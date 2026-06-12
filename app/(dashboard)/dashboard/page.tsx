@@ -1,59 +1,164 @@
-import Link from "next/link";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CATEGORIES } from "@/lib/categories";
-import { DAILY_FREE_NEURONS } from "@/lib/env";
-import { formatNumber } from "@/lib/utils";
+import { requireUser } from "@/lib/usage/meter";
+import {
+  getTodayUsage,
+  getMonthUsage,
+  getUserQuota,
+  getRecentUsage,
+} from "@/lib/usage/queries";
+import { Activity, Zap, DollarSign, Clock } from "lucide-react";
 
-// P0: static placeholders. Real metrics arrive in P4 (usage monitoring).
-const stats = [
-  { label: "今日 Neurons", value: "—", hint: `/ ${formatNumber(DAILY_FREE_NEURONS)} 免费额度` },
-  { label: "今日调用", value: "—", hint: "全部渠道" },
-  { label: "今日费用估算", value: "—", hint: "超额部分" },
-  { label: "可用模型", value: "78", hint: "Workers AI 目录" },
-];
+export const dynamic = "force-dynamic";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const userId = await requireUser();
+  const [today, month, quota, recent] = await Promise.all([
+    getTodayUsage(userId),
+    getMonthUsage(userId),
+    getUserQuota(userId),
+    getRecentUsage(userId, 10),
+  ]);
+
+  const todayRemaining = Math.max(0, quota.dailyNeuronLimit - today.totalNeurons);
+  const todayPercent = Math.min(
+    100,
+    (today.totalNeurons / quota.dailyNeuronLimit) * 100,
+  );
+
   return (
     <>
       <PageHeader
         title="用量总览"
-        description="Cloudflare Workers AI 控制台 · 在线生成、用量监控与 API 网关"
+        description="今日/本月调用次数、Neuron 消耗与配额余量"
       />
+      <div className="space-y-6 p-8">
+        {/* 今日用量 */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            icon={<Activity className="h-5 w-5" />}
+            label="今日调用"
+            value={today.totalCalls}
+            tone="primary"
+          />
+          <StatCard
+            icon={<Zap className="h-5 w-5" />}
+            label="今日 Neurons"
+            value={Math.round(today.totalNeurons).toLocaleString()}
+            subtitle={`剩余 ${Math.round(todayRemaining).toLocaleString()}`}
+            tone={todayPercent > 80 ? "danger" : "warning"}
+          />
+          <StatCard
+            icon={<DollarSign className="h-5 w-5" />}
+            label="今日费用"
+            value={`$${today.totalCost.toFixed(4)}`}
+            tone="muted"
+          />
+          <StatCard
+            icon={<Clock className="h-5 w-5" />}
+            label="本月调用"
+            value={month.totalCalls}
+            tone="muted"
+          />
+        </div>
 
-      <div className="space-y-8 p-8">
-        <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          {stats.map((s) => (
-            <Card key={s.label}>
-              <CardContent className="pt-5">
-                <p className="text-xs text-muted">{s.label}</p>
-                <p className="mt-1 text-2xl font-semibold">{s.value}</p>
-                <p className="mt-1 text-[11px] text-muted">{s.hint}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </section>
+        {/* 配额进度 */}
+        <Card>
+          <CardContent className="pt-5">
+            <div className="mb-2 flex items-center justify-between text-sm">
+              <span className="text-muted">每日 Neuron 配额</span>
+              <span className="font-medium">
+                {Math.round(today.totalNeurons).toLocaleString()} /{" "}
+                {quota.dailyNeuronLimit.toLocaleString()}
+              </span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-border">
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: `${todayPercent}%` }}
+              />
+            </div>
+            {todayPercent > 90 && (
+              <p className="mt-2 text-xs text-danger">
+                ⚠️ 今日配额即将用尽，请注意调用频率
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
-        <section>
-          <h2 className="mb-3 text-sm font-semibold text-muted">在线生成</h2>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {CATEGORIES.filter((c) => c.route).map((c) => (
-              <Link key={c.id} href={c.route!}>
-                <Card className="h-full transition-colors hover:border-[color:var(--primary)]">
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <CardTitle>{c.label}</CardTitle>
-                    {c.comingSoon && <Badge tone="warning">即将支持</Badge>}
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-xs text-muted">{c.description}</p>
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </section>
+        {/* 最近调用 */}
+        <Card>
+          <CardContent className="pt-5">
+            <h3 className="mb-4 text-sm font-medium">最近 10 次调用</h3>
+            {recent.length === 0 ? (
+              <p className="text-sm text-muted">暂无调用记录</p>
+            ) : (
+              <div className="space-y-2">
+                {recent.map((log) => (
+                  <div
+                    key={log.id}
+                    className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-xs"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Badge
+                        tone={log.status === "ok" ? "success" : "danger"}
+                      >
+                        {log.status}
+                      </Badge>
+                      <span className="text-muted">{log.task}</span>
+                      <span className="font-mono text-[11px] text-muted">
+                        {log.model}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-3 text-muted">
+                      <span>{log.latencyMs ? `${log.latencyMs}ms` : "—"}</span>
+                      <span>
+                        {new Date(log.createdAt!).toLocaleTimeString("zh-CN")}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  subtitle,
+  tone = "muted",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  subtitle?: string;
+  tone?: "primary" | "warning" | "danger" | "success" | "muted";
+}) {
+  const colors = {
+    primary: "text-primary",
+    warning: "text-warning",
+    danger: "text-danger",
+    success: "text-success",
+    muted: "text-muted",
+  };
+
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-3 pt-5">
+        <div className={colors[tone]}>{icon}</div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs text-muted">{label}</p>
+          <p className="truncate text-lg font-semibold">{value}</p>
+          {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

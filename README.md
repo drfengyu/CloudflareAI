@@ -12,7 +12,7 @@
 | P1 模型库 | 同步 `/ai/models/search`，按分类展示 ~78 个模型 | ✅ |
 | P2 鉴权 + D1/KV | Auth.js 多用户，D1/KV over REST，业务表 | ✅ |
 | P3 在线生成 | 文本流式 / 文生图 / 视觉 / 语音 / 嵌入 / 翻译 | ✅ |
-| P4 用量监控 | Neuron 记账、每日免费额度余量、费用估算、历史 | ⬜ |
+| P4 用量监控 | Neuron 记账、每日免费额度余量、费用估算、历史 | ✅ |
 | P5 API 网关 | OpenAI（chat/embeddings/models）+ Anthropic（messages） | ⬜ |
 | P6 收尾部署 | 限流、cron、Vercel 部署 | ⬜ |
 

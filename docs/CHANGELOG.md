@@ -2,6 +2,14 @@
 
 遵循约定：每次提交在此追加一条记录（日期 + 阶段 + 摘要）。
 
+## 2026-06-12 — P4 用量监控
+
+- 用量查询函数（`lib/usage/queries.ts`）：今日/本月统计、配额查询、分页历史记录。
+- **Dashboard**（`/dashboard`）：展示今日/本月调用次数、Neuron 消耗、费用估算、配额进度条、最近 10 次调用。
+- **使用历史**（`/history`）：分页查询所有调用记录（20 条/页），支持按模型/任务筛选，显示 tokens/neurons/延迟/时间。
+- **设置**（`/settings`）：展示用户每日/每月 Neuron 配额、计费说明（hosted vs proxied 模型）、用户 ID。
+- 配额预警：当今日 Neuron 用量超过 90% 时显示警告提示。
+
 ## 2026-06-12 — P3 Playground 在线生成
 
 - 用量计量中间件 `lib/usage/meter.ts`：每次 AI 调用写入 `usage_log`，记录模型/任务/tokens/神经元/延迟/状态。
