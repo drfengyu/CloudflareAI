@@ -3,6 +3,7 @@ import { z } from "zod";
 import { openaiCompatible } from "@/lib/cloudflare/ai";
 import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
 import { logUsage } from "@/lib/usage/meter";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { db } from "@/lib/db/d1-http";
 import { apiKeys } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -35,6 +36,11 @@ export async function POST(req: NextRequest) {
   const userId = await verifyApiKey(token);
   if (!userId) {
     return Response.json({ error: { type: "authentication_error", message: "Invalid API key" } }, { status: 401 });
+  }
+
+  // 限流：每用户每分钟 60 次请求
+  if (!checkRateLimit(`anthropic:${userId}`, { window: 60_000, limit: 60 })) {
+    return Response.json({ error: { type: "rate_limit_error", message: "Rate limit exceeded" } }, { status: 429 });
   }
 
   const hash = require("node:crypto")

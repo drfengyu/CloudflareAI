@@ -1,0 +1,42 @@
+{
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "outputDirectory": ".next",
+  "regions": ["iad1"],
+  "env": {
+    "CF_ACCOUNT_ID": {
+      "description": "Cloudflare Account ID（从 Cloudflare Dashboard 获取）",
+      "required": true
+    },
+    "CF_API_TOKEN": {
+      "description": "Cloudflare API Token（需要 Workers AI / D1 / KV 权限）",
+      "required": true
+    },
+    "CF_D1_DATABASE_ID": {
+      "description": "Cloudflare D1 数据库 ID",
+      "required": true
+    },
+    "CF_KV_NAMESPACE_ID": {
+      "description": "Cloudflare KV 命名空间 ID",
+      "required": true
+    },
+    "AUTH_SECRET": {
+      "description": "Auth.js 密钥（运行 openssl rand -base64 32 生成）",
+      "required": true
+    },
+    "GITHUB_CLIENT_ID": {
+      "description": "GitHub OAuth App Client ID",
+      "required": true
+    },
+    "GITHUB_CLIENT_SECRET": {
+      "description": "GitHub OAuth App Client Secret",
+      "required": true
+    },
+    "NEXTAUTH_URL": {
+      "description": "应用公开 URL（如 https://your-domain.vercel.app）",
+      "required": false
+    }
+  }
+}

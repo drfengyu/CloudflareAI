@@ -2,6 +2,19 @@
 
 遵循约定：每次提交在此追加一条记录（日期 + 阶段 + 摘要）。
 
+## 2026-06-12 — P6 收尾与部署
+
+- 限流保护（`lib/rate-limit.ts`）：内存限流器，60 req/min per user，应用于 OpenAI / Anthropic API 端点。
+- 环境变量检查脚本（`scripts/check-env.mjs`）：启动前验证必需的 CF 配置。
+- Vercel 部署配置（`vercel.json`）：定义环境变量、构建命令、框架。
+- README 完整部署指南：
+  - 一键部署按钮 + 环境变量说明表
+  - D1 / KV 创建步骤
+  - Claude Code / Continue / Codex 配置示例
+  - cURL 测试命令（OpenAI / Anthropic 格式）
+  - 技术栈 + 功能亮点 + 贡献方向
+- 生产构建验证通过（26 个路由，包括 7 个 API 端点）。
+
 ## 2026-06-12 — P5 API 网关（OpenAI + Anthropic 兼容）
 
 - API Key 鉴权（`lib/auth/api-key.ts`）：生成 `sk-cfai-xxxxx`，SHA-256 哈希存储，Bearer token 验证。
