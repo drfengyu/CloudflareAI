@@ -2,6 +2,17 @@
 
 遵循约定：每次提交在此追加一条记录（日期 + 阶段 + 摘要）。
 
+## 2026-06-12 — P3 Playground 在线生成
+
+- 用量计量中间件 `lib/usage/meter.ts`：每次 AI 调用写入 `usage_log`，记录模型/任务/tokens/神经元/延迟/状态。
+- **文本生成**（`/playground/text`）：对话式流式生成，支持温度/max_tokens 控制，SSE 透传。
+- **文生图**（`/playground/image`）：提示词 → PNG（base64），支持 num_steps/guidance 调节，可下载。
+- **图像理解**（`/playground/vision`）：上传图片 + 提问 → 文本回答（vision 模型）。
+- **嵌入**（`/playground/embeddings`）：文本 → 向量数组，展示前 10 维预览。
+- **翻译**（`/playground/translate`）：源文本 + 目标语言 → 译文（7 种常用语言）。
+- **语音/视频**（占位页）：提示 Cloudflare 原生支持有限，链接第三方 API（fal.ai / Replicate / Luma）。
+- API routes：`/api/ai/{text,image,vision,embeddings,translate}`，统一错误处理与用量记录。
+
 ## 2026-06-12 — P2 鉴权 + D1/KV
 
 - D1 schema（Auth.js 标准表 + 业务表：`api_key` / `usage_log` / `quota`），Drizzle 迁移已应用。

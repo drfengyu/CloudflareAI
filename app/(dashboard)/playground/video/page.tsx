@@ -1,20 +1,45 @@
 import { PageHeader } from "@/components/dashboard/page-header";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-export default function VideoPlaygroundPage() {
+export default function VideoPage() {
   return (
     <>
-      <PageHeader
-        title="视频生成"
-        description="Cloudflare Workers AI 原生暂不支持视频生成"
-        action={<Badge tone="warning">即将支持</Badge>}
-      />
-      <div className="m-8 rounded-[var(--radius-lg)] border border-dashed border-border bg-surface p-8 text-sm text-muted">
-        <p className="mb-2 font-medium text-foreground">规划中</p>
-        <p>
-          Workers AI 模型目录目前不包含视频生成模型。后续将通过第三方
-          provider（如 Replicate / fal.ai 的 Kling、Runway 等）接入，并在此处提供统一入口与用量记录。
-        </p>
+      <PageHeader title="视频生成" description="文本/图像转视频（计划集成第三方 API）" />
+      <div className="p-8">
+        <Card>
+          <CardContent className="space-y-4 pt-5">
+            <div className="flex items-center gap-2">
+              <Badge tone="muted">规划中</Badge>
+              <p className="text-sm text-muted">
+                Cloudflare Workers AI 暂未提供视频生成模型
+              </p>
+            </div>
+            <p className="text-xs text-muted">
+              视频生成需要大量 GPU 算力，建议通过第三方 API 集成：
+            </p>
+            <ul className="ml-4 space-y-2 text-xs text-muted">
+              <li>
+                • <a href="https://fal.ai/models/fal-ai/runway-gen3/alpha/turbo/image-to-video" target="_blank" rel="noopener" className="text-primary hover:underline">
+                  fal.ai/runway-gen3
+                </a> — 图片转视频（15-60 秒）
+              </li>
+              <li>
+                • <a href="https://replicate.com/models?query=video" target="_blank" rel="noopener" className="text-primary hover:underline">
+                  replicate.com
+                </a> — 多种开源视频生成模型
+              </li>
+              <li>
+                • <a href="https://lumalabs.ai/dream-machine" target="_blank" rel="noopener" className="text-primary hover:underline">
+                  Luma Dream Machine
+                </a> — 文本转视频
+              </li>
+            </ul>
+            <p className="text-xs text-muted">
+              后续版本可能将 API 密钥管理（P2）扩展为多服务集成，统一调用视频生成端点。
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </>
   );

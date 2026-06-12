@@ -1,10 +1,25 @@
-import { PageHeader, Placeholder } from "@/components/dashboard/page-header";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
+import { EmbeddingsClient } from "./client";
 
-export default function EmbeddingsPlaygroundPage() {
+export const dynamic = "force-dynamic";
+
+export default async function EmbeddingsPage() {
+  const catalog = await fetchModelCatalog();
+  const models = catalog
+    .filter((m) => m.category === "embeddings" && m.source === "hosted")
+    .map((m) => ({ id: m.id, name: m.name }));
+
   return (
     <>
-      <PageHeader title="嵌入" description="文本向量化，用于检索、聚类、RAG" />
-      <Placeholder note="P3 实现：文本转向量，维度展示与相似度计算" />
+      <PageHeader title="嵌入向量" description="将文本转换为向量表示，用于相似度计算或检索" />
+      {models.length === 0 ? (
+        <div className="m-8 rounded-lg border border-dashed border-border bg-surface p-6 text-sm text-muted">
+          无可用的嵌入模型
+        </div>
+      ) : (
+        <EmbeddingsClient models={models} />
+      )}
     </>
   );
 }
