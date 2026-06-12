@@ -2,6 +2,21 @@
 
 遵循约定：每次提交在此追加一条记录（日期 + 阶段 + 摘要）。
 
+## 2026-06-12 — P5 API 网关（OpenAI + Anthropic 兼容）
+
+- API Key 鉴权（`lib/auth/api-key.ts`）：生成 `sk-cfai-xxxxx`，SHA-256 哈希存储，Bearer token 验证。
+- **OpenAI 兼容端点**：
+  - `POST /api/openai/v1/chat/completions`：流式 + 非流式文本生成，记录用量（channel="openai"）
+  - `POST /api/openai/v1/embeddings`：文本嵌入，转换为 OpenAI 格式输出
+  - `GET /api/openai/v1/models`：列出所有 hosted 模型
+- **Anthropic 兼容端点**：
+  - `POST /api/anthropic/v1/messages`：接受 Anthropic 格式，内部转 OpenAI 调用 Cloudflare，转回 Anthropic 格式返回
+  - 支持 `x-api-key` 头（Anthropic）和 `Authorization: Bearer` 头（通用）
+- **Keys 管理**（`/keys`）：创建 API key（明文仅显示一次）、撤销 key、查看使用时间、集成示例代码。
+- 用量记录：每次 API 调用写入 `usage_log`，关联 `apiKeyId`，更新 `lastUsedAt`。
+
+适用场景：Claude Code / Codex / Hermes / Continue 等编程工具，将 base URL 设为本控制台，即可调用 Cloudflare 全部 hosted 模型。
+
 ## 2026-06-12 — P4 用量监控
 
 - 用量查询函数（`lib/usage/queries.ts`）：今日/本月统计、配额查询、分页历史记录。
