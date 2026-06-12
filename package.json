@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@auth/core": "^0.41.2",
+    "@auth/drizzle-adapter": "^1.11.2",
+    "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",
     "lucide-react": "^1.17.0",

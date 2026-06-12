@@ -1,0 +1,131 @@
+"use client";
+
+import Link from "next/link";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
+import { Cpu } from "lucide-react";
+import {
+  loginAction,
+  registerAction,
+  githubSignIn,
+  type AuthActionState,
+} from "@/app/(auth)/actions";
+import { Button } from "@/components/ui/button";
+
+function GithubIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden>
+      <path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.5v-1.7c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 .8 2.7 1.2 4.1.5.1-.5.4-1.1.7-1.4-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.4-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2.9-.3 2-.4 3-.4s2.1.1 3 .4c2.3-1.6 3.3-1.2 3.3-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.6.8.5 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z" />
+    </svg>
+  );
+}
+
+function SubmitButton({ label }: { label: string }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending} className="w-full">
+      {pending ? "处理中…" : label}
+    </Button>
+  );
+}
+
+export function AuthForm({ mode }: { mode: "login" | "register" }) {
+  const action = mode === "login" ? loginAction : registerAction;
+  const [state, formAction] = useActionState<AuthActionState, FormData>(
+    action,
+    {},
+  );
+  const isLogin = mode === "login";
+
+  return (
+    <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-6">
+      <div className="mb-6 flex items-center gap-2">
+        <Cpu className="h-6 w-6 text-primary" />
+        <span className="font-semibold">Cloudflare AI Console</span>
+      </div>
+
+      <h1 className="text-lg font-semibold">
+        {isLogin ? "登录" : "创建账户"}
+      </h1>
+      <p className="mt-1 text-sm text-muted">
+        {isLogin ? "欢迎回来" : "用邮箱注册，或使用 GitHub"}
+      </p>
+
+      <form action={formAction} className="mt-5 space-y-3">
+        {!isLogin && (
+          <Field name="name" type="text" label="昵称（可选）" required={false} />
+        )}
+        <Field name="email" type="email" label="邮箱" />
+        <Field name="password" type="password" label="密码" />
+
+        {state.error && (
+          <p className="text-xs text-danger">{state.error}</p>
+        )}
+
+        <SubmitButton label={isLogin ? "登录" : "注册"} />
+      </form>
+
+      <div className="my-4 flex items-center gap-3 text-[11px] text-muted">
+        <span className="h-px flex-1 bg-border" />
+        或
+        <span className="h-px flex-1 bg-border" />
+      </div>
+
+      <form action={githubSignIn}>
+        <Button type="submit" variant="outline" className="w-full">
+          <GithubIcon className="h-4 w-4" />
+          使用 GitHub 继续
+        </Button>
+      </form>
+
+      <p className="mt-5 text-center text-xs text-muted">
+        {isLogin ? (
+          <>
+            还没有账户？{" "}
+            <Link href="/register" className="text-primary">
+              注册
+            </Link>
+          </>
+        ) : (
+          <>
+            已有账户？{" "}
+            <Link href="/login" className="text-primary">
+              登录
+            </Link>
+          </>
+        )}
+      </p>
+    </div>
+  );
+}
+
+function Field({
+  name,
+  type,
+  label,
+  required = true,
+}: {
+  name: string;
+  type: string;
+  label: string;
+  required?: boolean;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs text-muted">{label}</span>
+      <input
+        name={name}
+        type={type}
+        required={required}
+        autoComplete={
+          type === "password"
+            ? name === "password" && required
+              ? "current-password"
+              : "new-password"
+            : type
+        }
+        className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-[color:var(--primary)]"
+      />
+    </label>
+  );
+}

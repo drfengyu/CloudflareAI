@@ -2,6 +2,18 @@
 
 遵循约定：每次提交在此追加一条记录（日期 + 阶段 + 摘要）。
 
+## 2026-06-12 — P2 鉴权 + D1/KV
+
+- D1 schema（Auth.js 标准表 + 业务表：`api_key` / `usage_log` / `quota`），Drizzle 迁移已应用。
+- D1/KV HTTP 客户端（`d1-http.ts` / `kv-http.ts`），sqlite-proxy 驱动适配 D1 REST API。
+- Auth.js v5 双登录方式：
+  - **邮箱密码**（Credentials provider）：注册/登录 server action，bcrypt 哈希。
+  - **GitHub OAuth**：DrizzleAdapter 自动建账户关联。
+- Middleware（Next 16 `proxy` 约定）：未登录重定向到 `/login`，已登录访问 `/login|/register` 重定向到 `/dashboard`。
+- `/login` + `/register` 页面与统一表单组件，session 显示在侧边栏（用户名 + 退出按钮）。
+- 端到端验证（浏览器）：注册 → 登录 → dashboard → GitHub OAuth → 模型库（250 个模型）。
+- D1 数据验证：1 用户 + 1 配额行已创建，KV 读写通过。
+
 ## 2026-06-12 — P1 模型库
 
 - Cloudflare REST 客户端 `lib/cloudflare/client.ts`（账户作用域、信封解包、错误类型、可选数据缓存）。

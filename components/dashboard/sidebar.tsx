@@ -15,8 +15,14 @@ import {
   KeyRound,
   Settings,
   Cpu,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+interface SidebarUser {
+  name?: string | null;
+  email?: string | null;
+}
 
 interface NavItem {
   href: string;
@@ -59,7 +65,13 @@ const NAV: NavGroup[] = [
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({
+  user,
+  signOutAction,
+}: {
+  user?: SidebarUser;
+  signOutAction: () => void;
+}) {
   const pathname = usePathname();
 
   return (
@@ -107,8 +119,26 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="border-t border-border px-5 py-3 text-[11px] text-muted">
-        Powered by Workers AI
+      <div className="border-t border-border px-3 py-3">
+        <div className="flex items-center justify-between gap-2 px-2">
+          <div className="min-w-0">
+            <p className="truncate text-xs font-medium text-foreground">
+              {user?.name || user?.email || "未登录"}
+            </p>
+            {user?.email && (
+              <p className="truncate text-[11px] text-muted">{user.email}</p>
+            )}
+          </div>
+          <form action={signOutAction}>
+            <button
+              type="submit"
+              title="退出登录"
+              className="rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-foreground"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          </form>
+        </div>
       </div>
     </aside>
   );
