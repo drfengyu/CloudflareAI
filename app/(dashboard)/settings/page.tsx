@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const userId = await requireUser();
-  const balance = await getUserBalance(userId);
+  const balance = await getUserBalance(userId).catch(() => 0);
   const balanceUsd = balance / 100;
 
   return (

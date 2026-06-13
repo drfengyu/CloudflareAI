@@ -18,13 +18,15 @@ export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const userId = await requireUser();
+
+  // 使用 try-catch 包裹每个查询，防止单个查询失败导致整个页面崩溃
   const [today, month, balance, recent, dailyUsage, modelUsage] = await Promise.all([
-    getTodayUsage(userId),
-    getMonthUsage(userId),
-    getUserBalance(userId),
-    getRecentUsage(userId, 10),
-    getDailyUsage(userId, 7),
-    getUsageByModel(userId, 30),
+    getTodayUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 })),
+    getMonthUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 })),
+    getUserBalance(userId).catch(() => 0),
+    getRecentUsage(userId, 10).catch(() => []),
+    getDailyUsage(userId, 7).catch(() => []),
+    getUsageByModel(userId, 30).catch(() => []),
   ]);
 
   const todayUsd = today.totalCredits / 100; // 100 credits = $1
