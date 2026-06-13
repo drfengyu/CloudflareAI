@@ -14,7 +14,7 @@ export default async function EmbeddingsPage() {
     <>
       <PageHeader title="嵌入向量" description="将文本转换为向量表示，用于相似度计算或检索" />
       {models.length === 0 ? (
-        <div className="m-8 rounded-lg border border-dashed border-border bg-surface p-6 text-sm text-muted">
+        <div className="m-8 rounded-lg border border-dashed border-border bg-surface p-6 text-sm text-muted-foreground">
           无可用的嵌入模型
         </div>
       ) : (

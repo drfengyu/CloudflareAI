@@ -63,7 +63,7 @@ export function ImageGenPlayground({ models }: ImageGenProps) {
         <Card>
           <CardContent className="space-y-4 pt-5">
             <label className="flex flex-col gap-2">
-              <span className="text-xs text-muted">模型</span>
+              <span className="text-xs text-muted-foreground">模型</span>
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
@@ -78,7 +78,7 @@ export function ImageGenPlayground({ models }: ImageGenProps) {
             </label>
 
             <label className="flex flex-col gap-2">
-              <span className="text-xs text-muted">提示词</span>
+              <span className="text-xs text-muted-foreground">提示词</span>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -90,7 +90,7 @@ export function ImageGenPlayground({ models }: ImageGenProps) {
 
             <div className="grid grid-cols-2 gap-4">
               <label className="flex flex-col gap-2">
-                <span className="text-xs text-muted">推理步数 ({numSteps})</span>
+                <span className="text-xs text-muted-foreground">推理步数 ({numSteps})</span>
                 <input
                   type="range"
                   value={numSteps}
@@ -102,7 +102,7 @@ export function ImageGenPlayground({ models }: ImageGenProps) {
               </label>
 
               <label className="flex flex-col gap-2">
-                <span className="text-xs text-muted">引导强度 ({guidance})</span>
+                <span className="text-xs text-muted-foreground">引导强度 ({guidance})</span>
                 <input
                   type="range"
                   value={guidance}
@@ -139,7 +139,7 @@ export function ImageGenPlayground({ models }: ImageGenProps) {
       <Card className="flex items-center justify-center">
         <CardContent className="w-full pt-5">
           {!imageUrl && !error && !loading && (
-            <p className="text-center text-sm text-muted">
+            <p className="text-center text-sm text-muted-foreground">
               输入提示词并生成图像
             </p>
           )}

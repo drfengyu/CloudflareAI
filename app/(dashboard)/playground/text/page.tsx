@@ -17,7 +17,7 @@ export default async function TextPlaygroundPage() {
         description="对话式文本生成，支持流式输出、温度与 token 控制"
       />
       {textModels.length === 0 ? (
-        <div className="m-8 rounded-lg border border-dashed border-border bg-surface p-6 text-sm text-muted">
+        <div className="m-8 rounded-lg border border-dashed border-border bg-surface p-6 text-sm text-muted-foreground">
           无可用的文本生成模型（hosted）
         </div>
       ) : (

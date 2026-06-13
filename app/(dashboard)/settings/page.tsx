@@ -20,20 +20,20 @@ export default async function SettingsPage() {
               <Zap className="h-5 w-5 text-primary" />
               <div className="flex-1">
                 <h3 className="mb-1 text-sm font-medium">Neuron 配额</h3>
-                <p className="mb-3 text-xs text-muted">
+                <p className="mb-3 text-xs text-muted-foreground">
                   Cloudflare 按 Neuron（神经元）计费：每个模型调用消耗若干
                   Neuron，Workers AI 提供每日 10,000 Neuron 免费额度。
                 </p>
                 <div className="space-y-2 rounded-lg border border-border bg-surface p-3 text-xs">
                   <div className="flex justify-between">
-                    <span className="text-muted">每日限额</span>
+                    <span className="text-muted-foreground">每日限额</span>
                     <span className="font-medium">
                       {quota.dailyNeuronLimit.toLocaleString()} Neurons
                     </span>
                   </div>
                   {quota.monthlyNeuronLimit && (
                     <div className="flex justify-between">
-                      <span className="text-muted">每月限额</span>
+                      <span className="text-muted-foreground">每月限额</span>
                       <span className="font-medium">
                         {quota.monthlyNeuronLimit.toLocaleString()} Neurons
                       </span>
@@ -44,8 +44,8 @@ export default async function SettingsPage() {
             </div>
 
             <div className="flex items-start gap-3 rounded-lg bg-surface-2 p-3">
-              <Info className="h-4 w-4 text-muted" />
-              <div className="flex-1 text-xs text-muted">
+              <Info className="h-4 w-4 text-muted-foreground" />
+              <div className="flex-1 text-xs text-muted-foreground">
                 <p className="mb-1 font-medium">计费说明</p>
                 <ul className="ml-3 list-disc space-y-1">
                   <li>
@@ -78,7 +78,7 @@ export default async function SettingsPage() {
             <h3 className="mb-3 text-sm font-medium">账户信息</h3>
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
-                <span className="text-muted">用户 ID</span>
+                <span className="text-muted-foreground">用户 ID</span>
                 <span className="font-mono">{userId}</span>
               </div>
             </div>

@@ -47,7 +47,7 @@ export function ModelBrowser({ models }: { models: NormalizedModel[] }) {
   return (
     <div className="space-y-5 p-8">
       <div className="relative max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -65,7 +65,7 @@ export function ModelBrowser({ models }: { models: NormalizedModel[] }) {
               "rounded-full border px-3 py-1 text-xs transition-colors",
               filter === t.id
                 ? "border-[color:var(--primary)] bg-[color:var(--primary)]/10 text-foreground"
-                : "border-border text-muted hover:text-foreground",
+                : "border-border text-muted-foreground hover:text-foreground",
             )}
           >
             {t.label}
@@ -81,7 +81,7 @@ export function ModelBrowser({ models }: { models: NormalizedModel[] }) {
       </div>
 
       {visible.length === 0 && (
-        <p className="py-12 text-center text-sm text-muted">没有匹配的模型</p>
+        <p className="py-12 text-center text-sm text-muted-foreground">没有匹配的模型</p>
       )}
     </div>
   );
@@ -100,7 +100,7 @@ function ModelCard({ model }: { model: NormalizedModel }) {
                 {model.name}
               </p>
               {model.author && (
-                <p className="truncate text-[11px] text-muted">{model.author}</p>
+                <p className="truncate text-[11px] text-muted-foreground">{model.author}</p>
               )}
             </div>
           </div>
@@ -110,9 +110,9 @@ function ModelCard({ model }: { model: NormalizedModel }) {
             <Badge tone="warning">第三方计费</Badge>
           )}
         </div>
-        <code className="break-all text-[11px] text-muted">{model.id}</code>
+        <code className="break-all text-[11px] text-muted-foreground">{model.id}</code>
         {description && (
-          <p className="line-clamp-3 text-xs text-muted">{description}</p>
+          <p className="line-clamp-3 text-xs text-muted-foreground">{description}</p>
         )}
         <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
           {model.tags?.map((tag) => (
@@ -163,7 +163,7 @@ function VendorLogo({
   }
   const initial = (author ?? name).trim().charAt(0).toUpperCase() || "?";
   return (
-    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[color:var(--primary)]/10 text-[11px] font-semibold text-muted">
+    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[color:var(--primary)]/10 text-[11px] font-semibold text-muted-foreground">
       {initial}
     </div>
   );

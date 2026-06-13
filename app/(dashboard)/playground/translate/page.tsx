@@ -14,7 +14,7 @@ export default async function TranslatePage() {
     <>
       <PageHeader title="翻译" description="多语言翻译服务" />
       {models.length === 0 ? (
-        <div className="m-8 rounded-lg border border-dashed border-border bg-surface p-6 text-sm text-muted">
+        <div className="m-8 rounded-lg border border-dashed border-border bg-surface p-6 text-sm text-muted-foreground">
           无可用的翻译模型
         </div>
       ) : (

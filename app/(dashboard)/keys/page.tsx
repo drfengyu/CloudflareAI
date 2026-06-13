@@ -34,7 +34,7 @@ export default async function KeysPage() {
           <CardContent className="pt-5">
             <h3 className="mb-4 text-sm font-medium">已创建的 API Keys</h3>
             {keys.length === 0 ? (
-              <p className="text-sm text-muted">暂无 API key</p>
+              <p className="text-sm text-muted-foreground">暂无 API key</p>
             ) : (
               <div className="space-y-2">
                 {keys.map((key) => (
@@ -47,10 +47,10 @@ export default async function KeysPage() {
                         <span className="text-sm font-medium">{key.name}</span>
                         {key.revoked && <Badge tone="danger">已撤销</Badge>}
                       </div>
-                      <p className="font-mono text-xs text-muted">
+                      <p className="font-mono text-xs text-muted-foreground">
                         {key.prefix}••••••••
                       </p>
-                      <p className="mt-1 text-xs text-muted">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         创建于 {new Date(key.createdAt!).toLocaleString("zh-CN")}
                         {key.lastUsedAt && (
                           <> · 最后使用 {new Date(key.lastUsedAt).toLocaleString("zh-CN")}</>
@@ -81,7 +81,7 @@ export default async function KeysPage() {
         <Card>
           <CardContent className="space-y-3 pt-5">
             <h3 className="text-sm font-medium">使用说明</h3>
-            <div className="space-y-2 text-xs text-muted">
+            <div className="space-y-2 text-xs text-muted-foreground">
               <p>
                 <strong>OpenAI 兼容端点</strong>（适用于 Claude Code / Codex / Hermes）
               </p>

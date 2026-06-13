@@ -47,7 +47,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
       <h1 className="text-lg font-semibold">
         {isLogin ? "登录" : "创建账户"}
       </h1>
-      <p className="mt-1 text-sm text-muted">
+      <p className="mt-1 text-sm text-muted-foreground">
         {isLogin ? "欢迎回来" : "用邮箱注册，或使用 GitHub"}
       </p>
 
@@ -65,7 +65,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         <SubmitButton label={isLogin ? "登录" : "注册"} />
       </form>
 
-      <div className="my-4 flex items-center gap-3 text-[11px] text-muted">
+      <div className="my-4 flex items-center gap-3 text-[11px] text-muted-foreground">
         <span className="h-px flex-1 bg-border" />
         或
         <span className="h-px flex-1 bg-border" />
@@ -78,7 +78,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         </Button>
       </form>
 
-      <p className="mt-5 text-center text-xs text-muted">
+      <p className="mt-5 text-center text-xs text-muted-foreground">
         {isLogin ? (
           <>
             还没有账户？{" "}
@@ -112,7 +112,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs text-muted">{label}</span>
+      <span className="mb-1 block text-xs text-muted-foreground">{label}</span>
       <input
         name={name}
         type={type}

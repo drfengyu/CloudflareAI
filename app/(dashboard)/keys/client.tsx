@@ -32,7 +32,7 @@ export function KeysClient() {
 
       {newKey ? (
         <div className="space-y-3 rounded-lg border border-primary bg-primary/5 p-4">
-          <p className="text-xs text-muted">
+          <p className="text-xs text-muted-foreground">
             ⚠️ 请立即复制并保存，密钥仅显示一次
           </p>
           <div className="flex items-center gap-2">

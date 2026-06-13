@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
+import { createHash } from "node:crypto";
 import { runModelJSON } from "@/lib/cloudflare/ai";
 import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
 import { logUsage } from "@/lib/usage/meter";
@@ -27,10 +28,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid or revoked API key" }, { status: 401 });
   }
 
-  const hash = require("node:crypto")
-    .createHash("sha256")
-    .update(token)
-    .digest("hex");
+  const hash = createHash("sha256").update(token).digest("hex");
   const apiKeyRows = await db
     .select()
     .from(apiKeys)

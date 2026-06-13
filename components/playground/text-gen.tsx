@@ -104,7 +104,7 @@ export function TextGenPlayground({ models }: TextGenProps) {
     <div className="flex h-full flex-col gap-4 p-8">
       <div className="flex flex-wrap items-center gap-4">
         <label className="flex items-center gap-2">
-          <span className="text-xs text-muted">模型</span>
+          <span className="text-xs text-muted-foreground">模型</span>
           <select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
@@ -119,7 +119,7 @@ export function TextGenPlayground({ models }: TextGenProps) {
         </label>
 
         <label className="flex items-center gap-2">
-          <span className="text-xs text-muted">温度</span>
+          <span className="text-xs text-muted-foreground">温度</span>
           <input
             type="number"
             value={temperature}
@@ -132,7 +132,7 @@ export function TextGenPlayground({ models }: TextGenProps) {
         </label>
 
         <label className="flex items-center gap-2">
-          <span className="text-xs text-muted">最大 tokens</span>
+          <span className="text-xs text-muted-foreground">最大 tokens</span>
           <input
             type="number"
             value={maxTokens}
@@ -158,7 +158,7 @@ export function TextGenPlayground({ models }: TextGenProps) {
         <CardContent className="flex h-full flex-col p-0">
           <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto p-6">
             {messages.length === 0 && (
-              <p className="text-center text-sm text-muted">开始对话，测试文本生成模型</p>
+              <p className="text-center text-sm text-muted-foreground">开始对话，测试文本生成模型</p>
             )}
             {messages.map((msg, i) => (
               <div

@@ -49,7 +49,7 @@ export function TranslateClient({ models }: { models: Array<{ id: string; name: 
         <CardContent className="space-y-4 pt-5">
           <div className="grid grid-cols-2 gap-4">
             <label className="flex flex-col gap-2">
-              <span className="text-xs text-muted">模型</span>
+              <span className="text-xs text-muted-foreground">模型</span>
               <select
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
@@ -61,7 +61,7 @@ export function TranslateClient({ models }: { models: Array<{ id: string; name: 
               </select>
             </label>
             <label className="flex flex-col gap-2">
-              <span className="text-xs text-muted">目标语言</span>
+              <span className="text-xs text-muted-foreground">目标语言</span>
               <select
                 value={targetLang}
                 onChange={(e) => setTargetLang(e.target.value)}
@@ -75,7 +75,7 @@ export function TranslateClient({ models }: { models: Array<{ id: string; name: 
           </div>
 
           <label className="flex flex-col gap-2">
-            <span className="text-xs text-muted">原文</span>
+            <span className="text-xs text-muted-foreground">原文</span>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -91,7 +91,7 @@ export function TranslateClient({ models }: { models: Array<{ id: string; name: 
 
           {result && (
             <div className="rounded-lg border border-border bg-surface-2 p-4">
-              <p className="mb-1 text-xs text-muted">译文</p>
+              <p className="mb-1 text-xs text-muted-foreground">译文</p>
               <p className="whitespace-pre-wrap text-sm">{result}</p>
             </div>
           )}

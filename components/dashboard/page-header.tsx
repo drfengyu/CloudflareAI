@@ -21,7 +21,7 @@ export function PageHeader({
       <div>
         <h1 className="text-lg font-semibold">{title}</h1>
         {description && (
-          <p className="mt-1 text-sm text-muted">{description}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{description}</p>
         )}
       </div>
       {action}
@@ -32,7 +32,7 @@ export function PageHeader({
 /** Placeholder block for routes that are scaffolded but not yet implemented. */
 export function Placeholder({ note }: { note: string }) {
   return (
-    <div className="m-8 flex h-64 items-center justify-center rounded-[var(--radius-lg)] border border-dashed border-border bg-surface text-sm text-muted">
+    <div className="m-8 flex h-64 items-center justify-center rounded-[var(--radius-lg)] border border-dashed border-border bg-surface text-sm text-muted-foreground">
       {note}
     </div>
   );

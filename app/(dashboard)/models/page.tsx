@@ -31,7 +31,7 @@ export default async function ModelsPage() {
       {error ? (
         <div className="m-8 rounded-[var(--radius-lg)] border border-dashed border-border bg-surface p-6 text-sm">
           <p className="mb-1 font-medium text-foreground">无法加载模型目录</p>
-          <p className="text-muted">
+          <p className="text-muted-foreground">
             请在环境变量中配置 <code>CF_ACCOUNT_ID</code> 与{" "}
             <code>CF_API_TOKEN</code>（参考 <code>.env.example</code> 与{" "}
             <code>docs/DEPLOYMENT.md</code>）。

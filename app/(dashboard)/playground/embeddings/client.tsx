@@ -38,7 +38,7 @@ export function EmbeddingsClient({ models }: { models: Array<{ id: string; name:
       <Card>
         <CardContent className="space-y-4 pt-5">
           <label className="flex flex-col gap-2">
-            <span className="text-xs text-muted">模型</span>
+            <span className="text-xs text-muted-foreground">模型</span>
             <select
               value={model}
               onChange={(e) => setModel(e.target.value)}
@@ -51,7 +51,7 @@ export function EmbeddingsClient({ models }: { models: Array<{ id: string; name:
           </label>
 
           <label className="flex flex-col gap-2">
-            <span className="text-xs text-muted">输入文本</span>
+            <span className="text-xs text-muted-foreground">输入文本</span>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
@@ -67,10 +67,10 @@ export function EmbeddingsClient({ models }: { models: Array<{ id: string; name:
 
           {embeddings && (
             <div className="rounded-lg border border-border bg-surface-2 p-4">
-              <p className="mb-2 text-xs text-muted">
+              <p className="mb-2 text-xs text-muted-foreground">
                 {embeddings.length} 个向量，每个维度 {embeddings[0]?.length || 0}
               </p>
-              <pre className="max-h-64 overflow-auto text-[11px] text-muted">
+              <pre className="max-h-64 overflow-auto text-[11px] text-muted-foreground">
                 {JSON.stringify(embeddings[0]?.slice(0, 10), null, 2)}... (前10维)
               </pre>
             </div>

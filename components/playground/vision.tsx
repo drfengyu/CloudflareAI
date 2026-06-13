@@ -68,7 +68,7 @@ export function VisionPlayground({ models }: VisionProps) {
         <Card>
           <CardContent className="space-y-4 pt-5">
             <label className="flex flex-col gap-2">
-              <span className="text-xs text-muted">模型</span>
+              <span className="text-xs text-muted-foreground">模型</span>
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
@@ -83,7 +83,7 @@ export function VisionPlayground({ models }: VisionProps) {
             </label>
 
             <div>
-              <p className="mb-2 text-xs text-muted">上传图片</p>
+              <p className="mb-2 text-xs text-muted-foreground">上传图片</p>
               {!imageDataUrl ? (
                 <button
                   type="button"
@@ -91,8 +91,8 @@ export function VisionPlayground({ models }: VisionProps) {
                   className="flex h-32 w-full items-center justify-center rounded-lg border-2 border-dashed border-border bg-surface hover:bg-surface-2"
                 >
                   <div className="text-center">
-                    <Upload className="mx-auto mb-2 h-6 w-6 text-muted" />
-                    <p className="text-xs text-muted">点击上传图片</p>
+                    <Upload className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
+                    <p className="text-xs text-muted-foreground">点击上传图片</p>
                   </div>
                 </button>
               ) : (
@@ -125,7 +125,7 @@ export function VisionPlayground({ models }: VisionProps) {
             </div>
 
             <label className="flex flex-col gap-2">
-              <span className="text-xs text-muted">问题</span>
+              <span className="text-xs text-muted-foreground">问题</span>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
@@ -158,9 +158,9 @@ export function VisionPlayground({ models }: VisionProps) {
 
       <Card>
         <CardContent className="pt-5">
-          <p className="mb-3 text-xs font-medium uppercase text-muted">分析结果</p>
+          <p className="mb-3 text-xs font-medium uppercase text-muted-foreground">分析结果</p>
           {!result && !error && !loading && (
-            <p className="text-sm text-muted">上传图片并提问</p>
+            <p className="text-sm text-muted-foreground">上传图片并提问</p>
           )}
           {error && <p className="text-sm text-danger">❌ {error}</p>}
           {result && (

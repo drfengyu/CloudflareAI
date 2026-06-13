@@ -67,7 +67,7 @@ export default async function DashboardPage() {
         <Card>
           <CardContent className="pt-5">
             <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="text-muted">每日 Neuron 配额</span>
+              <span className="text-muted-foreground">每日 Neuron 配额</span>
               <span className="font-medium">
                 {Math.round(today.totalNeurons).toLocaleString()} /{" "}
                 {quota.dailyNeuronLimit.toLocaleString()}
@@ -92,7 +92,7 @@ export default async function DashboardPage() {
           <CardContent className="pt-5">
             <h3 className="mb-4 text-sm font-medium">最近 10 次调用</h3>
             {recent.length === 0 ? (
-              <p className="text-sm text-muted">暂无调用记录</p>
+              <p className="text-sm text-muted-foreground">暂无调用记录</p>
             ) : (
               <div className="space-y-2">
                 {recent.map((log) => (
@@ -106,12 +106,12 @@ export default async function DashboardPage() {
                       >
                         {log.status}
                       </Badge>
-                      <span className="text-muted">{log.task}</span>
-                      <span className="font-mono text-[11px] text-muted">
+                      <span className="text-muted-foreground">{log.task}</span>
+                      <span className="font-mono text-[11px] text-muted-foreground">
                         {log.model}
                       </span>
                     </div>
-                    <div className="flex items-center gap-3 text-muted">
+                    <div className="flex items-center gap-3 text-muted-foreground">
                       <span>{log.latencyMs ? `${log.latencyMs}ms` : "—"}</span>
                       <span>
                         {new Date(log.createdAt!).toLocaleTimeString("zh-CN")}
@@ -146,7 +146,7 @@ function StatCard({
     warning: "text-warning",
     danger: "text-danger",
     success: "text-success",
-    muted: "text-muted",
+    muted: "text-muted-foreground",
   };
 
   return (
@@ -154,9 +154,9 @@ function StatCard({
       <CardContent className="flex items-center gap-3 pt-5">
         <div className={colors[tone]}>{icon}</div>
         <div className="min-w-0 flex-1">
-          <p className="text-xs text-muted">{label}</p>
+          <p className="text-xs text-muted-foreground">{label}</p>
           <p className="truncate text-lg font-semibold">{value}</p>
-          {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
+          {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
         </div>
       </CardContent>
     </Card>

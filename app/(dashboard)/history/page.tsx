@@ -34,7 +34,7 @@ export default async function HistoryPage({
         <Card>
           <CardContent className="pt-5">
             <div className="mb-4 flex items-center justify-between">
-              <p className="text-sm text-muted">
+              <p className="text-sm text-muted-foreground">
                 共 {total} 条记录，当前第 {page}/{totalPages || 1} 页
               </p>
               {(params.model || params.task) && (
@@ -48,7 +48,7 @@ export default async function HistoryPage({
             </div>
 
             {logs.length === 0 ? (
-              <p className="text-center text-sm text-muted">无调用记录</p>
+              <p className="text-center text-sm text-muted-foreground">无调用记录</p>
             ) : (
               <div className="space-y-2">
                 {logs.map((log) => (
@@ -60,7 +60,7 @@ export default async function HistoryPage({
                       <Badge tone={log.status === "ok" ? "success" : "danger"}>
                         {log.status}
                       </Badge>
-                      <span className="text-muted">{log.task || "未知"}</span>
+                      <span className="text-muted-foreground">{log.task || "未知"}</span>
                       <a
                         href={`/history?model=${encodeURIComponent(log.model)}`}
                         className="font-mono text-[11px] text-primary hover:underline"
@@ -69,7 +69,7 @@ export default async function HistoryPage({
                       </a>
                       <Badge tone="muted">{log.channel}</Badge>
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 text-muted">
+                    <div className="flex flex-wrap items-center gap-3 text-muted-foreground">
                       {log.inputTokens || log.outputTokens ? (
                         <span>
                           {log.inputTokens}+{log.outputTokens} tokens
@@ -99,7 +99,7 @@ export default async function HistoryPage({
                     上一页
                   </a>
                 )}
-                <span className="px-3 text-xs text-muted">
+                <span className="px-3 text-xs text-muted-foreground">
                   {page} / {totalPages}
                 </span>
                 {page < totalPages && (
