@@ -41,7 +41,8 @@ export async function GET() {
   try {
     const { db } = await import("@/lib/db/d1-http");
     const { sql } = await import("drizzle-orm");
-    await db.execute(sql`SELECT 1`);
+    // D1 HTTP 驱动使用 .all() 方法
+    await db.all(sql`SELECT 1 as check`);
     checks.database.status = "ok";
   } catch (err) {
     checks.database.status = "error";
