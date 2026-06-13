@@ -1,8 +1,8 @@
 import { db } from "@/lib/db/d1-http";
-import { usageLogs, quotas, type UsageLog } from "@/lib/db/schema";
+import { usageLogs, users, type UsageLog } from "@/lib/db/schema";
 import { desc, eq, gte, and, sql } from "drizzle-orm";
 
-/** 获取用户今日用量统计 */
+/** 获取用户今日用量统计（Phase C: credits 模型） */
 export async function getTodayUsage(userId: string) {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -10,8 +10,9 @@ export async function getTodayUsage(userId: string) {
   const rows = await db
     .select({
       totalCalls: sql<number>`COUNT(*)`,
-      totalNeurons: sql<number>`COALESCE(SUM(${usageLogs.neurons}), 0)`,
-      totalCost: sql<number>`COALESCE(SUM(${usageLogs.costUsd}), 0)`,
+      totalCredits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
+      totalInputTokens: sql<number>`COALESCE(SUM(${usageLogs.inputTokens}), 0)`,
+      totalOutputTokens: sql<number>`COALESCE(SUM(${usageLogs.outputTokens}), 0)`,
     })
     .from(usageLogs)
     .where(
@@ -21,10 +22,10 @@ export async function getTodayUsage(userId: string) {
       ),
     );
 
-  return rows[0] || { totalCalls: 0, totalNeurons: 0, totalCost: 0 };
+  return rows[0] || { totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 };
 }
 
-/** 获取用户本月用量统计 */
+/** 获取用户本月用量统计（Phase C: credits 模型） */
 export async function getMonthUsage(userId: string) {
   const monthStart = new Date();
   monthStart.setDate(1);
@@ -33,8 +34,9 @@ export async function getMonthUsage(userId: string) {
   const rows = await db
     .select({
       totalCalls: sql<number>`COUNT(*)`,
-      totalNeurons: sql<number>`COALESCE(SUM(${usageLogs.neurons}), 0)`,
-      totalCost: sql<number>`COALESCE(SUM(${usageLogs.costUsd}), 0)`,
+      totalCredits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
+      totalInputTokens: sql<number>`COALESCE(SUM(${usageLogs.inputTokens}), 0)`,
+      totalOutputTokens: sql<number>`COALESCE(SUM(${usageLogs.outputTokens}), 0)`,
     })
     .from(usageLogs)
     .where(
@@ -44,24 +46,18 @@ export async function getMonthUsage(userId: string) {
       ),
     );
 
-  return rows[0] || { totalCalls: 0, totalNeurons: 0, totalCost: 0 };
+  return rows[0] || { totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 };
 }
 
-/** 获取用户配额 */
-export async function getUserQuota(userId: string) {
+/** 获取用户余额（Phase C: credits 模型，取代旧的 quota） */
+export async function getUserBalance(userId: string) {
   const rows = await db
-    .select()
-    .from(quotas)
-    .where(eq(quotas.userId, userId))
+    .select({ balanceCredits: users.balanceCredits })
+    .from(users)
+    .where(eq(users.id, userId))
     .limit(1);
 
-  return (
-    rows[0] || {
-      userId,
-      dailyNeuronLimit: 10_000,
-      monthlyNeuronLimit: null,
-    }
-  );
+  return rows[0]?.balanceCredits ?? 0;
 }
 
 /** 获取最近 N 条用量记录 */
@@ -75,6 +71,57 @@ export async function getRecentUsage(
     .where(eq(usageLogs.userId, userId))
     .orderBy(desc(usageLogs.createdAt))
     .limit(limit);
+}
+
+/** 按模型统计用量（Phase C: 用于饼图/柱状图） */
+export async function getUsageByModel(userId: string, days = 30) {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  startDate.setHours(0, 0, 0, 0);
+
+  const rows = await db
+    .select({
+      model: usageLogs.model,
+      calls: sql<number>`COUNT(*)`,
+      credits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
+    })
+    .from(usageLogs)
+    .where(
+      and(
+        eq(usageLogs.userId, userId),
+        gte(usageLogs.createdAt, startDate),
+      ),
+    )
+    .groupBy(usageLogs.model)
+    .orderBy(desc(sql`credits`))
+    .limit(10);
+
+  return rows;
+}
+
+/** 按日统计用量（Phase C: 用于趋势图） */
+export async function getDailyUsage(userId: string, days = 7) {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  startDate.setHours(0, 0, 0, 0);
+
+  const rows = await db
+    .select({
+      date: sql<string>`DATE(${usageLogs.createdAt} / 1000, 'unixepoch')`,
+      calls: sql<number>`COUNT(*)`,
+      credits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
+    })
+    .from(usageLogs)
+    .where(
+      and(
+        eq(usageLogs.userId, userId),
+        gte(usageLogs.createdAt, startDate),
+      ),
+    )
+    .groupBy(sql`date`)
+    .orderBy(sql`date ASC`);
+
+  return rows;
 }
 
 /** 分页查询用量记录（历史页） */

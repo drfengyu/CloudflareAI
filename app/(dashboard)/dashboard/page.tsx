@@ -1,96 +1,113 @@
 import { PageHeader } from "@/components/dashboard/page-header";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { requireUser } from "@/lib/usage/meter";
 import {
   getTodayUsage,
   getMonthUsage,
-  getUserQuota,
+  getUserBalance,
   getRecentUsage,
+  getDailyUsage,
+  getUsageByModel,
 } from "@/lib/usage/queries";
-import { Activity, Zap, DollarSign, Clock } from "lucide-react";
+import { Activity, Wallet, TrendingUp, Clock } from "lucide-react";
+import { UsageTrendChart } from "@/components/dashboard/usage-trend-chart";
+import { ModelDistributionChart } from "@/components/dashboard/model-distribution-chart";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const userId = await requireUser();
-  const [today, month, quota, recent] = await Promise.all([
+  const [today, month, balance, recent, dailyUsage, modelUsage] = await Promise.all([
     getTodayUsage(userId),
     getMonthUsage(userId),
-    getUserQuota(userId),
+    getUserBalance(userId),
     getRecentUsage(userId, 10),
+    getDailyUsage(userId, 7),
+    getUsageByModel(userId, 30),
   ]);
 
-  const todayRemaining = Math.max(0, quota.dailyNeuronLimit - today.totalNeurons);
-  const todayPercent = Math.min(
-    100,
-    (today.totalNeurons / quota.dailyNeuronLimit) * 100,
-  );
+  const todayUsd = today.totalCredits / 100; // 100 credits = $1
+  const balanceUsd = balance / 100;
 
   return (
     <>
       <PageHeader
-        title="用量总览"
-        description="今日/本月调用次数、Neuron 消耗与配额余量"
+        title="数据看板"
+        description="Credits 消耗统计、余额、调用记录"
       />
       <div className="space-y-6 p-8">
-        {/* 今日用量 */}
+        {/* 核心指标卡片 */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <StatCard
+            icon={<Wallet className="h-5 w-5" />}
+            label="当前余额"
+            value={`${balance.toLocaleString()} credits`}
+            subtitle={`≈ $${balanceUsd.toFixed(2)}`}
+            tone="primary"
+          />
+          <StatCard
+            icon={<TrendingUp className="h-5 w-5" />}
+            label="今日消耗"
+            value={`${Math.round(today.totalCredits).toLocaleString()} credits`}
+            subtitle={`≈ $${todayUsd.toFixed(4)}`}
+            tone={today.totalCredits > balance * 0.1 ? "warning" : "success"}
+          />
           <StatCard
             icon={<Activity className="h-5 w-5" />}
             label="今日调用"
             value={today.totalCalls}
-            tone="primary"
-          />
-          <StatCard
-            icon={<Zap className="h-5 w-5" />}
-            label="今日 Neurons"
-            value={Math.round(today.totalNeurons).toLocaleString()}
-            subtitle={`剩余 ${Math.round(todayRemaining).toLocaleString()}`}
-            tone={todayPercent > 80 ? "danger" : "warning"}
-          />
-          <StatCard
-            icon={<DollarSign className="h-5 w-5" />}
-            label="今日费用"
-            value={`$${today.totalCost.toFixed(4)}`}
             tone="muted"
           />
           <StatCard
             icon={<Clock className="h-5 w-5" />}
             label="本月调用"
             value={month.totalCalls}
+            subtitle={`${Math.round(month.totalCredits).toLocaleString()} credits`}
             tone="muted"
           />
         </div>
 
-        {/* 配额进度 */}
-        <Card>
-          <CardContent className="pt-5">
-            <div className="mb-2 flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">每日 Neuron 配额</span>
-              <span className="font-medium">
-                {Math.round(today.totalNeurons).toLocaleString()} /{" "}
-                {quota.dailyNeuronLimit.toLocaleString()}
-              </span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-border">
-              <div
-                className="h-full bg-primary transition-all"
-                style={{ width: `${todayPercent}%` }}
-              />
-            </div>
-            {todayPercent > 90 && (
-              <p className="mt-2 text-xs text-danger">
-                ⚠️ 今日配额即将用尽，请注意调用频率
+        {/* 余额警示 */}
+        {balance < 1000 && (
+          <Card className="border-warning bg-warning/5">
+            <CardContent className="pt-5">
+              <p className="text-sm text-warning">
+                ⚠️ 余额不足 1000 credits（$10），请及时充值以免影响使用
               </p>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* 最近调用 */}
+        {/* 图表区 */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          {/* 消耗趋势 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">近 7 日消耗趋势</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <UsageTrendChart data={dailyUsage} />
+            </CardContent>
+          </Card>
+
+          {/* 模型分布 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">近 30 日模型分布（Top 10）</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ModelDistributionChart data={modelUsage} />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 最近调用记录 */}
         <Card>
-          <CardContent className="pt-5">
-            <h3 className="mb-4 text-sm font-medium">最近 10 次调用</h3>
+          <CardHeader>
+            <CardTitle className="text-base">最近 10 次调用</CardTitle>
+          </CardHeader>
+          <CardContent>
             {recent.length === 0 ? (
               <p className="text-sm text-muted-foreground">暂无调用记录</p>
             ) : (
@@ -101,20 +118,28 @@ export default async function DashboardPage() {
                     className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-xs"
                   >
                     <div className="flex items-center gap-3">
-                      <Badge
-                        tone={log.status === "ok" ? "success" : "danger"}
-                      >
+                      <Badge tone={log.status === "ok" ? "success" : "danger"}>
                         {log.status}
                       </Badge>
-                      <span className="text-muted-foreground">{log.task}</span>
-                      <span className="font-mono text-[11px] text-muted-foreground">
+                      <span className="text-muted-foreground">
+                        {log.channel === "web" ? "站内" : log.channel}
+                      </span>
+                      <span className="max-w-[200px] truncate font-mono text-[11px] text-muted-foreground">
                         {log.model}
                       </span>
                     </div>
                     <div className="flex items-center gap-3 text-muted-foreground">
+                      <span className="font-medium">
+                        {log.creditsUsed ? `${Math.round(log.creditsUsed)} cr` : "—"}
+                      </span>
                       <span>{log.latencyMs ? `${log.latencyMs}ms` : "—"}</span>
-                      <span>
-                        {new Date(log.createdAt!).toLocaleTimeString("zh-CN")}
+                      <span className="text-[11px]">
+                        {new Date(log.createdAt!).toLocaleString("zh-CN", {
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
                       </span>
                     </div>
                   </div>
