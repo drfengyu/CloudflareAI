@@ -13,6 +13,19 @@ const PRICE_MULTIPLIER_HOSTED = 10_000;
 const PRICE_MULTIPLIER_PROXIED = 1;
 
 /**
+ * 图像模型固定定价（Phase C 扩展）：
+ * 图像生成按 neurons 计费，但 Cloudflare API 不一定返回 neurons header，
+ * 且不同模型消耗差异大，因此采用固定价格策略。
+ */
+const IMAGE_MODEL_PRICING: Record<string, number> = {
+  "@cf/bytedance/stable-diffusion-xl-lightning": 3333,
+  "@cf/black-forest-labs/flux-1-schnell": 3000,
+  "@cf/stabilityai/stable-diffusion-xl-base-1.0": 3500,
+  // 其他图像模型统一使用 default
+};
+const IMAGE_MODEL_DEFAULT_PRICE = 3500; // credits per image
+
+/**
  * Calculate credits cost for a given model and token usage.
  * If model not found or pricing unavailable, falls back to default hosted pricing.
  * If catalog fetch fails, returns safe default to allow metering to continue.
@@ -22,9 +35,18 @@ export async function calculateCredits(
   inputTokens: number,
   outputTokens: number,
   neurons?: number,
+  task?: string,
 ): Promise<number> {
   try {
-    // 如果提供了 neurons，优先按 neurons 计算（图像/音频/视频模型）
+    // 图像模型固定定价（优先级最高）
+    // task === "Text-to-Image" 或 modelId 匹配已知图像模型
+    if (task === "Text-to-Image" || modelId.includes("stable-diffusion") || modelId.includes("flux")) {
+      const credits = IMAGE_MODEL_PRICING[modelId] ?? IMAGE_MODEL_DEFAULT_PRICE;
+      console.log(`[calculateCredits] image model fixed price: ${credits} credits`);
+      return credits;
+    }
+
+    // 如果提供了 neurons，优先按 neurons 计算（音频/视频模型）
     if (neurons && neurons > 0) {
       // Cloudflare 免费套餐：10,000 neurons/day
       // 我们的定价：按 neurons 的实际消耗 × 倍率

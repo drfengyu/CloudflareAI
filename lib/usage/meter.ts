@@ -35,6 +35,7 @@ export async function logUsage(input: {
     inputTokens,
     outputTokens,
     input.neurons,
+    input.task, // 传递 task 用于识别图像模型
   );
 
   // 扣减用户余额

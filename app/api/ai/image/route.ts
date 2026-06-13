@@ -26,9 +26,8 @@ export async function POST(req: NextRequest) {
 
   const { model, prompt, num_steps, guidance } = parsed.data;
 
-  // 余额预检（图像生成按 prompt 长度估算，输出按 1 image 计价）
-  const estimatedInput = prompt.length * 1.5;
-  const estimatedCredits = await calculateCredits(model, estimatedInput, 1);
+  // 余额预检（图像生成固定价格）
+  const estimatedCredits = await calculateCredits(model, 0, 0, undefined, "Text-to-Image");
 
   const balanceCheck = await verifyBalance(userId, undefined, estimatedCredits);
   if (!balanceCheck.ok) {
@@ -59,9 +58,9 @@ export async function POST(req: NextRequest) {
       model,
       task: "Text-to-Image",
       channel: "web",
-      inputTokens: Math.floor(estimatedInput),
+      inputTokens: Math.floor(prompt.length * 1.5),
       outputTokens: 1, // 1 image generated
-      neurons: neuronsUsed, // 真实的 neurons 消耗
+      neurons: neuronsUsed, // 真实的 neurons 消耗（可能为0）
       status: "ok",
       latencyMs: Date.now() - start,
     });
