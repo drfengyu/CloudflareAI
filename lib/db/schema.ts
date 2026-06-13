@@ -180,9 +180,27 @@ export const options = sqliteTable("option", {
   updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });
 
+/** 对话历史表：保存文本生成的 prompt 和 response（Phase C 扩展）。 */
+export const conversationHistory = sqliteTable("conversation_history", {
+  id: text("id").primaryKey().$defaultFn(uuid),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** 会话 ID，用于分组同一会话的多轮对话；null = 单次对话。 */
+  sessionId: text("sessionId"),
+  model: text("model").notNull(),
+  prompt: text("prompt").notNull(),
+  response: text("response").notNull(),
+  inputTokens: integer("inputTokens").notNull().default(0),
+  outputTokens: integer("outputTokens").notNull().default(0),
+  creditsUsed: integer("creditsUsed").notNull().default(0),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+});
+
 export type User = typeof users.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type UsageLog = typeof usageLogs.$inferSelect;
 export type Redemption = typeof redemptions.$inferSelect;
 export type Topup = typeof topups.$inferSelect;
 export type Option = typeof options.$inferSelect;
+export type ConversationHistory = typeof conversationHistory.$inferSelect;

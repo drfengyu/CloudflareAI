@@ -3,6 +3,7 @@ import { z } from "zod";
 import { openaiCompatible } from "@/lib/cloudflare/ai";
 import { requireUser, logUsage, verifyBalance } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
+import { saveConversation } from "@/lib/usage/conversation";
 
 const schema = z.object({
   model: z.string(),
@@ -98,16 +99,36 @@ export async function POST(req: NextRequest) {
     // 非流式：真实 token 数计量
     const data = await res.json();
     const usage = data.usage || {};
+    const inputTokens = usage.prompt_tokens || 0;
+    const outputTokens = usage.completion_tokens || 0;
+
+    const creditsUsed = await calculateCredits(model, inputTokens, outputTokens);
+
     await logUsage({
       userId,
       model,
       task: "Text Generation",
       channel: "web",
-      inputTokens: usage.prompt_tokens || 0,
-      outputTokens: usage.completion_tokens || 0,
+      inputTokens,
+      outputTokens,
       status: "ok",
       latencyMs: Date.now() - start,
     });
+
+    // 保存对话历史（仅非流式，因为流式我们无法获取完整 response）
+    const userMessage = messages.findLast((m) => m.role === "user");
+    const assistantMessage = data.choices?.[0]?.message?.content;
+    if (userMessage && assistantMessage) {
+      saveConversation({
+        userId,
+        model,
+        prompt: userMessage.content,
+        response: assistantMessage,
+        inputTokens,
+        outputTokens,
+        creditsUsed,
+      }).catch(console.error); // 不阻塞响应
+    }
 
     return Response.json(data);
   } catch (err) {
