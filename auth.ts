@@ -108,8 +108,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         name: token.name || "no-name"
       });
       // 从 token 恢复用户信息到 session
-      if (token.sub && session.user) {
-        session.user.id = token.sub;
+      if (session.user) {
+        // 强制设置 id，即使 token.sub 是空字符串
+        session.user.id = String(token.sub || "");
         // NextAuth 类型定义要求 email 是 string，所以提供默认值
         session.user.email = (token.email as string) || "";
         session.user.name = (token.name as string | null) || null;
