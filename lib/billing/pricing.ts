@@ -14,7 +14,7 @@ const PRICE_MULTIPLIER_PROXIED = 1;
 
 /**
  * Calculate credits cost for a given model and token usage.
- * Returns 0 if model not found or pricing unavailable.
+ * If model not found or pricing unavailable, falls back to default hosted pricing.
  */
 export async function calculateCredits(
   modelId: string,
@@ -23,7 +23,20 @@ export async function calculateCredits(
 ): Promise<number> {
   const catalog = await fetchModelCatalog();
   const model = catalog.find((m) => m.id === modelId);
-  if (!model?.pricing?.[0]) return 0;
+
+  // Fallback: if model not found in catalog, assume hosted + text model default pricing
+  if (!model) {
+    const defaultUsd = ((inputTokens + outputTokens) / 1_000_000) * 0.01; // $0.01 / 1M tokens
+    return usdToCredits(defaultUsd * PRICE_MULTIPLIER_HOSTED);
+  }
+
+  // If model exists but has no pricing, use default based on source
+  if (!model.pricing?.[0]) {
+    const defaultUsd = ((inputTokens + outputTokens) / 1_000_000) * 0.01;
+    const multiplier =
+      model.source === "hosted" ? PRICE_MULTIPLIER_HOSTED : PRICE_MULTIPLIER_PROXIED;
+    return usdToCredits(defaultUsd * multiplier);
+  }
 
   const p = model.pricing[0];
   let usd = 0;
