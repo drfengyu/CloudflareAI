@@ -56,6 +56,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, account, profile, trigger }) {
       // 首次登录时，将用户信息保存到 token
       if (user) {
+        console.log("[JWT] Raw user object:", JSON.stringify(user));
+        console.log("[JWT] Raw account:", JSON.stringify(account));
+        console.log("[JWT] Raw profile:", JSON.stringify(profile));
         console.log("[JWT] Saving user to token:", {
           id: user.id,
           email: user.email || "no-email",
