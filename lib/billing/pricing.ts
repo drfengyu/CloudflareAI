@@ -15,31 +15,33 @@ const PRICE_MULTIPLIER_PROXIED = 1;
 /**
  * Calculate credits cost for a given model and token usage.
  * If model not found or pricing unavailable, falls back to default hosted pricing.
+ * If catalog fetch fails, returns safe default to allow metering to continue.
  */
 export async function calculateCredits(
   modelId: string,
   inputTokens: number,
   outputTokens: number,
 ): Promise<number> {
-  const catalog = await fetchModelCatalog();
-  const model = catalog.find((m) => m.id === modelId);
+  try {
+    const catalog = await fetchModelCatalog();
+    const model = catalog.find((m) => m.id === modelId);
 
-  // Fallback: if model not found in catalog, assume hosted + text model default pricing
-  if (!model) {
-    const defaultUsd = ((inputTokens + outputTokens) / 1_000_000) * 0.01; // $0.01 / 1M tokens
-    return usdToCredits(defaultUsd * PRICE_MULTIPLIER_HOSTED);
-  }
+    // Fallback: if model not found in catalog, assume hosted + text model default pricing
+    if (!model) {
+      const defaultUsd = ((inputTokens + outputTokens) / 1_000_000) * 0.01; // $0.01 / 1M tokens
+      return usdToCredits(defaultUsd * PRICE_MULTIPLIER_HOSTED);
+    }
 
-  // If model exists but has no pricing, use default based on source
-  if (!model.pricing?.[0]) {
-    const defaultUsd = ((inputTokens + outputTokens) / 1_000_000) * 0.01;
-    const multiplier =
-      model.source === "hosted" ? PRICE_MULTIPLIER_HOSTED : PRICE_MULTIPLIER_PROXIED;
-    return usdToCredits(defaultUsd * multiplier);
-  }
+    // If model exists but has no pricing, use default based on source
+    if (!model.pricing?.[0]) {
+      const defaultUsd = ((inputTokens + outputTokens) / 1_000_000) * 0.01;
+      const multiplier =
+        model.source === "hosted" ? PRICE_MULTIPLIER_HOSTED : PRICE_MULTIPLIER_PROXIED;
+      return usdToCredits(defaultUsd * multiplier);
+    }
 
-  const p = model.pricing[0];
-  let usd = 0;
+    const p = model.pricing[0];
+    let usd = 0;
 
   // Map pricing unit to token count
   const unitTokens =
@@ -67,4 +69,11 @@ export async function calculateCredits(
     model.source === "hosted" ? PRICE_MULTIPLIER_HOSTED : PRICE_MULTIPLIER_PROXIED;
 
   return usdToCredits(usd * multiplier);
+  } catch (error) {
+    // If catalog fetch fails (network, API error, etc.), return safe default
+    // to allow metering to continue rather than failing the request
+    console.error("calculateCredits failed, using fallback:", error);
+    const defaultUsd = ((inputTokens + outputTokens) / 1_000_000) * 0.01;
+    return usdToCredits(defaultUsd * PRICE_MULTIPLIER_HOSTED);
+  }
 }
