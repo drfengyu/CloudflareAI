@@ -8,14 +8,14 @@ export default auth;
 
 export const config = {
   matcher: [
-    "/",
-    "/dashboard/:path*",
-    "/models/:path*",
-    "/playground/:path*",
-    "/history/:path*",
-    "/keys/:path*",
-    "/settings/:path*",
-    "/login",
-    "/register",
+    /*
+     * Match all request paths except for the ones starting with:
+     * - api (API routes)
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - test (test page)
+     */
+    "/((?!api|_next/static|_next/image|favicon.ico|test).*)",
   ],
 };
