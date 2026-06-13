@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# Playwright MCP debug artifacts
+.playwright-mcp/
+dashboard-hourly.png

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { runModelBinary } from "@/lib/cloudflare/ai";
+import { runModelBinary, runModelMultipart } from "@/lib/cloudflare/ai";
 import { requireUser, logUsage, verifyBalance } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 
@@ -37,29 +37,43 @@ export async function POST(req: NextRequest) {
   const start = Date.now();
 
   try {
-    // FLUX-2 系列模型需要特殊的参数格式（multipart 包裹）
+    // FLUX-2 系列要求真正的 multipart/form-data（即使纯文本提示），
+    // 且返回 JSON envelope（result.image 为 base64）；其余模型走 JSON + 裸字节。
     const isFlux2 = model.includes("flux-2");
-    const requestBody = isFlux2
-      ? {
-          multipart: {
-            prompt,
-            ...(num_steps && { num_steps }),
-            ...(guidance && { guidance }),
-          },
-        }
-      : { prompt, num_steps, guidance };
 
-    const res = await runModelBinary(model, requestBody, req.signal);
+    let dataUrl: string;
+    let neuronsUsed: number;
 
-    // 读取 Cloudflare 返回的 neurons 消耗
-    const neuronsHeader = res.headers.get("x-cf-ai-usage-neurons");
-    const neuronsUsed = parseFloat(neuronsHeader || "0");
-    console.log(`[image] model=${model}, neurons header="${neuronsHeader}", parsed=${neuronsUsed}`);
+    if (isFlux2) {
+      const fields: Record<string, string> = { prompt };
+      if (num_steps) fields.steps = String(num_steps);
+      if (guidance) fields.guidance = String(guidance);
 
-    const blob = await res.blob();
-    const buffer = await blob.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString("base64");
-    const dataUrl = `data:image/png;base64,${base64}`;
+      const { image, neuronsHeader } = await runModelMultipart(
+        model,
+        fields,
+        req.signal,
+      );
+      neuronsUsed = parseFloat(neuronsHeader || "0");
+      console.log(`[image] model=${model}, neurons header="${neuronsHeader}", parsed=${neuronsUsed}`);
+      dataUrl = `data:image/png;base64,${image}`;
+    } else {
+      const res = await runModelBinary(
+        model,
+        { prompt, num_steps, guidance },
+        req.signal,
+      );
+
+      // 读取 Cloudflare 返回的 neurons 消耗
+      const neuronsHeader = res.headers.get("x-cf-ai-usage-neurons");
+      neuronsUsed = parseFloat(neuronsHeader || "0");
+      console.log(`[image] model=${model}, neurons header="${neuronsHeader}", parsed=${neuronsUsed}`);
+
+      const blob = await res.blob();
+      const buffer = await blob.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString("base64");
+      dataUrl = `data:image/png;base64,${base64}`;
+    }
 
     await logUsage({
       userId,

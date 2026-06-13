@@ -69,6 +69,49 @@ export async function runModelBinary(
 }
 
 /**
+ * Run a model that requires `multipart/form-data` input (FLUX.2 family).
+ *
+ * Unlike most Workers AI image models, FLUX.2 rejects the JSON envelope and
+ * requires real multipart fields — even for a text-only prompt. The REST `/run`
+ * endpoint parses the form and returns the standard JSON envelope with the
+ * generated image as a base64 string (`result.image`). We let `fetch`/FormData
+ * set the `Content-Type` boundary itself, so we must NOT send our JSON headers.
+ *
+ * Returns `{ image: base64, neuronsHeader }`.
+ */
+export async function runModelMultipart(
+  model: string,
+  fields: Record<string, string>,
+  signal?: AbortSignal,
+): Promise<{ image: string; neuronsHeader: string | null }> {
+  const form = new FormData();
+  for (const [k, v] of Object.entries(fields)) {
+    form.append(k, v);
+  }
+
+  const res = await fetch(`${aiBase()}/run/${model}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${env.cloudflare.apiToken}` },
+    body: form,
+    signal,
+  });
+
+  const body = await res.json().catch(() => null);
+  if (!res.ok || (body && body.success === false)) {
+    const msg =
+      body?.errors?.map((e: { message: string }) => e.message).join("; ") ||
+      `Model run failed (${res.status})`;
+    throw new Error(msg);
+  }
+
+  const image = body?.result?.image as string | undefined;
+  if (!image) {
+    throw new Error("FLUX.2 response missing image data");
+  }
+  return { image, neuronsHeader: res.headers.get("x-cf-ai-usage-neurons") };
+}
+
+/**
  * Proxy to an OpenAI-compatible endpoint (`/ai/v1/...`). Returns the raw
  * Response — works for both JSON and streaming (SSE) responses.
  */

@@ -93,7 +93,7 @@ export async function getUsageByModel(userId: string, days = 30) {
       ),
     )
     .groupBy(usageLogs.model)
-    .orderBy(desc(sql`credits`))
+    .orderBy(desc(sql`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`))
     .limit(10);
 
   return rows;
@@ -143,7 +143,7 @@ export async function getHourlyUsageToday(userId: string) {
       ),
     )
     .groupBy(sql`CAST(strftime('%H', ${usageLogs.createdAt} / 1000, 'unixepoch', 'localtime') AS INTEGER)`)
-    .orderBy(sql`hour ASC`);
+    .orderBy(sql`CAST(strftime('%H', ${usageLogs.createdAt} / 1000, 'unixepoch', 'localtime') AS INTEGER) ASC`);
 
   return rows;
 }

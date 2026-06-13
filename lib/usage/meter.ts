@@ -29,16 +29,20 @@ export async function logUsage(input: {
   const inputTokens = input.inputTokens ?? 0;
   const outputTokens = input.outputTokens ?? 0;
 
-  // 计算 credits（失败的调用也计费，模型返回 error 仍消耗资源）
-  const creditsUsed = await calculateCredits(
-    input.model,
-    inputTokens,
-    outputTokens,
-    input.neurons,
-    input.task, // 传递 task 用于识别图像模型
-  );
+  // 计算 credits。失败的调用不计费、不计入统计（creditsUsed=0），
+  // 余额扣减与用量统计口径保持一致。
+  const creditsUsed =
+    input.status === "ok"
+      ? await calculateCredits(
+          input.model,
+          inputTokens,
+          outputTokens,
+          input.neurons,
+          input.task, // 传递 task 用于识别图像模型
+        )
+      : 0;
 
-  // 只有成功的调用才扣费（Phase C 修正：error 不扣费）
+  // 只有成功的调用才扣费（error 已在上面记为 0 credits）
   if (input.status === "ok" && creditsUsed > 0) {
     // 扣减用户余额
     await db

@@ -64,7 +64,11 @@ export function ModelDistributionChart({ data }: { data: ModelUsageData[] }) {
             borderRadius: "8px",
             fontSize: "12px",
           }}
-          formatter={(value: any, name: any, props: any) => {
+          formatter={(
+            value: number | string,
+            name: string,
+            props: { payload: { model: string; calls: number } },
+          ) => {
             if (name === "credits") {
               return [
                 `${Math.round(Number(value))} credits`,
