@@ -124,6 +124,30 @@ export async function getDailyUsage(userId: string, days = 7) {
   return rows;
 }
 
+/** 按小时统计今日用量（Phase C 扩展：用于当天小时趋势图） */
+export async function getHourlyUsageToday(userId: string) {
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+
+  const rows = await db
+    .select({
+      hour: sql<number>`CAST(strftime('%H', ${usageLogs.createdAt} / 1000, 'unixepoch', 'localtime') AS INTEGER)`,
+      calls: sql<number>`COUNT(*)`,
+      credits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
+    })
+    .from(usageLogs)
+    .where(
+      and(
+        eq(usageLogs.userId, userId),
+        gte(usageLogs.createdAt, todayStart),
+      ),
+    )
+    .groupBy(sql`CAST(strftime('%H', ${usageLogs.createdAt} / 1000, 'unixepoch', 'localtime') AS INTEGER)`)
+    .orderBy(sql`hour ASC`);
+
+  return rows;
+}
+
 /** 分页查询用量记录（历史页） */
 export async function queryUsage(input: {
   userId: string;

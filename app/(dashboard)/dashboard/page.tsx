@@ -9,23 +9,31 @@ import {
   getRecentUsage,
   getDailyUsage,
   getUsageByModel,
+  getHourlyUsageToday,
 } from "@/lib/usage/queries";
 import { Activity, Wallet, TrendingUp, Clock } from "lucide-react";
 import { UsageTrendChart } from "@/components/dashboard/usage-trend-chart";
 import { ModelDistributionChart } from "@/components/dashboard/model-distribution-chart";
+import { HourlyUsageChart } from "@/components/dashboard/hourly-usage-chart";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: { range?: string };
+}) {
   const userId = await requireUser();
+  const range = searchParams.range || "today"; // today | week | month
 
   // 使用 try-catch 包裹每个查询，防止单个查询失败导致整个页面崩溃
-  const [today, month, balance, recent, dailyUsage, modelUsage] = await Promise.all([
+  const [today, month, balance, recent, hourlyUsage, dailyUsage, modelUsage] = await Promise.all([
     getTodayUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 })),
     getMonthUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 })),
     getUserBalance(userId).catch(() => 0),
     getRecentUsage(userId, 10).catch(() => []),
-    getDailyUsage(userId, 7).catch(() => []),
+    getHourlyUsageToday(userId).catch(() => []),
+    getDailyUsage(userId, range === "month" ? 30 : 7).catch(() => []),
     getUsageByModel(userId, 30).catch(() => []),
   ]);
 
@@ -82,27 +90,77 @@ export default async function DashboardPage() {
         )}
 
         {/* 图表区 */}
-        <div className="grid gap-4 lg:grid-cols-2">
-          {/* 消耗趋势 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">近 7 日消耗趋势</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <UsageTrendChart data={dailyUsage} />
-            </CardContent>
-          </Card>
+        <div className="space-y-4">
+          {/* 时间范围切换 */}
+          <div className="flex gap-2">
+            <a
+              href="?range=today"
+              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                range === "today"
+                  ? "bg-primary text-white"
+                  : "border border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              今日
+            </a>
+            <a
+              href="?range=week"
+              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                range === "week"
+                  ? "bg-primary text-white"
+                  : "border border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              本周
+            </a>
+            <a
+              href="?range=month"
+              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                range === "month"
+                  ? "bg-primary text-white"
+                  : "border border-border text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              本月
+            </a>
+          </div>
 
-          {/* 模型分布 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">近 30 日模型分布（Top 10）</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ModelDistributionChart data={modelUsage} />
-            </CardContent>
-          </Card>
+          {/* 今日小时趋势 */}
+          {range === "today" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">今日每小时消耗（0-23时）</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <HourlyUsageChart data={hourlyUsage} />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* 每日趋势 */}
+          {range !== "today" && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">
+                  {range === "week" ? "近 7 日" : "近 30 日"}消耗趋势
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <UsageTrendChart data={dailyUsage} />
+              </CardContent>
+            </Card>
+          )}
         </div>
+
+        {/* 模型分布 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">近 30 日模型分布（Top 10）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ModelDistributionChart data={modelUsage} />
+          </CardContent>
+        </Card>
 
         {/* 最近调用记录 */}
         <Card>
