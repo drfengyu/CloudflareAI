@@ -50,7 +50,7 @@ export async function GET() {
           Authorization: `Bearer ${env.cloudflare.apiToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ sql: "SELECT 1 as check", params: [] }),
+        body: JSON.stringify({ sql: "SELECT 1 as result", params: [] }),
       }
     );
 
