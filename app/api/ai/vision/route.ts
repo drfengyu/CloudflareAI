@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { runModelJSON } from "@/lib/cloudflare/ai";
-import { requireUser, logUsage } from "@/lib/usage/meter";
+import { requireUser, logUsage, verifyBalance } from "@/lib/usage/meter";
+import { calculateCredits } from "@/lib/billing/pricing";
 
 const schema = z.object({
   model: z.string(),
@@ -12,7 +13,7 @@ const schema = z.object({
 
 /**
  * POST /api/ai/vision
- * 图像理解：上传图片 + 提问 → 文本回答（使用 vision 模型）
+ * 图像理解（Phase B: 加入余额校验 + 真实扣费）
  */
 export async function POST(req: NextRequest) {
   const userId = await requireUser();
@@ -24,6 +25,17 @@ export async function POST(req: NextRequest) {
   }
 
   const { model, prompt, image, max_tokens } = parsed.data;
+
+  // 余额预检（vision: 按 prompt 长度 + max_tokens 估算）
+  const estimatedInput = prompt.length * 1.5;
+  const estimatedOutput = max_tokens || 512;
+  const estimatedCredits = await calculateCredits(model, estimatedInput, estimatedOutput);
+
+  const balanceCheck = await verifyBalance(userId, undefined, estimatedCredits);
+  if (!balanceCheck.ok) {
+    return Response.json({ error: balanceCheck.reason }, { status: 402 });
+  }
+
   const start = Date.now();
 
   try {
@@ -42,6 +54,8 @@ export async function POST(req: NextRequest) {
       model,
       task: "Image Understanding",
       channel: "web",
+      inputTokens: Math.floor(estimatedInput),
+      outputTokens: estimatedOutput,
       status: "ok",
       latencyMs: Date.now() - start,
     });

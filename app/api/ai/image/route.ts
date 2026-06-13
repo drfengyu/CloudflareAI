@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { runModelBinary } from "@/lib/cloudflare/ai";
-import { requireUser, logUsage } from "@/lib/usage/meter";
+import { requireUser, logUsage, verifyBalance } from "@/lib/usage/meter";
+import { calculateCredits } from "@/lib/billing/pricing";
 
 const schema = z.object({
   model: z.string(),
@@ -12,7 +13,7 @@ const schema = z.object({
 
 /**
  * POST /api/ai/image
- * 文生图：提示词 → PNG 图像（返回 base64 data URL）
+ * 文生图（Phase B: 加入余额校验 + 真实扣费）
  */
 export async function POST(req: NextRequest) {
   const userId = await requireUser();
@@ -24,6 +25,16 @@ export async function POST(req: NextRequest) {
   }
 
   const { model, prompt, num_steps, guidance } = parsed.data;
+
+  // 余额预检（图像生成按 prompt 长度估算，输出按 1 image 计价）
+  const estimatedInput = prompt.length * 1.5;
+  const estimatedCredits = await calculateCredits(model, estimatedInput, 1);
+
+  const balanceCheck = await verifyBalance(userId, undefined, estimatedCredits);
+  if (!balanceCheck.ok) {
+    return Response.json({ error: balanceCheck.reason }, { status: 402 });
+  }
+
   const start = Date.now();
 
   try {
@@ -43,6 +54,8 @@ export async function POST(req: NextRequest) {
       model,
       task: "Text-to-Image",
       channel: "web",
+      inputTokens: Math.floor(estimatedInput),
+      outputTokens: 1, // 1 image generated
       status: "ok",
       latencyMs: Date.now() - start,
     });

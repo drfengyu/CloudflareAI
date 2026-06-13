@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { runModelJSON } from "@/lib/cloudflare/ai";
-import { requireUser, logUsage } from "@/lib/usage/meter";
+import { requireUser, logUsage, verifyBalance } from "@/lib/usage/meter";
+import { calculateCredits } from "@/lib/billing/pricing";
 
 const schema = z.object({
   model: z.string(),
@@ -12,7 +13,7 @@ const schema = z.object({
 
 /**
  * POST /api/ai/translate
- * 翻译：输入文本 + 目标语言 → 翻译结果
+ * 翻译（Phase B: 加入余额校验 + 真实扣费）
  */
 export async function POST(req: NextRequest) {
   const userId = await requireUser();
@@ -24,6 +25,17 @@ export async function POST(req: NextRequest) {
   }
 
   const { model, text, source_lang, target_lang } = parsed.data;
+
+  // 余额预检（翻译：输入文本长度 * 1.5，输出按输入等长估算）
+  const estimatedInput = text.length * 1.5;
+  const estimatedOutput = text.length * 1.5;
+  const estimatedCredits = await calculateCredits(model, estimatedInput, estimatedOutput);
+
+  const balanceCheck = await verifyBalance(userId, undefined, estimatedCredits);
+  if (!balanceCheck.ok) {
+    return Response.json({ error: balanceCheck.reason }, { status: 402 });
+  }
+
   const start = Date.now();
 
   try {
@@ -38,6 +50,8 @@ export async function POST(req: NextRequest) {
       model,
       task: "Translation",
       channel: "web",
+      inputTokens: Math.floor(estimatedInput),
+      outputTokens: Math.floor(estimatedOutput),
       status: "ok",
       latencyMs: Date.now() - start,
     });
