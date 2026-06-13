@@ -52,7 +52,7 @@ export function UsageTrendChart({ data }: { data: DailyUsageData[] }) {
             borderRadius: "8px",
             fontSize: "12px",
           }}
-          formatter={(value: number | string, name: string) => {
+          formatter={(value, name) => {
             if (name === "credits") return [`${Math.round(Number(value))} credits`, "消耗"];
             if (name === "calls") return [value, "调用次数"];
             return [value, name];
