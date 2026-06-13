@@ -39,7 +39,7 @@ export async function GET() {
     const tables = body.result?.[0]?.results || [];
 
     // 检查必需的表
-    const requiredTables = ["user", "account", "session", "usage_record", "api_key"];
+    const requiredTables = ["user", "account", "session", "usage_log", "api_key", "quota"];
     const existingTables = tables.map((t: { name: string }) => t.name);
     const missingTables = requiredTables.filter(t => !existingTables.includes(t));
 
