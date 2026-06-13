@@ -21,8 +21,20 @@ export async function calculateCredits(
   modelId: string,
   inputTokens: number,
   outputTokens: number,
+  neurons?: number,
 ): Promise<number> {
   try {
+    // 如果提供了 neurons，优先按 neurons 计算（图像/音频/视频模型）
+    if (neurons && neurons > 0) {
+      // Cloudflare 免费套餐：10,000 neurons/day
+      // 我们的定价：按 neurons 的实际消耗 × 倍率
+      // 1 neuron ≈ $0.000001 (假设)，× 10,000 = 0.01 credits/neuron
+      const creditsPerNeuron = 1; // 1 neuron = 1 credit
+      const credits = neurons * creditsPerNeuron;
+      console.log(`[calculateCredits] neurons-based: ${credits} credits (${neurons} neurons)`);
+      return credits;
+    }
+
     const catalog = await fetchModelCatalog();
     console.log(`[calculateCredits] catalog size: ${catalog.length}, modelId: ${modelId}`);
     const model = catalog.find((m) => m.id === modelId);

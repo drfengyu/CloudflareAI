@@ -30,7 +30,12 @@ export async function logUsage(input: {
   const outputTokens = input.outputTokens ?? 0;
 
   // 计算 credits（失败的调用也计费，模型返回 error 仍消耗资源）
-  const creditsUsed = await calculateCredits(input.model, inputTokens, outputTokens);
+  const creditsUsed = await calculateCredits(
+    input.model,
+    inputTokens,
+    outputTokens,
+    input.neurons,
+  );
 
   // 扣减用户余额
   if (creditsUsed > 0) {

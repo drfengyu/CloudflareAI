@@ -44,6 +44,9 @@ export async function POST(req: NextRequest) {
       req.signal,
     );
 
+    // 读取 Cloudflare 返回的 neurons 消耗
+    const neuronsUsed = parseFloat(res.headers.get("x-cf-ai-usage-neurons") || "0");
+
     const blob = await res.blob();
     const buffer = await blob.arrayBuffer();
     const base64 = Buffer.from(buffer).toString("base64");
@@ -56,6 +59,7 @@ export async function POST(req: NextRequest) {
       channel: "web",
       inputTokens: Math.floor(estimatedInput),
       outputTokens: 1, // 1 image generated
+      neurons: neuronsUsed, // 真实的 neurons 消耗
       status: "ok",
       latencyMs: Date.now() - start,
     });
