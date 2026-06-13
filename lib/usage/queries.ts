@@ -118,8 +118,8 @@ export async function getDailyUsage(userId: string, days = 7) {
         gte(usageLogs.createdAt, startDate),
       ),
     )
-    .groupBy(sql`date`)
-    .orderBy(sql`date ASC`);
+    .groupBy(sql`DATE(${usageLogs.createdAt} / 1000, 'unixepoch')`)
+    .orderBy(sql`DATE(${usageLogs.createdAt} / 1000, 'unixepoch') ASC`);
 
   return rows;
 }
