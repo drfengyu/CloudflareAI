@@ -53,12 +53,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     ...authConfig.callbacks,
-    jwt({ token, user }) {
-      if (user?.id) token.sub = user.id;
+    jwt({ token, user, account, profile }) {
+      // 首次登录时，将用户信息保存到 token
+      if (user) {
+        token.sub = user.id;
+        token.email = user.email;
+        token.name = user.name;
+        token.image = user.image;
+      }
       return token;
     },
     session({ session, token }) {
-      if (token.sub && session.user) session.user.id = token.sub;
+      // 从 token 恢复用户信息到 session
+      if (token.sub && session.user) {
+        session.user.id = token.sub;
+        session.user.email = token.email as string;
+        session.user.name = token.name as string | null;
+        session.user.image = token.image as string | null;
+      }
       return session;
     },
   },
