@@ -6,7 +6,7 @@
  */
 
 /* ── Anthropic: warm cream paper + clay/coral accent ── */
-[data-theme-preset="anthropic"] {
+:root[data-theme-preset="anthropic"] {
   --background: oklch(0.985 0.006 90);
   --foreground: oklch(0.24 0.02 50);
   --card: oklch(0.995 0.004 90);
@@ -61,7 +61,7 @@
 }
 
 /* ── Cloudflare: orange brand accent on neutral chrome ── */
-[data-theme-preset="cloudflare"] {
+:root[data-theme-preset="cloudflare"] {
   --primary: oklch(0.7 0.18 52);
   --primary-foreground: oklch(0.2 0.04 50);
   --ring: oklch(0.7 0.18 52);
