@@ -24,12 +24,16 @@ export async function calculateCredits(
 ): Promise<number> {
   try {
     const catalog = await fetchModelCatalog();
+    console.log(`[calculateCredits] catalog size: ${catalog.length}, modelId: ${modelId}`);
     const model = catalog.find((m) => m.id === modelId);
+    console.log(`[calculateCredits] model found: ${!!model}, pricing: ${JSON.stringify(model?.pricing || null)}`);
 
     // Fallback: if model not found in catalog, assume hosted + text model default pricing
     if (!model) {
       const defaultUsd = ((inputTokens + outputTokens) / 1_000_000) * 0.01; // $0.01 / 1M tokens
-      return usdToCredits(defaultUsd * PRICE_MULTIPLIER_HOSTED);
+      const credits = usdToCredits(defaultUsd * PRICE_MULTIPLIER_HOSTED);
+      console.log(`[calculateCredits] fallback (model not found): ${credits} credits`);
+      return credits;
     }
 
     // If model exists but has no pricing, use default based on source
@@ -37,7 +41,9 @@ export async function calculateCredits(
       const defaultUsd = ((inputTokens + outputTokens) / 1_000_000) * 0.01;
       const multiplier =
         model.source === "hosted" ? PRICE_MULTIPLIER_HOSTED : PRICE_MULTIPLIER_PROXIED;
-      return usdToCredits(defaultUsd * multiplier);
+      const credits = usdToCredits(defaultUsd * multiplier);
+      console.log(`[calculateCredits] fallback (no pricing), source=${model.source}: ${credits} credits`);
+      return credits;
     }
 
     const p = model.pricing[0];
@@ -68,12 +74,16 @@ export async function calculateCredits(
   const multiplier =
     model.source === "hosted" ? PRICE_MULTIPLIER_HOSTED : PRICE_MULTIPLIER_PROXIED;
 
-  return usdToCredits(usd * multiplier);
+  const finalCredits = usdToCredits(usd * multiplier);
+  console.log(`[calculateCredits] calculated: ${finalCredits} credits (usd=${usd}, multiplier=${multiplier}, source=${model.source})`);
+  return finalCredits;
   } catch (error) {
     // If catalog fetch fails (network, API error, etc.), return safe default
     // to allow metering to continue rather than failing the request
-    console.error("calculateCredits failed, using fallback:", error);
+    console.error("[calculateCredits] ERROR - using fallback:", error);
     const defaultUsd = ((inputTokens + outputTokens) / 1_000_000) * 0.01;
-    return usdToCredits(defaultUsd * PRICE_MULTIPLIER_HOSTED);
+    const credits = usdToCredits(defaultUsd * PRICE_MULTIPLIER_HOSTED);
+    console.log(`[calculateCredits] exception fallback: ${credits} credits`);
+    return credits;
   }
 }
