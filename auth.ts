@@ -56,14 +56,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     jwt({ token, user, account, profile }) {
       // 首次登录时，将用户信息保存到 token
       if (user) {
+        console.log("[JWT] Saving user to token:", {
+          id: user.id,
+          email: user.email,
+          name: user.name
+        });
         token.sub = user.id;
         token.email = user.email;
         token.name = user.name;
         token.image = user.image;
+      } else {
+        console.log("[JWT] No user, token:", { sub: token.sub, email: token.email });
       }
       return token;
     },
     session({ session, token }) {
+      console.log("[SESSION] Token data:", {
+        sub: token.sub,
+        email: token.email,
+        name: token.name
+      });
       // 从 token 恢复用户信息到 session
       if (token.sub && session.user) {
         session.user.id = token.sub;
@@ -71,6 +83,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.name = token.name as string | null;
         session.user.image = token.image as string | null;
       }
+      console.log("[SESSION] Final user:", session.user);
       return session;
     },
   },
