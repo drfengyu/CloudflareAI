@@ -117,7 +117,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           console.log("[SESSION] token.sub missing, fetching user ID by email:", token.email);
           try {
             const dbUser = await db.query.users.findFirst({
-              where: (users, { eq }) => eq(users.email, token.email as string),
+              where: (users, { eq }) => eq(users.email, String(token.email).toLowerCase()),
             });
             if (dbUser) {
               userId = dbUser.id;
