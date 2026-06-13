@@ -28,7 +28,9 @@ export function ModelBrowser({ models }: { models: NormalizedModel[] }) {
       return (
         m.id.toLowerCase().includes(q) ||
         m.name.toLowerCase().includes(q) ||
-        m.description.toLowerCase().includes(q)
+        m.description.toLowerCase().includes(q) ||
+        (m.descriptionZh?.toLowerCase().includes(q) ?? false) ||
+        (m.author?.toLowerCase().includes(q) ?? false)
       );
     });
   }, [models, filter, query]);
@@ -49,7 +51,7 @@ export function ModelBrowser({ models }: { models: NormalizedModel[] }) {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索模型 id / 名称 / 描述"
+          placeholder="搜索模型 id / 名称 / 厂商 / 描述"
           className="h-9 w-full rounded-lg border border-border bg-surface pl-9 pr-3 text-sm outline-none focus:border-[color:var(--primary)]"
         />
       </div>
@@ -86,11 +88,22 @@ export function ModelBrowser({ models }: { models: NormalizedModel[] }) {
 }
 
 function ModelCard({ model }: { model: NormalizedModel }) {
+  const description = model.descriptionZh ?? model.description;
   return (
     <Card className="flex h-full flex-col">
       <CardContent className="flex flex-1 flex-col gap-2 pt-5">
         <div className="flex items-start justify-between gap-2">
-          <p className="text-sm font-semibold leading-tight">{model.name}</p>
+          <div className="flex min-w-0 items-start gap-2.5">
+            <VendorLogo author={model.author} name={model.name} logo={model.logo} />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold leading-tight">
+                {model.name}
+              </p>
+              {model.author && (
+                <p className="truncate text-[11px] text-muted">{model.author}</p>
+              )}
+            </div>
+          </div>
           {model.source === "hosted" ? (
             <Badge tone="success">CF 托管</Badge>
           ) : (
@@ -98,17 +111,24 @@ function ModelCard({ model }: { model: NormalizedModel }) {
           )}
         </div>
         <code className="break-all text-[11px] text-muted">{model.id}</code>
-        {model.description && (
-          <p className="line-clamp-3 text-xs text-muted">{model.description}</p>
+        {description && (
+          <p className="line-clamp-3 text-xs text-muted">{description}</p>
         )}
         <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
-          {model.functionCalling && <Badge tone="accent">函数调用</Badge>}
-          {model.contextWindow ? (
-            <Badge tone="muted">
-              {formatNumber(model.contextWindow)} ctx
+          {model.tags?.map((tag) => (
+            <Badge key={tag} tone={tagTone(tag)}>
+              {tag}
             </Badge>
+          ))}
+          {model.functionCalling && !model.tags?.includes("函数调用") && (
+            <Badge tone="accent">函数调用</Badge>
+          )}
+          {model.contextWindow ? (
+            <Badge tone="muted">{formatNumber(model.contextWindow)} ctx</Badge>
           ) : null}
-          {model.beta && <Badge tone="muted">beta</Badge>}
+          {model.beta && !model.tags?.includes("测试版") && (
+            <Badge tone="muted">beta</Badge>
+          )}
           {model.pricing[0] && (
             <Badge tone="muted">
               ${model.pricing[0].price} / {model.pricing[0].unit}
@@ -118,4 +138,40 @@ function ModelCard({ model }: { model: NormalizedModel }) {
       </CardContent>
     </Card>
   );
+}
+
+/** 厂商 Logo，缺失时回退到作者/名称首字母占位。 */
+function VendorLogo({
+  author,
+  name,
+  logo,
+}: {
+  author?: string;
+  name: string;
+  logo?: string;
+}) {
+  if (logo) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- 远程 Cloudflare 文档站 SVG，无需 next/image 优化
+      <img
+        src={logo}
+        alt={author ?? name}
+        className="mt-0.5 h-6 w-6 shrink-0 rounded object-contain"
+        loading="lazy"
+      />
+    );
+  }
+  const initial = (author ?? name).trim().charAt(0).toUpperCase() || "?";
+  return (
+    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[color:var(--primary)]/10 text-[11px] font-semibold text-muted">
+      {initial}
+    </div>
+  );
+}
+
+/** 能力标签 → 配色：已弃用=警示，测试版=弱化，其余=强调。 */
+function tagTone(tag: string): "accent" | "warning" | "muted" {
+  if (tag === "已弃用") return "warning";
+  if (tag === "测试版") return "muted";
+  return "accent";
 }

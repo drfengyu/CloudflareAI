@@ -1,5 +1,6 @@
 import { cfFetch } from "@/lib/cloudflare/client";
 import { categoryForTask, type CategoryId } from "@/lib/categories";
+import { metaForId, logoForAuthor } from "@/lib/cloudflare/model-meta.zh";
 
 /**
  * Workers AI model catalog: fetch from `/ai/models/search`, normalize the
@@ -28,6 +29,14 @@ export interface NormalizedModel {
   contextWindow?: number;
   functionCalling: boolean;
   pricing: ModelPrice[];
+  /** 厂商/作者（来自中文元数据覆盖层）。 */
+  author?: string;
+  /** 中文描述（来自中文元数据覆盖层，优先于英文 description 展示）。 */
+  descriptionZh?: string;
+  /** 中文能力标签（函数调用 / 推理 / 视觉 / 已弃用 等）。 */
+  tags?: string[];
+  /** 厂商 Logo（SVG）URL。 */
+  logo?: string;
 }
 
 // ── Raw payload shapes (defensive: Cloudflare's fields are loosely typed) ──
@@ -95,6 +104,7 @@ function normalize(raw: RawModel): NormalizedModel | null {
   const id = raw.name ?? raw.id;
   if (!id || typeof id !== "string") return null;
   const task = taskName(raw.task);
+  const meta = metaForId(id);
   return {
     id,
     name: friendlyName(id),
@@ -102,6 +112,10 @@ function normalize(raw: RawModel): NormalizedModel | null {
     task,
     category: categoryForTask(task),
     source: normSource(raw.source),
+    author: meta?.author,
+    descriptionZh: meta?.zh,
+    tags: meta?.tags,
+    logo: logoForAuthor(meta?.author),
     ...parseProps(raw.properties),
   };
 }
