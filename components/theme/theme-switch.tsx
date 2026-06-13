@@ -25,16 +25,26 @@ const PRESETS: { id: ThemePreset; label: string }[] = [
 ];
 
 export function ThemeSwitch() {
-  const { setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
   const { preset, setPreset } = useThemePreset();
 
+  // next-themes hydration guard: theme is undefined during SSR
+  if (!theme) {
+    return (
+      <Button variant="ghost" size="icon-sm" aria-label="切换主题" disabled>
+        <Sun className="h-4 w-4" />
+      </Button>
+    );
+  }
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon-sm" aria-label="切换主题">
-          <Sun className="h-4 w-4 dark:hidden" />
-          <Moon className="hidden h-4 w-4 dark:block" />
-        </Button>
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger
+        className="inline-flex h-8 w-8 items-center justify-center rounded-md text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="切换主题"
+      >
+        <Sun className="h-4 w-4 dark:hidden" />
+        <Moon className="hidden h-4 w-4 dark:block" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuLabel>外观</DropdownMenuLabel>
