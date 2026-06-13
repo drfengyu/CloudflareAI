@@ -45,7 +45,9 @@ export default async function KeysPage() {
                     <div className="min-w-0 flex-1">
                       <div className="mb-1 flex items-center gap-2">
                         <span className="text-sm font-medium">{key.name}</span>
-                        {key.revoked && <Badge tone="danger">已撤销</Badge>}
+                        {key.status === 2 && <Badge tone="danger">已禁用</Badge>}
+                        {key.status === 3 && <Badge tone="warning">已过期</Badge>}
+                        {key.status === 4 && <Badge tone="muted">额度耗尽</Badge>}
                       </div>
                       <p className="font-mono text-xs text-muted-foreground">
                         {key.prefix}••••••••
@@ -57,7 +59,7 @@ export default async function KeysPage() {
                         )}
                       </p>
                     </div>
-                    {!key.revoked && (
+                    {key.status === 1 && (
                       <form action={async () => {
                         "use server";
                         const { revokeApiKeyAction } = await import("./actions");

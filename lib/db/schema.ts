@@ -3,10 +3,15 @@ import type { AdapterAccountType } from "next-auth/adapters";
 
 /**
  * D1 (SQLite) schema. The first four tables follow the Auth.js Drizzle adapter
- * contract; the rest are app-specific (API keys, usage accounting, quotas).
+ * contract; the rest are app-specific (API keys, usage accounting, billing).
  *
  * Migrations are applied to D1 over HTTP via drizzle-kit (`driver: d1-http`),
  * runtime queries go through lib/db/d1-http.ts (sqlite-proxy → D1 REST).
+ *
+ * Phase B changes:
+ * - users: +role/balanceCredits/group/status
+ * - api_key: revoked→status (1/2/3/4), +remainCredits/expiresAt/allowedModels/allowedIps/groupMultiplier
+ * - new: redemption, topup, option
  */
 
 const uuid = () => crypto.randomUUID();
@@ -21,6 +26,14 @@ export const users = sqliteTable("user", {
   image: text("image"),
   /** Set for email/password (Credentials) users; null for OAuth-only users. */
   passwordHash: text("passwordHash"),
+  /** 1=普通 / 10=管理员 / 100=超管。首个注册用户或 ADMIN_EMAILS 环境变量命中→100。 */
+  role: integer("role").notNull().default(1),
+  /** 整数积分余额（1 credit = $0.000002, CREDITS_PER_USD = 500000）。 */
+  balanceCredits: integer("balanceCredits").notNull().default(0),
+  /** 用户分组，影响倍率 (Phase F 实现分组倍率设置)。 */
+  group: text("group"),
+  /** 1=启用 / 2=禁用 / 3=已删除。 */
+  status: integer("status").notNull().default(1),
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });
 
@@ -75,8 +88,19 @@ export const apiKeys = sqliteTable("api_key", {
   prefix: text("prefix").notNull(),
   /** SHA-256 hex of the full key; the plaintext is shown only once. */
   keyHash: text("keyHash").notNull().unique(),
+  /** 1=启用 / 2=禁用 / 3=过期 / 4=额度耗尽 (migrated from revoked boolean). */
+  status: integer("status").notNull().default(1),
+  /** 剩余额度（整数 credits）；null = 无限额度。 */
+  remainCredits: integer("remainCredits"),
+  /** 有效期截止时间；null = 永不过期。 */
+  expiresAt: integer("expiresAt", { mode: "timestamp_ms" }),
+  /** 允许的模型白名单（JSON array of model IDs）；null = 所有模型。 */
+  allowedModels: text("allowedModels"),
+  /** 允许的 IP 白名单（逗号分隔）；null = 不限制。 */
+  allowedIps: text("allowedIps"),
+  /** 分组倍率覆盖（若设置则覆盖用户分组倍率）。 */
+  groupMultiplier: real("groupMultiplier").default(1.0),
   lastUsedAt: integer("lastUsedAt", { mode: "timestamp_ms" }),
-  revoked: integer("revoked", { mode: "boolean" }).notNull().default(false),
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });
 
@@ -93,6 +117,8 @@ export const usageLogs = sqliteTable("usage_log", {
   inputTokens: integer("inputTokens").default(0),
   outputTokens: integer("outputTokens").default(0),
   neurons: real("neurons").default(0),
+  /** 本次调用消耗的 credits（从 Phase B 起计量生效）。 */
+  creditsUsed: integer("creditsUsed").default(0),
   costUsd: real("costUsd").default(0),
   /** ok | error */
   status: text("status").notNull(),
@@ -108,6 +134,55 @@ export const quotas = sqliteTable("quota", {
   monthlyNeuronLimit: integer("monthlyNeuronLimit"),
 });
 
+/** 兑换码表：用于充值、邀请等场景。 */
+export const redemptions = sqliteTable("redemption", {
+  id: text("id").primaryKey().$defaultFn(uuid),
+  /** 兑换码明文（建议 base58/nanoid，8-16 字符）。 */
+  code: text("code").notNull().unique(),
+  /** 1=充值 / 2=邀请 / 3=一次性试用。 */
+  type: integer("type").notNull(),
+  /** 每次兑换赠送的 credits。 */
+  quota: integer("quota").notNull(),
+  /** 已兑换次数。 */
+  usedCount: integer("usedCount").notNull().default(0),
+  /** 最大兑换次数；null = 无限次（慎用）。 */
+  maxUses: integer("maxUses"),
+  /** 过期时间；null = 永不过期。 */
+  expiresAt: integer("expiresAt", { mode: "timestamp_ms" }),
+  /** 创建者用户 ID（管理员）。 */
+  createdBy: text("createdBy").references(() => users.id, { onDelete: "set null" }),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+});
+
+/** 余额流水表：记录每次充值、扣减、管理员调整。 */
+export const topups = sqliteTable("topup", {
+  id: text("id").primaryKey().$defaultFn(uuid),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** 变动金额（credits，可正可负）。 */
+  amount: integer("amount").notNull(),
+  /** 1=兑换码充值 / 2=管理员手动调整 / 3=消费扣减（暂不用，消费记 usage_log） / 4=其他。 */
+  type: integer("type").notNull(),
+  /** 描述：如"兑换码 ABC123"、"管理员充值"、"后台调整"。 */
+  description: text("description"),
+  /** 关联兑换码 ID（type=1 时填写）。 */
+  redemptionId: text("redemptionId").references(() => redemptions.id, {
+    onDelete: "set null",
+  }),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+});
+
+/** 系统设置 KV 表：存放全局配置项，value 为 JSON 字符串。 */
+export const options = sqliteTable("option", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).$defaultFn(now),
+});
+
 export type User = typeof users.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type UsageLog = typeof usageLogs.$inferSelect;
+export type Redemption = typeof redemptions.$inferSelect;
+export type Topup = typeof topups.$inferSelect;
+export type Option = typeof options.$inferSelect;

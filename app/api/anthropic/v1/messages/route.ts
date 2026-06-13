@@ -1,13 +1,10 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { createHash } from "node:crypto";
 import { openaiCompatible } from "@/lib/cloudflare/ai";
 import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
-import { logUsage } from "@/lib/usage/meter";
+import { logUsage, verifyBalance } from "@/lib/usage/meter";
+import { calculateCredits } from "@/lib/billing/pricing";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { db } from "@/lib/db/d1-http";
-import { apiKeys } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 
 const schema = z.object({
   model: z.string(),
@@ -26,7 +23,7 @@ const schema = z.object({
 /**
  * POST /api/anthropic/v1/messages
  * Anthropic 兼容端点：供 Claude Code / Codex 等工具调用。
- * 内部转换为 OpenAI 格式调用 Cloudflare，再转回 Anthropic 格式返回。
+ * Phase B: 增强鉴权 + 余额校验 + 真实计量。
  */
 export async function POST(req: NextRequest) {
   const token = extractBearerToken(req.headers.get("x-api-key") || req.headers.get("authorization"));
@@ -34,23 +31,18 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: { type: "authentication_error", message: "Missing API key" } }, { status: 401 });
   }
 
-  const userId = await verifyApiKey(token);
-  if (!userId) {
+  const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const verified = await verifyApiKey(token, clientIp);
+  if (!verified) {
     return Response.json({ error: { type: "authentication_error", message: "Invalid API key" } }, { status: 401 });
   }
+
+  const { userId, apiKeyId, allowedModels } = verified;
 
   // 限流：每用户每分钟 60 次请求
   if (!checkRateLimit(`anthropic:${userId}`, { window: 60_000, limit: 60 })) {
     return Response.json({ error: { type: "rate_limit_error", message: "Rate limit exceeded" } }, { status: 429 });
   }
-
-  const hash = createHash("sha256").update(token).digest("hex");
-  const apiKeyRows = await db
-    .select()
-    .from(apiKeys)
-    .where(eq(apiKeys.keyHash, hash))
-    .limit(1);
-  const apiKeyId = apiKeyRows[0]?.id;
 
   const body = await req.json();
   const parsed = schema.safeParse(body);
@@ -62,14 +54,28 @@ export async function POST(req: NextRequest) {
   }
 
   const { model, messages, max_tokens, stream = false, temperature, system } = parsed.data;
+
+  // 模型白名单检查
+  if (allowedModels && !allowedModels.includes(model)) {
+    return Response.json({ error: { type: "permission_error", message: "Model not allowed" } }, { status: 403 });
+  }
+
+  // 余额预检
+  const estimatedInput = messages.reduce((sum, m) => sum + m.content.length, 0) * 1.5;
+  const estimatedCredits = await calculateCredits(model, estimatedInput, max_tokens);
+  const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
+  if (!balanceCheck.ok) {
+    return Response.json({ error: { type: "insufficient_balance", message: balanceCheck.reason } }, { status: 402 });
+  }
+
   const start = Date.now();
 
-  // 转换为 OpenAI 格式
-  const openaiMessages = system
-    ? [{ role: "system", content: system }, ...messages]
-    : messages;
-
   try {
+    // 转 OpenAI 格式
+    const openaiMessages = system
+      ? [{ role: "system" as const, content: system }, ...messages]
+      : messages;
+
     const res = await openaiCompatible(
       "chat/completions",
       { model, messages: openaiMessages, max_tokens, stream, temperature },
@@ -87,56 +93,50 @@ export async function POST(req: NextRequest) {
         status: "error",
         latencyMs: Date.now() - start,
       });
-      return Response.json(
-        { error: { type: "api_error", message: text || "Model run failed" } },
-        { status: res.status },
-      );
+      return Response.json({ error: { type: "api_error", message: text } }, { status: res.status });
     }
 
     if (stream) {
-      // 流式：透传（简化版，实际应转换为 Anthropic SSE 格式）
+      // 流式：先扣预估（Phase C 改进）
       logUsage({
         userId,
         apiKeyId,
         model,
         task: "Text Generation",
         channel: "anthropic",
+        inputTokens: Math.floor(estimatedInput),
+        outputTokens: max_tokens,
         status: "ok",
         latencyMs: Date.now() - start,
       }).catch(console.error);
 
       return new Response(res.body, {
-        headers: {
-          "Content-Type": "text/event-stream",
-          "anthropic-version": "2023-06-01",
-        },
+        headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
       });
     }
 
-    // 非流式：转换为 Anthropic 格式
+    // 非流式
     const data = await res.json();
-    const choice = data.choices?.[0];
     const usage = data.usage || {};
-
     await logUsage({
       userId,
       apiKeyId,
       model,
       task: "Text Generation",
       channel: "anthropic",
-      inputTokens: usage.prompt_tokens,
-      outputTokens: usage.completion_tokens,
+      inputTokens: usage.prompt_tokens || 0,
+      outputTokens: usage.completion_tokens || 0,
       status: "ok",
       latencyMs: Date.now() - start,
     });
 
+    // 转回 Anthropic 格式
     return Response.json({
-      id: data.id || `msg-${Date.now()}`,
+      id: data.id,
       type: "message",
       role: "assistant",
-      content: [{ type: "text", text: choice?.message?.content || "" }],
-      model,
-      stop_reason: choice?.finish_reason === "stop" ? "end_turn" : "max_tokens",
+      content: [{ type: "text", text: data.choices?.[0]?.message?.content || "" }],
+      model: data.model,
       usage: {
         input_tokens: usage.prompt_tokens || 0,
         output_tokens: usage.completion_tokens || 0,

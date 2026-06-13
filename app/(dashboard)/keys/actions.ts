@@ -47,7 +47,7 @@ export async function revokeApiKeyAction(keyId: string) {
 
     await db
       .update(apiKeys)
-      .set({ revoked: true })
+      .set({ status: 2 }) // 2 = disabled (Phase B: revoked → status=2)
       .where(eq(apiKeys.id, keyId));
 
     revalidatePath("/keys");

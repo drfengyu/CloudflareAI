@@ -1,13 +1,10 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
-import { createHash } from "node:crypto";
 import { openaiCompatible } from "@/lib/cloudflare/ai";
 import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
-import { logUsage } from "@/lib/usage/meter";
+import { logUsage, verifyBalance } from "@/lib/usage/meter";
+import { calculateCredits } from "@/lib/billing/pricing";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { db } from "@/lib/db/d1-http";
-import { apiKeys } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
 
 const schema = z.object({
   model: z.string(),
@@ -25,7 +22,7 @@ const schema = z.object({
 /**
  * POST /api/openai/v1/chat/completions
  * OpenAI 兼容端点：供 Claude Code / Codex / Hermes 调用 Cloudflare 模型。
- * 鉴权：Authorization: Bearer sk-cfai-xxxxx
+ * Phase B: 校验状态/有效期/IP/模型白名单 + 余额前置检查 + 真实扣费计量。
  */
 export async function POST(req: NextRequest) {
   const token = extractBearerToken(req.headers.get("authorization"));
@@ -33,24 +30,18 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Missing API key" }, { status: 401 });
   }
 
-  const userId = await verifyApiKey(token);
-  if (!userId) {
-    return Response.json({ error: "Invalid or revoked API key" }, { status: 401 });
+  const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  const verified = await verifyApiKey(token, clientIp);
+  if (!verified) {
+    return Response.json({ error: "Invalid or unauthorized API key" }, { status: 401 });
   }
+
+  const { userId, apiKeyId, allowedModels } = verified;
 
   // 限流：每用户每分钟 60 次请求
   if (!checkRateLimit(`openai:${userId}`, { window: 60_000, limit: 60 })) {
     return Response.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
-
-  // 查找 API key ID（用于记账）
-  const hash = createHash("sha256").update(token).digest("hex");
-  const apiKeyRows = await db
-    .select()
-    .from(apiKeys)
-    .where(eq(apiKeys.keyHash, hash))
-    .limit(1);
-  const apiKeyId = apiKeyRows[0]?.id;
 
   const body = await req.json();
   const parsed = schema.safeParse(body);
@@ -62,6 +53,22 @@ export async function POST(req: NextRequest) {
   }
 
   const { model, messages, stream = false, temperature, max_tokens } = parsed.data;
+
+  // 模型白名单检查
+  if (allowedModels && !allowedModels.includes(model)) {
+    return Response.json({ error: "Model not allowed for this API key" }, { status: 403 });
+  }
+
+  // 余额预检（粗略估算：输入按消息总长*1.5，输出按max_tokens或默认512）
+  const estimatedInput = messages.reduce((sum, m) => sum + m.content.length, 0) * 1.5;
+  const estimatedOutput = max_tokens || 512;
+  const estimatedCredits = await calculateCredits(model, estimatedInput, estimatedOutput);
+
+  const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
+  if (!balanceCheck.ok) {
+    return Response.json({ error: balanceCheck.reason }, { status: 402 });
+  }
+
   const start = Date.now();
 
   try {
@@ -86,13 +93,15 @@ export async function POST(req: NextRequest) {
     }
 
     if (stream) {
-      // 流式透传
+      // 流式：先透传，结束后计量（简化处理：先扣预估，Phase C 实现流式计量修正）
       logUsage({
         userId,
         apiKeyId,
         model,
         task: "Text Generation",
         channel: "openai",
+        inputTokens: Math.floor(estimatedInput),
+        outputTokens: estimatedOutput,
         status: "ok",
         latencyMs: Date.now() - start,
       }).catch(console.error);
@@ -114,8 +123,8 @@ export async function POST(req: NextRequest) {
       model,
       task: "Text Generation",
       channel: "openai",
-      inputTokens: usage.prompt_tokens,
-      outputTokens: usage.completion_tokens,
+      inputTokens: usage.prompt_tokens || 0,
+      outputTokens: usage.completion_tokens || 0,
       status: "ok",
       latencyMs: Date.now() - start,
     });
