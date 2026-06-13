@@ -101,16 +101,34 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       return token;
     },
-    session({ session, token }) {
+    async session({ session, token }) {
       console.log("[SESSION] Token data:", {
         sub: token.sub,
         email: token.email || "no-email",
         name: token.name || "no-name"
       });
+
       // 从 token 恢复用户信息到 session
       if (session.user) {
-        // 强制设置 id，即使 token.sub 是空字符串
-        session.user.id = String(token.sub || "");
+        let userId = String(token.sub || "");
+
+        // 如果 token.sub 为空但有 email，从数据库查找用户 ID
+        if (!userId && token.email) {
+          console.log("[SESSION] token.sub missing, fetching user ID by email:", token.email);
+          try {
+            const dbUser = await db.query.users.findFirst({
+              where: (users, { eq }) => eq(users.email, token.email as string),
+            });
+            if (dbUser) {
+              userId = dbUser.id;
+              console.log("[SESSION] Found user ID from DB:", userId);
+            }
+          } catch (err) {
+            console.error("[SESSION] DB query failed:", err);
+          }
+        }
+
+        session.user.id = userId;
         // NextAuth 类型定义要求 email 是 string，所以提供默认值
         session.user.email = (token.email as string) || "";
         session.user.name = (token.name as string | null) || null;
