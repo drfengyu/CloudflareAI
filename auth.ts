@@ -53,7 +53,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     ...authConfig.callbacks,
-    jwt({ token, user, account, profile }) {
+    async jwt({ token, user, account, profile, trigger }) {
       // 首次登录时，将用户信息保存到 token
       if (user) {
         console.log("[JWT] Saving user to token:", {
@@ -65,6 +65,25 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.email = user.email;
         token.name = user.name;
         token.image = user.image;
+      }
+      // 如果 token 中没有 email 但有 sub，从数据库查询
+      else if (token.sub && !token.email) {
+        console.log("[JWT] Token missing email, fetching from DB for user:", token.sub);
+        try {
+          const dbUser = await db.query.users.findFirst({
+            where: (users, { eq }) => eq(users.id, token.sub as string),
+          });
+          if (dbUser) {
+            console.log("[JWT] Loaded from DB:", { email: dbUser.email, name: dbUser.name });
+            token.email = dbUser.email;
+            token.name = dbUser.name;
+            token.image = dbUser.image;
+          } else {
+            console.log("[JWT] User not found in DB");
+          }
+        } catch (err) {
+          console.error("[JWT] DB query failed:", err);
+        }
       } else {
         console.log("[JWT] No user, token:", { sub: token.sub, email: token.email });
       }
