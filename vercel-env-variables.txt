@@ -1,0 +1,34 @@
+# Vercel 环境变量配置清单
+# 项目：https://vercel.com/seacats-projects/cloudflare-ai/settings/environment-variables
+#
+# 复制你的 .env.local 中的值，在 Vercel Dashboard 中逐个添加
+# 环境选择：Production, Preview, Development（全选）
+
+## 1. CF_ACCOUNT_ID
+your_cloudflare_account_id
+
+## 2. CF_API_TOKEN
+your_cloudflare_api_token
+
+## 3. CF_D1_DATABASE_ID
+your_d1_database_id
+
+## 4. CF_KV_NAMESPACE_ID
+your_kv_namespace_id
+
+## 5. AUTH_SECRET
+your_auth_secret_from_openssl_rand_base64_32
+
+## 6. GITHUB_CLIENT_ID
+your_github_oauth_client_id
+
+## 7. GITHUB_CLIENT_SECRET
+your_github_oauth_client_secret
+
+---
+
+添加完成后的操作：
+1. 进入 Deployments 页面
+2. 点击 "Redeploy" 按钮
+3. 等待 2-3 分钟部署完成
+4. 访问分配的域名验证部署
