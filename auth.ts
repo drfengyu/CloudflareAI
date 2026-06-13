@@ -59,15 +59,24 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         console.log("[JWT] Raw user object:", JSON.stringify(user));
         console.log("[JWT] Raw account:", JSON.stringify(account));
         console.log("[JWT] Raw profile:", JSON.stringify(profile));
-        console.log("[JWT] Saving user to token:", {
-          id: user.id,
-          email: user.email || "no-email",
-          name: user.name
+
+        // user.id 可能不存在（Drizzle Adapter bug），从 account.userId 或 profile.sub 获取
+        const userId = user.id || (account as any)?.userId || profile?.sub;
+        const userEmail = user.email || profile?.email || null;
+        const userName = user.name || profile?.name || profile?.login || null;
+        const userImage = user.image || profile?.avatar_url || profile?.picture || null;
+
+        console.log("[JWT] Extracted data:", {
+          id: userId,
+          email: userEmail || "no-email",
+          name: userName,
+          image: userImage ? "has-image" : "no-image"
         });
-        token.sub = user.id;
-        token.email = user.email || null;
-        token.name = user.name || null;
-        token.image = user.image || null;
+
+        token.sub = userId;
+        token.email = userEmail;
+        token.name = userName;
+        token.image = userImage;
       }
       // 如果 token 中没有 email 但有 sub，从数据库查询
       else if (token.sub && token.email === undefined) {
