@@ -45,7 +45,9 @@ export async function POST(req: NextRequest) {
     );
 
     // 读取 Cloudflare 返回的 neurons 消耗
-    const neuronsUsed = parseFloat(res.headers.get("x-cf-ai-usage-neurons") || "0");
+    const neuronsHeader = res.headers.get("x-cf-ai-usage-neurons");
+    const neuronsUsed = parseFloat(neuronsHeader || "0");
+    console.log(`[image] model=${model}, neurons header="${neuronsHeader}", parsed=${neuronsUsed}`);
 
     const blob = await res.blob();
     const buffer = await blob.arrayBuffer();
