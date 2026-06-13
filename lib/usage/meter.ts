@@ -38,8 +38,9 @@ export async function logUsage(input: {
     input.task, // 传递 task 用于识别图像模型
   );
 
-  // 扣减用户余额
-  if (creditsUsed > 0) {
+  // 只有成功的调用才扣费（Phase C 修正：error 不扣费）
+  if (input.status === "ok" && creditsUsed > 0) {
+    // 扣减用户余额
     await db
       .update(users)
       .set({

@@ -37,11 +37,19 @@ export async function POST(req: NextRequest) {
   const start = Date.now();
 
   try {
-    const res = await runModelBinary(
-      model,
-      { prompt, num_steps, guidance },
-      req.signal,
-    );
+    // FLUX-2 系列模型需要特殊的参数格式（multipart 包裹）
+    const isFlux2 = model.includes("flux-2");
+    const requestBody = isFlux2
+      ? {
+          multipart: {
+            prompt,
+            ...(num_steps && { num_steps }),
+            ...(guidance && { guidance }),
+          },
+        }
+      : { prompt, num_steps, guidance };
+
+    const res = await runModelBinary(model, requestBody, req.signal);
 
     // 读取 Cloudflare 返回的 neurons 消耗
     const neuronsHeader = res.headers.get("x-cf-ai-usage-neurons");

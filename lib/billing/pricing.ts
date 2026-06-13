@@ -20,6 +20,7 @@ const PRICE_MULTIPLIER_PROXIED = 1;
 const IMAGE_MODEL_PRICING: Record<string, number> = {
   "@cf/bytedance/stable-diffusion-xl-lightning": 3333,
   "@cf/black-forest-labs/flux-1-schnell": 3000,
+  "@cf/black-forest-labs/flux-2-dev": 4000, // FLUX-2 更大更慢
   "@cf/stabilityai/stable-diffusion-xl-base-1.0": 3500,
   // 其他图像模型统一使用 default
 };
