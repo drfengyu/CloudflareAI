@@ -16,11 +16,20 @@ export default {
         nextUrl.pathname === "/login" || nextUrl.pathname === "/register";
 
       if (onAuthPage) {
-        return isAuthed
-          ? Response.redirect(new URL("/dashboard", nextUrl))
-          : true;
+        // 如果已登录，重定向到 dashboard
+        if (isAuthed) {
+          return Response.redirect(new URL("/dashboard", nextUrl));
+        }
+        // 未登录允许访问登录/注册页
+        return true;
       }
-      return isAuthed;
+
+      // 其他页面需要登录，未登录重定向到登录页
+      if (!isAuthed) {
+        return Response.redirect(new URL("/login", nextUrl));
+      }
+
+      return true;
     },
   },
 } satisfies NextAuthConfig;
