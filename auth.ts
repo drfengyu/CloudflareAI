@@ -98,9 +98,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // 从 token 恢复用户信息到 session
       if (token.sub && session.user) {
         session.user.id = token.sub;
-        session.user.email = token.email as string | undefined;
-        session.user.name = token.name as string | null | undefined;
-        session.user.image = token.image as string | null | undefined;
+        // NextAuth 类型定义要求 email 是 string，所以提供默认值
+        session.user.email = (token.email as string) || "";
+        session.user.name = (token.name as string | null) || null;
+        session.user.image = (token.image as string | null) || null;
       }
       console.log("[SESSION] Final user:", {
         id: session.user?.id,
