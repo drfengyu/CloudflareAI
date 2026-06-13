@@ -20,8 +20,8 @@ export async function GET() {
     "CF_D1_DATABASE_ID",
     "CF_KV_NAMESPACE_ID",
     "AUTH_SECRET",
-    "GITHUB_CLIENT_ID",
-    "GITHUB_CLIENT_SECRET",
+    "AUTH_GITHUB_ID",
+    "AUTH_GITHUB_SECRET",
   ];
 
   for (const key of requiredEnvs) {
