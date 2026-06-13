@@ -39,11 +39,32 @@ export async function GET() {
 
   // 检查 D1 连接
   try {
-    const { db } = await import("@/lib/db/d1-http");
-    const { sql } = await import("drizzle-orm");
-    // D1 HTTP 驱动使用 .all() 方法
-    await db.all(sql`SELECT 1 as check`);
-    checks.database.status = "ok";
+    const { env } = await import("@/lib/env");
+
+    // 直接调用 D1 HTTP API
+    const res = await fetch(
+      `${env.cloudflare.apiBase}/accounts/${env.cloudflare.accountId}/d1/database/${env.cloudflare.d1DatabaseId}/query`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.cloudflare.apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ sql: "SELECT 1 as check", params: [] }),
+      }
+    );
+
+    const body = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      checks.database.status = "error";
+      checks.database.error = `HTTP ${res.status}: ${JSON.stringify(body)}`;
+    } else if (!body.success) {
+      checks.database.status = "error";
+      checks.database.error = `D1 API error: ${JSON.stringify(body.errors || body)}`;
+    } else {
+      checks.database.status = "ok";
+    }
   } catch (err) {
     checks.database.status = "error";
     checks.database.error = err instanceof Error ? err.message : String(err);
