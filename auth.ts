@@ -58,23 +58,23 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (user) {
         console.log("[JWT] Saving user to token:", {
           id: user.id,
-          email: user.email,
+          email: user.email || "no-email",
           name: user.name
         });
         token.sub = user.id;
-        token.email = user.email;
-        token.name = user.name;
-        token.image = user.image;
+        token.email = user.email || null;
+        token.name = user.name || null;
+        token.image = user.image || null;
       }
       // 如果 token 中没有 email 但有 sub，从数据库查询
-      else if (token.sub && !token.email) {
-        console.log("[JWT] Token missing email, fetching from DB for user:", token.sub);
+      else if (token.sub && token.email === undefined) {
+        console.log("[JWT] Token missing user data, fetching from DB for user:", token.sub);
         try {
           const dbUser = await db.query.users.findFirst({
             where: (users, { eq }) => eq(users.id, token.sub as string),
           });
           if (dbUser) {
-            console.log("[JWT] Loaded from DB:", { email: dbUser.email, name: dbUser.name });
+            console.log("[JWT] Loaded from DB:", { email: dbUser.email || "no-email", name: dbUser.name });
             token.email = dbUser.email;
             token.name = dbUser.name;
             token.image = dbUser.image;
@@ -85,24 +85,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           console.error("[JWT] DB query failed:", err);
         }
       } else {
-        console.log("[JWT] No user, token:", { sub: token.sub, email: token.email });
+        console.log("[JWT] Existing token:", { sub: token.sub, email: token.email || "no-email" });
       }
       return token;
     },
     session({ session, token }) {
       console.log("[SESSION] Token data:", {
         sub: token.sub,
-        email: token.email,
-        name: token.name
+        email: token.email || "no-email",
+        name: token.name || "no-name"
       });
       // 从 token 恢复用户信息到 session
       if (token.sub && session.user) {
         session.user.id = token.sub;
-        session.user.email = token.email as string;
-        session.user.name = token.name as string | null;
-        session.user.image = token.image as string | null;
+        session.user.email = token.email as string | undefined;
+        session.user.name = token.name as string | null | undefined;
+        session.user.image = token.image as string | null | undefined;
       }
-      console.log("[SESSION] Final user:", session.user);
+      console.log("[SESSION] Final user:", {
+        id: session.user?.id,
+        email: session.user?.email || "no-email",
+        name: session.user?.name || "no-name"
+      });
       return session;
     },
   },
