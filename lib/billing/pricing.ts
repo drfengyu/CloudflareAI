@@ -49,17 +49,24 @@ export async function calculateCredits(
     const p = model.pricing[0];
     let usd = 0;
 
-  // Map pricing unit to token count
-  const unitTokens =
-    p.unit === "1M tokens"
-      ? 1_000_000
-      : p.unit === "1K tokens"
-        ? 1_000
-        : p.unit === "image"
-          ? 1
-          : 0;
+  // Map pricing unit to token count (match various Cloudflare unit formats)
+  const unit = p.unit.toLowerCase();
+  const unitTokens = unit.includes("1m") || unit.includes("per m")
+    ? 1_000_000
+    : unit.includes("1k") || unit.includes("per k")
+      ? 1_000
+      : unit.includes("image")
+        ? 1
+        : 0;
 
-  if (unitTokens === 0) return 0; // unknown unit
+  if (unitTokens === 0) {
+    console.log(`[calculateCredits] unknown unit "${p.unit}", using fallback`);
+    const defaultUsd = ((inputTokens + outputTokens) / 1_000_000) * 0.01;
+    const multiplier =
+      model.source === "hosted" ? PRICE_MULTIPLIER_HOSTED : PRICE_MULTIPLIER_PROXIED;
+    const credits = usdToCredits(defaultUsd * multiplier);
+    return credits;
+  }
 
   // If model has separate input/output pricing (some text models)
   if (model.pricing.length > 1 && model.pricing[1]) {
