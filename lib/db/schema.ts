@@ -28,7 +28,7 @@ export const users = sqliteTable("user", {
   passwordHash: text("passwordHash"),
   /** 1=普通 / 10=管理员 / 100=超管。首个注册用户或 ADMIN_EMAILS 环境变量命中→100。 */
   role: integer("role").notNull().default(1),
-  /** 整数积分余额（1 credit = $0.000002, CREDITS_PER_USD = 500000）。 */
+  /** 整数积分余额（1 credit = $0.01, CREDITS_PER_USD = 100）。 */
   balanceCredits: integer("balanceCredits").notNull().default(0),
   /** 用户分组，影响倍率 (Phase F 实现分组倍率设置)。 */
   group: text("group"),

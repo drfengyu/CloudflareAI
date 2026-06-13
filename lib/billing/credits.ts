@@ -1,9 +1,9 @@
 /**
  * Billing constants for credit-based accounting.
- * 1 credit = $0.000002 USD (500,000 credits = $1).
+ * 1 credit = $0.01 USD (100 credits = $1).
  */
 
-export const CREDITS_PER_USD = 500_000;
+export const CREDITS_PER_USD = 100;
 
 /**
  * Convert USD to credits (integer).
