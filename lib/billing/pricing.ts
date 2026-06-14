@@ -3,13 +3,13 @@ import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
 
 /**
  * 定价倍率策略（Phase B）：
- * - hosted 模型（消耗平台神经元配额）：官方价 × 10,000
+ * - hosted 模型（消耗平台神经元配额）：官方价 × 1,000
  * - proxied 模型（第三方计费，不消耗神经元）：官方价 × 1
  *
- * 原因：Cloudflare 免费套餐每天仅 10,000 neurons，hosted 模型需大幅加价
+ * 原因：Cloudflare 免费套餐每天仅 10,000 neurons，hosted 模型需加价
  * 以限制消耗；proxied 模型成本由第三方承担，按实际价格计费。
  */
-const PRICE_MULTIPLIER_HOSTED = 10_000;
+const PRICE_MULTIPLIER_HOSTED = 1_000;
 const PRICE_MULTIPLIER_PROXIED = 1;
 
 /**
