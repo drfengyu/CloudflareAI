@@ -132,13 +132,10 @@ function ModelCard({ model }: { model: NormalizedModel }) {
           {model.beta && !model.tags?.includes("测试版") && (
             <Badge tone="muted">beta</Badge>
           )}
-          {displayPrice.credits !== null && (
+          {displayPrice.usd !== null && (
             <Badge tone="muted" className="font-mono">
-              {formatNumber(displayPrice.credits)} cr
+              ${displayPrice.usd.toFixed(displayPrice.isImage ? 2 : 5)}
               {displayPrice.isImage ? "" : ` / ${displayPrice.unit}`}
-              {displayPrice.multiplier > 1 && (
-                <span className="ml-1 opacity-60">×{displayPrice.multiplier / 1000}k</span>
-              )}
             </Badge>
           )}
         </div>
