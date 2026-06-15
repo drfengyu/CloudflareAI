@@ -6,9 +6,9 @@ import { db } from "@/lib/db/d1-http";
 import { apiKeys } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { Plus } from "lucide-react";
-import { DataTable } from "@/components/data-table/data-table";
-import { columns, type ApiKeyRow } from "./columns";
+import { type ApiKeyRow } from "./columns";
 import { KeysClient } from "./client";
+import { KeysTable } from "./keys-table";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +55,7 @@ export default async function KeysPage() {
 
         <Card>
           <CardContent className="pt-5">
-            <DataTable columns={columns} data={data} />
+            <KeysTable data={data} />
           </CardContent>
         </Card>
 

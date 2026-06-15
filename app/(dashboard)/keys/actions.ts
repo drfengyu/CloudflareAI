@@ -110,3 +110,37 @@ export async function deleteApiKeyAction(keyId: string) {
     };
   }
 }
+
+export async function updateApiKeyAction(
+  keyId: string,
+  data: {
+    name: string;
+    remainCredits: number | null;
+    expiresAt: number | null;
+    allowedIps: string | null;
+    allowedModels: string | null;
+  }
+) {
+  try {
+    const userId = await requireUser();
+
+    await db
+      .update(apiKeys)
+      .set({
+        name: data.name,
+        remainCredits: data.remainCredits,
+        expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
+        allowedIps: data.allowedIps,
+        allowedModels: data.allowedModels,
+      })
+      .where(eq(apiKeys.id, keyId));
+
+    revalidatePath("/keys");
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "更新失败",
+    };
+  }
+}
