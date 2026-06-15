@@ -33,21 +33,27 @@ interface PresetCtx {
 const ThemePresetContext = React.createContext<PresetCtx | null>(null);
 
 function ThemePresetProvider({ children }: { children: React.ReactNode }) {
-  const [preset, setPresetState] = React.useState<ThemePreset>(() => {
-    if (typeof window === "undefined") return "default";
-    return (
-      (window.localStorage.getItem(PRESET_KEY) as ThemePreset | null) ?? "default"
-    );
-  });
+  const [mounted, setMounted] = React.useState(false);
+  const [preset, setPresetState] = React.useState<ThemePreset>("default");
+
+  // Load from localStorage only on client after mount
+  React.useEffect(() => {
+    const stored = window.localStorage.getItem(PRESET_KEY) as ThemePreset | null;
+    if (stored) {
+      setPresetState(stored);
+    }
+    setMounted(true);
+  }, []);
 
   // DOM sync only (no cascading setState) — apply the preset attribute.
   React.useEffect(() => {
+    if (!mounted) return;
     if (preset === "default") {
       document.documentElement.removeAttribute("data-theme-preset");
     } else {
       document.documentElement.setAttribute("data-theme-preset", preset);
     }
-  }, [preset]);
+  }, [preset, mounted]);
 
   const setPreset = React.useCallback((p: ThemePreset) => {
     setPresetState(p);
