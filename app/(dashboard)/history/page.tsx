@@ -68,9 +68,11 @@ export default async function HistoryPage({
                         {log.model}
                       </a>
                       <Badge tone="muted">{log.channel}</Badge>
-                      {log.apiKeyName && (
+                      {log.apiKeyName ? (
                         <Badge tone="muted">🔑 {log.apiKeyName}</Badge>
-                      )}
+                      ) : log.channel === "web" ? (
+                        <Badge tone="muted">历史数据</Badge>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap items-center gap-3 text-muted-foreground">
                       {log.creditsUsed ? (

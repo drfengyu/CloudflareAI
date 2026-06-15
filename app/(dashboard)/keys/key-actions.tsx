@@ -55,8 +55,8 @@ export function KeyActions({ keyId, status, onEdit }: KeyActionsProps) {
             onClick={() => setOpen(false)}
           />
 
-          {/* 菜单 */}
-          <div className="absolute right-0 top-8 z-20 w-40 rounded-lg border border-border bg-surface shadow-lg">
+          {/* 菜单 - 向上弹出避免被下方遮挡 */}
+          <div className="absolute right-0 bottom-full mb-1 z-20 w-40 rounded-lg border border-border bg-surface shadow-lg">
             <button
               onClick={() => {
                 onEdit?.();

@@ -185,9 +185,11 @@ export default async function DashboardPage({
                       <span className="text-muted-foreground">
                         {log.channel === "web" ? "站内" : log.channel}
                       </span>
-                      {log.apiKeyName && (
+                      {log.apiKeyName ? (
                         <Badge tone="muted">🔑 {log.apiKeyName}</Badge>
-                      )}
+                      ) : log.channel === "web" ? (
+                        <Badge tone="muted">历史数据</Badge>
+                      ) : null}
                       <span className="max-w-[200px] truncate font-mono text-[11px] text-muted-foreground">
                         {log.model}
                       </span>
