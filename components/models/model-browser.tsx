@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { CATEGORIES, type CategoryId } from "@/lib/categories";
 import type { NormalizedModel } from "@/lib/cloudflare/catalog";
 import { cn, formatNumber } from "@/lib/utils";
+import { getDisplayPrice } from "@/lib/billing/display-price";
 
 type Filter = CategoryId | "all";
 
@@ -89,6 +90,8 @@ export function ModelBrowser({ models }: { models: NormalizedModel[] }) {
 
 function ModelCard({ model }: { model: NormalizedModel }) {
   const description = model.descriptionZh ?? model.description;
+  const displayPrice = getDisplayPrice(model);
+
   return (
     <Card className="flex h-full flex-col">
       <CardContent className="flex flex-1 flex-col gap-2 pt-5">
@@ -129,9 +132,13 @@ function ModelCard({ model }: { model: NormalizedModel }) {
           {model.beta && !model.tags?.includes("测试版") && (
             <Badge tone="muted">beta</Badge>
           )}
-          {model.pricing[0] && (
-            <Badge tone="muted">
-              ${model.pricing[0].price} / {model.pricing[0].unit}
+          {displayPrice.credits !== null && (
+            <Badge tone="muted" className="font-mono">
+              {formatNumber(displayPrice.credits)} cr
+              {displayPrice.isImage ? "" : ` / ${displayPrice.unit}`}
+              {displayPrice.multiplier > 1 && (
+                <span className="ml-1 opacity-60">×{displayPrice.multiplier / 1000}k</span>
+              )}
             </Badge>
           )}
         </div>
