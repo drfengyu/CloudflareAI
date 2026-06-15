@@ -2,6 +2,56 @@
 
 遵循约定：每次提交在此追加一条记录（日期 + 阶段 + 摘要）。
 
+## 2026-06-15 — Phase B/C 持续改进
+
+- **模型库价格显示优化**：
+  - 新建 `lib/billing/display-price.ts` 计算应用倍率后的实际美元价格
+  - ModelCard 改为显示 `$30.00`（图像固定价）/ `$342.00 / per M input tokens`（token 模型 ×1000 后）
+  - 统一 2 位小数显示，替代原始 credits + ×1k 标记
+- **dashboard 时间范围切换修复**：
+  - 修复 Next.js 16 async searchParams 未 await 导致 range 永远读到 undefined
+  - 今日/本周/本月切换正常，本周/本月显示日趋势图
+- **hosted 倍率调整**：`PRICE_MULTIPLIER_HOSTED` 从 10000 降到 1000（文本/嵌入/视觉/翻译模型便宜 10 倍）
+
+## 2026-06-14 — Phase C 数据看板完成
+
+- **dashboard 图表渲染**：
+  - 小时趋势（0-23 时柱状图，recharts BarChart）
+  - 日趋势（近 7 日/30 日折线图，recharts LineChart）
+  - 模型分布（Top 10 横向条形图，recharts BarChart）
+- **时间范围切换**：今日/本周/本月 tabs，动态标题（"今日每小时消耗" / "近 7 日消耗趋势" / "近 30 日消耗趋势"）
+- **最近调用列表**：显示状态/渠道/模型/credits/延迟/时间，error 显示 `—`（0 cr）
+- **余额低于 1000 credits 预警**：StatCard 下方显示黄色警告提示
+
+## 2026-06-13 — Phase B 数据内核 & 计量修复
+
+- **定价模块**（`lib/billing/pricing.ts`）：
+  - hosted 模型倍率 ×10000，proxied 模型 ×1
+  - 图像模型固定价（FLUX-2-dev: 4000 cr, FLUX-1-schnell: 3000 cr, SDXL-lightning: 3333 cr）
+  - `calculateCredits` 按 token/neurons 真实计算，fallback 安全默认值
+- **真实计量**（`lib/usage/meter.ts`）：
+  - `logUsage` 调用 `calculateCredits`，非流式记录真实 token 数
+  - 成功时扣减 `user.balanceCredits`（D1 UPDATE），失败时记 `creditsUsed=0`，不扣费
+  - 余额预检 `verifyBalance`：user 余额 + apiKey 额度双重校验，不足时 402 拒绝
+- **FLUX-2 multipart 修复**（`lib/cloudflare/ai.ts`）：
+  - 检测 `Content-Type: multipart/form-data` 响应
+  - 解析 boundary，提取 `image` part 的 base64 数据
+  - 验证通过：FLUX-2-dev 成功出图 + 精确扣 4000 cr
+- **用量聚合查询**（`lib/usage/queries.ts`）：
+  - `getHourlyUsageToday`：按小时聚合 `SUM(creditsUsed)`
+  - `getDailyUsage`：近 7 日/30 日按天聚合
+  - `getUsageByModel`：Top 10 模型 credits 排行
+  - 所有查询含 `creditsUsed` 字段，dashboard 统计准确
+- **网关接入校验**：
+  - OpenAI `/chat/completions` + `/embeddings` 接入 `verifyBalance` + 真实扣费
+  - 站内 `/api/ai/*` 同步接入
+  - 余额不足时返回 `402 Insufficient balance`
+
+**验证通过**（线上 cloudai.fuwari.fun）：
+- FLUX-2 成功出图，余额精确扣 4000 cr
+- error 调用不扣费，记录显示 0 credits
+- 余额不足时 402 拦截，不执行调用
+
 ## 2026-06-12 — P6 收尾与部署
 
 - 限流保护（`lib/rate-limit.ts`）：内存限流器，60 req/min per user，应用于 OpenAI / Anthropic API 端点。

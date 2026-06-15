@@ -37,3 +37,56 @@
 ## 验证
 
 每阶段：`npm run typecheck` + `npm run lint` + `npm run dev` 手测。B：`sk-cfai-…` 调网关确认真实计量/扣减/拒绝越权。F：兑换加余额记流水、改设置生效、非管理员拦截。
+
+---
+
+## 当前进度（2026-06-15 更新）
+
+### ✅ Phase B — 数据内核 & 计量修复（部分完成）
+
+**已完成**：
+- ✅ 扩展 schema：`user.balanceCredits`、`user.role`、`apiKey.status`、`topup` 表、`option` 表、credits 单位常量
+- ✅ `lib/billing/pricing.ts` 定价模块：hosted ×1000 / proxied ×1 倍率，图像模型固定价（FLUX-2/SDXL 等）
+- ✅ `lib/usage/meter.ts` 真实计量：
+  - 调用 `calculateCredits` 按真实 token/neurons 计费
+  - 余额预检 `verifyBalance`（user + apiKey 双重校验）
+  - 成功扣减 `user.balanceCredits`，失败时记 0 credits
+  - 修复 FLUX-2 multipart 响应解析（`lib/cloudflare/ai.ts`）
+- ✅ 网关接入校验（余额/状态/有效期）
+- ✅ 管理员充值（D1 直接操作 + topup 流水）
+
+**验证通过**（线上 cloudai.fuwari.fun）：
+- FLUX-2 成功出图 + 精确扣 4000 cr
+- error 调用不扣费、记 0 credits
+- 余额不足时 402 拒绝
+
+### ✅ Phase C — 数据看板（部分完成）
+
+**已完成**：
+- ✅ `lib/usage/queries.ts` 聚合：
+  - `getHourlyUsageToday`（0-23 时小时柱状图）
+  - `getDailyUsage`（近 7 日/30 日折线图）
+  - `getUsageByModel`（Top 10 模型横向条形图）
+  - 所有查询含 `creditsUsed` 统计
+- ✅ `/dashboard` 重做：
+  - 余额/今日消耗/调用数/本月调用 StatCard
+  - 时间范围切换（今日/本周/本月），修复 Next.js 16 async searchParams
+  - recharts 图表渲染（小时趋势/日趋势/模型分布）
+  - 最近 10 次调用列表（状态/模型/credits/延迟）
+
+**验证通过**：
+- 图表正常渲染，切换今日/本周/本月正常
+- credits 统计准确，error 记录显示 `—`（0 cr）
+
+### ✅ 附加改进
+
+- ✅ 模型库价格显示：`lib/billing/display-price.ts` 计算应用倍率后的实际美元价格（$30.00 / $342.00 / per M input tokens），替代原始官方价
+- ✅ 所有小数统一显示 2 位（$0.01 ~ $999.99）
+
+### 🚧 待完成
+
+- **Phase B 剩余**：流式结束计量（当前流式按估算扣费）、网关 IP/模型白名单校验
+- **Phase D**：令牌管理界面重做（DataTable + 状态/额度/模型限制/有效期）
+- **Phase E**：公开定价页（`/pricing`）
+- **Phase F**：管理后台（`/admin/users`、`/admin/redemptions`、`/wallet`、`/admin/settings`）
+

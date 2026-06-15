@@ -6,15 +6,42 @@
 
 ## 功能进度
 
+### 基础功能（P0-P6 已完成）
+
 | 模块 | 说明 | 状态 |
 | --- | --- | --- |
-| P0 脚手架 | Next.js 16 + Tailwind v4 + 控制台布局 + 文档骨架 | ✅ |
-| P1 模型库 | 同步 `/ai/models/search`，按分类展示 ~78 个模型 | ✅ |
-| P2 鉴权 + D1/KV | Auth.js 多用户，D1/KV over REST，业务表 | ✅ |
-| P3 在线生成 | 文本流式 / 文生图 / 视觉 / 语音 / 嵌入 / 翻译 | ✅ |
-| P4 用量监控 | Neuron 记账、每日免费额度余量、费用估算、历史 | ✅ |
-| P5 API 网关 | OpenAI（chat/embeddings/models）+ Anthropic（messages） | ✅ |
-| P6 收尾部署 | 限流、cron、Vercel 部署 | ✅ |
+| 脚手架 | Next.js 16 + Tailwind v4 + 控制台布局 + 文档骨架 | ✅ |
+| 模型库 | 同步 `/ai/models/search`，按分类展示 ~59 个模型 | ✅ |
+| 鉴权 + 存储 | Auth.js 多用户，D1/KV over REST，业务表 | ✅ |
+| 在线生成 | 文本流式 / 文生图 / 视觉 / 语音 / 嵌入 / 翻译 | ✅ |
+| 用量监控 | Neuron 记账、历史记录 | ✅ |
+| API 网关 | OpenAI（chat/embeddings/models）+ Anthropic（messages） | ✅ |
+| 部署 | 限流、Vercel 生产部署 | ✅ |
+
+### 架构改造（2026-06-13 起，参考 new-api）
+
+当前阶段：**Phase B/C 部分完成** —— 真实计量 + 余额扣减 + 数据看板
+
+| 阶段 | 说明 | 状态 |
+| --- | --- | --- |
+| **Phase A** | 视觉地基（shadcn 组件/主题/布局） | 🚧 规划中 |
+| **Phase B** | 数据内核 & 计量修复 | ✅ 部分完成 |
+| ├─ 定价模块 | hosted ×1000 / proxied ×1 倍率 + 图像固定价 | ✅ |
+| ├─ 真实计量 | 按 token/neurons 计费 + 余额扣减 + error 记 0 | ✅ |
+| ├─ 余额校验 | user + apiKey 双重余额预检 + 402 拒绝 | ✅ |
+| ├─ 图像修复 | FLUX-2 multipart 响应解析 | ✅ |
+| └─ 流式计量 | 流式结束后精确计量（当前按估算） | 🚧 待实现 |
+| **Phase C** | 数据看板 | ✅ 部分完成 |
+| ├─ 用量聚合 | 小时/日趋势 + 模型排行 + credits 统计 | ✅ |
+| ├─ 图表渲染 | recharts 折线/柱状/条形图 | ✅ |
+| ├─ 时间切换 | 今日/本周/本月（修复 async searchParams） | ✅ |
+| └─ 余额展示 | StatCard + 最近调用列表 | ✅ |
+| **Phase D** | 令牌管理界面 | 🚧 待实现 |
+| **Phase E** | 公开定价页 | 🚧 待实现 |
+| **Phase F** | 管理后台 | 🚧 待实现 |
+
+**变更详情**：见 [`docs/CHANGELOG.md`](docs/CHANGELOG.md) 和 [`CLAUDE.md`](CLAUDE.md)
+
 
 ## 快速部署
 
@@ -160,11 +187,12 @@ curl https://your-app.vercel.app/api/anthropic/v1/messages \
 
 ## 功能亮点
 
-- **250+ 模型**：自动同步 Cloudflare Workers AI 全模型目录，按功能分类
-- **在线生成**：5 个可用 playground（文本对话流式/文生图/图像理解/嵌入/翻译）
-- **用量监控**：今日/本月 Neuron 消耗、配额进度条、90% 预警、分页历史记录
+- **59+ 模型**：自动同步 Cloudflare Workers AI 全模型目录，按功能分类，显示应用倍率后的实际计费价格
+- **在线生成**：7 个 playground（文本对话流式/文生图/图像理解/嵌入/翻译/语音/视频）
+- **真实计量**：按 token/neurons 精确计费，余额预检 + 双重扣减（user + apiKey），error 不扣费
+- **数据看板**：小时/日趋势图表、模型分布、余额/消耗统计、时间范围切换（今日/本周/本月）
 - **API 网关**：OpenAI + Anthropic 双协议兼容，供编程工具直接调用
-- **多用户**：邮箱密码注册 + GitHub OAuth，D1 存储用户/会话/配额/用量日志
+- **多用户**：邮箱密码注册 + GitHub OAuth，D1 存储用户/会话/余额/用量日志
 
 ## 贡献
 

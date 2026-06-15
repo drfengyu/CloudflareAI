@@ -134,7 +134,7 @@ function ModelCard({ model }: { model: NormalizedModel }) {
           )}
           {displayPrice.usd !== null && (
             <Badge tone="muted" className="font-mono">
-              ${displayPrice.usd.toFixed(displayPrice.isImage ? 2 : 5)}
+              ${displayPrice.usd.toFixed(2)}
               {displayPrice.isImage ? "" : ` / ${displayPrice.unit}`}
             </Badge>
           )}
