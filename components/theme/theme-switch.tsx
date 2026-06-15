@@ -17,6 +17,7 @@ import {
   useThemePreset,
   type ThemePreset,
 } from "@/components/theme/theme-provider";
+import { useEffect, useState } from "react";
 
 const PRESETS: { id: ThemePreset; label: string }[] = [
   { id: "default", label: "默认（中性）" },
@@ -27,9 +28,14 @@ const PRESETS: { id: ThemePreset; label: string }[] = [
 export function ThemeSwitch() {
   const { theme, setTheme } = useTheme();
   const { preset, setPreset } = useThemePreset();
+  const [mounted, setMounted] = useState(false);
 
-  // next-themes hydration guard: theme is undefined during SSR
-  if (!theme) {
+  // Prevent hydration mismatch by not rendering theme-dependent content until mounted
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
     return (
       <Button variant="ghost" size="icon-sm" aria-label="切换主题" disabled>
         <Sun className="h-4 w-4" />
