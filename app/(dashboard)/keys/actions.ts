@@ -124,7 +124,9 @@ export async function updateApiKeyAction(
   try {
     const userId = await requireUser();
 
-    await db
+    console.log("[updateApiKeyAction] keyId:", keyId, "userId:", userId, "data:", data);
+
+    const result = await db
       .update(apiKeys)
       .set({
         name: data.name,
@@ -135,9 +137,12 @@ export async function updateApiKeyAction(
       })
       .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)));
 
+    console.log("[updateApiKeyAction] result:", result);
+
     revalidatePath("/keys");
     return { success: true };
   } catch (err) {
+    console.error("[updateApiKeyAction] error:", err);
     return {
       success: false,
       error: err instanceof Error ? err.message : "更新失败",
