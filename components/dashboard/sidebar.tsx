@@ -15,6 +15,10 @@ import {
   KeyRound,
   Settings,
   Cpu,
+  DollarSign,
+  Wallet,
+  Users,
+  Ticket,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +39,7 @@ const NAV: NavGroup[] = [
     items: [
       { href: "/dashboard", label: "数据看板", icon: LayoutDashboard },
       { href: "/models", label: "模型库", icon: Boxes },
+      { href: "/pricing", label: "定价", icon: DollarSign },
     ],
   },
   {
@@ -52,9 +57,18 @@ const NAV: NavGroup[] = [
   {
     title: "个人",
     items: [
+      { href: "/wallet", label: "我的钱包", icon: Wallet },
       { href: "/keys", label: "API 密钥", icon: KeyRound },
       { href: "/history", label: "使用记录", icon: History },
       { href: "/settings", label: "设置", icon: Settings },
+    ],
+  },
+  {
+    title: "管理",
+    items: [
+      { href: "/admin/users", label: "用户管理", icon: Users },
+      { href: "/admin/redemptions", label: "兑换码", icon: Ticket },
+      { href: "/admin/settings", label: "系统设置", icon: Settings },
     ],
   },
 ];
