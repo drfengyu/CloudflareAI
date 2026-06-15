@@ -53,10 +53,18 @@ export const columns: ColumnDef<ApiKeyRow>[] = [
       if (remain === null) {
         return <span className="text-xs text-muted-foreground">无限制</span>;
       }
+
+      // 假设初始额度是 100000（或从某处读取），这里简化为仅显示当前值
+      // 如果需要进度条，需要在 schema 添加 initialCredits 字段
       return (
         <div className="min-w-[120px]">
           <p className="text-xs font-medium">{remain.toLocaleString()} cr</p>
-          {/* TODO: 添加进度条 */}
+          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{ width: `${Math.min(100, (remain / 100000) * 100)}%` }}
+            />
+          </div>
         </div>
       );
     },

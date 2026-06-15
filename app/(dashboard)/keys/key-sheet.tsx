@@ -3,8 +3,20 @@
 import { useState, useTransition } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { MultiSelect } from "@/components/ui/multi-select";
 import { updateApiKeyAction } from "./actions";
 import type { ApiKeyRow } from "./columns";
+
+// 常用模型列表（后续可以从 API 动态获取）
+const POPULAR_MODELS = [
+  { id: "@cf/meta/llama-3.1-8b-instruct", name: "Llama 3.1 8B" },
+  { id: "@cf/meta/llama-3.1-70b-instruct", name: "Llama 3.1 70B" },
+  { id: "@cf/qwen/qwen2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B" },
+  { id: "@cf/deepseek-ai/deepseek-v3", name: "DeepSeek V3" },
+  { id: "@cf/black-forest-labs/flux-1-schnell", name: "FLUX.1 Schnell" },
+  { id: "@cf/stabilityai/stable-diffusion-xl-base-1.0", name: "SDXL 1.0" },
+  { id: "@cf/baai/bge-base-en-v1.5", name: "BGE Base EN v1.5 (Embedding)" },
+];
 
 interface KeySheetProps {
   apiKey: ApiKeyRow | null;
@@ -13,12 +25,22 @@ interface KeySheetProps {
 
 export function KeySheet({ apiKey, onClose }: KeySheetProps) {
   const [isPending, startTransition] = useTransition();
+
+  // 解析已有的模型白名单
+  const initialModels = apiKey?.allowedModels ? (() => {
+    try {
+      return JSON.parse(apiKey.allowedModels);
+    } catch {
+      return [];
+    }
+  })() : [];
+
   const [formData, setFormData] = useState({
     name: apiKey?.name || "",
     remainCredits: apiKey?.remainCredits?.toString() || "",
     expiresAt: apiKey?.expiresAt?.toISOString().split("T")[0] || "",
     allowedIps: apiKey?.allowedIps || "",
-    allowedModels: apiKey?.allowedModels || "",
+    allowedModels: initialModels as string[],
   });
 
   if (!apiKey) return null;
@@ -33,7 +55,7 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
         remainCredits: formData.remainCredits ? parseInt(formData.remainCredits) : null,
         expiresAt: formData.expiresAt ? new Date(formData.expiresAt).getTime() : null,
         allowedIps: formData.allowedIps || null,
-        allowedModels: formData.allowedModels || null,
+        allowedModels: formData.allowedModels.length > 0 ? JSON.stringify(formData.allowedModels) : null,
       });
       if (result.success) {
         onClose();
@@ -114,16 +136,15 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
 
           {/* 模型白名单 */}
           <div>
-            <label className="mb-2 block text-sm font-medium">模型白名单（JSON）</label>
-            <textarea
+            <label className="mb-2 block text-sm font-medium">模型白名单</label>
+            <MultiSelect
               value={formData.allowedModels}
-              onChange={(e) => setFormData({ ...formData, allowedModels: e.target.value })}
-              placeholder='留空=全部模型，或输入 JSON 数组：["@cf/meta/llama-3.1-8b-instruct"]'
-              rows={4}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 font-mono text-xs outline-none focus:border-primary"
+              options={POPULAR_MODELS}
+              onChange={(models) => setFormData({ ...formData, allowedModels: models })}
+              placeholder="留空=全部模型"
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              输入 JSON 数组格式，如：["model1", "model2"]
+              选择允许调用的模型，留空则不限制
             </p>
           </div>
 
