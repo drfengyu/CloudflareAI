@@ -1,48 +1,42 @@
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db/d1-http";
-import { apiKeys } from "@/lib/db/schema";
+import { apiKeys, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { requireUser } from "@/lib/usage/meter";
 
 /**
  * 临时测试端点：验证数据库 UPDATE 是否生效
  */
 export async function GET(req: NextRequest) {
   try {
-    // 1. 查找 test-quota key
+    // 当前登录用户
+    const currentUserId = await requireUser();
+
+    // 查询所有 test- 开头的 key
     const keys = await db
-      .select()
+      .select({
+        id: apiKeys.id,
+        name: apiKeys.name,
+        userId: apiKeys.userId,
+        remainCredits: apiKeys.remainCredits,
+      })
       .from(apiKeys)
-      .where(eq(apiKeys.name, "test-quota"))
-      .limit(1);
+      .limit(10);
 
-    if (!keys[0]) {
-      return Response.json({ error: "test-quota key not found" }, { status: 404 });
-    }
-
-    const keyId = keys[0].id;
-    const oldValue = keys[0].remainCredits;
-
-    // 2. 更新 remainCredits 为 88888
-    const updateResult = await db
-      .update(apiKeys)
-      .set({ remainCredits: 88888 })
-      .where(eq(apiKeys.id, keyId));
-
-    console.log("[test-db] Update result:", updateResult);
-
-    // 3. 重新查询验证
-    const updated = await db
-      .select()
-      .from(apiKeys)
-      .where(eq(apiKeys.id, keyId))
-      .limit(1);
+    // 查询所有用户
+    const allUsers = await db
+      .select({
+        id: users.id,
+        email: users.email,
+      })
+      .from(users)
+      .limit(10);
 
     return Response.json({
       success: true,
-      keyId,
-      oldValue,
-      newValue: updated[0]?.remainCredits,
-      updateResult,
+      currentUserId,
+      keys,
+      allUsers,
     });
   } catch (err) {
     console.error("[test-db] Error:", err);
