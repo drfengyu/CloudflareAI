@@ -3,8 +3,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
-import { apiKeys, users } from "@/lib/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { apiKeys, users, usageLogs } from "@/lib/db/schema";
+import { desc, eq, sql } from "drizzle-orm";
 import { Plus } from "lucide-react";
 import { type ApiKeyRow } from "./columns";
 import { KeysClient } from "./client";
@@ -30,6 +30,16 @@ export default async function KeysPage() {
     .where(eq(apiKeys.userId, userId))
     .orderBy(desc(apiKeys.createdAt));
 
+  // 查询每个 key 的实际使用量
+  const keyUsageMap = new Map<string, number>();
+  for (const key of keys) {
+    const usageRows = await db
+      .select({ total: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)` })
+      .from(usageLogs)
+      .where(eq(usageLogs.apiKeyId, key.id));
+    keyUsageMap.set(key.id, usageRows[0]?.total || 0);
+  }
+
   // 转换为 DataTable 需要的格式
   const data: ApiKeyRow[] = keys.map((k) => ({
     id: k.id,
@@ -43,6 +53,8 @@ export default async function KeysPage() {
     allowedIps: k.allowedIps,
     lastUsedAt: k.lastUsedAt ? new Date(k.lastUsedAt) : null,
     createdAt: new Date(k.createdAt!),
+    actualUsed: keyUsageMap.get(k.id) || 0,
+    userBalance,
   }));
 
   return (

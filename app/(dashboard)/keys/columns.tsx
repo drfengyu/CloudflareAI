@@ -18,6 +18,8 @@ export interface ApiKeyRow {
   allowedIps: string | null;
   lastUsedAt: Date | null;
   createdAt: Date;
+  actualUsed: number; // 实际使用量（从 usage_log）
+  userBalance: number; // 账户余额
 }
 
 const statusLabels: Record<number, { label: string; tone: "success" | "danger" | "warning" | "muted" }> = {
@@ -52,12 +54,28 @@ export const columns: ColumnDef<ApiKeyRow>[] = [
     cell: ({ row }) => {
       const quota = row.original.quotaCredits;
       const remain = row.original.remainCredits;
+      const actualUsed = row.original.actualUsed;
+      const userBalance = row.original.userBalance;
 
+      // 无限额度：显示该 key 实际使用量 / 账户余额
       if (remain === null) {
-        return <span className="text-xs text-muted-foreground">无限制</span>;
+        const usedPercent = userBalance > 0 ? Math.min(100, (actualUsed / userBalance) * 100) : 0;
+
+        return (
+          <div className="min-w-[120px]">
+            <p className="text-xs font-medium">{actualUsed.toLocaleString()} / {userBalance.toLocaleString()} cr</p>
+            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+              <div
+                className="h-full bg-primary transition-all"
+                style={{ width: `${usedPercent}%` }}
+              />
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">无限额度 · 已用 {usedPercent.toFixed(1)}%</p>
+          </div>
+        );
       }
 
-      // 计算已使用百分比
+      // 有限额度：显示剩余 / 总额度
       const used = quota !== null && quota > 0 ? ((quota - remain) / quota) * 100 : 0;
       const usedPercent = Math.min(100, Math.max(0, used));
 
