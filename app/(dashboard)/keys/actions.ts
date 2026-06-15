@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/usage/meter";
 import { generateApiKey } from "@/lib/auth/api-key";
 import { db } from "@/lib/db/d1-http";
 import { apiKeys } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export interface CreateKeyResult {
   success: boolean;
@@ -68,7 +68,7 @@ export async function toggleApiKeyAction(keyId: string) {
     const rows = await db
       .select({ status: apiKeys.status })
       .from(apiKeys)
-      .where(eq(apiKeys.id, keyId))
+      .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)))
       .limit(1);
 
     if (!rows[0]) {
@@ -81,7 +81,7 @@ export async function toggleApiKeyAction(keyId: string) {
     await db
       .update(apiKeys)
       .set({ status: newStatus })
-      .where(eq(apiKeys.id, keyId));
+      .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)));
 
     revalidatePath("/keys");
     return { success: true };
@@ -99,7 +99,7 @@ export async function deleteApiKeyAction(keyId: string) {
 
     await db
       .delete(apiKeys)
-      .where(eq(apiKeys.id, keyId));
+      .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)));
 
     revalidatePath("/keys");
     return { success: true };
@@ -133,7 +133,7 @@ export async function updateApiKeyAction(
         allowedIps: data.allowedIps,
         allowedModels: data.allowedModels,
       })
-      .where(eq(apiKeys.id, keyId));
+      .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)));
 
     revalidatePath("/keys");
     return { success: true };
