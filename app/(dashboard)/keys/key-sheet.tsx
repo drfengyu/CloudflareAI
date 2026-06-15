@@ -51,16 +51,13 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
 
     startTransition(async () => {
       const remainCredits = formData.remainCredits.trim();
-      const payload = {
+      const result = await updateApiKeyAction(apiKey.id, {
         name: formData.name,
         remainCredits: remainCredits ? parseInt(remainCredits, 10) : null,
         expiresAt: formData.expiresAt ? new Date(formData.expiresAt).getTime() : null,
         allowedIps: formData.allowedIps || null,
         allowedModels: formData.allowedModels.length > 0 ? JSON.stringify(formData.allowedModels) : null,
-      };
-      console.log("[KeySheet] Calling updateApiKeyAction with:", { keyId: apiKey.id, payload });
-      const result = await updateApiKeyAction(apiKey.id, payload);
-      console.log("[KeySheet] Result:", result);
+      });
       if (result.success) {
         onClose();
       } else {

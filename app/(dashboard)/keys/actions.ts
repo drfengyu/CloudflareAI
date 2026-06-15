@@ -124,9 +124,7 @@ export async function updateApiKeyAction(
   try {
     const userId = await requireUser();
 
-    console.log("[updateApiKeyAction] keyId:", keyId, "userId:", userId, "data:", data);
-
-    const result = await db
+    await db
       .update(apiKeys)
       .set({
         name: data.name,
@@ -136,8 +134,6 @@ export async function updateApiKeyAction(
         allowedModels: data.allowedModels,
       })
       .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)));
-
-    console.log("[updateApiKeyAction] result:", result);
 
     revalidatePath("/keys");
     return { success: true };
