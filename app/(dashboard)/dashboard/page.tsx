@@ -21,10 +21,11 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: { range?: string };
+  searchParams: Promise<{ range?: string }>;
 }) {
   const userId = await requireUser();
-  const range = searchParams.range || "today"; // today | week | month
+  const params = await searchParams;
+  const range = params.range || "today"; // today | week | month
 
   // 使用 try-catch 包裹每个查询，防止单个查询失败导致整个页面崩溃
   const [today, month, balance, recent, hourlyUsage, dailyUsage, modelUsage] = await Promise.all([
