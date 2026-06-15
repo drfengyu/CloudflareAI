@@ -28,7 +28,7 @@ export const users = sqliteTable("user", {
   passwordHash: text("passwordHash"),
   /** 1=普通 / 10=管理员 / 100=超管。首个注册用户或 ADMIN_EMAILS 环境变量命中→100。 */
   role: integer("role").notNull().default(1),
-  /** 整数积分余额（1 credit = $0.01, CREDITS_PER_USD = 100）。 */
+  /** 永久余额（1 credit = $1 USD, CREDITS_PER_USD = 1）。管理员充值到此。 */
   balanceCredits: integer("balanceCredits").notNull().default(0),
   /** 用户分组，影响倍率 (Phase F 实现分组倍率设置)。 */
   group: text("group"),
@@ -151,8 +151,10 @@ export const redemptions = sqliteTable("redemption", {
   usedCount: integer("usedCount").notNull().default(0),
   /** 最大兑换次数；null = 无限次（慎用）。 */
   maxUses: integer("maxUses"),
-  /** 过期时间；null = 永不过期。 */
+  /** 兑换码本身的过期时间；null = 永不过期。 */
   expiresAt: integer("expiresAt", { mode: "timestamp_ms" }),
+  /** 充值后余额的有效期（天数）；null = 永久有效。兑换时计算为 now + balanceValidDays。 */
+  balanceValidDays: integer("balanceValidDays"),
   /** 创建者用户 ID（管理员）。 */
   createdBy: text("createdBy").references(() => users.id, { onDelete: "set null" }),
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
@@ -201,6 +203,25 @@ export const conversationHistory = sqliteTable("conversation_history", {
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });
 
+/** 临时余额表：有过期时间的余额（兑换码充值到此）。 */
+export const temporaryBalances = sqliteTable("temporary_balance", {
+  id: text("id").primaryKey().$defaultFn(uuid),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** 临时余额金额（credits）。 */
+  amount: integer("amount").notNull(),
+  /** 过期时间。 */
+  expiresAt: integer("expiresAt", { mode: "timestamp_ms" }).notNull(),
+  /** 关联的兑换码 ID（可选）。 */
+  redemptionId: text("redemptionId").references(() => redemptions.id, {
+    onDelete: "set null",
+  }),
+  /** 描述：如"兑换码 ABC123 充值"。 */
+  description: text("description"),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+});
+
 export type User = typeof users.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type UsageLog = typeof usageLogs.$inferSelect;
@@ -208,3 +229,4 @@ export type Redemption = typeof redemptions.$inferSelect;
 export type Topup = typeof topups.$inferSelect;
 export type Option = typeof options.$inferSelect;
 export type ConversationHistory = typeof conversationHistory.$inferSelect;
+export type TemporaryBalance = typeof temporaryBalances.$inferSelect;

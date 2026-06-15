@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db/d1-http";
-import { redemptions, topups, users } from "@/lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { redemptions, topups, temporaryBalances } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { revalidatePath } from "next/cache";
 
@@ -28,30 +28,28 @@ export async function redeemCode(code: string) {
     throw new Error("兑换码已用完");
   }
 
-  // 检查是否过期
+  // 检查兑换码本身是否过期
   if (redemption.expiresAt && new Date(redemption.expiresAt) < new Date()) {
     throw new Error("兑换码已过期");
   }
 
-  // 获取用户当前余额
-  const userRows = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, currentUserId))
-    .limit(1);
-
-  if (!userRows[0]) {
-    throw new Error("用户不存在");
+  // 计算余额过期时间
+  let balanceExpiresAt: Date;
+  if (redemption.balanceValidDays) {
+    balanceExpiresAt = new Date(Date.now() + redemption.balanceValidDays * 24 * 60 * 60 * 1000);
+  } else {
+    // 默认 365 天
+    balanceExpiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
   }
 
-  const currentBalance = userRows[0].balanceCredits;
-  const newBalance = currentBalance + redemption.quota;
-
-  // 更新用户余额
-  await db
-    .update(users)
-    .set({ balanceCredits: newBalance })
-    .where(eq(users.id, currentUserId));
+  // 插入临时余额
+  await db.insert(temporaryBalances).values({
+    userId: currentUserId,
+    amount: redemption.quota,
+    expiresAt: balanceExpiresAt,
+    redemptionId: redemption.id,
+    description: `兑换码充值: ${code}`,
+  });
 
   // 更新兑换码使用次数
   await db
@@ -64,13 +62,14 @@ export async function redeemCode(code: string) {
     userId: currentUserId,
     amount: redemption.quota,
     type: 1, // 兑换码充值
-    description: `兑换码充值: ${code}`,
+    description: `兑换码充值: ${code} (有效期至 ${balanceExpiresAt.toLocaleDateString()})`,
+    redemptionId: redemption.id,
   });
 
   revalidatePath("/wallet");
   return {
     success: true,
     amount: redemption.quota,
-    newBalance,
+    expiresAt: balanceExpiresAt,
   };
 }

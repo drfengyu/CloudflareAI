@@ -35,7 +35,7 @@ export default async function PricingPage() {
     <>
       <PageHeader
         title="定价"
-        description="所有模型的实际计费价格（已应用平台倍率）"
+        description="所有模型的实际计费价格"
       />
 
       <div className="space-y-8 p-8">
@@ -45,12 +45,11 @@ export default async function PricingPage() {
             <div className="flex items-start gap-2">
               <Info className="h-4 w-4 text-primary mt-0.5" />
               <div className="space-y-2 text-sm">
-                <p className="font-medium text-primary">定价策略</p>
+                <p className="font-medium text-primary">定价说明</p>
                 <ul className="space-y-1 text-muted-foreground">
-                  <li>• <strong>Hosted 模型</strong>：官方价 × 1,000 倍（消耗平台神经元配额）</li>
-                  <li>• <strong>Proxied 模型</strong>：官方价 × 1 倍（第三方计费，不消耗神经元）</li>
-                  <li>• <strong>图像模型</strong>：固定价格（3,000-4,000 credits/张）</li>
-                  <li>• <strong>Credits 换算</strong>：500,000 credits = $1 USD</li>
+                  <li>• <strong>文本模型</strong>：按 token 计费，价格单位为「每百万 token」</li>
+                  <li>• <strong>图像模型</strong>：固定价格，价格单位为「每张图片」</li>
+                  <li>• <strong>Credits 换算</strong>：1 credit = $1 USD</li>
                 </ul>
               </div>
             </div>
@@ -76,7 +75,6 @@ export default async function PricingPage() {
                         <th className="py-2 text-left font-medium text-muted-foreground">模型</th>
                         <th className="py-2 text-left font-medium text-muted-foreground">来源</th>
                         <th className="py-2 text-right font-medium text-muted-foreground">价格</th>
-                        <th className="py-2 text-right font-medium text-muted-foreground">倍率</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -107,15 +105,6 @@ export default async function PricingPage() {
                                 </div>
                               ) : (
                                 <span className="text-muted-foreground">—</span>
-                              )}
-                            </td>
-                            <td className="py-3 text-right text-muted-foreground">
-                              {price.isImage ? (
-                                <span className="text-xs">固定价</span>
-                              ) : price.multiplier > 0 ? (
-                                <span className="text-xs">×{price.multiplier}</span>
-                              ) : (
-                                "—"
                               )}
                             </td>
                           </tr>

@@ -20,6 +20,7 @@ export async function generateRedemptionCodes(formData: {
   quota: number;
   maxUses: number;
   expiresInDays: number | null;
+  balanceValidDays: number | null;
 }) {
   const currentUserId = await requireUser();
 
@@ -47,7 +48,7 @@ export async function generateRedemptionCodes(formData: {
     throw new Error("最大使用次数必须大于 0");
   }
 
-  // 计算过期时间
+  // 计算兑换码过期时间
   const expiresAt = formData.expiresInDays
     ? new Date(Date.now() + formData.expiresInDays * 24 * 60 * 60 * 1000)
     : null;
@@ -60,6 +61,7 @@ export async function generateRedemptionCodes(formData: {
     maxUses: number;
     usedCount: number;
     expiresAt: Date | null;
+    balanceValidDays: number | null;
     createdBy: string;
   }> = [];
 
@@ -71,6 +73,7 @@ export async function generateRedemptionCodes(formData: {
       maxUses: formData.maxUses,
       usedCount: 0,
       expiresAt: expiresAt,
+      balanceValidDays: formData.balanceValidDays,
       createdBy: currentUserId,
     });
   }

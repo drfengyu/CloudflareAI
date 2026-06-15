@@ -17,9 +17,10 @@ export function GenerateCodesDialog() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [count, setCount] = useState(10);
-  const [quota, setQuota] = useState(500000); // 500k credits = $1
+  const [quota, setQuota] = useState(10); // 10 credits = $10
   const [maxUses, setMaxUses] = useState(1);
   const [expiresInDays, setExpiresInDays] = useState<number | null>(30);
+  const [balanceValidDays, setBalanceValidDays] = useState<number | null>(365);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +32,7 @@ export function GenerateCodesDialog() {
         quota,
         maxUses,
         expiresInDays,
+        balanceValidDays,
       });
       toast.success(`成功生成 ${result.count} 个兑换码`);
       setOpen(false);
@@ -83,7 +85,7 @@ export function GenerateCodesDialog() {
               required
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              ≈ ${(quota / 500000).toFixed(2)} USD（500,000 cr = $1）
+              ≈ ${quota.toFixed(2)} USD（1 credit = $1）
             </p>
           </div>
 
@@ -106,7 +108,7 @@ export function GenerateCodesDialog() {
 
           <div>
             <label className="block text-sm font-medium mb-1">
-              有效期（天）
+              兑换码有效期（天）
             </label>
             <input
               type="number"
@@ -119,7 +121,26 @@ export function GenerateCodesDialog() {
               className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              留空表示永久有效
+              兑换码本身的有效期，留空表示永久有效
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              充值余额有效期（天）
+            </label>
+            <input
+              type="number"
+              value={balanceValidDays || ""}
+              onChange={(e) =>
+                setBalanceValidDays(e.target.value ? parseInt(e.target.value) : null)
+              }
+              min={1}
+              placeholder="365"
+              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              兑换后余额的有效期，留空默认 365 天
             </p>
           </div>
 

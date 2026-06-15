@@ -28,8 +28,9 @@ export function RedeemCodeDialog() {
     setLoading(true);
     try {
       const result = await redeemCode(code);
+      const expiresDate = new Date(result.expiresAt).toLocaleDateString();
       toast.success(
-        `充值成功！已获得 ${result.amount.toLocaleString()} cr，当前余额 ${result.newBalance.toLocaleString()} cr`
+        `充值成功！已获得 ${result.amount.toLocaleString()} cr，有效期至 ${expiresDate}`
       );
       setCode("");
       setOpen(false);

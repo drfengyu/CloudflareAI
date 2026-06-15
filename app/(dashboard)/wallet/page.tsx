@@ -3,9 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
-import { users, topups } from "@/lib/db/schema";
-import { desc, eq } from "drizzle-orm";
-import { Wallet } from "lucide-react";
+import { users, topups, temporaryBalances } from "@/lib/db/schema";
+import { desc, eq, gt, sum } from "drizzle-orm";
+import { Wallet, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { RedeemCodeDialog } from "./redeem-code-dialog";
@@ -15,15 +15,31 @@ export const dynamic = "force-dynamic";
 export default async function WalletPage() {
   const userId = await requireUser();
 
-  // 获取用户余额
+  // 获取用户永久余额
   const userRows = await db
     .select({ balanceCredits: users.balanceCredits })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
 
-  const balance = userRows[0]?.balanceCredits || 0;
-  const balanceUsd = (balance / 500000).toFixed(2);
+  const permanentBalance = userRows[0]?.balanceCredits || 0;
+
+  // 获取未过期的临时余额
+  const now = new Date();
+  const tempBalances = await db
+    .select()
+    .from(temporaryBalances)
+    .where(eq(temporaryBalances.userId, userId))
+    .orderBy(temporaryBalances.expiresAt);
+
+  // 过滤未过期的
+  const validTempBalances = tempBalances.filter(
+    (tb) => new Date(tb.expiresAt) > now
+  );
+  const temporaryTotal = validTempBalances.reduce((sum, tb) => sum + tb.amount, 0);
+
+  const totalBalance = permanentBalance + temporaryTotal;
+  const balanceUsd = totalBalance.toFixed(2);
 
   // 获取充值流水
   const topupRecords = await db
@@ -49,14 +65,55 @@ export default async function WalletPage() {
                 <Wallet className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">当前余额</p>
-                <p className="text-2xl font-semibold">{balance.toLocaleString()} credits</p>
+                <p className="text-sm text-muted-foreground">总余额</p>
+                <p className="text-2xl font-semibold">{totalBalance.toLocaleString()} credits</p>
                 <p className="text-xs text-muted-foreground">≈ ${balanceUsd} USD</p>
+                <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
+                  <span>永久: {permanentBalance.toLocaleString()} cr</span>
+                  {temporaryTotal > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" />
+                      临时: {temporaryTotal.toLocaleString()} cr
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
             <RedeemCodeDialog />
           </CardContent>
         </Card>
+
+        {/* 临时余额明细 */}
+        {validTempBalances.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">临时余额明细</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {validTempBalances.map((tb) => (
+                  <div
+                    key={tb.id}
+                    className="flex items-center justify-between rounded-lg border border-border bg-surface p-3"
+                  >
+                    <div>
+                      <p className="text-sm font-medium">{tb.amount.toLocaleString()} credits</p>
+                      <p className="text-xs text-muted-foreground">{tb.description}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground">
+                        过期时间
+                      </p>
+                      <p className="text-sm">
+                        {new Date(tb.expiresAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 充值流水 */}
         <Card>
@@ -92,7 +149,7 @@ export default async function WalletPage() {
                         +{record.amount.toLocaleString()} cr
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        ≈ ${(record.amount / 500000).toFixed(2)}
+                        ≈ ${record.amount.toFixed(2)}
                       </p>
                     </div>
                   </div>

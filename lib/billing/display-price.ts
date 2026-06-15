@@ -63,7 +63,7 @@ export function getDisplayPrice(model: NormalizedModel): {
 
   // 官方价 × 倍率
   const adjustedUsd = p.price * multiplier;
-  const credits = adjustedUsd * 100; // 1 USD = 100 credits (from credits.ts CREDITS_PER_USD)
+  const credits = adjustedUsd * 1; // 1 USD = 1 credit (from credits.ts CREDITS_PER_USD)
 
   return {
     credits,
