@@ -64,10 +64,28 @@ export async function getUserBalance(userId: string) {
 export async function getRecentUsage(
   userId: string,
   limit = 10,
-): Promise<UsageLog[]> {
+): Promise<(UsageLog & { apiKeyName?: string | null })[]> {
   return db
-    .select()
+    .select({
+      id: usageLogs.id,
+      userId: usageLogs.userId,
+      apiKeyId: usageLogs.apiKeyId,
+      model: usageLogs.model,
+      task: usageLogs.task,
+      source: usageLogs.source,
+      channel: usageLogs.channel,
+      inputTokens: usageLogs.inputTokens,
+      outputTokens: usageLogs.outputTokens,
+      neurons: usageLogs.neurons,
+      creditsUsed: usageLogs.creditsUsed,
+      costUsd: usageLogs.costUsd,
+      status: usageLogs.status,
+      latencyMs: usageLogs.latencyMs,
+      createdAt: usageLogs.createdAt,
+      apiKeyName: apiKeys.name,
+    })
     .from(usageLogs)
+    .leftJoin(apiKeys, eq(usageLogs.apiKeyId, apiKeys.id))
     .where(eq(usageLogs.userId, userId))
     .orderBy(desc(usageLogs.createdAt))
     .limit(limit);

@@ -146,3 +146,17 @@ export async function requireUser(): Promise<string> {
   }
   return session.user.id;
 }
+
+/**
+ * 获取用户的默认 API Key（用于 Playground web 渠道）。
+ * 返回第一个启用状态（status=1）的 key ID，如果没有则返回 undefined。
+ */
+export async function getDefaultApiKey(userId: string): Promise<string | undefined> {
+  const keys = await db
+    .select({ id: apiKeys.id })
+    .from(apiKeys)
+    .where(sql`${apiKeys.userId} = ${userId} AND ${apiKeys.status} = 1`)
+    .limit(1);
+
+  return keys[0]?.id;
+}

@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { openaiCompatible } from "@/lib/cloudflare/ai";
-import { requireUser, logUsage, verifyBalance } from "@/lib/usage/meter";
+import { requireUser, logUsage, verifyBalance, getDefaultApiKey } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { saveConversation } from "@/lib/usage/conversation";
 
@@ -24,6 +24,8 @@ const schema = z.object({
  */
 export async function POST(req: NextRequest) {
   const userId = await requireUser();
+  const apiKeyId = await getDefaultApiKey(userId);
+
   const body = await req.json();
   const parsed = schema.safeParse(body);
 
@@ -41,7 +43,7 @@ export async function POST(req: NextRequest) {
   const estimatedOutput = max_tokens || 2048;
   const estimatedCredits = await calculateCredits(model, estimatedInput, estimatedOutput);
 
-  const balanceCheck = await verifyBalance(userId, undefined, estimatedCredits);
+  const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
   if (!balanceCheck.ok) {
     return Response.json({ error: balanceCheck.reason }, { status: 402 });
   }
@@ -65,6 +67,7 @@ export async function POST(req: NextRequest) {
       const text = await res.text();
       await logUsage({
         userId,
+        apiKeyId,
         model,
         task: "Text Generation",
         channel: "web",
@@ -78,6 +81,7 @@ export async function POST(req: NextRequest) {
       // 流式：先扣预估（Phase C 实现流式结束修正）
       logUsage({
         userId,
+        apiKeyId,
         model,
         task: "Text Generation",
         channel: "web",
@@ -106,6 +110,7 @@ export async function POST(req: NextRequest) {
 
     await logUsage({
       userId,
+      apiKeyId,
       model,
       task: "Text Generation",
       channel: "web",
@@ -134,6 +139,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     await logUsage({
       userId,
+      apiKeyId,
       model,
       task: "Text Generation",
       channel: "web",

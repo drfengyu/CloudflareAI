@@ -185,6 +185,9 @@ export default async function DashboardPage({
                       <span className="text-muted-foreground">
                         {log.channel === "web" ? "站内" : log.channel}
                       </span>
+                      {log.apiKeyName && (
+                        <Badge tone="muted">🔑 {log.apiKeyName}</Badge>
+                      )}
                       <span className="max-w-[200px] truncate font-mono text-[11px] text-muted-foreground">
                         {log.model}
                       </span>
@@ -193,7 +196,7 @@ export default async function DashboardPage({
                       <span className="font-medium">
                         {log.creditsUsed ? `${Math.round(log.creditsUsed)} cr` : "—"}
                       </span>
-                      <span>{log.latencyMs ? `${log.latencyMs}ms` : "—"}</span>
+                      <span>{log.latencyMs ? `${(log.latencyMs / 1000).toFixed(2)}s` : "—"}</span>
                       <span className="text-[11px]">
                         {new Date(log.createdAt!).toLocaleString("zh-CN", {
                           month: "2-digit",
