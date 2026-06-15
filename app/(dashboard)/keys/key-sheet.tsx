@@ -38,7 +38,6 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
   const [formData, setFormData] = useState({
     name: apiKey?.name || "",
     quotaCredits: apiKey?.quotaCredits?.toString() || "",
-    remainCredits: apiKey?.remainCredits?.toString() || "",
     expiresAt: apiKey?.expiresAt?.toISOString().split("T")[0] || "",
     allowedIps: apiKey?.allowedIps || "",
     allowedModels: initialModels as string[],
@@ -52,15 +51,11 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
 
     startTransition(async () => {
       const quotaCredits = formData.quotaCredits.trim();
-      const remainCredits = formData.remainCredits.trim();
-
       const quotaValue = quotaCredits ? parseInt(quotaCredits, 10) : null;
-      const remainValue = remainCredits ? parseInt(remainCredits, 10) : null;
 
       const result = await updateApiKeyAction(apiKey.id, {
         name: formData.name,
         quotaCredits: quotaValue,
-        remainCredits: remainValue,
         expiresAt: formData.expiresAt ? new Date(formData.expiresAt).getTime() : null,
         allowedIps: formData.allowedIps || null,
         allowedModels: formData.allowedModels.length > 0 ? JSON.stringify(formData.allowedModels) : null,
@@ -114,25 +109,45 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
               className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              初始总额度：{apiKey.quotaCredits?.toLocaleString() || "无限制"}
+              设置此 API Key 可使用的最大额度
             </p>
             <p className="mt-1 text-xs text-amber-600">
               ⚠️ 设置的额度不能超过您的账户余额
             </p>
           </div>
 
-          {/* 剩余额度 */}
+          {/* 已使用额度（只读显示） */}
           <div>
-            <label className="mb-2 block text-sm font-medium">剩余额度（credits）</label>
-            <input
-              type="number"
-              value={formData.remainCredits}
-              onChange={(e) => setFormData({ ...formData, remainCredits: e.target.value })}
-              placeholder="留空=无限额度"
-              className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
-            />
+            <label className="mb-2 block text-sm font-medium">已使用 / 剩余</label>
+            <div className="rounded-lg border border-border bg-surface-2 p-3">
+              <div className="flex items-center justify-between text-sm">
+                <span>
+                  已使用：{apiKey.quotaCredits !== null && apiKey.remainCredits !== null
+                    ? (apiKey.quotaCredits - apiKey.remainCredits).toLocaleString()
+                    : "—"} cr
+                </span>
+                <span>
+                  剩余：{apiKey.remainCredits?.toLocaleString() || "无限制"}
+                </span>
+              </div>
+              {apiKey.quotaCredits !== null && apiKey.remainCredits !== null && (
+                <div className="mt-2">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-surface">
+                    <div
+                      className="h-full bg-primary transition-all"
+                      style={{
+                        width: `${Math.min(100, ((apiKey.quotaCredits - apiKey.remainCredits) / apiKey.quotaCredits) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground text-center">
+                    使用率：{Math.round(((apiKey.quotaCredits - apiKey.remainCredits) / apiKey.quotaCredits) * 100)}%
+                  </p>
+                </div>
+              )}
+            </div>
             <p className="mt-1 text-xs text-muted-foreground">
-              当前剩余：{apiKey.remainCredits?.toLocaleString() || "无限制"}
+              剩余额度由系统根据实际调用自动扣减，不可手动修改
             </p>
           </div>
 

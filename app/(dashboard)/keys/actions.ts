@@ -116,7 +116,6 @@ export async function updateApiKeyAction(
   data: {
     name: string;
     quotaCredits: number | null;
-    remainCredits: number | null;
     expiresAt: number | null;
     allowedIps: string | null;
     allowedModels: string | null;
@@ -143,12 +142,44 @@ export async function updateApiKeyAction(
       }
     }
 
+    // 获取当前 key 的 remainCredits
+    const keyRows = await db
+      .select({ remainCredits: apiKeys.remainCredits, quotaCredits: apiKeys.quotaCredits })
+      .from(apiKeys)
+      .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)))
+      .limit(1);
+
+    if (!keyRows[0]) {
+      return { success: false, error: "API Key 不存在" };
+    }
+
+    const currentRemain = keyRows[0].remainCredits;
+    const currentQuota = keyRows[0].quotaCredits;
+
+    // 如果修改了总额度，同步调整剩余额度
+    let newRemainCredits = currentRemain;
+    if (data.quotaCredits !== null && data.quotaCredits !== currentQuota) {
+      // 新总额度 = 旧总额度时，保持剩余额度不变
+      // 新总额度 > 旧总额度时，增加剩余额度（增量 = 新总额 - 旧总额）
+      // 新总额度 < 旧总额度时，减少剩余额度，但不低于 0
+      if (currentQuota !== null && currentRemain !== null) {
+        const delta = data.quotaCredits - currentQuota;
+        newRemainCredits = Math.max(0, currentRemain + delta);
+      } else {
+        // 从无限额度切换到有限额度，初始化剩余额度 = 总额度
+        newRemainCredits = data.quotaCredits;
+      }
+    } else if (data.quotaCredits === null) {
+      // 切换到无限额度
+      newRemainCredits = null;
+    }
+
     await db
       .update(apiKeys)
       .set({
         name: data.name,
         quotaCredits: data.quotaCredits,
-        remainCredits: data.remainCredits,
+        remainCredits: newRemainCredits,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
         allowedIps: data.allowedIps,
         allowedModels: data.allowedModels,
