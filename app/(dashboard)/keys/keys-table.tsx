@@ -35,7 +35,7 @@ export function KeysTable({ data }: KeysTableProps) {
   return (
     <>
       <DataTable columns={columnsWithEdit} data={data} />
-      <KeySheet apiKey={editingKey} onClose={() => setEditingKey(null)} />
+      <KeySheet key={editingKey?.id} apiKey={editingKey} onClose={() => setEditingKey(null)} />
     </>
   );
 }
