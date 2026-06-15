@@ -30,32 +30,42 @@ export default async function KeysPage() {
     .where(eq(apiKeys.userId, userId))
     .orderBy(desc(apiKeys.createdAt));
 
-  // 查询每个 key 的实际使用量
-  const keyUsageMap = new Map<string, number>();
+  // 查询每个 key 的实际使用量和调用次数
+  const keyUsageMap = new Map<string, { used: number; calls: number }>();
   for (const key of keys) {
     const usageRows = await db
-      .select({ total: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)` })
+      .select({
+        total: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
+        count: sql<number>`COUNT(*)`
+      })
       .from(usageLogs)
       .where(eq(usageLogs.apiKeyId, key.id));
-    keyUsageMap.set(key.id, usageRows[0]?.total || 0);
+    keyUsageMap.set(key.id, {
+      used: usageRows[0]?.total || 0,
+      calls: usageRows[0]?.count || 0
+    });
   }
 
   // 转换为 DataTable 需要的格式
-  const data: ApiKeyRow[] = keys.map((k) => ({
-    id: k.id,
-    name: k.name,
-    prefix: k.prefix,
-    status: k.status,
-    quotaCredits: k.quotaCredits,
-    remainCredits: k.remainCredits,
-    expiresAt: k.expiresAt ? new Date(k.expiresAt) : null,
-    allowedModels: k.allowedModels,
-    allowedIps: k.allowedIps,
-    lastUsedAt: k.lastUsedAt ? new Date(k.lastUsedAt) : null,
-    createdAt: new Date(k.createdAt!),
-    actualUsed: keyUsageMap.get(k.id) || 0,
-    userBalance,
-  }));
+  const data: ApiKeyRow[] = keys.map((k) => {
+    const usage = keyUsageMap.get(k.id) || { used: 0, calls: 0 };
+    return {
+      id: k.id,
+      name: k.name,
+      prefix: k.prefix,
+      status: k.status,
+      quotaCredits: k.quotaCredits,
+      remainCredits: k.remainCredits,
+      expiresAt: k.expiresAt ? new Date(k.expiresAt) : null,
+      allowedModels: k.allowedModels,
+      allowedIps: k.allowedIps,
+      lastUsedAt: k.lastUsedAt ? new Date(k.lastUsedAt) : null,
+      createdAt: new Date(k.createdAt!),
+      actualUsed: usage.used,
+      callCount: usage.calls,
+      userBalance,
+    };
+  });
 
   return (
     <>

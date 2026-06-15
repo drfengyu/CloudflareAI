@@ -19,6 +19,7 @@ export interface ApiKeyRow {
   lastUsedAt: Date | null;
   createdAt: Date;
   actualUsed: number; // 实际使用量（从 usage_log）
+  callCount: number; // 调用次数
   userBalance: number; // 账户余额
 }
 
@@ -121,6 +122,20 @@ export const columns: ColumnDef<ApiKeyRow>[] = [
         <span className={`text-xs ${isPast ? "text-danger" : ""}`}>
           {exp.toLocaleDateString("zh-CN")}
         </span>
+      );
+    },
+  },
+  {
+    id: "usage",
+    header: "调用",
+    cell: ({ row }) => {
+      const count = row.original.callCount;
+      const used = row.original.actualUsed;
+      return (
+        <div className="text-xs">
+          <p className="font-medium">{count} 次</p>
+          <p className="text-muted-foreground">{used.toLocaleString()} cr</p>
+        </div>
       );
     },
   },
