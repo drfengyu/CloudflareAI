@@ -68,8 +68,14 @@ export default async function HistoryPage({
                         {log.model}
                       </a>
                       <Badge tone="muted">{log.channel}</Badge>
+                      {log.apiKeyName && (
+                        <Badge tone="muted">🔑 {log.apiKeyName}</Badge>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-3 text-muted-foreground">
+                      {log.creditsUsed ? (
+                        <span className="font-medium">{log.creditsUsed.toLocaleString()} cr</span>
+                      ) : null}
                       {log.inputTokens || log.outputTokens ? (
                         <span>
                           {log.inputTokens}+{log.outputTokens} tokens
@@ -78,7 +84,9 @@ export default async function HistoryPage({
                       {log.neurons ? (
                         <span>{Math.round(log.neurons)} neurons</span>
                       ) : null}
-                      {log.latencyMs ? <span>{log.latencyMs}ms</span> : null}
+                      {log.latencyMs ? (
+                        <span>{(log.latencyMs / 1000).toFixed(2)}s</span>
+                      ) : null}
                       <span>
                         {new Date(log.createdAt!).toLocaleString("zh-CN")}
                       </span>

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db/d1-http";
-import { usageLogs, users, type UsageLog } from "@/lib/db/schema";
+import { usageLogs, users, apiKeys, type UsageLog } from "@/lib/db/schema";
 import { desc, eq, gte, and, sql } from "drizzle-orm";
 
 /** 获取用户今日用量统计（Phase C: credits 模型） */
@@ -155,7 +155,7 @@ export async function queryUsage(input: {
   pageSize?: number;
   model?: string;
   task?: string;
-}): Promise<{ logs: UsageLog[]; total: number }> {
+}): Promise<{ logs: (UsageLog & { apiKeyName?: string | null })[]; total: number }> {
   const { userId, page = 1, pageSize = 20, model, task } = input;
   const offset = (page - 1) * pageSize;
 
@@ -167,8 +167,26 @@ export async function queryUsage(input: {
 
   const [logs, countResult] = await Promise.all([
     db
-      .select()
+      .select({
+        id: usageLogs.id,
+        userId: usageLogs.userId,
+        apiKeyId: usageLogs.apiKeyId,
+        model: usageLogs.model,
+        task: usageLogs.task,
+        source: usageLogs.source,
+        channel: usageLogs.channel,
+        inputTokens: usageLogs.inputTokens,
+        outputTokens: usageLogs.outputTokens,
+        neurons: usageLogs.neurons,
+        creditsUsed: usageLogs.creditsUsed,
+        costUsd: usageLogs.costUsd,
+        status: usageLogs.status,
+        latencyMs: usageLogs.latencyMs,
+        createdAt: usageLogs.createdAt,
+        apiKeyName: apiKeys.name,
+      })
       .from(usageLogs)
+      .leftJoin(apiKeys, eq(usageLogs.apiKeyId, apiKeys.id))
       .where(where)
       .orderBy(desc(usageLogs.createdAt))
       .limit(pageSize)
