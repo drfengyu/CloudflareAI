@@ -173,48 +173,61 @@ export default async function DashboardPage({
               <p className="text-sm text-muted-foreground">暂无调用记录</p>
             ) : (
               <div className="space-y-2">
-                {recent.map((log) => (
-                  <div
-                    key={log.id}
-                    className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 text-xs sm:flex-row sm:items-center sm:justify-between"
-                  >
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone={log.status === "ok" ? "success" : "danger"}>
-                        {log.status}
-                      </Badge>
-                      <span className="text-muted-foreground">
-                        站内
-                      </span>
-                      {log.apiKeyName ? (
-                        <Badge tone="muted">🔑 {log.apiKeyName}</Badge>
-                      ) : (
-                        <Badge tone="muted">历史数据</Badge>
-                      )}
-                      <span className="max-w-[200px] truncate font-mono text-[11px] text-muted-foreground">
-                        {log.model}
-                      </span>
-                      {log.status === "error" && log.errorReason && (
-                        <span className="text-xs text-danger" title={log.errorReason}>
-                          ⚠️ {log.errorReason.substring(0, 30)}{log.errorReason.length > 30 ? "..." : ""}
+                {recent.map((log) => {
+                  const channelLabel =
+                    log.channel === "web" ? "站内" :
+                    log.channel === "openai" ? "OpenAI" :
+                    log.channel === "anthropic" ? "Anthropic" :
+                    log.channel;
+
+                  return (
+                    <div
+                      key={log.id}
+                      className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-surface p-3 text-xs"
+                    >
+                      {/* 左侧：状态 + 渠道 */}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Badge tone={log.status === "ok" ? "success" : "danger"}>
+                          {log.status}
+                        </Badge>
+                        <Badge tone="muted">{channelLabel}</Badge>
+                      </div>
+
+                      {/* 中间：Key + 模型 + 错误 */}
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                        {log.apiKeyName ? (
+                          <Badge tone="muted">🔑 {log.apiKeyName}</Badge>
+                        ) : (
+                          <Badge tone="muted">历史数据</Badge>
+                        )}
+                        <span className="max-w-[200px] truncate font-mono text-[11px] text-muted-foreground" title={log.model}>
+                          {log.model}
                         </span>
-                      )}
+                        {log.status === "error" && log.errorReason && (
+                          <span className="text-xs text-danger truncate max-w-[150px]" title={log.errorReason}>
+                            ⚠️ {log.errorReason}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* 右侧：指标 */}
+                      <div className="flex items-center gap-3 text-muted-foreground whitespace-nowrap">
+                        <span className="font-medium w-[60px] text-right">
+                          {log.creditsUsed ? `${Math.round(log.creditsUsed)} cr` : "—"}
+                        </span>
+                        <span className="w-[50px] text-right">{log.latencyMs ? `${(log.latencyMs / 1000).toFixed(2)}s` : "—"}</span>
+                        <span className="text-[11px] w-[80px] text-right">
+                          {new Date(log.createdAt!).toLocaleString("zh-CN", {
+                            month: "2-digit",
+                            day: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3 text-muted-foreground">
-                      <span className="font-medium">
-                        {log.creditsUsed ? `${Math.round(log.creditsUsed)} cr` : "—"}
-                      </span>
-                      <span>{log.latencyMs ? `${(log.latencyMs / 1000).toFixed(2)}s` : "—"}</span>
-                      <span className="text-[11px]">
-                        {new Date(log.createdAt!).toLocaleString("zh-CN", {
-                          month: "2-digit",
-                          day: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>
