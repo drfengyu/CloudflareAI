@@ -10,6 +10,7 @@ interface RateLimitEntry {
 
 const store = new Map<string, RateLimitEntry>();
 
+
 export interface RateLimitOptions {
   /** 时间窗口（毫秒） */
   window: number;

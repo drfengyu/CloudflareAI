@@ -78,15 +78,60 @@
 - 图表正常渲染，切换今日/本周/本月正常
 - credits 统计准确，error 记录显示 `—`（0 cr）
 
+### ✅ Phase D — 令牌管理界面（部分完成，2026-06-15）
+
+**已完成**：
+- ✅ API Key 使用统计：
+  - 每个 key 显示调用次数 + 消耗 credits
+  - 新增"调用"列：`29 次` + `15,823 cr`
+  - 查询 `usage_log` 聚合统计（SUM + COUNT）
+- ✅ 额度进度可视化：
+  - 无限额度 key：显示 `已用 / 账户余额`，进度条反映使用百分比
+  - 有限额度 key：显示 `剩余 / 总额度`，进度条反映消耗进度
+  - 清晰标签：`无限额度 · 已用 X%`
+- ✅ Error 追踪系统：
+  - 添加 `errorReason` 字段到 `usage_log` 表
+  - 所有 API error handler 捕获并记录错误原因
+  - 显示层展示错误信息（截断 + tooltip）
+- ✅ 渠道标识：
+  - `web` = 站内（Playground）
+  - `openai` = OpenAI（API 客户端）
+  - `anthropic` = Anthropic（API 客户端）
+  - 历史数据（无 apiKeyId）单独标识
+- ✅ 完美对齐布局：
+  - CSS Grid 三列布局（`auto | 1fr | auto`）
+  - 固定宽度右对齐（credits 80px，latency 50px，time 120px）
+  - 所有列表项垂直对齐，无论内容长短
+- ✅ API Key 必需：
+  - 所有 Playground API（text/image/embeddings/translate/vision）必须有 key
+  - 无 key 返回 403
+  - 所有记录关联 apiKeyId
+
+**验证通过**（线上 cloudai.fuwari.fun）：
+- Key 统计准确（test-metering: 3 次/7 cr, A: 29 次/15,823 cr）
+- 额度进度条正常显示
+- Error 记录显示"—"（0 cr）+ 错误原因 tooltip
+- 列表完美对齐
+- 渠道标识清晰区分
+
 ### ✅ 附加改进
 
 - ✅ 模型库价格显示：`lib/billing/display-price.ts` 计算应用倍率后的实际美元价格（$30.00 / $342.00 / per M input tokens），替代原始官方价
 - ✅ 所有小数统一显示 2 位（$0.01 ~ $999.99）
+- ✅ 数据修复：返还 4 条 error 记录的错误扣费（15,500 cr），余额从 6,018 恢复到 21,518
 
 ### 🚧 待完成
 
 - **Phase B 剩余**：流式结束计量（当前流式按估算扣费）、网关 IP/模型白名单校验
-- **Phase D**：令牌管理界面重做（DataTable + 状态/额度/模型限制/有效期）
+- **Phase D 剩余**：批量创建 key、分组管理、导出统计
 - **Phase E**：公开定价页（`/pricing`）
 - **Phase F**：管理后台（`/admin/users`、`/admin/redemptions`、`/wallet`、`/admin/settings`）
+
+---
+
+## 版本发布
+
+**当前版本**：v0.2.0（2026-06-15）
+
+所有版本变更记录见根目录 [`CHANGELOG.md`](CHANGELOG.md)，遵循 [Keep a Changelog](https://keepachangelog.com/) 规范。
 

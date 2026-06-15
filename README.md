@@ -20,7 +20,7 @@
 
 ### 架构改造（2026-06-13 起，参考 new-api）
 
-当前阶段：**Phase B/C 部分完成** —— 真实计量 + 余额扣减 + 数据看板
+当前版本：**v0.2.0**（2026-06-15）—— API Key 管理增强 + Error 追踪 + 完美对齐布局
 
 | 阶段 | 说明 | 状态 |
 | --- | --- | --- |
@@ -30,17 +30,29 @@
 | ├─ 真实计量 | 按 token/neurons 计费 + 余额扣减 + error 记 0 | ✅ |
 | ├─ 余额校验 | user + apiKey 双重余额预检 + 402 拒绝 | ✅ |
 | ├─ 图像修复 | FLUX-2 multipart 响应解析 | ✅ |
+| ├─ API Key 必需 | 所有 Playground 必须有 key，无 key 返回 403 | ✅ |
 | └─ 流式计量 | 流式结束后精确计量（当前按估算） | 🚧 待实现 |
 | **Phase C** | 数据看板 | ✅ 部分完成 |
 | ├─ 用量聚合 | 小时/日趋势 + 模型排行 + credits 统计 | ✅ |
 | ├─ 图表渲染 | recharts 折线/柱状/条形图 | ✅ |
 | ├─ 时间切换 | 今日/本周/本月（修复 async searchParams） | ✅ |
 | └─ 余额展示 | StatCard + 最近调用列表 | ✅ |
-| **Phase D** | 令牌管理界面 | 🚧 待实现 |
+| **Phase D** | 令牌管理界面 | ✅ 部分完成 |
+| ├─ Key 统计 | 每个 key 的调用次数 + 消耗 credits | ✅ |
+| ├─ 额度进度 | 有限/无限额度可视化 + 进度条 | ✅ |
+| ├─ 列表对齐 | CSS Grid 固定宽度列布局 | ✅ |
+| └─ 状态管理 | 创建/编辑/禁用/删除 + 模型白名单 | ✅ |
 | **Phase E** | 公开定价页 | 🚧 待实现 |
 | **Phase F** | 管理后台 | 🚧 待实现 |
 
-**变更详情**：见 [`docs/CHANGELOG.md`](docs/CHANGELOG.md) 和 [`CLAUDE.md`](CLAUDE.md)
+**最新更新（v0.2.0）**：
+- ✅ API Key 使用统计（调用次数 + 消耗 credits）
+- ✅ Error 追踪系统（errorReason 字段 + 显示）
+- ✅ 渠道区分（站内/OpenAI/Anthropic）
+- ✅ 完美对齐的列表布局（Grid + 固定宽度）
+- ✅ 所有 Playground 必须有 API Key
+
+**变更详情**：见 [`CHANGELOG.md`](CHANGELOG.md) 和 [`CLAUDE.md`](CLAUDE.md)
 
 
 ## 快速部署
@@ -212,10 +224,11 @@ MIT
 
 ## 文档
 
+- [`CHANGELOG.md`](CHANGELOG.md) — 版本变更记录（遵循 Keep a Changelog 规范）
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — 架构与目录结构
 - [`docs/MODELS.md`](docs/MODELS.md) — 模型分类与 Workers AI 要点
 - [`docs/API.md`](docs/API.md) — API 网关用法（OpenAI / Anthropic 兼容）
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — Vercel + Cloudflare 部署
-- [`docs/CHANGELOG.md`](docs/CHANGELOG.md) — 变更记录
+- [`CLAUDE.md`](CLAUDE.md) — 项目指令和改造路线图
 
-> 约定：**每次提交都同步更新相关 md 文档**，并在 `docs/CHANGELOG.md` 追加一条记录。
+> 约定：**每次提交都同步更新相关 md 文档**，并在 `CHANGELOG.md` 追加版本记录。
