@@ -115,6 +115,7 @@ export async function updateApiKeyAction(
   keyId: string,
   data: {
     name: string;
+    quotaCredits: number | null;
     remainCredits: number | null;
     expiresAt: number | null;
     allowedIps: string | null;
@@ -125,7 +126,7 @@ export async function updateApiKeyAction(
     const userId = await requireUser();
 
     // 如果设置了额度限制，检查是否超过账户余额
-    if (data.remainCredits !== null) {
+    if (data.quotaCredits !== null) {
       const userRows = await db
         .select({ balanceCredits: users.balanceCredits })
         .from(users)
@@ -134,7 +135,7 @@ export async function updateApiKeyAction(
 
       const userBalance = userRows[0]?.balanceCredits || 0;
 
-      if (data.remainCredits > userBalance) {
+      if (data.quotaCredits > userBalance) {
         return {
           success: false,
           error: `API Key 额度不能超过账户余额（${userBalance.toLocaleString()} credits）`,
@@ -146,6 +147,7 @@ export async function updateApiKeyAction(
       .update(apiKeys)
       .set({
         name: data.name,
+        quotaCredits: data.quotaCredits,
         remainCredits: data.remainCredits,
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
         allowedIps: data.allowedIps,

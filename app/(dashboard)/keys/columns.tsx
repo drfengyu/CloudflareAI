@@ -11,6 +11,7 @@ export interface ApiKeyRow {
   name: string;
   prefix: string;
   status: number; // 1=启用 / 2=禁用 / 3=过期 / 4=耗尽
+  quotaCredits: number | null;
   remainCredits: number | null;
   expiresAt: Date | null;
   allowedModels: string | null;
@@ -49,14 +50,27 @@ export const columns: ColumnDef<ApiKeyRow>[] = [
     id: "quota",
     header: "额度",
     cell: ({ row }) => {
+      const quota = row.original.quotaCredits;
       const remain = row.original.remainCredits;
+
       if (remain === null) {
         return <span className="text-xs text-muted-foreground">无限制</span>;
       }
 
-      // 仅显示剩余额度数值，不显示进度条（因为没有初始总额度字段）
+      // 计算已使用百分比
+      const used = quota !== null && quota > 0 ? ((quota - remain) / quota) * 100 : 0;
+      const usedPercent = Math.min(100, Math.max(0, used));
+
       return (
-        <span className="text-xs font-medium">{remain.toLocaleString()} cr</span>
+        <div className="min-w-[120px]">
+          <p className="text-xs font-medium">{remain.toLocaleString()} / {quota?.toLocaleString() || '?'} cr</p>
+          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{ width: `${usedPercent}%` }}
+            />
+          </div>
+        </div>
       );
     },
   },

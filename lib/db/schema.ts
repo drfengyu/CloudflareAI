@@ -90,6 +90,8 @@ export const apiKeys = sqliteTable("api_key", {
   keyHash: text("keyHash").notNull().unique(),
   /** 1=启用 / 2=禁用 / 3=过期 / 4=额度耗尽 (migrated from revoked boolean). */
   status: integer("status").notNull().default(1),
+  /** 初始总额度（整数 credits）；null = 无限额度。创建时设置，用于计算进度条。 */
+  quotaCredits: integer("quotaCredits"),
   /** 剩余额度（整数 credits）；null = 无限额度。 */
   remainCredits: integer("remainCredits"),
   /** 有效期截止时间；null = 永不过期。 */

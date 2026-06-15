@@ -36,6 +36,7 @@ export default async function KeysPage() {
     name: k.name,
     prefix: k.prefix,
     status: k.status,
+    quotaCredits: k.quotaCredits,
     remainCredits: k.remainCredits,
     expiresAt: k.expiresAt ? new Date(k.expiresAt) : null,
     allowedModels: k.allowedModels,

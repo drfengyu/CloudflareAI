@@ -37,6 +37,7 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
 
   const [formData, setFormData] = useState({
     name: apiKey?.name || "",
+    quotaCredits: apiKey?.quotaCredits?.toString() || "",
     remainCredits: apiKey?.remainCredits?.toString() || "",
     expiresAt: apiKey?.expiresAt?.toISOString().split("T")[0] || "",
     allowedIps: apiKey?.allowedIps || "",
@@ -50,10 +51,16 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
     if (!apiKey) return; // Type guard
 
     startTransition(async () => {
+      const quotaCredits = formData.quotaCredits.trim();
       const remainCredits = formData.remainCredits.trim();
+
+      const quotaValue = quotaCredits ? parseInt(quotaCredits, 10) : null;
+      const remainValue = remainCredits ? parseInt(remainCredits, 10) : null;
+
       const result = await updateApiKeyAction(apiKey.id, {
         name: formData.name,
-        remainCredits: remainCredits ? parseInt(remainCredits, 10) : null,
+        quotaCredits: quotaValue,
+        remainCredits: remainValue,
         expiresAt: formData.expiresAt ? new Date(formData.expiresAt).getTime() : null,
         allowedIps: formData.allowedIps || null,
         allowedModels: formData.allowedModels.length > 0 ? JSON.stringify(formData.allowedModels) : null,
@@ -96,9 +103,27 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
             />
           </div>
 
-          {/* 额度限制 */}
+          {/* 总额度 */}
           <div>
-            <label className="mb-2 block text-sm font-medium">额度限制（credits）</label>
+            <label className="mb-2 block text-sm font-medium">总额度（credits）</label>
+            <input
+              type="number"
+              value={formData.quotaCredits}
+              onChange={(e) => setFormData({ ...formData, quotaCredits: e.target.value })}
+              placeholder="留空=无限额度"
+              className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              初始总额度：{apiKey.quotaCredits?.toLocaleString() || "无限制"}
+            </p>
+            <p className="mt-1 text-xs text-amber-600">
+              ⚠️ 设置的额度不能超过您的账户余额
+            </p>
+          </div>
+
+          {/* 剩余额度 */}
+          <div>
+            <label className="mb-2 block text-sm font-medium">剩余额度（credits）</label>
             <input
               type="number"
               value={formData.remainCredits}
@@ -107,10 +132,7 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
               className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              当前 Key 余额：{apiKey.remainCredits?.toLocaleString() || "无限制"}
-            </p>
-            <p className="mt-1 text-xs text-amber-600">
-              ⚠️ 设置的额度不能超过您的账户余额
+              当前剩余：{apiKey.remainCredits?.toLocaleString() || "无限制"}
             </p>
           </div>
 
