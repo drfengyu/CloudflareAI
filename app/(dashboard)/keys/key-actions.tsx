@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { MoreHorizontal, Edit, Trash2, Ban, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toggleApiKeyAction, deleteApiKeyAction } from "./actions";
@@ -14,6 +14,23 @@ interface KeyActionsProps {
 export function KeyActions({ keyId, status, onEdit }: KeyActionsProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [dropdownPosition, setDropdownPosition] = useState<"top" | "bottom">("bottom");
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (open && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+
+      // 如果下方空间不足 150px（菜单高度），且上方空间更多，则向上弹出
+      if (spaceBelow < 150 && spaceAbove > spaceBelow) {
+        setDropdownPosition("top");
+      } else {
+        setDropdownPosition("bottom");
+      }
+    }
+  }, [open]);
 
   function handleToggle() {
     startTransition(async () => {
@@ -39,6 +56,7 @@ export function KeyActions({ keyId, status, onEdit }: KeyActionsProps) {
   return (
     <div className="relative">
       <Button
+        ref={buttonRef}
         variant="ghost"
         size="sm"
         onClick={() => setOpen(!open)}
@@ -55,8 +73,12 @@ export function KeyActions({ keyId, status, onEdit }: KeyActionsProps) {
             onClick={() => setOpen(false)}
           />
 
-          {/* 菜单 - 向上弹出避免被下方遮挡 */}
-          <div className="absolute right-0 bottom-full mb-1 z-20 w-40 rounded-lg border border-border bg-surface shadow-lg">
+          {/* 菜单 - 根据位置智能弹出 */}
+          <div
+            className={`absolute right-0 z-20 w-40 rounded-lg border border-border bg-surface shadow-lg ${
+              dropdownPosition === "top" ? "bottom-full mb-1" : "top-8"
+            }`}
+          >
             <button
               onClick={() => {
                 onEdit?.();

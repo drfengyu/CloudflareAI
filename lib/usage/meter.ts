@@ -121,16 +121,48 @@ export async function verifyBalance(
   // 查令牌额度（如果有限制）
   if (apiKeyId) {
     const keyRows = await db
-      .select({ remainCredits: apiKeys.remainCredits })
+      .select({
+        remainCredits: apiKeys.remainCredits,
+        expiresAt: apiKeys.expiresAt,
+        status: apiKeys.status
+      })
       .from(apiKeys)
       .where(eq(apiKeys.id, apiKeyId))
       .limit(1);
 
+    if (!keyRows[0]) {
+      return { ok: false, reason: "API key not found" };
+    }
+
+    const key = keyRows[0];
+
+    // 检查过期时间
+    if (key.expiresAt && new Date(key.expiresAt) < new Date()) {
+      // 更新状态为过期
+      await db
+        .update(apiKeys)
+        .set({ status: 3 })
+        .where(eq(apiKeys.id, apiKeyId));
+      return { ok: false, reason: "API key expired" };
+    }
+
+    // 检查是否已禁用
+    if (key.status === 2) {
+      return { ok: false, reason: "API key disabled" };
+    }
+
+    // 检查额度
     if (
-      keyRows[0] &&
-      keyRows[0].remainCredits !== null &&
-      keyRows[0].remainCredits < estimatedCredits
+      key.remainCredits !== null &&
+      key.remainCredits < estimatedCredits
     ) {
+      // 更新状态为额度耗尽
+      if (key.status !== 4) {
+        await db
+          .update(apiKeys)
+          .set({ status: 4 })
+          .where(eq(apiKeys.id, apiKeyId));
+      }
       return { ok: false, reason: "API key quota exhausted" };
     }
   }

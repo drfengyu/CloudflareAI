@@ -26,6 +26,14 @@ export async function POST(req: NextRequest) {
   const userId = await requireUser();
   const apiKeyId = await getDefaultApiKey(userId);
 
+  // 必须有 API Key 才能调用
+  if (!apiKeyId) {
+    return Response.json(
+      { error: "No API key available. Please create an API key first at /keys" },
+      { status: 403 }
+    );
+  }
+
   const body = await req.json();
   const parsed = schema.safeParse(body);
 
