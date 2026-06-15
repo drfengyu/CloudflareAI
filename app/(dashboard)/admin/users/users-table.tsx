@@ -1,7 +1,7 @@
 "use client";
 
 import { DataTable } from "@/components/data-table/data-table";
-import { columns, type UserRow } from "./columns";
+import { createColumns, type UserRow } from "./columns";
 
 interface UsersTableProps {
   data: UserRow[];
@@ -9,5 +9,6 @@ interface UsersTableProps {
 }
 
 export function UsersTable({ data, currentUserId }: UsersTableProps) {
+  const columns = createColumns(currentUserId);
   return <DataTable columns={columns} data={data} />;
 }

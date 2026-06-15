@@ -2,10 +2,9 @@
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { Settings } from "lucide-react";
+import { ManageUserDialog } from "./manage-user-dialog";
 
 export interface UserRow {
   id: string;
@@ -17,61 +16,60 @@ export interface UserRow {
   roleLabel: { label: string; tone: "success" | "warning" | "muted" };
 }
 
-export const columns: ColumnDef<UserRow>[] = [
-  {
-    accessorKey: "email",
-    header: "用户",
-    cell: ({ row }) => (
-      <div>
-        <p className="font-medium">{row.original.name || row.original.email}</p>
-        <p className="text-xs text-muted-foreground">{row.original.email}</p>
-      </div>
-    ),
-  },
-  {
-    accessorKey: "role",
-    header: "角色",
-    cell: ({ row }) => (
-      <Badge tone={row.original.roleLabel.tone}>
-        {row.original.roleLabel.label}
-      </Badge>
-    ),
-  },
-  {
-    accessorKey: "balanceCredits",
-    header: "余额",
-    cell: ({ row }) => {
-      const balance = row.original.balanceCredits;
-      const usd = (balance / 500000).toFixed(2);
-      return (
-        <div className="text-right">
-          <p className="font-medium">{balance.toLocaleString()} cr</p>
-          <p className="text-xs text-muted-foreground">≈ ${usd}</p>
+export function createColumns(currentUserId: string): ColumnDef<UserRow>[] {
+  return [
+    {
+      accessorKey: "email",
+      header: "用户",
+      cell: ({ row }) => (
+        <div>
+          <p className="font-medium">{row.original.name || row.original.email}</p>
+          <p className="text-xs text-muted-foreground">{row.original.email}</p>
         </div>
-      );
+      ),
     },
-  },
-  {
-    accessorKey: "createdAt",
-    header: "注册时间",
-    cell: ({ row }) => {
-      const date = row.original.createdAt;
-      if (!date) return <span className="text-muted-foreground">—</span>;
-      return (
-        <span className="text-xs text-muted-foreground">
-          {formatDistanceToNow(new Date(date), { addSuffix: true, locale: zhCN })}
-        </span>
-      );
+    {
+      accessorKey: "role",
+      header: "角色",
+      cell: ({ row }) => (
+        <Badge tone={row.original.roleLabel.tone}>
+          {row.original.roleLabel.label}
+        </Badge>
+      ),
     },
-  },
-  {
-    id: "actions",
-    header: "",
-    cell: ({ row }) => (
-      <Button size="sm" variant="outline">
-        <Settings className="h-3 w-3" />
-        管理
-      </Button>
-    ),
-  },
-];
+    {
+      accessorKey: "balanceCredits",
+      header: "余额",
+      cell: ({ row }) => {
+        const balance = row.original.balanceCredits;
+        const usd = (balance / 500000).toFixed(2);
+        return (
+          <div className="text-right">
+            <p className="font-medium">{balance.toLocaleString()} cr</p>
+            <p className="text-xs text-muted-foreground">≈ ${usd}</p>
+          </div>
+        );
+      },
+    },
+    {
+      accessorKey: "createdAt",
+      header: "注册时间",
+      cell: ({ row }) => {
+        const date = row.original.createdAt;
+        if (!date) return <span className="text-muted-foreground">—</span>;
+        return (
+          <span className="text-xs text-muted-foreground">
+            {formatDistanceToNow(new Date(date), { addSuffix: true, locale: zhCN })}
+          </span>
+        );
+      },
+    },
+    {
+      id: "actions",
+      header: "",
+      cell: ({ row }) => (
+        <ManageUserDialog user={row.original} currentUserId={currentUserId} />
+      ),
+    },
+  ];
+}

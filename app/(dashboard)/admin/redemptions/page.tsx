@@ -1,13 +1,12 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { db } from "@/lib/db/d1-http";
 import { redemptions, users } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
-import { Plus } from "lucide-react";
 import { RedemptionsTable } from "./redemptions-table";
+import { GenerateCodesDialog } from "./generate-codes-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -46,12 +45,7 @@ export default async function AdminRedemptionsPage() {
       <PageHeader
         title="兑换码管理"
         description="生成、查看、管理充值兑换码"
-        action={
-          <Button size="sm">
-            <Plus className="h-4 w-4" />
-            批量生成
-          </Button>
-        }
+        action={<GenerateCodesDialog />}
       />
       <div className="space-y-4 p-8">
         <Card>

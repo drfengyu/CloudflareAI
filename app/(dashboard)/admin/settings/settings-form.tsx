@@ -2,6 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
+import { updatePricingSettings } from "./actions";
+import { toast } from "sonner";
 
 interface SettingsFormProps {
   initialSettings: {
@@ -19,11 +21,17 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
     e.preventDefault();
     setLoading(true);
 
-    // TODO: 实现保存逻辑（Server Action）
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    setLoading(false);
-    alert("设置已保存（TODO: 实现后端逻辑）");
+    try {
+      await updatePricingSettings({
+        priceMultiplierHosted: hosted,
+        priceMultiplierProxied: proxied,
+      });
+      toast.success("设置已保存");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

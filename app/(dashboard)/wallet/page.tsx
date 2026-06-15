@@ -1,14 +1,14 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
 import { users, topups } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
-import { Wallet, Plus } from "lucide-react";
+import { Wallet } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
+import { RedeemCodeDialog } from "./redeem-code-dialog";
 
 export const dynamic = "force-dynamic";
 
@@ -54,10 +54,7 @@ export default async function WalletPage() {
                 <p className="text-xs text-muted-foreground">≈ ${balanceUsd} USD</p>
               </div>
             </div>
-            <Button>
-              <Plus className="h-4 w-4" />
-              充值
-            </Button>
+            <RedeemCodeDialog />
           </CardContent>
         </Card>
 
