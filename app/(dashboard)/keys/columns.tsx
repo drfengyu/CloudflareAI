@@ -2,10 +2,9 @@
 
 import { type ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { MoreHorizontal } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
+import { KeyActions } from "./key-actions";
 
 export interface ApiKeyRow {
   id: string;
@@ -113,9 +112,11 @@ export const columns: ColumnDef<ApiKeyRow>[] = [
     id: "actions",
     header: "",
     cell: ({ row }) => (
-      <Button variant="ghost" size="sm">
-        <MoreHorizontal className="h-4 w-4" />
-      </Button>
+      <KeyActions
+        keyId={row.original.id}
+        status={row.original.status}
+        onEdit={() => console.log("Edit", row.original.id)}
+      />
     ),
   },
 ];

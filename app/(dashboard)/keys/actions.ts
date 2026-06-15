@@ -47,7 +47,7 @@ export async function revokeApiKeyAction(keyId: string) {
 
     await db
       .update(apiKeys)
-      .set({ status: 2 }) // 2 = disabled (Phase B: revoked → status=2)
+      .set({ status: 2 }) // 2 = disabled
       .where(eq(apiKeys.id, keyId));
 
     revalidatePath("/keys");
@@ -56,6 +56,57 @@ export async function revokeApiKeyAction(keyId: string) {
     return {
       success: false,
       error: err instanceof Error ? err.message : "撤销失败",
+    };
+  }
+}
+
+export async function toggleApiKeyAction(keyId: string) {
+  try {
+    const userId = await requireUser();
+
+    // 查询当前状态
+    const rows = await db
+      .select({ status: apiKeys.status })
+      .from(apiKeys)
+      .where(eq(apiKeys.id, keyId))
+      .limit(1);
+
+    if (!rows[0]) {
+      return { success: false, error: "API key 不存在" };
+    }
+
+    // 切换：1↔2（启用↔禁用）
+    const newStatus = rows[0].status === 1 ? 2 : 1;
+
+    await db
+      .update(apiKeys)
+      .set({ status: newStatus })
+      .where(eq(apiKeys.id, keyId));
+
+    revalidatePath("/keys");
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "操作失败",
+    };
+  }
+}
+
+export async function deleteApiKeyAction(keyId: string) {
+  try {
+    const userId = await requireUser();
+
+    await db
+      .delete(apiKeys)
+      .where(eq(apiKeys.id, keyId));
+
+    revalidatePath("/keys");
+    return { success: true };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "删除失败",
     };
   }
 }
