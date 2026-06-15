@@ -1,10 +1,13 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
 import { apiKeys } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
+import { Plus } from "lucide-react";
+import { DataTable } from "@/components/data-table/data-table";
+import { columns, type ApiKeyRow } from "./columns";
 import { KeysClient } from "./client";
 
 export const dynamic = "force-dynamic";
@@ -17,11 +20,31 @@ export default async function KeysPage() {
     .where(eq(apiKeys.userId, userId))
     .orderBy(desc(apiKeys.createdAt));
 
+  // 转换为 DataTable 需要的格式
+  const data: ApiKeyRow[] = keys.map((k) => ({
+    id: k.id,
+    name: k.name,
+    prefix: k.prefix,
+    status: k.status,
+    remainCredits: k.remainCredits,
+    expiresAt: k.expiresAt ? new Date(k.expiresAt) : null,
+    allowedModels: k.allowedModels,
+    allowedIps: k.allowedIps,
+    lastUsedAt: k.lastUsedAt ? new Date(k.lastUsedAt) : null,
+    createdAt: new Date(k.createdAt!),
+  }));
+
   return (
     <>
       <PageHeader
         title="API Keys"
         description="生成 API key，供 Claude Code / Codex / Hermes 等工具调用 Cloudflare 模型"
+        action={
+          <Button size="sm">
+            <Plus className="h-4 w-4" />
+            创建密钥
+          </Button>
+        }
       />
       <div className="space-y-4 p-8">
         <Card>
@@ -32,51 +55,7 @@ export default async function KeysPage() {
 
         <Card>
           <CardContent className="pt-5">
-            <h3 className="mb-4 text-sm font-medium">已创建的 API Keys</h3>
-            {keys.length === 0 ? (
-              <p className="text-sm text-muted-foreground">暂无 API key</p>
-            ) : (
-              <div className="space-y-2">
-                {keys.map((key) => (
-                  <div
-                    key={key.id}
-                    className="flex items-center justify-between rounded-lg border border-border bg-surface p-3"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="mb-1 flex items-center gap-2">
-                        <span className="text-sm font-medium">{key.name}</span>
-                        {key.status === 2 && <Badge tone="danger">已禁用</Badge>}
-                        {key.status === 3 && <Badge tone="warning">已过期</Badge>}
-                        {key.status === 4 && <Badge tone="muted">额度耗尽</Badge>}
-                      </div>
-                      <p className="font-mono text-xs text-muted-foreground">
-                        {key.prefix}••••••••
-                      </p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        创建于 {new Date(key.createdAt!).toLocaleString("zh-CN")}
-                        {key.lastUsedAt && (
-                          <> · 最后使用 {new Date(key.lastUsedAt).toLocaleString("zh-CN")}</>
-                        )}
-                      </p>
-                    </div>
-                    {key.status === 1 && (
-                      <form action={async () => {
-                        "use server";
-                        const { revokeApiKeyAction } = await import("./actions");
-                        await revokeApiKeyAction(key.id);
-                      }}>
-                        <button
-                          type="submit"
-                          className="rounded-lg border border-danger px-3 py-1.5 text-xs text-danger hover:bg-danger/10"
-                        >
-                          撤销
-                        </button>
-                      </form>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            <DataTable columns={columns} data={data} />
           </CardContent>
         </Card>
 
