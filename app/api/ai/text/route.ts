@@ -80,6 +80,7 @@ export async function POST(req: NextRequest) {
         task: "Text Generation",
         channel: "web",
         status: "error",
+        errorReason: text || "Model run failed",
         latencyMs: Date.now() - start,
       });
       return Response.json({ error: text || "Model run failed" }, { status: res.status });
@@ -152,6 +153,7 @@ export async function POST(req: NextRequest) {
       task: "Text Generation",
       channel: "web",
       status: "error",
+      errorReason: err instanceof Error ? err.message : "Unknown error",
       latencyMs: Date.now() - start,
     });
     return Response.json(

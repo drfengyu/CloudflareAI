@@ -124,6 +124,8 @@ export const usageLogs = sqliteTable("usage_log", {
   costUsd: real("costUsd").default(0),
   /** ok | error */
   status: text("status").notNull(),
+  /** error 时的错误原因 */
+  errorReason: text("errorReason"),
   latencyMs: integer("latencyMs"),
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });

@@ -67,12 +67,19 @@ export default async function HistoryPage({
                       >
                         {log.model}
                       </a>
-                      <Badge tone="muted">{log.channel}</Badge>
+                      <Badge tone="muted">
+                        {log.channel === "web" || log.channel === "openai" || log.channel === "anthropic" ? "站内" : log.channel}
+                      </Badge>
                       {log.apiKeyName ? (
                         <Badge tone="muted">🔑 {log.apiKeyName}</Badge>
-                      ) : log.channel === "web" ? (
+                      ) : (log.channel === "web" || log.channel === "openai" || log.channel === "anthropic") ? (
                         <Badge tone="muted">历史数据</Badge>
                       ) : null}
+                      {log.status === "error" && log.errorReason && (
+                        <span className="text-xs text-danger" title={log.errorReason}>
+                          ⚠️ {log.errorReason.substring(0, 50)}{log.errorReason.length > 50 ? "..." : ""}
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-3 text-muted-foreground">
                       {log.creditsUsed ? (

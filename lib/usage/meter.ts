@@ -24,6 +24,7 @@ export async function logUsage(input: {
   outputTokens?: number;
   neurons?: number;
   status: "ok" | "error";
+  errorReason?: string;
   latencyMs?: number;
 }) {
   const inputTokens = input.inputTokens ?? 0;
@@ -94,6 +95,7 @@ export async function logUsage(input: {
     creditsUsed,
     costUsd: 0, // legacy, 不再使用
     status: input.status,
+    errorReason: input.errorReason,
     latencyMs: input.latencyMs,
   });
 }

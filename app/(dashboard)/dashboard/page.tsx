@@ -176,23 +176,28 @@ export default async function DashboardPage({
                 {recent.map((log) => (
                   <div
                     key={log.id}
-                    className="flex items-center justify-between rounded-lg border border-border bg-surface p-3 text-xs"
+                    className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 text-xs sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-2">
                       <Badge tone={log.status === "ok" ? "success" : "danger"}>
                         {log.status}
                       </Badge>
                       <span className="text-muted-foreground">
-                        {log.channel === "web" ? "站内" : log.channel}
+                        站内
                       </span>
                       {log.apiKeyName ? (
                         <Badge tone="muted">🔑 {log.apiKeyName}</Badge>
-                      ) : log.channel === "web" ? (
+                      ) : (
                         <Badge tone="muted">历史数据</Badge>
-                      ) : null}
+                      )}
                       <span className="max-w-[200px] truncate font-mono text-[11px] text-muted-foreground">
                         {log.model}
                       </span>
+                      {log.status === "error" && log.errorReason && (
+                        <span className="text-xs text-danger" title={log.errorReason}>
+                          ⚠️ {log.errorReason.substring(0, 30)}{log.errorReason.length > 30 ? "..." : ""}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 text-muted-foreground">
                       <span className="font-medium">
