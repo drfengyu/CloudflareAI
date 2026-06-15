@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/usage/meter";
 import { generateApiKey } from "@/lib/auth/api-key";
 import { db } from "@/lib/db/d1-http";
-import { apiKeys } from "@/lib/db/schema";
+import { apiKeys, users } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 
 export interface CreateKeyResult {
@@ -123,6 +123,24 @@ export async function updateApiKeyAction(
 ) {
   try {
     const userId = await requireUser();
+
+    // 如果设置了额度限制，检查是否超过账户余额
+    if (data.remainCredits !== null) {
+      const userRows = await db
+        .select({ balanceCredits: users.balanceCredits })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      const userBalance = userRows[0]?.balanceCredits || 0;
+
+      if (data.remainCredits > userBalance) {
+        return {
+          success: false,
+          error: `API Key 额度不能超过账户余额（${userBalance.toLocaleString()} credits）`,
+        };
+      }
+    }
 
     await db
       .update(apiKeys)

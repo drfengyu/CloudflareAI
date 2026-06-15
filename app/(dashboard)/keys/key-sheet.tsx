@@ -107,7 +107,10 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
               className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              当前余额：{apiKey.remainCredits?.toLocaleString() || "无限制"}
+              当前 Key 余额：{apiKey.remainCredits?.toLocaleString() || "无限制"}
+            </p>
+            <p className="mt-1 text-xs text-amber-600">
+              ⚠️ 设置的额度不能超过您的账户余额
             </p>
           </div>
 

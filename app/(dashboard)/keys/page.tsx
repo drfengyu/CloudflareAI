@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
-import { apiKeys } from "@/lib/db/schema";
+import { apiKeys, users } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { Plus } from "lucide-react";
 import { type ApiKeyRow } from "./columns";
@@ -14,6 +14,16 @@ export const dynamic = "force-dynamic";
 
 export default async function KeysPage() {
   const userId = await requireUser();
+
+  // 获取用户余额
+  const userRows = await db
+    .select({ balanceCredits: users.balanceCredits })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  const userBalance = userRows[0]?.balanceCredits || 0;
+
   const keys = await db
     .select()
     .from(apiKeys)
