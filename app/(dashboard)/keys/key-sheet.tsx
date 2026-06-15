@@ -50,9 +50,10 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
     if (!apiKey) return; // Type guard
 
     startTransition(async () => {
+      const remainCredits = formData.remainCredits.trim();
       const result = await updateApiKeyAction(apiKey.id, {
         name: formData.name,
-        remainCredits: formData.remainCredits ? parseInt(formData.remainCredits) : null,
+        remainCredits: remainCredits ? parseInt(remainCredits, 10) : null,
         expiresAt: formData.expiresAt ? new Date(formData.expiresAt).getTime() : null,
         allowedIps: formData.allowedIps || null,
         allowedModels: formData.allowedModels.length > 0 ? JSON.stringify(formData.allowedModels) : null,
