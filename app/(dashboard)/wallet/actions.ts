@@ -42,13 +42,17 @@ export async function redeemCode(code: string) {
     balanceExpiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
   }
 
+  const now = new Date();
+
   // 插入临时余额
   await db.insert(temporaryBalances).values({
+    id: crypto.randomUUID(),
     userId: currentUserId,
     amount: redemption.quota,
     expiresAt: balanceExpiresAt,
     redemptionId: redemption.id,
     description: `兑换码充值: ${code}`,
+    createdAt: now,
   });
 
   // 更新兑换码使用次数
@@ -59,11 +63,13 @@ export async function redeemCode(code: string) {
 
   // 记录充值流水
   await db.insert(topups).values({
+    id: crypto.randomUUID(),
     userId: currentUserId,
     amount: redemption.quota,
     type: 1, // 兑换码充值
     description: `兑换码充值: ${code} (有效期至 ${balanceExpiresAt.toLocaleDateString()})`,
     redemptionId: redemption.id,
+    createdAt: now,
   });
 
   revalidatePath("/wallet");
