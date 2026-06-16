@@ -1,5 +1,5 @@
 import { db } from "@/lib/db/d1-http";
-import { modelPricing } from "@/lib/db/schema";
+import { modelPricing, options } from "@/lib/db/schema";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
 import { eq } from "drizzle-orm";
 
@@ -9,12 +9,58 @@ import { eq } from "drizzle-orm";
  * - 调整规则：基础价 < $100 时 ×5，≥ $100 时 ×1
  * - 无定价模型：默认 $100 / 1M tokens
  * - 图像模型：固定价格
+ *
+ * 这些值可以通过 options 表动态配置，如果没有配置则使用默认值。
  */
 export const BASE_MULTIPLIER = 1000;
 export const ADJUST_THRESHOLD = 100; // $/1M tokens
 export const ADJUST_MULTIPLIER_LOW = 5;
 export const ADJUST_MULTIPLIER_HIGH = 1;
 export const DEFAULT_PRICE_PER_MILLION = 100; // $/1M tokens
+
+/**
+ * 从 options 表读取定价配置（带缓存，避免每次计算都查数据库）。
+ */
+let pricingConfigCache: {
+  baseMultiplier: number;
+  adjustThreshold: number;
+  adjustMultiplierLow: number;
+  adjustMultiplierHigh: number;
+  defaultPricePerMillion: number;
+  cachedAt: number;
+} | null = null;
+
+const CACHE_TTL = 60_000; // 1 分钟缓存
+
+async function getPricingConfig() {
+  const now = Date.now();
+  if (pricingConfigCache && now - pricingConfigCache.cachedAt < CACHE_TTL) {
+    return pricingConfigCache;
+  }
+
+  const keys = [
+    "pricing_base_multiplier",
+    "pricing_adjust_threshold",
+    "pricing_adjust_multiplier_low",
+    "pricing_adjust_multiplier_high",
+    "pricing_default_price_per_million",
+  ];
+
+  const rows = await db.select().from(options);
+  const map = new Map(rows.map((r) => [r.key, r.value]));
+
+  const config = {
+    baseMultiplier: parseFloat(map.get("pricing_base_multiplier") || String(BASE_MULTIPLIER)),
+    adjustThreshold: parseFloat(map.get("pricing_adjust_threshold") || String(ADJUST_THRESHOLD)),
+    adjustMultiplierLow: parseFloat(map.get("pricing_adjust_multiplier_low") || String(ADJUST_MULTIPLIER_LOW)),
+    adjustMultiplierHigh: parseFloat(map.get("pricing_adjust_multiplier_high") || String(ADJUST_MULTIPLIER_HIGH)),
+    defaultPricePerMillion: parseFloat(map.get("pricing_default_price_per_million") || String(DEFAULT_PRICE_PER_MILLION)),
+    cachedAt: now,
+  };
+
+  pricingConfigCache = config;
+  return config;
+}
 
 /**
  * 图像模型固定定价（$/张）
@@ -38,17 +84,19 @@ const IMAGE_MODEL_DEFAULT_PRICE = 3500;
 /**
  * 计算最终价格（应用 ×1000 基础倍率 + 调整规则）
  */
-export function calculateFinalPrice(officialPrice: number | null | undefined): number {
+export async function calculateFinalPrice(officialPrice: number | null | undefined): Promise<number> {
+  const config = await getPricingConfig();
+
   if (officialPrice === null || officialPrice === undefined || officialPrice === 0) {
-    // 无定价 → 默认 $100/1M
-    return DEFAULT_PRICE_PER_MILLION;
+    // 无定价 → 默认价格
+    return config.defaultPricePerMillion;
   }
-  // 先 ×1000
-  const basePrice = officialPrice * BASE_MULTIPLIER;
+  // 先 ×基础倍率
+  const basePrice = officialPrice * config.baseMultiplier;
   // 再按规则调整
-  return basePrice < ADJUST_THRESHOLD
-    ? basePrice * ADJUST_MULTIPLIER_LOW
-    : basePrice * ADJUST_MULTIPLIER_HIGH;
+  return basePrice < config.adjustThreshold
+    ? basePrice * config.adjustMultiplierLow
+    : basePrice * config.adjustMultiplierHigh;
 }
 
 /**
@@ -77,8 +125,8 @@ export async function syncModelPricing(): Promise<{ inserted: number; updated: n
     const p = model.pricing?.[0];
     const pOut = model.pricing?.[1];
 
-    const inputPrice = isImage ? null : calculateFinalPrice(p?.price);
-    const outputPrice = isImage ? null : pOut ? calculateFinalPrice(pOut.price) : null;
+    const inputPrice = isImage ? null : await calculateFinalPrice(p?.price);
+    const outputPrice = isImage ? null : pOut ? await calculateFinalPrice(pOut.price) : null;
     const fixedPrice = isImage
       ? IMAGE_MODEL_PRICING[model.id] ?? IMAGE_MODEL_DEFAULT_PRICE
       : null;
@@ -127,6 +175,18 @@ export async function syncModelPricing(): Promise<{ inserted: number; updated: n
 }
 
 /**
+ * 使用新的配置重新同步价格表（管理员修改全局倍率时调用）。
+ * 清除缓存，重新计算所有模型价格，保留自定义倍率。
+ */
+export async function syncModelPricingWithSettings(): Promise<{ inserted: number; updated: number }> {
+  // 清除缓存，强制重新读取配置
+  pricingConfigCache = null;
+
+  // 重新同步
+  return await syncModelPricing();
+}
+
+/**
  * 从 model_pricing 表获取单个模型的价格。
  */
 export async function getModelPricing(modelId: string): Promise<{
@@ -146,10 +206,11 @@ export async function getModelPricing(modelId: string): Promise<{
   if (!rows[0]) return null;
 
   const multiplier = rows[0].multiplier ?? 1.0;
+  const config = await getPricingConfig();
 
   return {
-    inputPrice: (rows[0].inputPrice ?? DEFAULT_PRICE_PER_MILLION) * multiplier,
-    outputPrice: (rows[0].outputPrice ?? rows[0].inputPrice ?? DEFAULT_PRICE_PER_MILLION) * multiplier,
+    inputPrice: (rows[0].inputPrice ?? config.defaultPricePerMillion) * multiplier,
+    outputPrice: (rows[0].outputPrice ?? rows[0].inputPrice ?? config.defaultPricePerMillion) * multiplier,
     isImage: rows[0].isImage === 1,
     fixedPrice: (rows[0].fixedPrice ?? IMAGE_MODEL_DEFAULT_PRICE) * multiplier,
     unit: rows[0].unit ?? "per M input tokens",
@@ -169,13 +230,14 @@ export async function getAllModelPricing(): Promise<Map<string, {
   multiplier: number;
 }>> {
   const rows = await db.select().from(modelPricing);
+  const config = await getPricingConfig();
   const map = new Map();
 
   for (const row of rows) {
     const multiplier = row.multiplier ?? 1.0;
     map.set(row.modelId, {
-      inputPrice: (row.inputPrice ?? DEFAULT_PRICE_PER_MILLION) * multiplier,
-      outputPrice: (row.outputPrice ?? row.inputPrice ?? DEFAULT_PRICE_PER_MILLION) * multiplier,
+      inputPrice: (row.inputPrice ?? config.defaultPricePerMillion) * multiplier,
+      outputPrice: (row.outputPrice ?? row.inputPrice ?? config.defaultPricePerMillion) * multiplier,
       isImage: row.isImage === 1,
       fixedPrice: (row.fixedPrice ?? IMAGE_MODEL_DEFAULT_PRICE) * multiplier,
       unit: row.unit ?? "per M input tokens",

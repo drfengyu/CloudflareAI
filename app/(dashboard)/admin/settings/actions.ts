@@ -5,6 +5,7 @@ import { options, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { revalidatePath } from "next/cache";
+import { syncModelPricingWithSettings } from "@/lib/billing/model-pricing";
 
 async function upsertOption(key: string, value: string) {
   const existing = await db
@@ -53,4 +54,68 @@ export async function updateBasicSettings(formData: {
 
   revalidatePath("/admin/settings");
   return { success: true };
+}
+
+export async function updatePricingSettings(formData: {
+  baseMultiplier: string;
+  adjustThreshold: string;
+  adjustMultiplierLow: string;
+  adjustMultiplierHigh: string;
+  defaultPricePerMillion: string;
+}) {
+  const currentUserId = await requireUser();
+
+  // 检查权限
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  // 验证输入
+  const baseMultiplier = parseFloat(formData.baseMultiplier);
+  const adjustThreshold = parseFloat(formData.adjustThreshold);
+  const adjustMultiplierLow = parseFloat(formData.adjustMultiplierLow);
+  const adjustMultiplierHigh = parseFloat(formData.adjustMultiplierHigh);
+  const defaultPricePerMillion = parseFloat(formData.defaultPricePerMillion);
+
+  if (isNaN(baseMultiplier) || baseMultiplier < 1) {
+    throw new Error("基础倍率必须 ≥ 1");
+  }
+  if (isNaN(adjustThreshold) || adjustThreshold < 0) {
+    throw new Error("价格阈值必须 ≥ 0");
+  }
+  if (isNaN(adjustMultiplierLow) || adjustMultiplierLow < 0.01) {
+    throw new Error("低价倍率必须 ≥ 0.01");
+  }
+  if (isNaN(adjustMultiplierHigh) || adjustMultiplierHigh < 0.01) {
+    throw new Error("高价倍率必须 ≥ 0.01");
+  }
+  if (isNaN(defaultPricePerMillion) || defaultPricePerMillion < 0) {
+    throw new Error("默认价格必须 ≥ 0");
+  }
+
+  // 更新设置
+  await upsertOption("pricing_base_multiplier", formData.baseMultiplier);
+  await upsertOption("pricing_adjust_threshold", formData.adjustThreshold);
+  await upsertOption("pricing_adjust_multiplier_low", formData.adjustMultiplierLow);
+  await upsertOption("pricing_adjust_multiplier_high", formData.adjustMultiplierHigh);
+  await upsertOption("pricing_default_price_per_million", formData.defaultPricePerMillion);
+
+  // 重新同步价格表（使用新的配置）
+  const result = await syncModelPricingWithSettings();
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/pricing");
+  revalidatePath("/pricing");
+
+  return {
+    success: true,
+    inserted: result.inserted,
+    updated: result.updated,
+  };
 }

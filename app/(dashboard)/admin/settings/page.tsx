@@ -5,7 +5,7 @@ import { users, options } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
-import { SettingsForm } from "./settings-form";
+import { SettingsForm, PricingSettingsForm } from "./settings-form";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +49,23 @@ export default async function AdminSettingsPage() {
               initialSettings={{
                 siteName: settings.siteName || "Cloudflare AI Console",
                 defaultBalanceValidDays: settings.defaultBalanceValidDays || "365",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">全局定价倍率</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PricingSettingsForm
+              initialSettings={{
+                baseMultiplier: settings.pricing_base_multiplier || "1000",
+                adjustThreshold: settings.pricing_adjust_threshold || "100",
+                adjustMultiplierLow: settings.pricing_adjust_multiplier_low || "5",
+                adjustMultiplierHigh: settings.pricing_adjust_multiplier_high || "1",
+                defaultPricePerMillion: settings.pricing_default_price_per_million || "100",
               }}
             />
           </CardContent>
