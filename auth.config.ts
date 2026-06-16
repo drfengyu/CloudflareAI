@@ -16,7 +16,7 @@ interface LinuxDOProfile {
 
 /**
  * LinuxDO OAuth Provider
- * 使用 client_secret_post 方法交换 token
+ * 使用 client_secret_post 方法交换 token（放在 POST body，不是 Basic Auth）
  */
 function LinuxDO(
   config: OAuthUserConfig<LinuxDOProfile>
@@ -30,6 +30,15 @@ function LinuxDO(
       params: {
         scope: "openid profile email",
       },
+    },
+    token: {
+      url: "https://connect.linux.do/oauth2/token",
+      params: {
+        grant_type: "authorization_code",
+      },
+    },
+    client: {
+      token_endpoint_auth_method: "client_secret_post",
     },
     profile(profile) {
       return {
