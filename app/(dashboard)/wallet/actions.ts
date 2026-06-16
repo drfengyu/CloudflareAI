@@ -55,10 +55,14 @@ export async function redeemCode(code: string) {
     createdAt: now,
   });
 
-  // 更新兑换码使用次数
+  // 更新兑换码使用次数和使用者
   await db
     .update(redemptions)
-    .set({ usedCount: redemption.usedCount + 1 })
+    .set({
+      usedCount: redemption.usedCount + 1,
+      usedUserId: currentUserId,
+      redeemedAt: now,
+    })
     .where(eq(redemptions.id, redemption.id));
 
   // 记录充值流水

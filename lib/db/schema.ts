@@ -155,6 +155,10 @@ export const redemptions = sqliteTable("redemption", {
   expiresAt: integer("expiresAt", { mode: "timestamp_ms" }),
   /** 充值后余额的有效期（天数）；null = 永久有效。兑换时计算为 now + balanceValidDays。 */
   balanceValidDays: integer("balanceValidDays"),
+  /** 使用者用户 ID（最后一次使用）。 */
+  usedUserId: text("usedUserId").references(() => users.id, { onDelete: "set null" }),
+  /** 最后兑换时间。 */
+  redeemedAt: integer("redeemedAt", { mode: "timestamp_ms" }),
   /** 创建者用户 ID（管理员）。 */
   createdBy: text("createdBy").references(() => users.id, { onDelete: "set null" }),
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),

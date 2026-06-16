@@ -24,21 +24,30 @@ export default async function AdminRedemptionsPage() {
     redirect("/dashboard");
   }
 
-  // 获取所有兑换码
+  // 获取所有兑换码及使用者信息
   const codes = await db
-    .select()
+    .select({
+      redemption: redemptions,
+      usedUser: users,
+    })
     .from(redemptions)
+    .leftJoin(users, eq(redemptions.usedUserId, users.id))
     .orderBy(desc(redemptions.createdAt));
 
-  const data = codes.map((c) => ({
-    id: c.id,
-    code: c.code,
-    creditsAmount: c.quota,
-    status: c.usedCount >= (c.maxUses || Infinity) ? 2 : c.expiresAt && new Date(c.expiresAt) < new Date() ? 3 : 1,
-    usedBy: null, // redemption 表没有 usedBy 字段，需要关联 topup 表查询
-    usedAt: null,
-    createdAt: new Date(c.createdAt!),
-  }));
+  const data = codes.map((row) => {
+    const c = row.redemption;
+    const usedUser = row.usedUser;
+
+    return {
+      id: c.id,
+      code: c.code,
+      creditsAmount: c.quota,
+      status: c.usedCount >= (c.maxUses || Infinity) ? 2 : c.expiresAt && new Date(c.expiresAt) < new Date() ? 3 : 1,
+      usedBy: usedUser?.email || null,
+      usedAt: c.redeemedAt ? new Date(c.redeemedAt) : null,
+      createdAt: new Date(c.createdAt!),
+    };
+  });
 
   return (
     <>
