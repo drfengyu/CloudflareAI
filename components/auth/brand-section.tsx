@@ -1,3 +1,5 @@
+"use client";
+
 import { Cpu, Zap, BarChart3, Shield } from "lucide-react";
 
 export function BrandSection() {
