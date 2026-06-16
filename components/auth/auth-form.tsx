@@ -47,7 +47,11 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         <span className="font-semibold">Cloudflare AI Console</span>
       </div>
 
-      <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-6 shadow-sm">
+      {/* 玻璃态卡片 + 渐变光晕 */}
+      <div className="group relative rounded-2xl border border-border/50 bg-card/80 p-6 shadow-xl shadow-black/5 backdrop-blur-xl transition-all duration-300 hover:border-border/80 hover:shadow-2xl dark:border-white/10 dark:bg-card/60 dark:shadow-black/20">
+        {/* 顶部高光渐变 */}
+        <div className="pointer-events-none absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+
         <h1 className="text-lg font-semibold">
           {isLogin ? "登录" : "创建账户"}
         </h1>
@@ -55,64 +59,76 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           {isLogin ? "欢迎回来" : "用邮箱注册，或使用第三方账号"}
         </p>
 
-      <form action={formAction} className="mt-5 space-y-3">
-        {!isLogin && (
-          <Field name="name" type="text" label="昵称（可选）" required={false} />
-        )}
-        <Field name="email" type="email" label="邮箱" />
-        <Field name="password" type="password" label="密码" />
+        <form action={formAction} className="mt-5 space-y-3">
+          {!isLogin && (
+            <Field name="name" type="text" label="昵称（可选）" required={false} />
+          )}
+          <Field name="email" type="email" label="邮箱" />
+          <Field name="password" type="password" label="密码" />
 
-        {state.error && (
-          <p className="text-xs text-danger">{state.error}</p>
-        )}
+          {state.error && (
+            <p className="animate-in fade-in slide-in-from-top-1 text-xs text-danger duration-200">
+              {state.error}
+            </p>
+          )}
 
-        <SubmitButton label={isLogin ? "登录" : "注册"} />
-      </form>
-
-      <div className="my-4 flex items-center gap-3 text-[11px] text-muted-foreground">
-        <span className="h-px flex-1 bg-border" />
-        或使用第三方账号
-        <span className="h-px flex-1 bg-border" />
-      </div>
-
-      <div className="space-y-2">
-        <form action={githubSignIn}>
-          <Button type="submit" variant="outline" className="w-full">
-            <GithubIcon className="h-4 w-4" />
-            使用 GitHub 继续
-          </Button>
+          <SubmitButton label={isLogin ? "登录" : "注册"} />
         </form>
 
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          onClick={() => signIn("linuxdo", { callbackUrl: "/dashboard" })}
-        >
-          <IconLinuxDo className="h-4 w-4" />
-          使用 LinuxDO 继续
-        </Button>
-      </div>
+        <div className="my-4 flex items-center gap-3 text-[11px] text-muted-foreground">
+          <span className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-border" />
+          或使用第三方账号
+          <span className="h-px flex-1 bg-gradient-to-l from-transparent via-border to-border" />
+        </div>
 
-      <p className="mt-5 text-center text-xs text-muted-foreground">
-        {isLogin ? (
-          <>
-            还没有账户？{" "}
-            <Link href="/register" className="text-primary hover:underline">
-              注册
-            </Link>
-          </>
-        ) : (
-          <>
-            已有账户？{" "}
-            <Link href="/login" className="text-primary hover:underline">
-              登录
-            </Link>
-          </>
-        )}
-      </p>
+        <div className="space-y-2">
+          <form action={githubSignIn}>
+            <Button
+              type="submit"
+              variant="outline"
+              className="group/btn w-full transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-gradient-to-r hover:from-primary/5 hover:to-transparent hover:shadow-lg"
+            >
+              <GithubIcon className="h-4 w-4 transition-transform duration-300 group-hover/btn:rotate-12" />
+              使用 GitHub 继续
+            </Button>
+          </form>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="group/btn w-full transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-gradient-to-r hover:from-primary/5 hover:to-transparent hover:shadow-lg"
+            onClick={() => signIn("linuxdo", { callbackUrl: "/dashboard" })}
+          >
+            <IconLinuxDo className="h-4 w-4 transition-transform duration-300 group-hover/btn:scale-110" />
+            使用 LinuxDO 继续
+          </Button>
+        </div>
+
+        <p className="mt-5 text-center text-xs text-muted-foreground">
+          {isLogin ? (
+            <>
+              还没有账户？{" "}
+              <Link
+                href="/register"
+                className="text-primary transition-colors hover:text-primary/80 hover:underline"
+              >
+                注册
+              </Link>
+            </>
+          ) : (
+            <>
+              已有账户？{" "}
+              <Link
+                href="/login"
+                className="text-primary transition-colors hover:text-primary/80 hover:underline"
+              >
+                登录
+              </Link>
+            </>
+          )}
+        </p>
+      </div>
     </div>
-  </div>
   );
 }
 
@@ -129,7 +145,9 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs text-muted-foreground">{label}</span>
+      <span className="mb-1 block text-xs font-medium text-muted-foreground transition-colors duration-200 has-[:focus]:text-foreground">
+        {label}
+      </span>
       <input
         name={name}
         type={type}
@@ -141,7 +159,14 @@ function Field({
               : "new-password"
             : type
         }
-        className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-[color:var(--primary)]"
+        placeholder={
+          type === "email"
+            ? "your@email.com"
+            : type === "password"
+              ? "••••••••"
+              : ""
+        }
+        className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm shadow-sm outline-none transition-all duration-200 placeholder:text-muted-foreground/40 hover:border-primary/50 focus:border-primary focus:shadow-[0_0_0_3px_hsl(var(--primary)/0.1)] focus:ring-2 focus:ring-primary/20"
       />
     </label>
   );
