@@ -98,7 +98,9 @@ export function CheckinCalendarCard() {
       const result = await performCheckin();
       if (result.success && result.data) {
         toast.success(`签到成功！获得 ${result.data.quotaAwarded.toFixed(2)} cr`);
-        fetchData(); // 刷新数据
+        await fetchData(); // 刷新签到数据
+        // 刷新页面以更新余额（Server Component 重新渲染）
+        window.location.reload();
       } else {
         toast.error(result.message || "签到失败");
       }
@@ -299,7 +301,8 @@ export function CheckinCalendarCard() {
                     className={cn(
                       "relative flex h-10 w-full flex-col items-center justify-center rounded-lg text-sm font-medium transition-colors",
                       !dayObj.isCurrentMonth && "text-muted-foreground/40 cursor-default",
-                      isToday && "bg-primary text-primary-foreground hover:bg-primary/90",
+                      isToday && isCheckedIn && "bg-primary text-primary-foreground hover:bg-primary/90",
+                      isToday && !isCheckedIn && "ring-2 ring-primary ring-inset",
                       !isToday && dayObj.isCurrentMonth && "hover:bg-surface",
                       !isToday && isCheckedIn && "font-semibold"
                     )}
@@ -308,6 +311,9 @@ export function CheckinCalendarCard() {
                     <span className="tabular-nums">{dayNum}</span>
                     {isCheckedIn && !isToday && (
                       <span className="absolute bottom-1 h-1 w-1 rounded-full bg-emerald-500" />
+                    )}
+                    {isToday && isCheckedIn && (
+                      <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-primary" />
                     )}
                   </button>
                 );
