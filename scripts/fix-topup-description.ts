@@ -6,9 +6,15 @@
  * npx tsx scripts/fix-topup-description.ts
  */
 
+import * as dotenv from "dotenv";
+import { resolve } from "path";
+
+// 加载 .env.local
+dotenv.config({ path: resolve(process.cwd(), ".env.local") });
+
 import { db } from "@/lib/db/d1-http";
 import { topups } from "@/lib/db/schema";
-import { sql, eq, and, like } from "drizzle-orm";
+import { sql, eq } from "drizzle-orm";
 
 async function fixTopupDescription() {
   console.log("开始修复充值记录描述...");
