@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey, unique } from "drizzle-orm/sqlite-core";
 import type { AdapterAccountType } from "next-auth/adapters";
 
 /**
@@ -178,6 +178,28 @@ export const topups = sqliteTable("topup", {
   }),
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });
+
+/** 签到记录表：每日签到获得随机额度奖励。 */
+export const checkins = sqliteTable(
+  "checkin",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 签到日期：YYYY-MM-DD 格式。 */
+    checkinDate: text("checkinDate").notNull(),
+    /** 本次签到奖励的 credits。 */
+    quotaAwarded: real("quotaAwarded").notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => ({
+    // 每人每天只能签到一次
+    uniqueUserDate: unique().on(table.userId, table.checkinDate),
+  })
+);
+
+export type Checkin = typeof checkins.$inferSelect;
 
 /** 系统设置 KV 表：存放全局配置项，value 为 JSON 字符串。 */
 export const options = sqliteTable("option", {

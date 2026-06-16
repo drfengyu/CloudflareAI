@@ -9,6 +9,7 @@ import { Wallet, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { RedeemCodeDialog } from "./redeem-code-dialog";
+import { CheckinCalendarCard } from "./checkin-calendar-card";
 import { formatCredits } from "@/lib/billing/credits";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +59,9 @@ export default async function WalletPage() {
       />
 
       <div className="space-y-6 p-8">
+        {/* 签到日历 */}
+        <CheckinCalendarCard />
+
         {/* 余额卡片 */}
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="flex items-center justify-between pt-5">
@@ -133,7 +137,13 @@ export default async function WalletPage() {
                   >
                     <div>
                       <p className="text-sm font-medium">
-                        {record.type === 1 ? "兑换码充值" : record.type === 2 ? "管理员充值" : "其他充值"}
+                        {record.type === 1
+                          ? "兑换码充值"
+                          : record.type === 2
+                            ? "管理员充值"
+                            : record.type === 3
+                              ? "签到奖励"
+                              : "其他充值"}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {formatDistanceToNow(new Date(record.createdAt!), {
