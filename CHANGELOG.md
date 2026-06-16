@@ -7,19 +7,55 @@
 
 ## [未发布]
 
+### 规划中
+
+- **Phase B 剩余**：流式结束计量、网关 IP/模型白名单校验
+- **Phase F 剩余**：Server Actions 实现（兑换码生成 UI、用户余额调整 UI）
+- **管理后台签到配置界面**（`/admin/settings`）
+
+## [0.2.1] - 2026-06-16
+
 ### 新增
 
-- **Phase E - 公开定价页**
-  - 新增 `/pricing` 页面，展示所有模型的实际计费价格
-  - 按类别分组显示（文本/图像/视觉/嵌入/翻译/语音/视频）
-  - 显示应用倍率后的美元价格和 credits
-  - 定价策略说明（hosted ×1000 / proxied ×1 / 图像固定价）
-- **Phase F - 管理后台**
-  - `/admin/users` 用户管理页面（角色/余额/注册时间）
-  - `/admin/redemptions` 兑换码管理页面（状态/额度/使用情况）
-  - `/wallet` 钱包页面（余额显示/充值流水）
-  - `/admin/settings` 系统设置页面（定价倍率配置）
-  - 所有管理页面需要管理员权限（role ≥ 10）
+- **Phase G - 签到功能**
+  - 新增 `checkin` 表存储签到记录
+  - 新增每日签到功能，随机获得额度奖励（10-100 cr）
+  - 新增 CheckinCalendarCard 组件（日历 UI + 统计展示）
+    - 7×6 日历网格（42 天）
+    - 可折叠界面（默认已签到时收起）
+    - 月份导航（上/下月切换）
+    - 统计卡片（累计签到/本月获得/累计获得）
+    - 已签到日期显示绿点 + Tooltip 奖励额度
+  - 集成到 `/wallet` 页面顶部
+  - Server Actions：`getCheckinStatus()` 和 `performCheckin()`
+  - 充值流水新增 type 3（签到奖励）
+  - 签到配置存储在 `option` 表（enabled/min_quota/max_quota）
+  - 防重复签到：UNIQUE(userId, checkinDate) 约束
+  - 详细文档：`docs/features/checkin.md`
+- **Phase F - 管理员定价管理**
+  - 新增 `/admin/pricing` 定价管理页面
+  - 管理员可内联编辑每个模型的倍率（0.01-100）
+  - `model_pricing` 表新增 `multiplier` 字段
+  - 分类筛选（全部/文本/图像等）
+  - 搜索功能（模型 ID / 名称）
+  - 显示基础价 → 最终价转换
+  - 倍率实时生效（计费 + 页面显示）
+
+### 变更
+
+- **数据迁移**
+  - `redemption.quota` 和 `topup.amount` 从 INTEGER 改为 REAL 支持小数
+  - 历史兑换码额度调整：500000 → 5000（÷100）
+  - 历史充值记录调整：≥10000 的金额 ÷100
+  - 用户余额按实际充值消耗重新结算（移除系统补偿记录）
+- **文档结构优化**
+  - 签到功能设计从 `CLAUDE.md` 移至 `docs/features/checkin.md`
+  - README 更新功能进度和亮点
+
+### 修复
+
+- 修复 `schema.ts` 缺少 `unique` 导入
+- 修复 `checkin-actions.ts` 中 `createdAt` 类型错误（使用 Date 对象）
 
 ## [0.2.0] - 2026-06-15
 
