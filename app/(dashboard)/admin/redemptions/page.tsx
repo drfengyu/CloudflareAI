@@ -24,19 +24,37 @@ export default async function AdminRedemptionsPage() {
     redirect("/dashboard");
   }
 
-  // 获取所有兑换码及使用者信息
+  // 获取所有兑换码
   const codes = await db
-    .select({
-      redemption: redemptions,
-      usedUser: users,
-    })
+    .select()
     .from(redemptions)
-    .leftJoin(users, eq(redemptions.usedUserId, users.id))
     .orderBy(desc(redemptions.createdAt));
 
-  const data = codes.map((row) => {
-    const c = row.redemption;
-    const usedUser = row.usedUser;
+  // 获取所有使用者 ID
+  const usedUserIds = codes
+    .map((c) => c.usedUserId)
+    .filter((id): id is string => id !== null);
+
+  // 批量查询使用者信息
+  const usedUsersMap = new Map<string, typeof users.$inferSelect>();
+  if (usedUserIds.length > 0) {
+    const usedUsers = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, usedUserIds[0])); // 先查第一个
+    usedUsers.forEach((u) => usedUsersMap.set(u.id, u));
+
+    // 查询剩余的（如果有多个不同用户）
+    for (const userId of usedUserIds.slice(1)) {
+      if (!usedUsersMap.has(userId)) {
+        const u = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+        if (u[0]) usedUsersMap.set(u[0].id, u[0]);
+      }
+    }
+  }
+
+  const data = codes.map((c) => {
+    const usedUser = c.usedUserId ? usedUsersMap.get(c.usedUserId) : null;
 
     return {
       id: c.id,
