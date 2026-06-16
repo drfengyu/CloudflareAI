@@ -42,7 +42,7 @@ export function createColumns(currentUserId: string): ColumnDef<UserRow>[] {
       header: "余额",
       cell: ({ row }) => {
         const balance = row.original.balanceCredits;
-        const usd = (balance / 500000).toFixed(2);
+        const usd = balance.toFixed(2);
         return (
           <div className="text-right">
             <p className="font-medium">{balance.toLocaleString()} cr</p>

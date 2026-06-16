@@ -48,7 +48,7 @@ export async function GET() {
     role: user.role,
     roleLabel,
     balanceCredits: user.balanceCredits,
-    balanceUsd: (user.balanceCredits / 500000).toFixed(2),
+    balanceUsd: user.balanceCredits.toFixed(2),
     status: user.status,
     canAccessAdmin: user.role >= 10,
   });

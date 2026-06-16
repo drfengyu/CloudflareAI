@@ -36,7 +36,7 @@ export const columns: ColumnDef<RedemptionRow>[] = [
     header: "额度",
     cell: ({ row }) => {
       const credits = row.original.creditsAmount;
-      const usd = (credits / 500000).toFixed(2);
+      const usd = credits.toFixed(2);
       return (
         <div>
           <p className="font-medium">{credits.toLocaleString()} cr</p>

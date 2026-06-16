@@ -97,7 +97,7 @@ export function ManageUserDialog({ user, currentUserId }: ManageUserDialogProps)
               <p className="text-xs text-muted-foreground">{user.email}</p>
               <p className="mt-2 text-xs text-muted-foreground">
                 当前余额: {user.balanceCredits.toLocaleString()} cr
-                (≈ ${(user.balanceCredits / 500000).toFixed(2)})
+                (≈ ${user.balanceCredits.toFixed(2)})
               </p>
             </div>
 
@@ -116,8 +116,8 @@ export function ManageUserDialog({ user, currentUserId }: ManageUserDialogProps)
                   placeholder="正数充值，负数扣减"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {amount > 0 && `+${(amount / 500000).toFixed(2)} USD`}
-                  {amount < 0 && `${(amount / 500000).toFixed(2)} USD`}
+                  {amount > 0 && `+${amount.toFixed(2)} USD`}
+                  {amount < 0 && `${amount.toFixed(2)} USD`}
                 </p>
               </div>
 
