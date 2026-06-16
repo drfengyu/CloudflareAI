@@ -5,6 +5,7 @@ import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
 import { logUsage, verifyBalance } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { interceptOpenAIStream } from "@/lib/usage/stream-intercept";
 
 const schema = z.object({
   model: z.string(),
@@ -97,20 +98,26 @@ export async function POST(req: NextRequest) {
     }
 
     if (stream) {
-      // 流式：先扣预估（Phase C 改进）
-      logUsage({
-        userId,
-        apiKeyId,
-        model,
-        task: "Text Generation",
-        channel: "anthropic",
-        inputTokens: Math.floor(estimatedInput),
-        outputTokens: max_tokens,
-        status: "ok",
-        latencyMs: Date.now() - start,
+      // 流式：拦截 SSE 流，解析末尾 usage 后按真实 token 扣费。
+      // 注意：这个 gateway 透传 OpenAI 格式 SSE 给客户端（route 未做 Anthropic 格式转换），
+      // 所以可以直接用 OpenAI 拦截器解析 usage chunk。
+      const { stream: tap, done } = interceptOpenAIStream(res.body);
+
+      done.then(async ({ usage }) => {
+        await logUsage({
+          userId,
+          apiKeyId,
+          model,
+          task: "Text Generation",
+          channel: "anthropic",
+          inputTokens: usage?.promptTokens ?? Math.floor(estimatedInput),
+          outputTokens: usage?.completionTokens ?? 0,
+          status: "ok",
+          latencyMs: Date.now() - start,
+        });
       }).catch(console.error);
 
-      return new Response(res.body, {
+      return new Response(tap, {
         headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
       });
     }

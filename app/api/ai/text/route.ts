@@ -4,6 +4,7 @@ import { openaiCompatible } from "@/lib/cloudflare/ai";
 import { requireUser, logUsage, verifyBalance, getDefaultApiKey } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { saveConversation } from "@/lib/usage/conversation";
+import { interceptOpenAIStream } from "@/lib/usage/stream-intercept";
 
 const schema = z.object({
   model: z.string(),
@@ -87,20 +88,42 @@ export async function POST(req: NextRequest) {
     }
 
     if (stream) {
-      // 流式：先扣预估（Phase C 实现流式结束修正）
-      logUsage({
-        userId,
-        apiKeyId,
-        model,
-        task: "Text Generation",
-        channel: "web",
-        inputTokens: Math.floor(estimatedInput),
-        outputTokens: estimatedOutput,
-        status: "ok",
-        latencyMs: Date.now() - start,
+      // 流式：拦截 SSE，结束后用真实 token 数计量 + 保存对话历史。
+      const { stream: tap, done } = interceptOpenAIStream(res.body);
+
+      done.then(async ({ usage, content }) => {
+        const inputTokens = usage?.promptTokens ?? Math.floor(estimatedInput);
+        const outputTokens = usage?.completionTokens ?? 0;
+        const creditsUsed = await calculateCredits(model, inputTokens, outputTokens);
+
+        await logUsage({
+          userId,
+          apiKeyId,
+          model,
+          task: "Text Generation",
+          channel: "web",
+          inputTokens,
+          outputTokens,
+          status: "ok",
+          latencyMs: Date.now() - start,
+        });
+
+        // 保存对话历史：流式时也能拿到拼接后的 content
+        const userMessage = messages.findLast((m) => m.role === "user");
+        if (userMessage && content) {
+          await saveConversation({
+            userId,
+            model,
+            prompt: userMessage.content,
+            response: content,
+            inputTokens,
+            outputTokens,
+            creditsUsed,
+          });
+        }
       }).catch(console.error);
 
-      return new Response(res.body, {
+      return new Response(tap, {
         headers: {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",

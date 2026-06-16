@@ -5,6 +5,7 @@ import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
 import { logUsage, verifyBalance } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { interceptOpenAIStream } from "@/lib/usage/stream-intercept";
 
 const schema = z.object({
   model: z.string(),
@@ -93,20 +94,27 @@ export async function POST(req: NextRequest) {
     }
 
     if (stream) {
-      // 流式：先透传，结束后计量（简化处理：先扣预估，Phase C 实现流式计量修正）
-      logUsage({
-        userId,
-        apiKeyId,
-        model,
-        task: "Text Generation",
-        channel: "openai",
-        inputTokens: Math.floor(estimatedInput),
-        outputTokens: estimatedOutput,
-        status: "ok",
-        latencyMs: Date.now() - start,
+      // 流式：拦截 SSE 流，解析末尾的 usage chunk 后再按真实 token 扣费。
+      // Cloudflare 即使不传 stream_options 也会发 usage chunk，所以无需改请求体。
+      const { stream: tap, done } = interceptOpenAIStream(res.body);
+
+      // 后台等待流读完，拿到真实 usage 后才计量。
+      // 注意：不能 await，否则会阻塞返回。
+      done.then(async ({ usage }) => {
+        await logUsage({
+          userId,
+          apiKeyId,
+          model,
+          task: "Text Generation",
+          channel: "openai",
+          inputTokens: usage?.promptTokens ?? Math.floor(estimatedInput),
+          outputTokens: usage?.completionTokens ?? 0,
+          status: "ok",
+          latencyMs: Date.now() - start,
+        });
       }).catch(console.error);
 
-      return new Response(res.body, {
+      return new Response(tap, {
         headers: {
           "Content-Type": "text/event-stream",
           "Cache-Control": "no-cache",
