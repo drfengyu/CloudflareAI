@@ -11,6 +11,134 @@
 
 目标：参考本地 `D:\Download\new-api-main`（`web/default` 重设计前端 + Go 后端业务语义），改造成视觉贴近 new-api、功能覆盖「数据看板 / 令牌增强 / 真实计量+定价 / 管理后台」的多用户 AI 网关。
 
+## 开发规范
+
+### 参考实现（必读）
+
+**所有功能开发和规划前，必须先参考本地 `D:\Download\new-api-main` 的实现**：
+
+1. **后端逻辑**：`model/*.go` + `controller/*.go`
+2. **前端组件**：`web/default/src/features/*/` 
+3. **配置管理**：`setting/operation_setting/*.go`
+4. **数据库设计**：`model/*.go` 中的 struct 定义
+
+**参考流程**：
+```bash
+# 1. 查找相关文件
+find "D:\Download\new-api-main" -name "*keyword*.go" -o -name "*keyword*.tsx"
+
+# 2. 阅读核心实现
+Read <file_path>
+
+# 3. 理解业务逻辑后再实现本项目对应功能
+```
+
+### 测试验证流程
+
+**每个功能完成后必须执行完整的测试验证**：
+
+#### 1. 本地测试（开发环境）
+
+```bash
+# 类型检查
+npm run typecheck
+
+# 代码规范
+npm run lint
+
+# 本地启动
+npm run dev
+# 访问 http://localhost:3000 手动测试功能
+```
+
+#### 2. Playwright E2E 测试
+
+```bash
+# 安装 Playwright（首次）
+npx playwright install
+
+# 编写测试用例（参考现有测试）
+# tests/e2e/checkin.spec.ts
+# tests/e2e/pricing.spec.ts
+
+# 运行测试
+npm run test:e2e
+
+# 生成测试报告
+npx playwright show-report
+```
+
+**测试覆盖要求**：
+- 登录/注册流程
+- API Key 创建和使用
+- 主要功能页面（Dashboard / Keys / Wallet / Pricing）
+- API 网关调用（OpenAI / Anthropic 兼容性）
+- 错误处理和边界情况
+
+#### 3. Vercel 预览部署
+
+```bash
+# 安装 Vercel CLI（首次）
+npm i -g vercel
+
+# 登录 Vercel
+vercel login
+
+# 预览部署（自动生成预览 URL）
+vercel
+
+# 查看部署日志
+vercel logs <deployment-url>
+
+# 测试预览环境
+curl https://<preview-url>/api/health
+```
+
+#### 4. Cloudflare D1 数据验证
+
+```bash
+# 通过 D1 HTTP API 查询数据
+curl "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT_ID/d1/database/$CF_D1_DATABASE_ID/query" \
+  -H "Authorization: Bearer $CF_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"sql": "SELECT * FROM checkin ORDER BY createdAt DESC LIMIT 5;"}'
+
+# 验证数据一致性
+# - 签到记录是否正确存储
+# - 余额扣减是否准确
+# - 充值流水是否完整
+```
+
+#### 5. 线上功能测试（生产环境）
+
+```bash
+# 推送到主分支触发生产部署
+git push origin main
+
+# 等待 Vercel 自动部署完成
+# 访问生产域名验证功能
+
+# 测试 API 网关
+curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
+  -H "Authorization: Bearer sk-cfai-xxxxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "@cf/meta/llama-3.1-8b-instruct",
+    "messages": [{"role": "user", "content": "Hello!"}]
+  }'
+```
+
+### 测试检查清单（每次部署前）
+
+- [ ] 本地 TypeScript 类型检查通过
+- [ ] 代码 lint 无错误
+- [ ] 本地开发环境功能正常
+- [ ] Playwright E2E 测试通过
+- [ ] Vercel 预览部署成功
+- [ ] Cloudflare D1 数据验证通过
+- [ ] 线上功能测试无异常
+- [ ] 文档已更新（README / CHANGELOG / feature docs）
+
 ## 已确认决策
 
 1. **计费**＝内部整数「余额/积分」账本 + 兑换码 + 管理员手动充值，**不接真实支付**。
@@ -40,13 +168,16 @@
 
 ---
 
-## 当前进度（2026-06-15 更新）
+## 当前进度（2026-06-16 更新）
 
 ### ✅ Phase B — 数据内核 & 计量修复（部分完成）
 
 **已完成**：
-- ✅ 扩展 schema：`user.balanceCredits`、`user.role`、`apiKey.status`、`topup` 表、`option` 表、credits 单位常量
-- ✅ `lib/billing/pricing.ts` 定价模块：hosted ×1000 / proxied ×1 倍率，图像模型固定价（FLUX-2/SDXL 等）
+- ✅ 扩展 schema：`user.balanceCredits`、`user.role`、`apiKey.status`、`topup` 表、`option` 表、`checkin` 表
+- ✅ `lib/billing/model-pricing.ts` 统一定价表：
+  - 基础倍率 ×1000 + 调整规则（< $100 ×5, ≥ $100 ×1）
+  - 图像模型固定价（3000-4000 cr/张）
+  - `model_pricing` 表 + `multiplier` 字段（管理员动态调整）
 - ✅ `lib/usage/meter.ts` 真实计量：
   - 调用 `calculateCredits` 按真实 token/neurons 计费
   - 余额预检 `verifyBalance`（user + apiKey 双重校验）
@@ -54,13 +185,15 @@
   - 修复 FLUX-2 multipart 响应解析（`lib/cloudflare/ai.ts`）
 - ✅ 网关接入校验（余额/状态/有效期）
 - ✅ 管理员充值（D1 直接操作 + topup 流水）
+- ✅ 数据迁移：redemption/topup REAL 类型支持小数
 
 **验证通过**（线上 cloudai.fuwari.fun）：
 - FLUX-2 成功出图 + 精确扣 4000 cr
 - error 调用不扣费、记 0 credits
 - 余额不足时 402 拒绝
+- 倍率调整实时生效
 
-### ✅ Phase C — 数据看板（部分完成）
+### ✅ Phase C — 数据看板（完成）
 
 **已完成**：
 - ✅ `lib/usage/queries.ts` 聚合：
@@ -78,7 +211,7 @@
 - 图表正常渲染，切换今日/本周/本月正常
 - credits 统计准确，error 记录显示 `—`（0 cr）
 
-### ✅ Phase D — 令牌管理界面（部分完成，2026-06-15）
+### ✅ Phase D — 令牌管理界面（完成）
 
 **已完成**：
 - ✅ API Key 使用统计：
@@ -108,13 +241,13 @@
   - 所有记录关联 apiKeyId
 
 **验证通过**（线上 cloudai.fuwari.fun）：
-- Key 统计准确（test-metering: 3 次/7 cr, A: 29 次/15,823 cr）
+- Key 统计准确（调用次数 + credits）
 - 额度进度条正常显示
 - Error 记录显示"—"（0 cr）+ 错误原因 tooltip
 - 列表完美对齐
 - 渠道标识清晰区分
 
-### ✅ Phase E — 公开定价页（已完成，2026-06-15）
+### ✅ Phase E — 公开定价页（完成，2026-06-15）
 
 **已完成**：
 - ✅ `/pricing` 页面：
@@ -134,7 +267,7 @@
 - 页面正常渲染（需登录）
 - 价格显示准确
 
-### ✅ Phase F — 管理后台（已完成基础页面，2026-06-15）
+### ✅ Phase F — 管理后台（完成基础页面，2026-06-16）
 
 **已完成**：
 - ✅ `/admin/users` 用户管理：
@@ -149,22 +282,50 @@
 - ✅ `/wallet` 钱包页面：
   - 余额卡片显示（credits + USD + 图标）
   - 充值流水列表（类型/金额/时间/描述）
-  - 类型标识（兑换码充值/管理员充值/其他）
+  - 类型标识（兑换码充值/管理员充值/签到奖励）
 - ✅ `/admin/settings` 系统设置：
   - 定价倍率配置表单（hosted/proxied multiplier）
   - 所有设置 JSON 预览
   - 管理员权限校验
+- ✅ `/admin/pricing` 定价管理（2026-06-16 新增）：
+  - 管理员内联编辑每个模型的倍率（0.01-100）
+  - 分类筛选（全部/文本/图像等）
+  - 搜索功能（模型 ID / 名称）
+  - 显示基础价 → 最终价转换
+  - 倍率实时生效（计费 + 页面显示）
 
 **验证通过**：
 - 类型检查通过
 - 所有页面正常渲染
 - 权限校验正确（非管理员重定向到 dashboard）
+- 倍率调整实时生效
 
-### ✅ 附加改进
+### ✅ Phase G — 用户留存（完成，2026-06-16）
 
-- ✅ 模型库价格显示：`lib/billing/display-price.ts` 计算应用倍率后的实际美元价格（$30.00 / $342.00 / per M input tokens），替代原始官方价
-- ✅ 所有小数统一显示 2 位（$0.01 ~ $999.99）
-- ✅ 数据修复：返还 4 条 error 记录的错误扣费（15,500 cr），余额从 6,018 恢复到 21,518
+**已完成**：
+- ✅ **签到功能**（详见 [`docs/features/checkin.md`](docs/features/checkin.md)）：
+  - 数据库：`checkin` 表 + `option` 配置（enabled/min_quota/max_quota）
+  - 后端：Server Actions（`getCheckinStatus` + `performCheckin`）
+    - 防重复检查（UNIQUE 约束）
+    - 随机奖励计算（10-100 cr）
+    - 原子操作 + 手动回滚
+  - 前端：CheckinCalendarCard 组件
+    - 7×6 日历网格（42 天）
+    - 可折叠界面（默认已签到时收起）
+    - 月份导航（上/下月切换）
+    - 统计展示（累计签到/本月获得/累计获得）
+    - 已签到日期显示绿点 + Tooltip 奖励额度
+    - Toast 反馈（成功/失败）
+  - 集成：`/wallet` 页面顶部
+  - 充值流水：新增 type 3（签到奖励）
+
+**验证通过**（线上 cloudai.fuwari.fun）：
+- 签到功能已启用（`checkin_enabled = true`）
+- 日历 UI 正常渲染
+- 签到按钮防抖正常
+- 奖励随机生成（10-100 cr）
+- 余额实时更新
+- 充值流水正确记录
 
 ### 🚧 待完成
 
