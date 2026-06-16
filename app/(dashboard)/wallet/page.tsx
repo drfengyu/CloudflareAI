@@ -34,11 +34,14 @@ export default async function WalletPage() {
     .where(eq(temporaryBalances.userId, userId))
     .orderBy(temporaryBalances.expiresAt);
 
-  // 过滤未过期的 + 只显示 >= 100 cr 的临时余额
-  const validTempBalances = tempBalances.filter(
-    (tb) => new Date(tb.expiresAt) > now && tb.amount >= 100
+  // 计算总余额：包含所有未过期的临时余额（不过滤小额）
+  const allValidTempBalances = tempBalances.filter(
+    (tb) => new Date(tb.expiresAt) > now
   );
-  const temporaryTotal = validTempBalances.reduce((sum, tb) => sum + tb.amount, 0);
+  const temporaryTotal = allValidTempBalances.reduce((sum, tb) => sum + tb.amount, 0);
+
+  // 显示用：只显示 >= 100 cr 的临时余额明细
+  const displayTempBalances = allValidTempBalances.filter((tb) => tb.amount >= 100);
 
   const totalBalance = permanentBalance + temporaryTotal;
   const balanceUsd = totalBalance.toFixed(2);
@@ -89,14 +92,14 @@ export default async function WalletPage() {
         </Card>
 
         {/* 临时余额明细 */}
-        {validTempBalances.length > 0 && (
+        {displayTempBalances.length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">临时余额明细</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                {validTempBalances.map((tb) => (
+                {displayTempBalances.map((tb) => (
                   <div
                     key={tb.id}
                     className="flex items-center justify-between rounded-lg border border-border bg-surface p-3"
