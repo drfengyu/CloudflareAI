@@ -95,6 +95,14 @@ export default async function HistoryPage({
 
                       {/* 右侧：指标 */}
                       <div className="flex items-center gap-3 text-muted-foreground whitespace-nowrap">
+                        {/* Token 数量 */}
+                        {log.inputTokens || log.outputTokens ? (
+                          <span className="w-[100px] text-right text-[11px]" title="输入 / 输出 tokens">
+                            {log.inputTokens?.toLocaleString() || 0} / {log.outputTokens?.toLocaleString() || 0}
+                          </span>
+                        ) : (
+                          <span className="w-[100px] text-right">—</span>
+                        )}
                         {log.creditsUsed ? (
                           <span className="font-medium w-[80px] text-right">{log.creditsUsed.toLocaleString()} cr</span>
                         ) : (

@@ -12,6 +12,7 @@ import { Settings } from "lucide-react";
 import { adjustUserBalance, updateUserRole } from "./actions";
 import { toast } from "sonner";
 import type { UserRow } from "./columns";
+import { creditsToUsd } from "@/lib/billing/credits";
 
 interface ManageUserDialogProps {
   user: UserRow;
@@ -97,7 +98,7 @@ export function ManageUserDialog({ user, currentUserId }: ManageUserDialogProps)
               <p className="text-xs text-muted-foreground">{user.email}</p>
               <p className="mt-2 text-xs text-muted-foreground">
                 当前余额: {user.balanceCredits.toLocaleString()} cr
-                (≈ ${user.balanceCredits.toFixed(2)})
+                (≈ ${creditsToUsd(user.balanceCredits).toFixed(4)})
               </p>
             </div>
 

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { ManageUserDialog } from "./manage-user-dialog";
+import { creditsToUsd } from "@/lib/billing/credits";
 
 export interface UserRow {
   id: string;
@@ -42,7 +43,7 @@ export function createColumns(currentUserId: string): ColumnDef<UserRow>[] {
       header: "余额",
       cell: ({ row }) => {
         const balance = row.original.balanceCredits;
-        const usd = balance.toFixed(2);
+        const usd = creditsToUsd(balance).toFixed(4);
         return (
           <div className="text-right">
             <p className="font-medium">{balance.toLocaleString()} cr</p>

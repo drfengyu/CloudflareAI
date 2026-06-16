@@ -10,7 +10,7 @@ import {
   getUsageByModel,
   getHourlyUsageToday,
 } from "@/lib/usage/queries";
-import { formatCredits } from "@/lib/billing/credits";
+import { formatCredits, creditsToUsd } from "@/lib/billing/credits";
 import { Activity, Wallet, TrendingUp, Clock } from "lucide-react";
 import { UsageTrendChart } from "@/components/dashboard/usage-trend-chart";
 import { ModelDistributionChart } from "@/components/dashboard/model-distribution-chart";
@@ -39,8 +39,8 @@ export default async function DashboardPage({
   ]);
 
   const balance = balanceInfo.total; // 总余额（永久+临时）
-  const todayUsd = today.totalCredits; // 1 credit = $1
-  const balanceUsd = balance; // 1 credit = $1
+  const todayUsd = creditsToUsd(today.totalCredits);
+  const balanceUsd = creditsToUsd(balance);
 
   return (
     <>
@@ -73,13 +73,14 @@ export default async function DashboardPage({
             icon={<Activity className="h-5 w-5" />}
             label="今日调用"
             value={today.totalCalls}
+            subtitle={`输入 ${(today.totalInputTokens || 0).toLocaleString()} / 输出 ${(today.totalOutputTokens || 0).toLocaleString()}`}
             tone="muted"
           />
           <StatCard
             icon={<Clock className="h-5 w-5" />}
             label="本月调用"
             value={month.totalCalls}
-            subtitle={`${formatCredits(month.totalCredits)} cr`}
+            subtitle={`${formatCredits(month.totalCredits)} cr · 输入 ${(month.totalInputTokens || 0).toLocaleString()} / 输出 ${(month.totalOutputTokens || 0).toLocaleString()}`}
             tone="muted"
           />
         </div>
@@ -217,6 +218,14 @@ export default async function DashboardPage({
 
                       {/* 右侧：指标 */}
                       <div className="flex items-center gap-3 text-muted-foreground whitespace-nowrap">
+                        {/* Token 数量 */}
+                        {log.inputTokens || log.outputTokens ? (
+                          <span className="w-[100px] text-right text-[11px]" title="输入 / 输出 tokens">
+                            {log.inputTokens?.toLocaleString() || 0} / {log.outputTokens?.toLocaleString() || 0}
+                          </span>
+                        ) : (
+                          <span className="w-[100px] text-right">—</span>
+                        )}
                         <span className="font-medium w-[80px] text-right">
                           {log.creditsUsed ? `${formatCredits(log.creditsUsed)} cr` : "—"}
                         </span>
