@@ -25,7 +25,7 @@ function LinuxDO(
     id: "linuxdo",
     name: "LinuxDO",
     type: "oidc",
-    issuer: "https://connect.linux.do",
+    issuer: "https://connect.linux.do/",  // 注意：必须带结尾斜杠，匹配 OIDC Discovery
     authorization: {
       params: {
         scope: "openid profile email",
