@@ -11,6 +11,8 @@ import {
   type AuthActionState,
 } from "@/app/(auth)/actions";
 import { Button } from "@/components/ui/button";
+import { IconLinuxDo } from "@/components/icons/linuxdo";
+import { signIn } from "next-auth/react";
 
 function GithubIcon({ className }: { className?: string }) {
   return (
@@ -38,18 +40,20 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const isLogin = mode === "login";
 
   return (
-    <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-6">
-      <div className="mb-6 flex items-center gap-2">
+    <div className="space-y-6">
+      {/* 移动端 Logo */}
+      <div className="flex items-center gap-2 lg:hidden">
         <Cpu className="h-6 w-6 text-primary" />
         <span className="font-semibold">Cloudflare AI Console</span>
       </div>
 
-      <h1 className="text-lg font-semibold">
-        {isLogin ? "登录" : "创建账户"}
-      </h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {isLogin ? "欢迎回来" : "用邮箱注册，或使用 GitHub"}
-      </p>
+      <div className="rounded-[var(--radius-lg)] border border-border bg-surface p-6 shadow-sm">
+        <h1 className="text-lg font-semibold">
+          {isLogin ? "登录" : "创建账户"}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {isLogin ? "欢迎回来" : "用邮箱注册，或使用第三方账号"}
+        </p>
 
       <form action={formAction} className="mt-5 space-y-3">
         {!isLogin && (
@@ -67,7 +71,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
 
       <div className="my-4 flex items-center gap-3 text-[11px] text-muted-foreground">
         <span className="h-px flex-1 bg-border" />
-        或
+        或使用第三方账号
         <span className="h-px flex-1 bg-border" />
       </div>
 
@@ -78,24 +82,35 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         </Button>
       </form>
 
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full"
+        onClick={() => signIn("linuxdo", { callbackUrl: "/dashboard" })}
+      >
+        <IconLinuxDo className="h-4 w-4" />
+        使用 LinuxDO 继续
+      </Button>
+
       <p className="mt-5 text-center text-xs text-muted-foreground">
         {isLogin ? (
           <>
             还没有账户？{" "}
-            <Link href="/register" className="text-primary">
+            <Link href="/register" className="text-primary hover:underline">
               注册
             </Link>
           </>
         ) : (
           <>
             已有账户？{" "}
-            <Link href="/login" className="text-primary">
+            <Link href="/login" className="text-primary hover:underline">
               登录
             </Link>
           </>
         )}
       </p>
     </div>
+  </div>
   );
 }
 

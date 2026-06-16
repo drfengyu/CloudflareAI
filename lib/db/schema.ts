@@ -34,6 +34,10 @@ export const users = sqliteTable("user", {
   group: text("group"),
   /** 1=启用 / 2=禁用 / 3=已删除。 */
   status: integer("status").notNull().default(1),
+  /** LinuxDO 用户 ID（OAuth 绑定）。 */
+  linuxdoId: text("linuxdoId").unique(),
+  /** LinuxDO 信任等级（0-4）。 */
+  linuxdoTrustLevel: integer("linuxdoTrustLevel"),
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });
 
@@ -274,6 +278,19 @@ export const modelPricing = sqliteTable("model_pricing", {
   updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });
 
+/** 注册日志表：记录每次注册的 IP、邮箱、时间等信息，用于频率限制。 */
+export const registrationLog = sqliteTable("registration_log", {
+  id: text("id").primaryKey().$defaultFn(uuid),
+  /** 注册时的 IP 地址。 */
+  ip: text("ip").notNull(),
+  /** 注册的邮箱地址。 */
+  email: text("email").notNull(),
+  /** 注册时间戳。 */
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  /** 用户代理字符串。 */
+  userAgent: text("userAgent"),
+});
+
 export type User = typeof users.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type UsageLog = typeof usageLogs.$inferSelect;
@@ -283,3 +300,4 @@ export type Option = typeof options.$inferSelect;
 export type ConversationHistory = typeof conversationHistory.$inferSelect;
 export type TemporaryBalance = typeof temporaryBalances.$inferSelect;
 export type ModelPricing = typeof modelPricing.$inferSelect;
+export type RegistrationLog = typeof registrationLog.$inferSelect;

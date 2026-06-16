@@ -11,6 +11,10 @@ import {
   verificationTokens,
 } from "@/lib/db/schema";
 import { getUserByEmail } from "@/lib/db/queries";
+import {
+  createOrGetLinuxDOUser,
+  type LinuxDOProfile,
+} from "@/lib/db/queries-linuxdo";
 
 /**
  * Full Auth.js config (Node runtime). Adds the Drizzle/D1 adapter for OAuth
@@ -53,6 +57,26 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   callbacks: {
     ...authConfig.callbacks,
+    async signIn({ user, account, profile }) {
+      // LinuxDO OAuth 登录处理
+      if (account?.provider === "linuxdo" && profile) {
+        try {
+          const linuxdoProfile = profile as unknown as LinuxDOProfile;
+          const userId = await createOrGetLinuxDOUser(linuxdoProfile);
+
+          // 更新 user.id 供后续 jwt callback 使用
+          user.id = userId;
+          return true;
+        } catch (error) {
+          console.error("[LinuxDO OAuth] Failed:", error);
+          // 返回错误信息到登录页
+          return `/login?error=${encodeURIComponent(
+            error instanceof Error ? error.message : "LinuxDO 登录失败"
+          )}`;
+        }
+      }
+      return true;
+    },
     async jwt({ token, user, account, profile, trigger }) {
       // 首次登录时，将用户信息保存到 token
       if (user) {
