@@ -2,12 +2,16 @@ import { eq, sql } from "drizzle-orm";
 import { db } from "./d1-http";
 import { users, topups, type User } from "./schema";
 
-/** LinuxDO OAuth 用户信息 */
+/** LinuxDO OIDC 用户信息 */
 export interface LinuxDOProfile {
-  id: number;
+  sub: string;  // OIDC 标准字段（用户 ID）
   username: string;
   name: string;
+  email?: string;
+  avatar_url?: string;
   trust_level: number;
+  // 兼容旧字段
+  id?: number;
   avatar_template?: string;
 }
 
@@ -28,6 +32,13 @@ export async function getUserByLinuxDOId(linuxdoId: string): Promise<User | unde
  * - 创建时发放 2000 credits 新人奖励
  */
 export async function createOrGetLinuxDOUser(profile: LinuxDOProfile): Promise<string> {
+  // 兼容 OIDC (sub) 和旧 OAuth (id) 格式
+  const linuxdoId = profile.sub || (profile.id ? String(profile.id) : "");
+
+  if (!linuxdoId) {
+    throw new Error("LinuxDO profile 缺少用户 ID（sub 或 id）");
+  }
+
   // 1. 检查信任等级
   const minTrustLevel = parseInt(process.env.LINUXDO_MIN_TRUST_LEVEL || "1");
   if (profile.trust_level < minTrustLevel) {
@@ -37,7 +48,7 @@ export async function createOrGetLinuxDOUser(profile: LinuxDOProfile): Promise<s
   }
 
   // 2. 查找现有用户
-  const existing = await getUserByLinuxDOId(profile.id.toString());
+  const existing = await getUserByLinuxDOId(linuxdoId);
   if (existing) {
     // 更新信任等级
     await db
@@ -60,10 +71,10 @@ export async function createOrGetLinuxDOUser(profile: LinuxDOProfile): Promise<s
 
   await db.insert(users).values({
     id,
-    email: `linuxdo_${profile.id}@placeholder.local`, // 占位邮箱
+    email: profile.email || `linuxdo_${linuxdoId}@placeholder.local`,
     passwordHash: "", // LinuxDO 用户无密码
     name: profile.name || profile.username,
-    linuxdoId: profile.id.toString(),
+    linuxdoId,
     linuxdoTrustLevel: profile.trust_level,
     role: isFirstUser ? 100 : 1, // 首个用户 → 超管
     balanceCredits: WELCOME_BONUS,
