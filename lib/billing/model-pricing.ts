@@ -218,20 +218,35 @@ export async function getPricingConfig() {
     return pricingConfigCache;
   }
 
-  const rows = await db.select().from(options);
-  const map = new Map(rows.map((r) => [r.key, r.value]));
+  try {
+    const rows = await db.select().from(options);
+    const map = new Map(rows.map((r) => [r.key, r.value]));
 
-  const config = {
-    baseMultiplier: parseFloat(map.get("pricing_base_multiplier") || String(BASE_MULTIPLIER)),
-    adjustThreshold: parseFloat(map.get("pricing_adjust_threshold") || String(ADJUST_THRESHOLD)),
-    adjustMultiplierLow: parseFloat(map.get("pricing_adjust_multiplier_low") || String(ADJUST_MULTIPLIER_LOW)),
-    adjustMultiplierHigh: parseFloat(map.get("pricing_adjust_multiplier_high") || String(ADJUST_MULTIPLIER_HIGH)),
-    defaultPricePerMillion: parseFloat(map.get("pricing_default_price_per_million") || String(DEFAULT_PRICE_PER_MILLION)),
-    cachedAt: now,
-  };
+    const config = {
+      baseMultiplier: parseFloat(map.get("pricing_base_multiplier") || String(BASE_MULTIPLIER)),
+      adjustThreshold: parseFloat(map.get("pricing_adjust_threshold") || String(ADJUST_THRESHOLD)),
+      adjustMultiplierLow: parseFloat(map.get("pricing_adjust_multiplier_low") || String(ADJUST_MULTIPLIER_LOW)),
+      adjustMultiplierHigh: parseFloat(map.get("pricing_adjust_multiplier_high") || String(ADJUST_MULTIPLIER_HIGH)),
+      defaultPricePerMillion: parseFloat(map.get("pricing_default_price_per_million") || String(DEFAULT_PRICE_PER_MILLION)),
+      cachedAt: now,
+    };
 
-  pricingConfigCache = config;
-  return config;
+    pricingConfigCache = config;
+    return config;
+  } catch (error) {
+    console.error('[getPricingConfig] Database query failed, using defaults:', error);
+    // 返回默认配置
+    const config = {
+      baseMultiplier: BASE_MULTIPLIER,
+      adjustThreshold: ADJUST_THRESHOLD,
+      adjustMultiplierLow: ADJUST_MULTIPLIER_LOW,
+      adjustMultiplierHigh: ADJUST_MULTIPLIER_HIGH,
+      defaultPricePerMillion: DEFAULT_PRICE_PER_MILLION,
+      cachedAt: now,
+    };
+    pricingConfigCache = config;
+    return config;
+  }
 }
 
 /**
