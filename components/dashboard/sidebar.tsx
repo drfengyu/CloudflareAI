@@ -70,6 +70,7 @@ const NAV: NavGroup[] = [
     items: [
       { href: "/admin/users", label: "用户管理", icon: Users },
       { href: "/admin/redemptions", label: "兑换码", icon: Ticket },
+      { href: "/admin/pricing", label: "定价管理", icon: Settings },
       { href: "/admin/settings", label: "系统设置", icon: Settings },
     ],
   },
