@@ -93,8 +93,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, account, profile, trigger }) {
       // 首次登录时，将用户信息保存到 token
       if (user) {
-        // user.id 可能不存在（Drizzle Adapter bug），从 account.userId 或 profile.sub 获取
-        const userId = user.id || (account as any)?.userId || (profile as any)?.sub;
+        // LinuxDO OAuth: user.id 是我们在 signIn callback 中设置的 UUID
+        // 其他 OAuth: 使用 Drizzle Adapter 创建的 user.id 或 account.userId
+        // Credentials: 直接使用 user.id
+        let userId = user.id;
+
+        // 如果 user.id 为空，尝试从 account 或 profile 获取
+        if (!userId) {
+          if (account?.provider === "linuxdo" && profile) {
+            // LinuxDO: 从数据库查询（通过 linuxdoId）
+            const linuxdoId = (profile as any).sub;
+            if (linuxdoId) {
+              const dbUser = await db.query.users.findFirst({
+                where: (users, { eq }) => eq(users.linuxdoId, String(linuxdoId)),
+              });
+              userId = dbUser?.id;
+            }
+          } else {
+            // 其他 provider: 从 account.userId 或 profile.sub 获取
+            userId = (account as any)?.userId || (profile as any)?.sub;
+          }
+        }
+
         const userEmail = user.email || (profile as any)?.email || null;
         const userName = user.name || (profile as any)?.name || (profile as any)?.login || null;
         const userImage = user.image || (profile as any)?.avatar_url || (profile as any)?.picture || null;
