@@ -34,9 +34,9 @@ export default async function WalletPage() {
     .where(eq(temporaryBalances.userId, userId))
     .orderBy(temporaryBalances.expiresAt);
 
-  // 过滤未过期的
+  // 过滤未过期的 + 只显示 >= 100 cr 的临时余额
   const validTempBalances = tempBalances.filter(
-    (tb) => new Date(tb.expiresAt) > now
+    (tb) => new Date(tb.expiresAt) > now && tb.amount >= 100
   );
   const temporaryTotal = validTempBalances.reduce((sum, tb) => sum + tb.amount, 0);
 

@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { CalendarDays, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { getCheckinStatus, performCheckin } from "./checkin-actions";
+import { formatCredits } from "@/lib/billing/credits";
 
 interface CheckinRecord {
   checkinDate: string;
@@ -51,24 +53,44 @@ export function CheckinCalendarCard() {
       const result = await getCheckinStatus(currentMonthStr);
       if (result.success && result.data) {
         setData(result.data);
-        // 默认状态：已签到时收起
-        if (!collapsed) {
-          setCollapsed(result.data.stats.checkedInToday);
-        }
+        // 默认展开日历，不自动折叠（参考 new-api）
       } else {
         toast.error(result.message || "获取签到状态失败");
       }
-    } catch (error) {
+    } catch {
       toast.error("获取签到状态失败");
     } finally {
       setLoading(false);
     }
-  }, [currentMonthStr, collapsed]);
+  }, [currentMonthStr]);
 
   // 初始加载
-  useMemo(() => {
-    fetchData();
-  }, [fetchData]);
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadData() {
+      if (!isMounted) return;
+      setLoading(true);
+      try {
+        const result = await getCheckinStatus(currentMonthStr);
+        if (isMounted && result.success && result.data) {
+          setData(result.data);
+        } else if (isMounted) {
+          toast.error(result.message || "获取签到状态失败");
+        }
+      } catch {
+        if (isMounted) toast.error("获取签到状态失败");
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    }
+
+    void loadData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [currentMonthStr]);
 
   const checkinRecordsMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -104,7 +126,7 @@ export function CheckinCalendarCard() {
       } else {
         toast.error(result.message || "签到失败");
       }
-    } catch (error) {
+    } catch {
       toast.error("签到失败");
     } finally {
       setCheckinLoading(false);
@@ -241,7 +263,7 @@ export function CheckinCalendarCard() {
             </div>
             <div className="bg-card p-5 text-center">
               <div className="text-2xl font-semibold tabular-nums">
-                {monthlyQuota.toFixed(0)} cr
+                {formatCredits(monthlyQuota)}
               </div>
               <div className="text-xs font-medium text-muted-foreground mt-1">
                 本月获得
@@ -249,7 +271,7 @@ export function CheckinCalendarCard() {
             </div>
             <div className="bg-card p-5 text-center">
               <div className="text-2xl font-semibold tabular-nums">
-                {data.stats.totalQuota.toFixed(0)} cr
+                {formatCredits(data.stats.totalQuota)}
               </div>
               <div className="text-xs font-medium text-muted-foreground mt-1">
                 累计获得
@@ -273,52 +295,74 @@ export function CheckinCalendarCard() {
             </div>
 
             {/* Calendar grid */}
-            <div className="grid grid-cols-7 gap-1">
-              {/* Week day headers */}
-              {weekDays.map((day) => (
-                <div
-                  key={day}
-                  className="flex h-8 items-center justify-center text-xs font-medium text-muted-foreground"
-                >
-                  {day}
-                </div>
-              ))}
-
-              {/* Calendar days */}
-              {calendarDays.map((dayObj, idx) => {
-                const dateStr = `${dayObj.date.getFullYear()}-${String(
-                  dayObj.date.getMonth() + 1
-                ).padStart(2, "0")}-${String(dayObj.date.getDate()).padStart(2, "0")}`;
-                const isToday = dateStr === todayString;
-                const quotaAwarded = checkinRecordsMap[dateStr];
-                const isCheckedIn = quotaAwarded !== undefined;
-                const dayNum = dayObj.date.getDate();
-
-                return (
-                  <button
-                    key={idx}
-                    disabled={!dayObj.isCurrentMonth}
-                    className={cn(
-                      "relative flex h-10 w-full flex-col items-center justify-center rounded-lg text-sm font-medium transition-colors",
-                      !dayObj.isCurrentMonth && "text-muted-foreground/40 cursor-default",
-                      isToday && isCheckedIn && "bg-primary text-primary-foreground hover:bg-primary/90",
-                      isToday && !isCheckedIn && "ring-2 ring-primary ring-inset",
-                      !isToday && dayObj.isCurrentMonth && "hover:bg-surface",
-                      !isToday && isCheckedIn && "font-semibold"
-                    )}
-                    title={isCheckedIn ? `已签到 +${quotaAwarded.toFixed(2)} cr` : undefined}
+            <TooltipProvider delayDuration={100}>
+              <div className="grid grid-cols-7 gap-1">
+                {/* Week day headers */}
+                {weekDays.map((day) => (
+                  <div
+                    key={day}
+                    className="flex h-8 items-center justify-center text-xs font-medium text-muted-foreground"
                   >
-                    <span className="tabular-nums">{dayNum}</span>
-                    {isCheckedIn && !isToday && (
-                      <span className="absolute bottom-1 h-1 w-1 rounded-full bg-emerald-500" />
-                    )}
-                    {isToday && isCheckedIn && (
-                      <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-primary" />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+                    {day}
+                  </div>
+                ))}
+
+                {/* Calendar days */}
+                {calendarDays.map((dayObj, idx) => {
+                  const dateStr = `${dayObj.date.getFullYear()}-${String(
+                    dayObj.date.getMonth() + 1
+                  ).padStart(2, "0")}-${String(dayObj.date.getDate()).padStart(2, "0")}`;
+                  const isToday = dateStr === todayString;
+                  const quotaAwarded = checkinRecordsMap[dateStr];
+                  const isCheckedIn = quotaAwarded !== undefined;
+                  const dayNum = dayObj.date.getDate();
+
+                  const dayButton = (
+                    <button
+                      key={idx}
+                      disabled={!dayObj.isCurrentMonth}
+                      className={cn(
+                        "relative flex h-10 w-full flex-col items-center justify-center rounded-lg text-sm font-medium transition-colors",
+                        !dayObj.isCurrentMonth && "text-muted-foreground/40 cursor-default",
+                        isToday && isCheckedIn && "bg-primary text-primary-foreground hover:bg-primary/90",
+                        isToday && !isCheckedIn && "ring-2 ring-primary ring-inset",
+                        !isToday && dayObj.isCurrentMonth && "hover:bg-surface",
+                        !isToday && isCheckedIn && "font-semibold"
+                      )}
+                    >
+                      <span className="tabular-nums">{dayNum}</span>
+                      {isCheckedIn && !isToday && (
+                        <span className="absolute bottom-1 h-1 w-1 rounded-full bg-emerald-500" />
+                      )}
+                      {isToday && isCheckedIn && (
+                        <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-primary" />
+                      )}
+                    </button>
+                  );
+
+                  // Add tooltip for checked-in days
+                  if (isCheckedIn && dayObj.isCurrentMonth) {
+                    return (
+                      <Tooltip key={idx}>
+                        <TooltipTrigger asChild>
+                          {dayButton}
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <div className="text-xs">
+                            <div className="font-medium">已签到</div>
+                            <div className="text-muted-foreground mt-0.5">
+                              +{formatCredits(quotaAwarded)}
+                            </div>
+                          </div>
+                        </TooltipContent>
+                      </Tooltip>
+                    );
+                  }
+
+                  return dayButton;
+                })}
+              </div>
+            </TooltipProvider>
 
             {/* Footer hint */}
             <div className="border-t pt-4 text-center text-xs text-muted-foreground">
