@@ -212,7 +212,7 @@ let pricingConfigCache: {
 
 const CACHE_TTL = 60_000; // 1 分钟缓存
 
-async function getPricingConfig() {
+export async function getPricingConfig() {
   const now = Date.now();
   if (pricingConfigCache && now - pricingConfigCache.cachedAt < CACHE_TTL) {
     return pricingConfigCache;
