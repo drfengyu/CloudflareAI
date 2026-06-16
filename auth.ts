@@ -61,14 +61,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // LinuxDO OAuth 登录处理
       if (account?.provider === "linuxdo" && profile) {
         try {
+          console.log("[LinuxDO signIn] Raw profile:", JSON.stringify(profile, null, 2));
+
           const linuxdoProfile = profile as unknown as LinuxDOProfile;
+
+          console.log("[LinuxDO signIn] Parsed profile:", {
+            sub: linuxdoProfile.sub,
+            id: linuxdoProfile.id,
+            username: linuxdoProfile.username,
+            trust_level: linuxdoProfile.trust_level,
+          });
+
           const userId = await createOrGetLinuxDOUser(linuxdoProfile);
+
+          console.log("[LinuxDO signIn] Created/found user:", userId);
 
           // 更新 user.id 供后续 jwt callback 使用
           user.id = userId;
           return true;
         } catch (error) {
           console.error("[LinuxDO OAuth] Failed:", error);
+          console.error("[LinuxDO OAuth] Error stack:", error instanceof Error ? error.stack : "");
           // 返回错误信息到登录页
           return `/login?error=${encodeURIComponent(
             error instanceof Error ? error.message : "LinuxDO 登录失败"
