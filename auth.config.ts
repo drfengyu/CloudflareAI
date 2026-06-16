@@ -36,6 +36,12 @@ function LinuxDO(
           `${context.provider.clientId}:${context.provider.clientSecret}`
         ).toString("base64");
 
+        console.log("[LinuxDO OAuth] Token exchange request:", {
+          url: context.provider.token!.url!,
+          redirect_uri: context.provider.callbackUrl,
+          code: context.params.code?.substring(0, 10) + "...",
+        });
+
         const response = await fetch(context.provider.token!.url!, {
           method: "POST",
           headers: {
@@ -51,6 +57,18 @@ function LinuxDO(
         });
 
         const tokens = await response.json();
+
+        console.log("[LinuxDO OAuth] Token response:", {
+          status: response.status,
+          ok: response.ok,
+          error: tokens.error,
+          error_description: tokens.error_description,
+        });
+
+        if (!response.ok) {
+          throw new Error(`LinuxDO token exchange failed: ${tokens.error_description || tokens.error}`);
+        }
+
         return { tokens };
       },
     },
