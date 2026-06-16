@@ -13,6 +13,35 @@
 - **Phase F 剩余**：Server Actions 实现（兑换码生成 UI、用户余额调整 UI）
 - **管理后台签到配置界面**（`/admin/settings`）
 
+## [0.2.2] - 2026-06-16
+
+### 新增
+
+- **新用户注册奖励**
+  - 新用户注册时自动获得 2000 credits 欢迎奖励
+  - 奖励记录到 `topup` 表（type 4 = 其他充值）
+  - 充值描述："新用户注册奖励"
+- **兑换码使用者追踪**
+  - `redemption` 表新增 `usedUserId` 字段（最后使用者 ID）
+  - `redemption` 表新增 `redeemedAt` 字段（最后兑换时间）
+  - 管理后台兑换码列表显示使用者邮箱
+  - 兑换时更新使用者信息和时间戳
+
+### 变更
+
+- **设置页面简化**
+  - 移除冗余的余额显示（钱包页面已有）
+  - 移除冗余的计费说明（定价页面已有）
+  - 仅保留用户 ID 显示
+  - 页面更简洁清晰
+
+### 修复
+
+- **Drizzle ORM JOIN 问题**
+  - 修复 D1 HTTP 模式下 leftJoin 字段错位问题
+  - 改用手动查询 + Map 映射方案
+  - 兑换码列表正确显示使用者信息
+
 ## [0.2.1] - 2026-06-16
 
 ### 新增
@@ -153,6 +182,8 @@
 - Auth.js v5
 - Recharts 数据可视化
 
-[未发布]: https://github.com/drfengyu/CloudflareAI/compare/v0.2.0...HEAD
+[未发布]: https://github.com/drfengyu/CloudflareAI/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/drfengyu/CloudflareAI/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/drfengyu/CloudflareAI/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/drfengyu/CloudflareAI/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/drfengyu/CloudflareAI/releases/tag/v0.1.0

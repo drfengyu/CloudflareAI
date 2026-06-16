@@ -318,6 +318,21 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
     - Toast 反馈（成功/失败）
   - 集成：`/wallet` 页面顶部
   - 充值流水：新增 type 3（签到奖励）
+- ✅ **新用户注册奖励**（2026-06-16）：
+  - 新用户注册时自动获得 2000 credits
+  - 奖励记录到 `topup` 表（type 4 = 其他充值）
+  - 充值描述："新用户注册奖励"
+  - 实现位置：`lib/db/queries.ts` 的 `createCredentialUser()`
+- ✅ **兑换码使用者追踪**（2026-06-16）：
+  - `redemption` 表新增 `usedUserId` 字段（最后使用者 ID）
+  - `redemption` 表新增 `redeemedAt` 字段（最后兑换时间）
+  - 管理后台兑换码列表显示使用者邮箱和时间
+  - 兑换时更新使用者信息和时间戳
+  - 修复 Drizzle ORM leftJoin 字段错位问题（使用手动查询 + Map 映射）
+- ✅ **设置页面简化**（2026-06-16）：
+  - 移除冗余的余额显示（钱包页面已有）
+  - 移除冗余的计费说明（定价页面已有）
+  - 仅保留用户 ID 显示
 
 **验证通过**（线上 cloudai.fuwari.fun）：
 - 签到功能已启用（`checkin_enabled = true`）
@@ -326,19 +341,21 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 - 奖励随机生成（10-100 cr）
 - 余额实时更新
 - 充值流水正确记录
+- 新用户注册获得 2000 cr
+- 兑换码列表显示使用者信息
+- 设置页面简洁清晰
 
 ### 🚧 待完成
 
 - **Phase B 剩余**：流式结束计量（当前流式按估算扣费）、网关 IP/模型白名单校验
 - **Phase D 剩余**：批量创建 key、分组管理、导出统计
 - **Phase E & F 剩余**：Server Actions 实现（充值/余额调整/兑换码生成/设置保存）、权限细化
-- **Phase G — 签到功能**：详见 [`docs/features/checkin.md`](docs/features/checkin.md)
 
 ---
 
 ## 版本发布
 
-**当前版本**：v0.2.1（2026-06-16）
+**当前版本**：v0.2.2（2026-06-16）
 
 所有版本变更记录见根目录 [`CHANGELOG.md`](CHANGELOG.md)，遵循 [Keep a Changelog](https://keepachangelog.com/) 规范。
 
