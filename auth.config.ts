@@ -3,19 +3,20 @@ import GitHub from "next-auth/providers/github";
 import type { OAuthConfig, OAuthUserConfig } from "next-auth/providers";
 
 /**
- * LinuxDO OAuth 用户信息
+ * LinuxDO OIDC 用户信息
  */
 interface LinuxDOProfile {
-  id: number;
+  sub: string;
   username: string;
   name: string;
+  email?: string;
+  avatar_url?: string;
   trust_level: number;
-  avatar_template?: string;
 }
 
 /**
  * LinuxDO OAuth Provider
- * 使用 Basic Auth 交换 token，需要自定义 token 请求
+ * 使用 client_secret_post 方法交换 token
  */
 function LinuxDO(
   config: OAuthUserConfig<LinuxDOProfile>
@@ -23,62 +24,19 @@ function LinuxDO(
   return {
     id: "linuxdo",
     name: "LinuxDO",
-    type: "oauth",
+    type: "oidc",
+    issuer: "https://connect.linux.do",
     authorization: {
-      url: "https://connect.linux.do/oauth2/authorize",
-      params: { scope: "read" },
-    },
-    token: {
-      url: "https://connect.linux.do/oauth2/token",
-      async request(context: any) {
-        // LinuxDO 使用 Basic Auth 交换 token
-        const credentials = Buffer.from(
-          `${context.provider.clientId}:${context.provider.clientSecret}`
-        ).toString("base64");
-
-        console.log("[LinuxDO OAuth] Token exchange request:", {
-          url: context.provider.token!.url!,
-          redirect_uri: context.provider.callbackUrl,
-          code: context.params.code?.substring(0, 10) + "...",
-        });
-
-        const response = await fetch(context.provider.token!.url!, {
-          method: "POST",
-          headers: {
-            Authorization: `Basic ${credentials}`,
-            "Content-Type": "application/x-www-form-urlencoded",
-            Accept: "application/json",
-          },
-          body: new URLSearchParams({
-            grant_type: "authorization_code",
-            code: context.params.code!,
-            redirect_uri: context.provider.callbackUrl,
-          }),
-        });
-
-        const tokens = await response.json();
-
-        console.log("[LinuxDO OAuth] Token response:", {
-          status: response.status,
-          ok: response.ok,
-          error: tokens.error,
-          error_description: tokens.error_description,
-        });
-
-        if (!response.ok) {
-          throw new Error(`LinuxDO token exchange failed: ${tokens.error_description || tokens.error}`);
-        }
-
-        return { tokens };
+      params: {
+        scope: "openid profile email",
       },
     },
-    userinfo: "https://connect.linux.do/api/user",
     profile(profile) {
       return {
-        id: profile.id.toString(),
+        id: profile.sub,
         name: profile.name || profile.username,
-        email: `linuxdo_${profile.id}@placeholder.local`,
-        image: profile.avatar_template?.replace("{size}", "120"),
+        email: profile.email || `linuxdo_${profile.sub}@placeholder.local`,
+        image: profile.avatar_url,
       };
     },
     style: { brandColor: "#feb005" },
