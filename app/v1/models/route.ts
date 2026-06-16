@@ -3,7 +3,7 @@ import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
 
 /**
- * GET /api/openai/v1/models
+ * GET /v1/models
  * 列出可用模型（OpenAI 格式）
  */
 export async function GET(req: NextRequest) {

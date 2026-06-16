@@ -11,7 +11,7 @@ const schema = z.object({
 });
 
 /**
- * POST /api/openai/v1/embeddings
+ * POST /v1/embeddings
  * OpenAI 兼容嵌入端点（Phase B: 增强鉴权 + 计量）
  */
 export async function POST(req: NextRequest) {

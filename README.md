@@ -159,7 +159,7 @@ wrangler kv:namespace create cloudflare-ai-console
       "provider": "openai",
       "model": "@cf/meta/llama-3.1-8b-instruct",
       "apiKey": "sk-cfai-xxxxx",
-      "baseURL": "https://your-app.vercel.app/api/openai/v1"
+      "baseURL": "https://your-app.vercel.app/v1"
     }
   ]
 }
@@ -175,7 +175,7 @@ wrangler kv:namespace create cloudflare-ai-console
       "provider": "openai",
       "model": "@cf/meta/llama-3.1-8b-instruct",
       "apiKey": "sk-cfai-xxxxx",
-      "apiBase": "https://your-app.vercel.app/api/openai/v1"
+      "apiBase": "https://your-app.vercel.app/v1"
     }
   ]
 }
@@ -185,7 +185,7 @@ wrangler kv:namespace create cloudflare-ai-console
 
 ```bash
 # OpenAI 格式
-curl https://your-app.vercel.app/api/openai/v1/chat/completions \
+curl https://your-app.vercel.app/v1/chat/completions \
   -H "Authorization: Bearer sk-cfai-xxxxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -194,7 +194,7 @@ curl https://your-app.vercel.app/api/openai/v1/chat/completions \
   }'
 
 # Anthropic 格式
-curl https://your-app.vercel.app/api/anthropic/v1/messages \
+curl https://your-app.vercel.app/v1/messages \
   -H "x-api-key: sk-cfai-xxxxx" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \

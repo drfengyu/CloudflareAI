@@ -66,11 +66,11 @@
 
 ```bash
 # 列出模型
-curl https://cloudflare-ai-tau.vercel.app/api/openai/v1/models \
+curl https://cloudflare-ai-tau.vercel.app/v1/models \
   -H "Authorization: Bearer sk-cfai-xxxxx"
 
 # 文本生成（非流式）
-curl https://cloudflare-ai-tau.vercel.app/api/openai/v1/chat/completions \
+curl https://cloudflare-ai-tau.vercel.app/v1/chat/completions \
   -H "Authorization: Bearer sk-cfai-xxxxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -80,7 +80,7 @@ curl https://cloudflare-ai-tau.vercel.app/api/openai/v1/chat/completions \
   }'
 
 # Anthropic 兼容端点
-curl https://cloudflare-ai-tau.vercel.app/api/anthropic/v1/messages \
+curl https://cloudflare-ai-tau.vercel.app/v1/messages \
   -H "x-api-key: sk-cfai-xxxxx" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
@@ -102,7 +102,7 @@ curl https://cloudflare-ai-tau.vercel.app/api/anthropic/v1/messages \
       "provider": "openai",
       "model": "@cf/meta/llama-3.1-8b-instruct",
       "apiKey": "sk-cfai-xxxxx",
-      "baseURL": "https://cloudflare-ai-tau.vercel.app/api/openai/v1"
+      "baseURL": "https://cloudflare-ai-tau.vercel.app/v1"
     }
   ]
 }
@@ -118,7 +118,7 @@ curl https://cloudflare-ai-tau.vercel.app/api/anthropic/v1/messages \
       "provider": "openai",
       "model": "@cf/meta/llama-3.1-8b-instruct",
       "apiKey": "sk-cfai-xxxxx",
-      "apiBase": "https://cloudflare-ai-tau.vercel.app/api/openai/v1"
+      "apiBase": "https://cloudflare-ai-tau.vercel.app/v1"
     }
   ]
 }

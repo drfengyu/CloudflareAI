@@ -101,17 +101,17 @@ export default async function KeysPage() {
               </p>
               <pre className="rounded-lg bg-surface-2 p-3 font-mono text-[11px]">
 {`# Base URL
-https://your-domain.vercel.app/api/openai/v1
+https://your-domain.vercel.app/v1
 
 # Chat completions
-POST /api/openai/v1/chat/completions
+POST /v1/chat/completions
 Authorization: Bearer sk-cfai-xxxxx
 
 # Embeddings
-POST /api/openai/v1/embeddings
+POST /v1/embeddings
 
 # Models
-GET /api/openai/v1/models`}
+GET /v1/models`}
               </pre>
 
               <p className="pt-2">
@@ -119,10 +119,10 @@ GET /api/openai/v1/models`}
               </p>
               <pre className="rounded-lg bg-surface-2 p-3 font-mono text-[11px]">
 {`# Base URL
-https://your-domain.vercel.app/api/anthropic/v1
+https://your-domain.vercel.app/v1
 
 # Messages
-POST /api/anthropic/v1/messages
+POST /v1/messages
 x-api-key: sk-cfai-xxxxx
 anthropic-version: 2023-06-01`}
               </pre>

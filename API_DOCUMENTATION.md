@@ -24,7 +24,7 @@
 ### 1. 列出可用模型
 
 ```bash
-curl https://cloudflare-ai-tau.vercel.app/api/openai/v1/models \
+curl https://cloudflare-ai-tau.vercel.app/v1/models \
   -H "Authorization: Bearer sk-cfai-xxxxx"
 ```
 
@@ -47,7 +47,7 @@ curl https://cloudflare-ai-tau.vercel.app/api/openai/v1/models \
 ### 2. 聊天补全（非流式）
 
 ```bash
-curl https://cloudflare-ai-tau.vercel.app/api/openai/v1/chat/completions \
+curl https://cloudflare-ai-tau.vercel.app/v1/chat/completions \
   -H "Authorization: Bearer sk-cfai-xxxxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -89,7 +89,7 @@ curl https://cloudflare-ai-tau.vercel.app/api/openai/v1/chat/completions \
 ### 3. 聊天补全（流式）
 
 ```bash
-curl https://cloudflare-ai-tau.vercel.app/api/openai/v1/chat/completions \
+curl https://cloudflare-ai-tau.vercel.app/v1/chat/completions \
   -H "Authorization: Bearer sk-cfai-xxxxx" \
   -H "Content-Type: application/json" \
   -N \
@@ -114,7 +114,7 @@ data: [DONE]
 ### 4. 嵌入向量
 
 ```bash
-curl https://cloudflare-ai-tau.vercel.app/api/openai/v1/embeddings \
+curl https://cloudflare-ai-tau.vercel.app/v1/embeddings \
   -H "Authorization: Bearer sk-cfai-xxxxx" \
   -H "Content-Type: application/json" \
   -d '{
@@ -149,7 +149,7 @@ curl https://cloudflare-ai-tau.vercel.app/api/openai/v1/embeddings \
 ### 消息生成（非流式）
 
 ```bash
-curl https://cloudflare-ai-tau.vercel.app/api/anthropic/v1/messages \
+curl https://cloudflare-ai-tau.vercel.app/v1/messages \
   -H "x-api-key: sk-cfai-xxxxx" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
@@ -187,7 +187,7 @@ curl https://cloudflare-ai-tau.vercel.app/api/anthropic/v1/messages \
 ### 消息生成（流式）
 
 ```bash
-curl https://cloudflare-ai-tau.vercel.app/api/anthropic/v1/messages \
+curl https://cloudflare-ai-tau.vercel.app/v1/messages \
   -H "x-api-key: sk-cfai-xxxxx" \
   -H "anthropic-version: 2023-06-01" \
   -H "Content-Type: application/json" \
@@ -211,7 +211,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-cfai-xxxxx",
-    base_url="https://cloudflare-ai-tau.vercel.app/api/openai/v1"
+    base_url="https://cloudflare-ai-tau.vercel.app/v1"
 )
 
 # 聊天补全
@@ -252,7 +252,7 @@ from anthropic import Anthropic
 
 client = Anthropic(
     api_key="sk-cfai-xxxxx",
-    base_url="https://cloudflare-ai-tau.vercel.app/api/anthropic/v1"
+    base_url="https://cloudflare-ai-tau.vercel.app/v1"
 )
 
 # 消息生成
@@ -287,7 +287,7 @@ import OpenAI from 'openai';
 
 const client = new OpenAI({
   apiKey: 'sk-cfai-xxxxx',
-  baseURL: 'https://cloudflare-ai-tau.vercel.app/api/openai/v1'
+  baseURL: 'https://cloudflare-ai-tau.vercel.app/v1'
 });
 
 // 聊天补全
@@ -328,7 +328,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 const client = new Anthropic({
   apiKey: 'sk-cfai-xxxxx',
-  baseURL: 'https://cloudflare-ai-tau.vercel.app/api/anthropic/v1'
+  baseURL: 'https://cloudflare-ai-tau.vercel.app/v1'
 });
 
 // 消息生成
@@ -369,7 +369,7 @@ for await (const text of stream.text_stream) {
       "provider": "openai",
       "model": "@cf/meta/llama-3.1-8b-instruct",
       "apiKey": "sk-cfai-xxxxx",
-      "baseURL": "https://cloudflare-ai-tau.vercel.app/api/openai/v1"
+      "baseURL": "https://cloudflare-ai-tau.vercel.app/v1"
     }
   ]
 }
@@ -387,7 +387,7 @@ for await (const text of stream.text_stream) {
       "provider": "openai",
       "model": "@cf/meta/llama-3.1-8b-instruct",
       "apiKey": "sk-cfai-xxxxx",
-      "apiBase": "https://cloudflare-ai-tau.vercel.app/api/openai/v1"
+      "apiBase": "https://cloudflare-ai-tau.vercel.app/v1"
     }
   ]
 }
@@ -399,7 +399,7 @@ Settings → Models → Add Custom Model：
 - Provider: OpenAI
 - Model: `@cf/meta/llama-3.1-8b-instruct`
 - API Key: `sk-cfai-xxxxx`
-- Base URL: `https://cloudflare-ai-tau.vercel.app/api/openai/v1`
+- Base URL: `https://cloudflare-ai-tau.vercel.app/v1`
 
 ---
 

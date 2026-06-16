@@ -21,6 +21,15 @@
   - 类内极差大幅收敛：classify 2112× → 3×、text 246× → 35×（含 3 档）、speech 73× → 4×
   - 管理员调整的 multiplier 在 sync 时保留（不被覆盖）
 
+### 变更
+
+- **API 路由标准化**（遵循 new-api 约定）
+  - 迁移推理网关从 `/api/openai/v1/*` 和 `/api/anthropic/v1/*` 到标准 `/v1/*` 根路径
+  - OpenAI 兼容：`/v1/chat/completions`、`/v1/embeddings`、`/v1/models`
+  - Anthropic 兼容：`/v1/messages`
+  - 业务 API 保持 `/api/*` 路径不变
+  - 更新所有文档和示例配置
+
 ### 规划中
 
 - **Phase B 剩余**：网关 IP/模型白名单校验
@@ -178,8 +187,8 @@
   - 嵌入向量
   - 翻译
 - **API 兼容性**
-  - OpenAI 兼容端点（`/api/openai/v1/*`）
-  - Anthropic 兼容端点（`/api/anthropic/v1/*`）
+  - OpenAI 兼容端点（`/v1/*`）
+  - Anthropic 兼容端点（`/v1/*`）
   - 模型列表和对话补全
 - **数据库**
   - Cloudflare D1 + Drizzle ORM

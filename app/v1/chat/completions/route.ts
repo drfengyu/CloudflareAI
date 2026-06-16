@@ -12,75 +12,71 @@ const schema = z.object({
   model: z.string(),
   messages: z.array(
     z.object({
-      role: z.enum(["user", "assistant"]),
+      role: z.enum(["system", "user", "assistant"]),
       content: z.string(),
     }),
   ),
-  max_tokens: z.number().min(1),
   stream: z.boolean().optional(),
-  temperature: z.number().min(0).max(1).optional(),
-  system: z.string().optional(),
+  temperature: z.number().min(0).max(2).optional(),
+  max_tokens: z.number().min(1).optional(),
 });
 
 /**
- * POST /api/anthropic/v1/messages
- * Anthropic 兼容端点：供 Claude Code / Codex 等工具调用。
- * Phase B: 增强鉴权 + 余额校验 + 真实计量。
+ * POST /v1/chat/completions
+ * OpenAI 兼容端点：供 Claude Code / Codex / Hermes 调用 Cloudflare 模型。
+ * Phase B: 校验状态/有效期/IP/模型白名单 + 余额前置检查 + 真实扣费计量。
  */
 export async function POST(req: NextRequest) {
-  const token = extractBearerToken(req.headers.get("x-api-key") || req.headers.get("authorization"));
+  const token = extractBearerToken(req.headers.get("authorization"));
   if (!token) {
-    return Response.json({ error: { type: "authentication_error", message: "Missing API key" } }, { status: 401 });
+    return Response.json({ error: "Missing API key" }, { status: 401 });
   }
 
   const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const verified = await verifyApiKey(token, clientIp);
   if (!verified) {
-    return Response.json({ error: { type: "authentication_error", message: "Invalid API key" } }, { status: 401 });
+    return Response.json({ error: "Invalid or unauthorized API key" }, { status: 401 });
   }
 
   const { userId, apiKeyId, allowedModels } = verified;
 
   // 限流：每用户每分钟 60 次请求
-  if (!checkRateLimit(`anthropic:${userId}`, { window: 60_000, limit: 60 })) {
-    return Response.json({ error: { type: "rate_limit_error", message: "Rate limit exceeded" } }, { status: 429 });
+  if (!checkRateLimit(`openai:${userId}`, { window: 60_000, limit: 60 })) {
+    return Response.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
 
   const body = await req.json();
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     return Response.json(
-      { error: { type: "invalid_request_error", message: "Invalid request" } },
+      { error: "Invalid request", details: parsed.error.issues },
       { status: 400 },
     );
   }
 
-  const { model, messages, max_tokens, stream = false, temperature, system } = parsed.data;
+  const { model, messages, stream = false, temperature, max_tokens } = parsed.data;
 
   // 模型白名单检查
   if (allowedModels && !allowedModels.includes(model)) {
-    return Response.json({ error: { type: "permission_error", message: "Model not allowed" } }, { status: 403 });
+    return Response.json({ error: "Model not allowed for this API key" }, { status: 403 });
   }
 
-  // 余额预检
+  // 余额预检（粗略估算：输入按消息总长*1.5，输出按max_tokens或默认512）
   const estimatedInput = messages.reduce((sum, m) => sum + m.content.length, 0) * 1.5;
-  const estimatedCredits = await calculateCredits(model, estimatedInput, max_tokens);
+  const estimatedOutput = max_tokens || 512;
+  const estimatedCredits = await calculateCredits(model, estimatedInput, estimatedOutput);
+
   const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
   if (!balanceCheck.ok) {
-    return Response.json({ error: { type: "insufficient_balance", message: balanceCheck.reason } }, { status: 402 });
+    return Response.json({ error: balanceCheck.reason }, { status: 402 });
   }
 
   const start = Date.now();
 
   try {
-    // 转 OpenAI 格式
-    const openaiMessages = system
-      ? [{ role: "system" as const, content: system }, ...messages]
-      : messages;
-
     const res = await openaiCompatible(
       "chat/completions",
-      { model, messages: openaiMessages, max_tokens, stream, temperature },
+      { model, messages, stream, temperature, max_tokens },
       req.signal,
     );
 
@@ -91,20 +87,20 @@ export async function POST(req: NextRequest) {
         apiKeyId,
         model,
         task: "Text Generation",
-        channel: "anthropic",
+        channel: "openai",
         status: "error",
         latencyMs: Date.now() - start,
       });
-      return Response.json({ error: { type: "api_error", message: text } }, { status: res.status });
+      return Response.json({ error: text || "Model run failed" }, { status: res.status });
     }
 
     if (stream) {
-      // 流式：拦截 SSE 流，解析末尾 usage 后按真实 token 扣费。
-      // 注意：这个 gateway 透传 OpenAI 格式 SSE 给客户端（route 未做 Anthropic 格式转换），
-      // 所以可以直接用 OpenAI 拦截器解析 usage chunk。
+      // 流式：拦截 SSE 流，解析末尾的 usage chunk 后再按真实 token 扣费。
+      // Cloudflare 即使不传 stream_options 也会发 usage chunk，所以无需改请求体。
       const { stream: tap, done } = interceptOpenAIStream(res.body);
 
-      // after() 让 Vercel serverless 在响应结束后保持函数运行直到 logUsage 完成。
+      // 用 next/server 的 after() 让 Vercel 在响应结束后继续运行（serverless
+      // 默认在 response return 时立即终止函数，会让 done 的 .then() 丢失）。
       after(async () => {
         const { usage } = await done;
         await logUsage({
@@ -112,7 +108,7 @@ export async function POST(req: NextRequest) {
           apiKeyId,
           model,
           task: "Text Generation",
-          channel: "anthropic",
+          channel: "openai",
           inputTokens: usage?.promptTokens ?? Math.floor(estimatedInput),
           outputTokens: usage?.completionTokens ?? 0,
           status: "ok",
@@ -121,7 +117,10 @@ export async function POST(req: NextRequest) {
       });
 
       return new Response(tap, {
-        headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+        },
       });
     }
 
@@ -133,37 +132,26 @@ export async function POST(req: NextRequest) {
       apiKeyId,
       model,
       task: "Text Generation",
-      channel: "anthropic",
+      channel: "openai",
       inputTokens: usage.prompt_tokens || 0,
       outputTokens: usage.completion_tokens || 0,
       status: "ok",
       latencyMs: Date.now() - start,
     });
 
-    // 转回 Anthropic 格式
-    return Response.json({
-      id: data.id,
-      type: "message",
-      role: "assistant",
-      content: [{ type: "text", text: data.choices?.[0]?.message?.content || "" }],
-      model: data.model,
-      usage: {
-        input_tokens: usage.prompt_tokens || 0,
-        output_tokens: usage.completion_tokens || 0,
-      },
-    });
+    return Response.json(data);
   } catch (err) {
     await logUsage({
       userId,
       apiKeyId,
       model,
       task: "Text Generation",
-      channel: "anthropic",
+      channel: "openai",
       status: "error",
       latencyMs: Date.now() - start,
     });
     return Response.json(
-      { error: { type: "api_error", message: err instanceof Error ? err.message : "Unknown error" } },
+      { error: err instanceof Error ? err.message : "Unknown error" },
       { status: 500 },
     );
   }

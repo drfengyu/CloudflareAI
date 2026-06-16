@@ -137,7 +137,7 @@ export function interceptOpenAIStream(
  *   ...
  *   event: message_stop
  *
- * For our `/api/anthropic/v1/messages` route we currently forward the upstream
+ * For our `/v1/messages` route we currently forward the upstream
  * OpenAI-format SSE without rewrapping (the route's stream branch returns
  * `res.body` directly), so input/output tokens are still parsable via the
  * OpenAI intercept above. If we ever wrap the response into proper Anthropic
