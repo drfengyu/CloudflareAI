@@ -222,6 +222,29 @@ export const temporaryBalances = sqliteTable("temporary_balance", {
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });
 
+/** 模型价格表：统一管理所有模型的计费/显示价格。
+ * - 价格 = catalog 官方价 × 1000（基础价），再按规则 < $100 时 ×5。
+ * - 文本模型：inputPrice/outputPrice 单位为 $/1M tokens。
+ * - 图像模型：fixedPrice 单位为 $/张，isImage=1。
+ * - 计费和 UI 显示都从此表读取。
+ */
+export const modelPricing = sqliteTable("model_pricing", {
+  modelId: text("modelId").primaryKey(),
+  category: text("category"),
+  source: text("source"),
+  /** 输入价格（$/1M tokens）。 */
+  inputPrice: real("inputPrice"),
+  /** 输出价格（$/1M tokens）。null 表示与输入价相同。 */
+  outputPrice: real("outputPrice"),
+  /** 计费单位描述（如 "per M input tokens" / "image"）。 */
+  unit: text("unit"),
+  /** 是否为图像模型（固定价格）。 */
+  isImage: integer("isImage").default(0),
+  /** 图像模型的固定价格（$/张），仅 isImage=1 时有效。 */
+  fixedPrice: real("fixedPrice"),
+  updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).$defaultFn(now),
+});
+
 export type User = typeof users.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type UsageLog = typeof usageLogs.$inferSelect;
@@ -230,3 +253,4 @@ export type Topup = typeof topups.$inferSelect;
 export type Option = typeof options.$inferSelect;
 export type ConversationHistory = typeof conversationHistory.$inferSelect;
 export type TemporaryBalance = typeof temporaryBalances.$inferSelect;
+export type ModelPricing = typeof modelPricing.$inferSelect;

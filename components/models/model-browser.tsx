@@ -11,7 +11,22 @@ import { getDisplayPrice } from "@/lib/billing/display-price";
 
 type Filter = CategoryId | "all";
 
-export function ModelBrowser({ models }: { models: NormalizedModel[] }) {
+export function ModelBrowser({
+  models,
+  pricingMap,
+}: {
+  models: NormalizedModel[];
+  pricingMap?: Map<
+    string,
+    {
+      inputPrice: number;
+      outputPrice: number;
+      isImage: boolean;
+      fixedPrice: number;
+      unit: string;
+    }
+  >;
+}) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
 
@@ -77,7 +92,7 @@ export function ModelBrowser({ models }: { models: NormalizedModel[] }) {
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {visible.map((m) => (
-          <ModelCard key={m.id} model={m} />
+          <ModelCard key={m.id} model={m} pricingMap={pricingMap} />
         ))}
       </div>
 
@@ -88,9 +103,24 @@ export function ModelBrowser({ models }: { models: NormalizedModel[] }) {
   );
 }
 
-function ModelCard({ model }: { model: NormalizedModel }) {
+function ModelCard({
+  model,
+  pricingMap,
+}: {
+  model: NormalizedModel;
+  pricingMap?: Map<
+    string,
+    {
+      inputPrice: number;
+      outputPrice: number;
+      isImage: boolean;
+      fixedPrice: number;
+      unit: string;
+    }
+  >;
+}) {
   const description = model.descriptionZh ?? model.description;
-  const displayPrice = getDisplayPrice(model);
+  const displayPrice = getDisplayPrice(model, pricingMap);
 
   return (
     <Card className="flex h-full flex-col">

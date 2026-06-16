@@ -2,16 +2,21 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { ModelBrowser } from "@/components/models/model-browser";
 import { Badge } from "@/components/ui/badge";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
+import { getAllModelPricing } from "@/lib/billing/model-pricing";
 
 // Catalog is fetched server-side and cached (1h) via the Cloudflare client.
 export const dynamic = "force-dynamic";
 
 export default async function ModelsPage() {
   let models: Awaited<ReturnType<typeof fetchModelCatalog>> = [];
+  let pricingMap: Awaited<ReturnType<typeof getAllModelPricing>> = new Map();
   let error: string | null = null;
 
   try {
-    models = await fetchModelCatalog();
+    [models, pricingMap] = await Promise.all([
+      fetchModelCatalog(),
+      getAllModelPricing(),
+    ]);
   } catch (e) {
     error = e instanceof Error ? e.message : "无法加载模型目录";
   }
@@ -39,7 +44,7 @@ export default async function ModelsPage() {
           <p className="mt-2 text-[11px] text-danger">{error}</p>
         </div>
       ) : (
-        <ModelBrowser models={models} />
+        <ModelBrowser models={models} pricingMap={pricingMap} />
       )}
     </>
   );

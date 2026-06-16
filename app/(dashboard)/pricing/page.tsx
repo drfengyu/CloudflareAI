@@ -3,12 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
 import { getDisplayPrice } from "@/lib/billing/display-price";
+import { getAllModelPricing } from "@/lib/billing/model-pricing";
 import { Info } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default async function PricingPage() {
-  const models = await fetchModelCatalog();
+  const [models, pricingMap] = await Promise.all([
+    fetchModelCatalog(),
+    getAllModelPricing(),
+  ]);
 
   // 按类别分组
   const categories = {
@@ -79,7 +83,7 @@ export default async function PricingPage() {
                     </thead>
                     <tbody>
                       {categoryModels.map((model) => {
-                        const price = getDisplayPrice(model);
+                        const price = getDisplayPrice(model, pricingMap);
 
                         return (
                           <tr key={model.id} className="border-b border-border/50 last:border-0">

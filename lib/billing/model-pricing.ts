@@ -1,0 +1,178 @@
+import { db } from "@/lib/db/d1-http";
+import { modelPricing } from "@/lib/db/schema";
+import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
+import { eq } from "drizzle-orm";
+
+/**
+ * 价格策略（统一管理）：
+ * - 基础倍率 ×1000：catalog 官方价 × 1000 = 基础价
+ * - 调整规则：基础价 < $100 时 ×5，≥ $100 时 ×1
+ * - 无定价模型：默认 $100 / 1M tokens
+ * - 图像模型：固定价格
+ */
+export const BASE_MULTIPLIER = 1000;
+export const ADJUST_THRESHOLD = 100; // $/1M tokens
+export const ADJUST_MULTIPLIER_LOW = 5;
+export const ADJUST_MULTIPLIER_HIGH = 1;
+export const DEFAULT_PRICE_PER_MILLION = 100; // $/1M tokens
+
+/**
+ * 图像模型固定定价（$/张）
+ * 注意：这些价格不参与 ×1000 基础倍率和调整规则，直接作为最终价格。
+ */
+const IMAGE_MODEL_PRICING: Record<string, number> = {
+  "@cf/bytedance/stable-diffusion-xl-lightning": 3333,
+  "@cf/black-forest-labs/flux-1-schnell": 3000,
+  "@cf/black-forest-labs/flux-2-dev": 4000,
+  "@cf/black-forest-labs/flux-2-klein-4b": 3500,
+  "@cf/black-forest-labs/flux-2-klein-9b": 3500,
+  "@cf/stabilityai/stable-diffusion-xl-base-1.0": 3500,
+  "@cf/leonardo/lucid-origin": 3500,
+  "@cf/leonardo/phoenix-1.0": 3500,
+  "@cf/lykon/dreamshaper-8-lcm": 3500,
+  "@cf/runwayml/stable-diffusion-v1-5-img2img": 3500,
+  "@cf/runwayml/stable-diffusion-v1-5-inpainting": 3500,
+};
+const IMAGE_MODEL_DEFAULT_PRICE = 3500;
+
+/**
+ * 计算最终价格（应用 ×1000 基础倍率 + 调整规则）
+ */
+export function calculateFinalPrice(officialPrice: number | null | undefined): number {
+  if (officialPrice === null || officialPrice === undefined || officialPrice === 0) {
+    // 无定价 → 默认 $100/1M
+    return DEFAULT_PRICE_PER_MILLION;
+  }
+  // 先 ×1000
+  const basePrice = officialPrice * BASE_MULTIPLIER;
+  // 再按规则调整
+  return basePrice < ADJUST_THRESHOLD
+    ? basePrice * ADJUST_MULTIPLIER_LOW
+    : basePrice * ADJUST_MULTIPLIER_HIGH;
+}
+
+/**
+ * 判断是否为图像模型
+ */
+function isImageModel(modelId: string, category?: string): boolean {
+  return (
+    category === "image" ||
+    modelId.includes("stable-diffusion") ||
+    modelId.includes("flux") ||
+    modelId in IMAGE_MODEL_PRICING
+  );
+}
+
+/**
+ * 从 catalog 初始化/同步 model_pricing 表。
+ * 仅在管理员触发或首次启动时调用。
+ */
+export async function syncModelPricing(): Promise<{ inserted: number; updated: number }> {
+  const catalog = await fetchModelCatalog();
+  let inserted = 0;
+  let updated = 0;
+
+  for (const model of catalog) {
+    const isImage = isImageModel(model.id, model.category);
+    const p = model.pricing?.[0];
+    const pOut = model.pricing?.[1];
+
+    const inputPrice = isImage ? null : calculateFinalPrice(p?.price);
+    const outputPrice = isImage ? null : pOut ? calculateFinalPrice(pOut.price) : null;
+    const fixedPrice = isImage
+      ? IMAGE_MODEL_PRICING[model.id] ?? IMAGE_MODEL_DEFAULT_PRICE
+      : null;
+    const unit = isImage ? "image" : p?.unit || "per M input tokens";
+
+    // 检查是否已存在
+    const existing = await db
+      .select({ modelId: modelPricing.modelId })
+      .from(modelPricing)
+      .where(eq(modelPricing.modelId, model.id))
+      .limit(1);
+
+    if (existing[0]) {
+      await db
+        .update(modelPricing)
+        .set({
+          category: model.category,
+          source: model.source,
+          inputPrice,
+          outputPrice,
+          unit,
+          isImage: isImage ? 1 : 0,
+          fixedPrice,
+          updatedAt: new Date(),
+        })
+        .where(eq(modelPricing.modelId, model.id));
+      updated++;
+    } else {
+      await db.insert(modelPricing).values({
+        modelId: model.id,
+        category: model.category,
+        source: model.source,
+        inputPrice,
+        outputPrice,
+        unit,
+        isImage: isImage ? 1 : 0,
+        fixedPrice,
+      });
+      inserted++;
+    }
+  }
+
+  return { inserted, updated };
+}
+
+/**
+ * 从 model_pricing 表获取单个模型的价格。
+ */
+export async function getModelPricing(modelId: string): Promise<{
+  inputPrice: number;
+  outputPrice: number;
+  isImage: boolean;
+  fixedPrice: number;
+  unit: string;
+} | null> {
+  const rows = await db
+    .select()
+    .from(modelPricing)
+    .where(eq(modelPricing.modelId, modelId))
+    .limit(1);
+
+  if (!rows[0]) return null;
+
+  return {
+    inputPrice: rows[0].inputPrice ?? DEFAULT_PRICE_PER_MILLION,
+    outputPrice: rows[0].outputPrice ?? rows[0].inputPrice ?? DEFAULT_PRICE_PER_MILLION,
+    isImage: rows[0].isImage === 1,
+    fixedPrice: rows[0].fixedPrice ?? IMAGE_MODEL_DEFAULT_PRICE,
+    unit: rows[0].unit ?? "per M input tokens",
+  };
+}
+
+/**
+ * 获取所有模型价格（用于定价页/模型库批量显示）。
+ */
+export async function getAllModelPricing(): Promise<Map<string, {
+  inputPrice: number;
+  outputPrice: number;
+  isImage: boolean;
+  fixedPrice: number;
+  unit: string;
+}>> {
+  const rows = await db.select().from(modelPricing);
+  const map = new Map();
+
+  for (const row of rows) {
+    map.set(row.modelId, {
+      inputPrice: row.inputPrice ?? DEFAULT_PRICE_PER_MILLION,
+      outputPrice: row.outputPrice ?? row.inputPrice ?? DEFAULT_PRICE_PER_MILLION,
+      isImage: row.isImage === 1,
+      fixedPrice: row.fixedPrice ?? IMAGE_MODEL_DEFAULT_PRICE,
+      unit: row.unit ?? "per M input tokens",
+    });
+  }
+
+  return map;
+}

@@ -134,12 +134,12 @@ async function deductCredits(userId: string, amount: number): Promise<void> {
     }
   }
 
-  // 3. 临时余额不够，扣永久余额
+  // 3. 临时余额不够，扣永久余额（允许变负值）
   if (remaining > 0) {
     await db
       .update(users)
       .set({
-        balanceCredits: sql`MAX(0, ${users.balanceCredits} - ${remaining})`,
+        balanceCredits: sql`${users.balanceCredits} - ${remaining}`,
       })
       .where(eq(users.id, userId));
   }
