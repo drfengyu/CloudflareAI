@@ -38,8 +38,8 @@ export async function redeemCode(code: string) {
   if (redemption.balanceValidDays) {
     balanceExpiresAt = new Date(Date.now() + redemption.balanceValidDays * 24 * 60 * 60 * 1000);
   } else {
-    // 默认 365 天
-    balanceExpiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    // 默认 7 天
+    balanceExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   }
 
   const now = new Date();

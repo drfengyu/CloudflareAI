@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db/d1-http";
-import { checkins, users, topups, options } from "@/lib/db/schema";
+import { checkins, users, topups, options, temporaryBalances } from "@/lib/db/schema";
 import { requireUser } from "@/lib/usage/meter";
 import { eq, and, gte, lte, sql } from "drizzle-orm";
 
@@ -167,6 +167,8 @@ export async function performCheckin(): Promise<{
 
     const checkinId = crypto.randomUUID();
     const now = new Date();
+    // 签到奖励有效期：7 天
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
     try {
       // 步骤1: 插入签到记录（UNIQUE 约束防止并发重复）
@@ -178,13 +180,15 @@ export async function performCheckin(): Promise<{
         createdAt: now,
       });
 
-      // 步骤2: 增加用户余额
-      await db
-        .update(users)
-        .set({
-          balanceCredits: sql`${users.balanceCredits} + ${quotaAwarded}`,
-        })
-        .where(eq(users.id, userId));
+      // 步骤2: 插入临时余额
+      await db.insert(temporaryBalances).values({
+        id: crypto.randomUUID(),
+        userId,
+        amount: quotaAwarded,
+        expiresAt,
+        description: `每日签到奖励 ${quotaAwarded} cr（有效期 7 天）`,
+        createdAt: now,
+      });
 
       // 步骤3: 记录 topup 流水
       await db.insert(topups).values({
@@ -192,7 +196,7 @@ export async function performCheckin(): Promise<{
         userId,
         amount: quotaAwarded,
         type: 3, // 签到充值
-        description: `每日签到奖励 ${quotaAwarded} cr`,
+        description: `每日签到奖励 ${quotaAwarded} cr（有效期至 ${expiresAt.toLocaleDateString()}）`,
         createdAt: now,
       });
 

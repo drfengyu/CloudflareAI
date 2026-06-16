@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import bcrypt from "bcryptjs";
+import { eq } from "drizzle-orm";
 import authConfig from "./auth.config";
 import { db } from "@/lib/db/d1-http";
 import {
@@ -9,6 +10,7 @@ import {
   accounts,
   sessions,
   verificationTokens,
+  topups,
 } from "@/lib/db/schema";
 import { getUserByEmail } from "@/lib/db/queries";
 import {
@@ -88,6 +90,44 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           )}`;
         }
       }
+
+      // GitHub OAuth 登录处理（Drizzle Adapter 自动创建用户）
+      if (account?.provider === "github" && user?.id) {
+        try {
+          const userId = user.id;
+
+          // 检查是否为新用户（刚创建的用户 balanceCredits 为 0）
+          const dbUser = await db.query.users.findFirst({
+            where: (users, { eq }) => eq(users.id, userId),
+          });
+
+          if (dbUser && dbUser.balanceCredits === 0) {
+            // 新用户，发放奖励
+            const WELCOME_BONUS = 2000;
+            const now = new Date();
+
+            await db
+              .update(users)
+              .set({ balanceCredits: WELCOME_BONUS })
+              .where(eq(users.id, userId));
+
+            await db.insert(topups).values({
+              id: crypto.randomUUID(),
+              userId: userId,
+              amount: WELCOME_BONUS,
+              type: 4, // 4=其他（新用户奖励）
+              description: "新用户注册奖励（GitHub）",
+              createdAt: now,
+            });
+
+            console.log("[GitHub signIn] Welcome bonus granted:", userId);
+          }
+        } catch (error) {
+          console.error("[GitHub signIn] Failed to grant bonus:", error);
+          // 不阻止登录，只是记录错误
+        }
+      }
+
       return true;
     },
     async jwt({ token, user, account, profile, trigger }) {
