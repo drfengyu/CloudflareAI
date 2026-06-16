@@ -25,7 +25,7 @@ function GithubIcon({ className }: { className?: string }) {
 function SubmitButton({ label }: { label: string }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending} className="w-full">
+    <Button type="submit" disabled={pending} size="lg" className="w-full shadow-sm">
       {pending ? "处理中…" : label}
     </Button>
   );
@@ -40,26 +40,25 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
   const isLogin = mode === "login";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* 移动端 Logo */}
       <div className="flex items-center gap-2 lg:hidden">
         <Cpu className="h-6 w-6 text-primary" />
         <span className="font-semibold">Cloudflare AI Console</span>
       </div>
 
-      {/* 玻璃态卡片 + 渐变光晕 */}
-      <div className="group relative rounded-2xl border border-border/50 bg-card/80 p-6 shadow-xl shadow-black/5 backdrop-blur-xl transition-all duration-300 hover:border-border/80 hover:shadow-2xl dark:border-white/10 dark:bg-card/60 dark:shadow-black/20">
-        {/* 顶部高光渐变 */}
-        <div className="pointer-events-none absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+      {/* 简洁卡片 */}
+      <div className="rounded-xl border border-border bg-card p-8 shadow-sm">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {isLogin ? "登录" : "创建账户"}
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            {isLogin ? "欢迎回来" : "用邮箱注册，或使用第三方账号"}
+          </p>
+        </div>
 
-        <h1 className="text-lg font-semibold">
-          {isLogin ? "登录" : "创建账户"}
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {isLogin ? "欢迎回来" : "用邮箱注册，或使用第三方账号"}
-        </p>
-
-        <form action={formAction} className="mt-5 space-y-3">
+        <form action={formAction} className="space-y-5">
           {!isLogin && (
             <Field name="name" type="text" label="昵称（可选）" required={false} />
           )}
@@ -67,7 +66,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           <Field name="password" type="password" label="密码" />
 
           {state.error && (
-            <p className="animate-in fade-in slide-in-from-top-1 text-xs text-danger duration-200">
+            <p className="animate-in fade-in slide-in-from-top-1 text-sm text-danger duration-200">
               {state.error}
             </p>
           )}
@@ -75,20 +74,21 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           <SubmitButton label={isLogin ? "登录" : "注册"} />
         </form>
 
-        <div className="my-4 flex items-center gap-3 text-[11px] text-muted-foreground">
-          <span className="h-px flex-1 bg-gradient-to-r from-transparent via-border to-border" />
+        <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
           或使用第三方账号
-          <span className="h-px flex-1 bg-gradient-to-l from-transparent via-border to-border" />
+          <span className="h-px flex-1 bg-border" />
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-3">
           <form action={githubSignIn}>
             <Button
               type="submit"
               variant="outline"
-              className="group/btn w-full transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-gradient-to-r hover:from-primary/5 hover:to-transparent hover:shadow-lg"
+              size="lg"
+              className="w-full"
             >
-              <GithubIcon className="h-4 w-4 transition-transform duration-300 group-hover/btn:rotate-12" />
+              <GithubIcon className="h-4 w-4" />
               使用 GitHub 继续
             </Button>
           </form>
@@ -96,21 +96,22 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           <Button
             type="button"
             variant="outline"
-            className="group/btn w-full transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-gradient-to-r hover:from-primary/5 hover:to-transparent hover:shadow-lg"
+            size="lg"
+            className="w-full"
             onClick={() => signIn("linuxdo", { callbackUrl: "/dashboard" })}
           >
-            <IconLinuxDo className="h-4 w-4 transition-transform duration-300 group-hover/btn:scale-110" />
+            <IconLinuxDo className="h-4 w-4" />
             使用 LinuxDO 继续
           </Button>
         </div>
 
-        <p className="mt-5 text-center text-xs text-muted-foreground">
+        <p className="mt-6 text-center text-sm text-muted-foreground">
           {isLogin ? (
             <>
               还没有账户？{" "}
               <Link
                 href="/register"
-                className="text-primary transition-colors hover:text-primary/80 hover:underline"
+                className="font-medium text-primary hover:underline"
               >
                 注册
               </Link>
@@ -120,7 +121,7 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
               已有账户？{" "}
               <Link
                 href="/login"
-                className="text-primary transition-colors hover:text-primary/80 hover:underline"
+                className="font-medium text-primary hover:underline"
               >
                 登录
               </Link>
@@ -145,7 +146,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-medium text-muted-foreground transition-colors duration-200 has-[:focus]:text-foreground">
+      <span className="mb-2 block text-sm font-medium text-foreground">
         {label}
       </span>
       <input
@@ -166,7 +167,7 @@ function Field({
               ? "••••••••"
               : ""
         }
-        className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm shadow-sm outline-none transition-all duration-200 placeholder:text-muted-foreground/40 hover:border-primary/50 focus:border-primary focus:shadow-[0_0_0_3px_hsl(var(--primary)/0.1)] focus:ring-2 focus:ring-primary/20"
+        className="h-11 w-full rounded-lg border border-border bg-background px-4 text-sm outline-none transition-colors placeholder:text-muted-foreground/30 hover:border-border/80 focus:border-primary focus:ring-1 focus:ring-primary"
       />
     </label>
   );
