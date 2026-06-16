@@ -86,7 +86,7 @@ export async function syncModelPricing(): Promise<{ inserted: number; updated: n
 
     // 检查是否已存在
     const existing = await db
-      .select({ modelId: modelPricing.modelId })
+      .select({ modelId: modelPricing.modelId, multiplier: modelPricing.multiplier })
       .from(modelPricing)
       .where(eq(modelPricing.modelId, model.id))
       .limit(1);
@@ -102,6 +102,7 @@ export async function syncModelPricing(): Promise<{ inserted: number; updated: n
           unit,
           isImage: isImage ? 1 : 0,
           fixedPrice,
+          // 保留已有的 multiplier，不覆盖管理员调整
           updatedAt: new Date(),
         })
         .where(eq(modelPricing.modelId, model.id));
@@ -116,6 +117,7 @@ export async function syncModelPricing(): Promise<{ inserted: number; updated: n
         unit,
         isImage: isImage ? 1 : 0,
         fixedPrice,
+        multiplier: 1.0, // 新模型默认倍率 1.0
       });
       inserted++;
     }
@@ -133,6 +135,7 @@ export async function getModelPricing(modelId: string): Promise<{
   isImage: boolean;
   fixedPrice: number;
   unit: string;
+  multiplier: number;
 } | null> {
   const rows = await db
     .select()
@@ -142,12 +145,15 @@ export async function getModelPricing(modelId: string): Promise<{
 
   if (!rows[0]) return null;
 
+  const multiplier = rows[0].multiplier ?? 1.0;
+
   return {
-    inputPrice: rows[0].inputPrice ?? DEFAULT_PRICE_PER_MILLION,
-    outputPrice: rows[0].outputPrice ?? rows[0].inputPrice ?? DEFAULT_PRICE_PER_MILLION,
+    inputPrice: (rows[0].inputPrice ?? DEFAULT_PRICE_PER_MILLION) * multiplier,
+    outputPrice: (rows[0].outputPrice ?? rows[0].inputPrice ?? DEFAULT_PRICE_PER_MILLION) * multiplier,
     isImage: rows[0].isImage === 1,
-    fixedPrice: rows[0].fixedPrice ?? IMAGE_MODEL_DEFAULT_PRICE,
+    fixedPrice: (rows[0].fixedPrice ?? IMAGE_MODEL_DEFAULT_PRICE) * multiplier,
     unit: rows[0].unit ?? "per M input tokens",
+    multiplier,
   };
 }
 
@@ -160,17 +166,20 @@ export async function getAllModelPricing(): Promise<Map<string, {
   isImage: boolean;
   fixedPrice: number;
   unit: string;
+  multiplier: number;
 }>> {
   const rows = await db.select().from(modelPricing);
   const map = new Map();
 
   for (const row of rows) {
+    const multiplier = row.multiplier ?? 1.0;
     map.set(row.modelId, {
-      inputPrice: row.inputPrice ?? DEFAULT_PRICE_PER_MILLION,
-      outputPrice: row.outputPrice ?? row.inputPrice ?? DEFAULT_PRICE_PER_MILLION,
+      inputPrice: (row.inputPrice ?? DEFAULT_PRICE_PER_MILLION) * multiplier,
+      outputPrice: (row.outputPrice ?? row.inputPrice ?? DEFAULT_PRICE_PER_MILLION) * multiplier,
       isImage: row.isImage === 1,
-      fixedPrice: row.fixedPrice ?? IMAGE_MODEL_DEFAULT_PRICE,
+      fixedPrice: (row.fixedPrice ?? IMAGE_MODEL_DEFAULT_PRICE) * multiplier,
       unit: row.unit ?? "per M input tokens",
+      multiplier,
     });
   }
 

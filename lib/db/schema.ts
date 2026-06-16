@@ -226,6 +226,7 @@ export const temporaryBalances = sqliteTable("temporary_balance", {
  * - 价格 = catalog 官方价 × 1000（基础价），再按规则 < $100 时 ×5。
  * - 文本模型：inputPrice/outputPrice 单位为 $/1M tokens。
  * - 图像模型：fixedPrice 单位为 $/张，isImage=1。
+ * - multiplier 为管理员可调整的倍率（默认 1.0），最终价格 = 基础价格 × multiplier。
  * - 计费和 UI 显示都从此表读取。
  */
 export const modelPricing = sqliteTable("model_pricing", {
@@ -242,6 +243,8 @@ export const modelPricing = sqliteTable("model_pricing", {
   isImage: integer("isImage").default(0),
   /** 图像模型的固定价格（$/张），仅 isImage=1 时有效。 */
   fixedPrice: real("fixedPrice"),
+  /** 管理员可调整的定价倍率（默认 1.0）。最终价格 = 基础价格 × multiplier。 */
+  multiplier: real("multiplier").default(1.0).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });
 

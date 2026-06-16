@@ -24,6 +24,7 @@ export function ModelBrowser({
       isImage: boolean;
       fixedPrice: number;
       unit: string;
+      multiplier: number;
     }
   >;
 }) {
@@ -116,6 +117,7 @@ function ModelCard({
       isImage: boolean;
       fixedPrice: number;
       unit: string;
+      multiplier: number;
     }
   >;
 }) {

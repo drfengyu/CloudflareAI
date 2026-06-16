@@ -15,6 +15,7 @@ export function getDisplayPrice(
       isImage: boolean;
       fixedPrice: number;
       unit: string;
+      multiplier: number;
     }
   >,
 ): {
@@ -25,7 +26,7 @@ export function getDisplayPrice(
 } {
   const pricing = pricingMap?.get(model.id);
 
-  // 如果有 pricing 表数据，使用之
+  // 如果有 pricing 表数据，使用之（已应用 multiplier）
   if (pricing) {
     if (pricing.isImage) {
       return {
