@@ -145,8 +145,8 @@ export const redemptions = sqliteTable("redemption", {
   code: text("code").notNull().unique(),
   /** 1=充值 / 2=邀请 / 3=一次性试用。 */
   type: integer("type").notNull(),
-  /** 每次兑换赠送的 credits。 */
-  quota: integer("quota").notNull(),
+  /** 每次兑换赠送的 credits（支持小数）。 */
+  quota: real("quota").notNull(),
   /** 已兑换次数。 */
   usedCount: integer("usedCount").notNull().default(0),
   /** 最大兑换次数；null = 无限次（慎用）。 */
@@ -166,8 +166,8 @@ export const topups = sqliteTable("topup", {
   userId: text("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  /** 变动金额（credits，可正可负）。 */
-  amount: integer("amount").notNull(),
+  /** 变动金额（credits，可正可负，支持小数）。 */
+  amount: real("amount").notNull(),
   /** 1=兑换码充值 / 2=管理员手动调整 / 3=消费扣减（暂不用，消费记 usage_log） / 4=其他。 */
   type: integer("type").notNull(),
   /** 描述：如"兑换码 ABC123"、"管理员充值"、"后台调整"。 */
