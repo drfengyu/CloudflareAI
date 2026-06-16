@@ -170,20 +170,26 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 当前进度（2026-06-16 更新）
 
-### ✅ Phase B — 数据内核 & 计量修复（部分完成）
+### ✅ Phase B — 数据内核 & 计量修复（完成）
 
 **已完成**：
 - ✅ 扩展 schema：`user.balanceCredits`、`user.role`、`apiKey.status`、`topup` 表、`option` 表、`checkin` 表
 - ✅ `lib/billing/model-pricing.ts` 统一定价表：
-  - 基础倍率 ×1000 + 调整规则（< $100 ×5, ≥ $100 ×1）
+  - **分类线性映射重构**（2026-06-16）：8 个价格分桶 + 桶内线性映射到 OpenAI 主流价格
+  - 类内极差收敛：classify 2112× → 3×、text 246× → 35×、speech 73× → 4×
   - 图像模型固定价（3000-4000 cr/张）
-  - `model_pricing` 表 + `multiplier` 字段（管理员动态调整）
+  - `model_pricing` 表 + `multiplier` 字段（管理员动态调整，sync 时保留）
 - ✅ `lib/usage/meter.ts` 真实计量：
   - 调用 `calculateCredits` 按真实 token/neurons 计费
   - 余额预检 `verifyBalance`（user + apiKey 双重校验）
   - 成功扣减 `user.balanceCredits`，失败时记 0 credits
   - 修复 FLUX-2 multipart 响应解析（`lib/cloudflare/ai.ts`）
-- ✅ 网关接入校验（余额/状态/有效期）
+- ✅ **流式真实计量**（2026-06-16）：
+  - `lib/usage/stream-intercept.ts`：TransformStream 拦截 SSE 流
+  - 解析末尾 `usage` chunk（Cloudflare 默认发，无需 `stream_options`）
+  - 累积 `choices[0].delta.content` 供 playground 保存对话
+  - 用 Next.js 15 `after()` API 确保 Vercel serverless 在响应后继续运行 logUsage
+- ✅ 网关接入校验（余额/状态/有效期/IP/模型白名单）
 - ✅ 管理员充值（D1 直接操作 + topup 流水）
 - ✅ 数据迁移：redemption/topup REAL 类型支持小数
 
@@ -192,6 +198,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 - error 调用不扣费、记 0 credits
 - 余额不足时 402 拒绝
 - 倍率调整实时生效
+- **流式调用真实 token 计量**：outputTokens 从估算 2048 降到真实值（如 16）
 
 ### ✅ Phase C — 数据看板（完成）
 
@@ -347,15 +354,16 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ### 🚧 待完成
 
-- **Phase B 剩余**：流式结束计量（当前流式按估算扣费）、网关 IP/模型白名单校验
-- **Phase D 剩余**：批量创建 key、分组管理、导出统计
-- **Phase E & F 剩余**：Server Actions 实现（充值/余额调整/兑换码生成/设置保存）、权限细化
+- **Phase B 剩余**：网关 IP/模型白名单校验优化（已实现基础逻辑）
+- **Phase D 剩余**：批量创建 key、分组管理（groupMultiplier）、导出统计
+- **Phase F 剩余**：Server Actions UI 完善（充值/余额调整/兑换码生成前端表单）、权限细化
 
 ---
 
 ## 版本发布
 
 **当前版本**：v0.2.2（2026-06-16）
+**下一版本**：v0.3.0（流式计量 + 定价重构，待发布）
 
 所有版本变更记录见根目录 [`CHANGELOG.md`](CHANGELOG.md)，遵循 [Keep a Changelog](https://keepachangelog.com/) 规范。
 
