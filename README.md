@@ -246,6 +246,7 @@ MIT
 ## 文档
 
 - [`CHANGELOG.md`](CHANGELOG.md) — 版本变更记录（遵循 Keep a Changelog 规范）
+- [`docs/API_ROUTES.md`](docs/API_ROUTES.md) — **API 路由规范**（遵循 new-api 标准约定）
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — 架构与目录结构
 - [`docs/MODELS.md`](docs/MODELS.md) — 模型分类与 Workers AI 要点
 - [`docs/API.md`](docs/API.md) — API 网关用法（OpenAI / Anthropic 兼容）

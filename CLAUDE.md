@@ -13,14 +13,23 @@
 
 ## 开发规范
 
+### API 路由规范（必读）
+
+**本项目遵循 new-api 的标准路由约定**，详见 [`docs/API_ROUTES.md`](docs/API_ROUTES.md)：
+
+- **AI 推理网关**：`/v1/*` — OpenAI/Anthropic 兼容端点（根路径，无 `/api` 前缀）
+- **业务 API**：`/api/*` — 用户/令牌/兑换码等业务逻辑
+- **站内 Playground**：`/api/ai/*` — 需登录的在线生成功能
+
 ### 参考实现（必读）
 
 **所有功能开发和规划前，必须先参考本地 `D:\Download\new-api-main` 的实现**：
 
-1. **后端逻辑**：`model/*.go` + `controller/*.go`
-2. **前端组件**：`web/default/src/features/*/` 
-3. **配置管理**：`setting/operation_setting/*.go`
-4. **数据库设计**：`model/*.go` 中的 struct 定义
+1. **路由设计**：`router/api-router.go` + `router/relay-router.go` — **标准路由约定**
+2. **后端逻辑**：`model/*.go` + `controller/*.go`
+3. **前端组件**：`web/default/src/features/*/` 
+4. **配置管理**：`setting/operation_setting/*.go`
+5. **数据库设计**：`model/*.go` 中的 struct 定义
 
 **参考流程**：
 ```bash
