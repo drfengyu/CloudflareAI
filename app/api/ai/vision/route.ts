@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const result = await runModelJSON<{ response: string }>(
+    const result = await runModelJSON<{ response?: string; description?: string }>(
       model,
       {
         prompt,
@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
       latencyMs: Date.now() - start,
     });
 
-    return Response.json({ text: result.response || "" });
+    return Response.json({ text: result.description || result.response || "" });
   } catch (err) {
     await logUsage({
       userId,
