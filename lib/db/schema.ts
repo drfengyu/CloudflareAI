@@ -28,8 +28,8 @@ export const users = sqliteTable("user", {
   passwordHash: text("passwordHash"),
   /** 1=普通 / 10=管理员 / 100=超管。首个注册用户或 ADMIN_EMAILS 环境变量命中→100。 */
   role: integer("role").notNull().default(1),
-  /** 永久余额（1 credit = $1 USD, CREDITS_PER_USD = 1）。管理员充值到此。 */
-  balanceCredits: integer("balanceCredits").notNull().default(0),
+  /** 永久余额（1 credit = $1 USD, CREDITS_PER_USD = 1）。管理员充值到此。支持小数。 */
+  balanceCredits: real("balanceCredits").notNull().default(0),
   /** 用户分组，影响倍率 (Phase F 实现分组倍率设置)。 */
   group: text("group"),
   /** 1=启用 / 2=禁用 / 3=已删除。 */
@@ -90,10 +90,10 @@ export const apiKeys = sqliteTable("api_key", {
   keyHash: text("keyHash").notNull().unique(),
   /** 1=启用 / 2=禁用 / 3=过期 / 4=额度耗尽 (migrated from revoked boolean). */
   status: integer("status").notNull().default(1),
-  /** 初始总额度（整数 credits）；null = 无限额度。创建时设置，用于计算进度条。 */
-  quotaCredits: integer("quotaCredits"),
-  /** 剩余额度（整数 credits）；null = 无限额度。 */
-  remainCredits: integer("remainCredits"),
+  /** 初始总额度（credits）；null = 无限额度。支持小数。 */
+  quotaCredits: real("quotaCredits"),
+  /** 剩余额度（credits）；null = 无限额度。支持小数。 */
+  remainCredits: real("remainCredits"),
   /** 有效期截止时间；null = 永不过期。 */
   expiresAt: integer("expiresAt", { mode: "timestamp_ms" }),
   /** 允许的模型白名单（JSON array of model IDs）；null = 所有模型。 */
@@ -119,8 +119,8 @@ export const usageLogs = sqliteTable("usage_log", {
   inputTokens: integer("inputTokens").default(0),
   outputTokens: integer("outputTokens").default(0),
   neurons: real("neurons").default(0),
-  /** 本次调用消耗的 credits（从 Phase B 起计量生效）。 */
-  creditsUsed: integer("creditsUsed").default(0),
+  /** 本次调用消耗的 credits（从 Phase B 起计量生效）。支持小数。 */
+  creditsUsed: real("creditsUsed").default(0),
   costUsd: real("costUsd").default(0),
   /** ok | error */
   status: text("status").notNull(),
@@ -209,8 +209,8 @@ export const temporaryBalances = sqliteTable("temporary_balance", {
   userId: text("userId")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  /** 临时余额金额（credits）。 */
-  amount: integer("amount").notNull(),
+  /** 临时余额金额（credits）。支持小数。 */
+  amount: real("amount").notNull(),
   /** 过期时间。 */
   expiresAt: integer("expiresAt", { mode: "timestamp_ms" }).notNull(),
   /** 关联的兑换码 ID（可选）。 */

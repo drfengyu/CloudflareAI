@@ -36,19 +36,19 @@ export default async function AdminSettingsPage() {
     <>
       <PageHeader
         title="系统设置"
-        description="管理平台配置、定价倍率、功能开关"
+        description="管理平台配置、功能开关"
       />
 
       <div className="space-y-6 p-8">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">定价倍率</CardTitle>
+            <CardTitle className="text-base">基础设置</CardTitle>
           </CardHeader>
           <CardContent>
             <SettingsForm
               initialSettings={{
-                priceMultiplierHosted: settings.priceMultiplierHosted || "1000",
-                priceMultiplierProxied: settings.priceMultiplierProxied || "1",
+                siteName: settings.siteName || "Cloudflare AI Console",
+                defaultBalanceValidDays: settings.defaultBalanceValidDays || "365",
               }}
             />
           </CardContent>

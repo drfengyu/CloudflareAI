@@ -1,17 +1,16 @@
 import { auth } from "@/auth";
 import { db } from "@/lib/db/d1-http";
-import { usageLogs, users, apiKeys } from "@/lib/db/schema";
+import { usageLogs, users, apiKeys, temporaryBalances } from "@/lib/db/schema";
 import { calculateCredits } from "@/lib/billing/pricing";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and, gt } from "drizzle-orm";
 
 /**
  * 用量记账 + 扣费（Phase B 起生效）：
  * 1. 计算 credits（基于 catalog 定价 + token 数）。
- * 2. 扣减 user.balanceCredits 和 apiKey.remainCredits（如果非 null）。
- * 3. 写入 usage_log（含 creditsUsed）。
- * 4. 更新 api_key.lastUsedAt 和状态（额度耗尽→4）。
- *
- * 调用前应已校验余额充足（verifyBalance），此处仅扣减；如扣减失败（余额不足）则抛错回滚。
+ * 2. 扣减用户余额（优先扣临时余额，最早过期的先扣；不够再扣永久余额）。
+ * 3. 扣减 apiKey.remainCredits（如果非 null）。
+ * 4. 写入 usage_log（含 creditsUsed）。
+ * 5. 更新 api_key.lastUsedAt 和状态（额度耗尽→4）。
  */
 export async function logUsage(input: {
   userId: string;
@@ -43,15 +42,9 @@ export async function logUsage(input: {
         )
       : 0;
 
-  // 只有成功的调用才扣费（error 已在上面记为 0 credits）
+  // 只有成功的调用才扣费
   if (input.status === "ok" && creditsUsed > 0) {
-    // 扣减用户余额
-    await db
-      .update(users)
-      .set({
-        balanceCredits: sql`${users.balanceCredits} - ${creditsUsed}`,
-      })
-      .where(eq(users.id, input.userId));
+    await deductCredits(input.userId, creditsUsed);
 
     // 扣减令牌额度（如果有限制）
     if (input.apiKeyId) {
@@ -101,6 +94,94 @@ export async function logUsage(input: {
 }
 
 /**
+ * 从用户余额中扣减 credits。
+ * 策略：优先扣临时余额（最早过期的先扣），不够再扣永久余额。
+ * 不允许过度扣减（不会让余额变负）。
+ */
+async function deductCredits(userId: string, amount: number): Promise<void> {
+  let remaining = amount;
+  const now = new Date();
+
+  // 1. 获取所有未过期的临时余额，按过期时间升序（最早过期的先扣）
+  const tempBalances = await db
+    .select()
+    .from(temporaryBalances)
+    .where(
+      and(
+        eq(temporaryBalances.userId, userId),
+        gt(temporaryBalances.expiresAt, now),
+      ),
+    )
+    .orderBy(temporaryBalances.expiresAt);
+
+  // 2. 逐个扣减临时余额
+  for (const tb of tempBalances) {
+    if (remaining <= 0) break;
+
+    if (tb.amount <= remaining) {
+      // 临时余额不够扣，全部扣完并删除
+      remaining -= tb.amount;
+      await db
+        .delete(temporaryBalances)
+        .where(eq(temporaryBalances.id, tb.id));
+    } else {
+      // 临时余额够扣，部分扣减
+      await db
+        .update(temporaryBalances)
+        .set({ amount: tb.amount - remaining })
+        .where(eq(temporaryBalances.id, tb.id));
+      remaining = 0;
+    }
+  }
+
+  // 3. 临时余额不够，扣永久余额
+  if (remaining > 0) {
+    await db
+      .update(users)
+      .set({
+        balanceCredits: sql`MAX(0, ${users.balanceCredits} - ${remaining})`,
+      })
+      .where(eq(users.id, userId));
+  }
+}
+
+/**
+ * 获取用户总可用余额（永久 + 未过期临时）。
+ */
+export async function getUserTotalBalance(userId: string): Promise<{
+  permanent: number;
+  temporary: number;
+  total: number;
+}> {
+  const userRows = await db
+    .select({ balanceCredits: users.balanceCredits })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  const permanent = userRows[0]?.balanceCredits ?? 0;
+
+  const now = new Date();
+  const tempBalances = await db
+    .select({ amount: temporaryBalances.amount })
+    .from(temporaryBalances)
+    .where(
+      and(
+        eq(temporaryBalances.userId, userId),
+        gt(temporaryBalances.expiresAt, now),
+      ),
+    );
+
+  const temporary = tempBalances.reduce((sum, tb) => sum + tb.amount, 0);
+
+  return {
+    permanent,
+    temporary,
+    total: permanent + temporary,
+  };
+}
+
+/**
  * 校验用户余额和令牌额度是否充足（调用前置检查）。
  * 返回 { ok: true } 或 { ok: false, reason: string }。
  */
@@ -109,14 +190,10 @@ export async function verifyBalance(
   apiKeyId: string | undefined,
   estimatedCredits: number,
 ): Promise<{ ok: boolean; reason?: string }> {
-  // 查用户余额
-  const userRows = await db
-    .select({ balanceCredits: users.balanceCredits })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  // 查用户总余额（永久 + 未过期临时）
+  const balance = await getUserTotalBalance(userId);
 
-  if (!userRows[0] || userRows[0].balanceCredits < estimatedCredits) {
+  if (balance.total < estimatedCredits) {
     return { ok: false, reason: "Insufficient balance" };
   }
 

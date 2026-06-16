@@ -31,6 +31,7 @@ interface NavItem {
 interface NavGroup {
   title: string;
   items: NavItem[];
+  adminOnly?: boolean;
 }
 
 const NAV: NavGroup[] = [
@@ -65,6 +66,7 @@ const NAV: NavGroup[] = [
   },
   {
     title: "管理",
+    adminOnly: true,
     items: [
       { href: "/admin/users", label: "用户管理", icon: Users },
       { href: "/admin/redemptions", label: "兑换码", icon: Ticket },
@@ -73,8 +75,11 @@ const NAV: NavGroup[] = [
   },
 ];
 
-export function Sidebar() {
+export function Sidebar({ userRole = 1 }: { userRole?: number }) {
   const pathname = usePathname();
+
+  // Filter out admin-only groups for non-admin users (role < 10)
+  const visibleGroups = NAV.filter((group) => !group.adminOnly || userRole >= 10);
 
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
@@ -89,7 +94,7 @@ export function Sidebar() {
       </Link>
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-2">
-        {NAV.map((group) => (
+        {visibleGroups.map((group) => (
           <div key={group.title}>
             <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               {group.title}

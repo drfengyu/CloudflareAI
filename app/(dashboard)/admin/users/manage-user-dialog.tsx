@@ -110,8 +110,9 @@ export function ManageUserDialog({ user, currentUserId }: ManageUserDialogProps)
                 </label>
                 <input
                   type="number"
+                  step="0.01"
                   value={amount}
-                  onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
+                  onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
                   className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
                   placeholder="正数充值，负数扣减"
                 />

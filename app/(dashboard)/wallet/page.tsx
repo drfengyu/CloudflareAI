@@ -9,6 +9,7 @@ import { Wallet, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { RedeemCodeDialog } from "./redeem-code-dialog";
+import { formatCredits } from "@/lib/billing/credits";
 
 export const dynamic = "force-dynamic";
 
@@ -66,14 +67,14 @@ export default async function WalletPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">总余额</p>
-                <p className="text-2xl font-semibold">{totalBalance.toLocaleString()} credits</p>
+                <p className="text-2xl font-semibold">{formatCredits(totalBalance)} credits</p>
                 <p className="text-xs text-muted-foreground">≈ ${balanceUsd} USD</p>
                 <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
-                  <span>永久: {permanentBalance.toLocaleString()} cr</span>
+                  <span>永久: {formatCredits(permanentBalance)} cr</span>
                   {temporaryTotal > 0 && (
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      临时: {temporaryTotal.toLocaleString()} cr
+                      临时: {formatCredits(temporaryTotal)} cr
                     </span>
                   )}
                 </div>
@@ -97,7 +98,7 @@ export default async function WalletPage() {
                     className="flex items-center justify-between rounded-lg border border-border bg-surface p-3"
                   >
                     <div>
-                      <p className="text-sm font-medium">{tb.amount.toLocaleString()} credits</p>
+                      <p className="text-sm font-medium">{formatCredits(tb.amount)} credits</p>
                       <p className="text-xs text-muted-foreground">{tb.description}</p>
                     </div>
                     <div className="text-right">
@@ -146,7 +147,7 @@ export default async function WalletPage() {
                     </div>
                     <div className="text-right">
                       <p className="text-lg font-semibold text-success">
-                        +{record.amount.toLocaleString()} cr
+                        +{formatCredits(record.amount)} cr
                       </p>
                       <p className="text-xs text-muted-foreground">
                         ≈ ${record.amount.toFixed(2)}

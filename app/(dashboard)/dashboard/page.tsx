@@ -1,16 +1,16 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { requireUser } from "@/lib/usage/meter";
+import { requireUser, getUserTotalBalance } from "@/lib/usage/meter";
 import {
   getTodayUsage,
   getMonthUsage,
-  getUserBalance,
   getRecentUsage,
   getDailyUsage,
   getUsageByModel,
   getHourlyUsageToday,
 } from "@/lib/usage/queries";
+import { formatCredits } from "@/lib/billing/credits";
 import { Activity, Wallet, TrendingUp, Clock } from "lucide-react";
 import { UsageTrendChart } from "@/components/dashboard/usage-trend-chart";
 import { ModelDistributionChart } from "@/components/dashboard/model-distribution-chart";
@@ -28,18 +28,19 @@ export default async function DashboardPage({
   const range = params.range || "today"; // today | week | month
 
   // 使用 try-catch 包裹每个查询，防止单个查询失败导致整个页面崩溃
-  const [today, month, balance, recent, hourlyUsage, dailyUsage, modelUsage] = await Promise.all([
+  const [today, month, balanceInfo, recent, hourlyUsage, dailyUsage, modelUsage] = await Promise.all([
     getTodayUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 })),
     getMonthUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 })),
-    getUserBalance(userId).catch(() => 0),
+    getUserTotalBalance(userId).catch(() => ({ permanent: 0, temporary: 0, total: 0 })),
     getRecentUsage(userId, 10).catch(() => []),
     getHourlyUsageToday(userId).catch(() => []),
     getDailyUsage(userId, range === "month" ? 30 : 7).catch(() => []),
     getUsageByModel(userId, 30).catch(() => []),
   ]);
 
-  const todayUsd = today.totalCredits / 100; // 100 credits = $1
-  const balanceUsd = balance / 100;
+  const balance = balanceInfo.total; // 总余额（永久+临时）
+  const todayUsd = today.totalCredits; // 1 credit = $1
+  const balanceUsd = balance; // 1 credit = $1
 
   return (
     <>
@@ -53,14 +54,18 @@ export default async function DashboardPage({
           <StatCard
             icon={<Wallet className="h-5 w-5" />}
             label="当前余额"
-            value={`${balance.toLocaleString()} credits`}
-            subtitle={`≈ $${balanceUsd.toFixed(2)}`}
+            value={`${formatCredits(balance)} cr`}
+            subtitle={
+              balanceInfo.temporary > 0
+                ? `≈ $${balanceUsd.toFixed(2)} · 永久 ${formatCredits(balanceInfo.permanent)} + 临时 ${formatCredits(balanceInfo.temporary)}`
+                : `≈ $${balanceUsd.toFixed(2)}`
+            }
             tone="primary"
           />
           <StatCard
             icon={<TrendingUp className="h-5 w-5" />}
             label="今日消耗"
-            value={`${Math.round(today.totalCredits).toLocaleString()} credits`}
+            value={`${formatCredits(today.totalCredits)} cr`}
             subtitle={`≈ $${todayUsd.toFixed(4)}`}
             tone={today.totalCredits > balance * 0.1 ? "warning" : "success"}
           />
@@ -74,17 +79,17 @@ export default async function DashboardPage({
             icon={<Clock className="h-5 w-5" />}
             label="本月调用"
             value={month.totalCalls}
-            subtitle={`${Math.round(month.totalCredits).toLocaleString()} credits`}
+            subtitle={`${formatCredits(month.totalCredits)} cr`}
             tone="muted"
           />
         </div>
 
         {/* 余额警示 */}
-        {balance < 1000 && (
+        {balance < 1 && (
           <Card className="border-warning bg-warning/5">
             <CardContent className="pt-5">
               <p className="text-sm text-warning">
-                ⚠️ 余额不足 1000 credits（$10），请及时充值以免影响使用
+                ⚠️ 余额不足 $1，请及时充值以免影响使用
               </p>
             </CardContent>
           </Card>
@@ -212,8 +217,8 @@ export default async function DashboardPage({
 
                       {/* 右侧：指标 */}
                       <div className="flex items-center gap-3 text-muted-foreground whitespace-nowrap">
-                        <span className="font-medium w-[60px] text-right">
-                          {log.creditsUsed ? `${Math.round(log.creditsUsed)} cr` : "—"}
+                        <span className="font-medium w-[80px] text-right">
+                          {log.creditsUsed ? `${formatCredits(log.creditsUsed)} cr` : "—"}
                         </span>
                         <span className="w-[50px] text-right">{log.latencyMs ? `${(log.latencyMs / 1000).toFixed(2)}s` : "—"}</span>
                         <span className="text-[11px] w-[80px] text-right">

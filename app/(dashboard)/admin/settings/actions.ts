@@ -6,9 +6,23 @@ import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { revalidatePath } from "next/cache";
 
-export async function updatePricingSettings(formData: {
-  priceMultiplierHosted: string;
-  priceMultiplierProxied: string;
+async function upsertOption(key: string, value: string) {
+  const existing = await db
+    .select()
+    .from(options)
+    .where(eq(options.key, key))
+    .limit(1);
+
+  if (existing[0]) {
+    await db.update(options).set({ value }).where(eq(options.key, key));
+  } else {
+    await db.insert(options).values({ key, value });
+  }
+}
+
+export async function updateBasicSettings(formData: {
+  siteName: string;
+  defaultBalanceValidDays: string;
 }) {
   const currentUserId = await requireUser();
 
@@ -24,53 +38,18 @@ export async function updatePricingSettings(formData: {
   }
 
   // 验证输入
-  const hostedMultiplier = parseFloat(formData.priceMultiplierHosted);
-  const proxiedMultiplier = parseFloat(formData.priceMultiplierProxied);
-
-  if (isNaN(hostedMultiplier) || hostedMultiplier <= 0) {
-    throw new Error("Hosted 倍率必须是正数");
+  if (!formData.siteName.trim()) {
+    throw new Error("站点名称不能为空");
   }
 
-  if (isNaN(proxiedMultiplier) || proxiedMultiplier <= 0) {
-    throw new Error("Proxied 倍率必须是正数");
+  const days = parseInt(formData.defaultBalanceValidDays);
+  if (isNaN(days) || days <= 0) {
+    throw new Error("有效期必须是正整数");
   }
 
-  // 更新或插入设置
-  const existingHosted = await db
-    .select()
-    .from(options)
-    .where(eq(options.key, "priceMultiplierHosted"))
-    .limit(1);
-
-  const existingProxied = await db
-    .select()
-    .from(options)
-    .where(eq(options.key, "priceMultiplierProxied"))
-    .limit(1);
-
-  if (existingHosted[0]) {
-    await db
-      .update(options)
-      .set({ value: formData.priceMultiplierHosted })
-      .where(eq(options.key, "priceMultiplierHosted"));
-  } else {
-    await db.insert(options).values({
-      key: "priceMultiplierHosted",
-      value: formData.priceMultiplierHosted,
-    });
-  }
-
-  if (existingProxied[0]) {
-    await db
-      .update(options)
-      .set({ value: formData.priceMultiplierProxied })
-      .where(eq(options.key, "priceMultiplierProxied"));
-  } else {
-    await db.insert(options).values({
-      key: "priceMultiplierProxied",
-      value: formData.priceMultiplierProxied,
-    });
-  }
+  // 更新设置
+  await upsertOption("siteName", formData.siteName.trim());
+  await upsertOption("defaultBalanceValidDays", formData.defaultBalanceValidDays);
 
   revalidatePath("/admin/settings");
   return { success: true };

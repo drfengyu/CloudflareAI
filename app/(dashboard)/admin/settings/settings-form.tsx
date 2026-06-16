@@ -2,19 +2,21 @@
 
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { updatePricingSettings } from "./actions";
+import { updateBasicSettings } from "./actions";
 import { toast } from "sonner";
 
 interface SettingsFormProps {
   initialSettings: {
-    priceMultiplierHosted: string;
-    priceMultiplierProxied: string;
+    siteName: string;
+    defaultBalanceValidDays: string;
   };
 }
 
 export function SettingsForm({ initialSettings }: SettingsFormProps) {
-  const [hosted, setHosted] = useState(initialSettings.priceMultiplierHosted);
-  const [proxied, setProxied] = useState(initialSettings.priceMultiplierProxied);
+  const [siteName, setSiteName] = useState(initialSettings.siteName);
+  const [defaultBalanceValidDays, setDefaultBalanceValidDays] = useState(
+    initialSettings.defaultBalanceValidDays,
+  );
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,9 +24,9 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
     setLoading(true);
 
     try {
-      await updatePricingSettings({
-        priceMultiplierHosted: hosted,
-        priceMultiplierProxied: proxied,
+      await updateBasicSettings({
+        siteName,
+        defaultBalanceValidDays,
       });
       toast.success("设置已保存");
     } catch (error) {
@@ -37,34 +39,33 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label className="block text-sm font-medium mb-1">
-          Hosted 模型倍率
-        </label>
+        <label className="block text-sm font-medium mb-1">站点名称</label>
         <input
-          type="number"
-          value={hosted}
-          onChange={(e) => setHosted(e.target.value)}
+          type="text"
+          value={siteName}
+          onChange={(e) => setSiteName(e.target.value)}
           className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-          placeholder="1000"
+          placeholder="Cloudflare AI Console"
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          消耗平台神经元配额的模型，建议 1000 倍以上
+          显示在浏览器标题栏和页面顶部
         </p>
       </div>
 
       <div>
         <label className="block text-sm font-medium mb-1">
-          Proxied 模型倍率
+          兑换码默认余额有效期（天）
         </label>
         <input
           type="number"
-          value={proxied}
-          onChange={(e) => setProxied(e.target.value)}
+          value={defaultBalanceValidDays}
+          onChange={(e) => setDefaultBalanceValidDays(e.target.value)}
+          min={1}
           className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
-          placeholder="1"
+          placeholder="365"
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          第三方计费模型，建议 1 倍（按实际价格）
+          生成兑换码时的默认有效期（充值后余额的过期时间）
         </p>
       </div>
 
