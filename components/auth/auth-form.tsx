@@ -75,22 +75,24 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         <span className="h-px flex-1 bg-border" />
       </div>
 
-      <form action={githubSignIn}>
-        <Button type="submit" variant="outline" className="w-full">
-          <GithubIcon className="h-4 w-4" />
-          使用 GitHub 继续
-        </Button>
-      </form>
+      <div className="space-y-2">
+        <form action={githubSignIn}>
+          <Button type="submit" variant="outline" className="w-full">
+            <GithubIcon className="h-4 w-4" />
+            使用 GitHub 继续
+          </Button>
+        </form>
 
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={() => signIn("linuxdo", { callbackUrl: "/dashboard" })}
-      >
-        <IconLinuxDo className="h-4 w-4" />
-        使用 LinuxDO 继续
-      </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => signIn("linuxdo", { callbackUrl: "/dashboard" })}
+        >
+          <IconLinuxDo className="h-4 w-4" />
+          使用 LinuxDO 继续
+        </Button>
+      </div>
 
       <p className="mt-5 text-center text-xs text-muted-foreground">
         {isLogin ? (
