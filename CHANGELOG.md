@@ -7,9 +7,23 @@
 
 ## [未发布]
 
+### 新增
+
+- **流式真实计量**
+  - 拦截 OpenAI/Anthropic gateway 和 playground 的 SSE 流
+  - 解析末尾 `usage` chunk 拿到真实 `prompt_tokens` / `completion_tokens`
+  - 使用 Next.js 15 `after()` API 确保 Vercel serverless 在响应后继续运行 `logUsage`
+  - 验证：outputTokens 从估算值 2048 降到真实值（如 16 tokens）
+- **模型定价重构**
+  - 替换原先的「官方价 ×1000 + 阈值调整」公式为**分类线性映射**
+  - 8 个价格区间分桶（textSmall/Medium/Large, embeddings, translate, vision, classify, speech）
+  - 桶内按官方价排序后线性映射到 OpenAI 主流价格区间
+  - 类内极差大幅收敛：classify 2112× → 3×、text 246× → 35×（含 3 档）、speech 73× → 4×
+  - 管理员调整的 multiplier 在 sync 时保留（不被覆盖）
+
 ### 规划中
 
-- **Phase B 剩余**：流式结束计量、网关 IP/模型白名单校验
+- **Phase B 剩余**：网关 IP/模型白名单校验
 - **Phase F 剩余**：Server Actions 实现（兑换码生成 UI、用户余额调整 UI）
 - **管理后台签到配置界面**（`/admin/settings`）
 
