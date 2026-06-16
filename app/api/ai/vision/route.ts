@@ -49,11 +49,25 @@ export async function POST(req: NextRequest) {
   const start = Date.now();
 
   try {
+    // Cloudflare llava-1.5-7b-hf 需要 u8 字节数组（每个字节 0-255 的数字），
+    // 不是 base64 字符串。先剥离 data URL 前缀，再解码为字节数组。
+    const base64 = image.includes(",") ? image.split(",")[1] : image;
+    let imageBytes: number[];
+    try {
+      const binaryString = atob(base64);
+      imageBytes = Array.from(binaryString, (c) => c.charCodeAt(0));
+    } catch {
+      return Response.json(
+        { error: "Invalid image data: not valid base64" },
+        { status: 400 },
+      );
+    }
+
     const result = await runModelJSON<{ response: string }>(
       model,
       {
         prompt,
-        image: [image.split(",")[1]], // strip data URL prefix, send base64 array
+        image: imageBytes,
         max_tokens,
       },
       req.signal,
