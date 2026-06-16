@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { after } from "next/server";
 import { z } from "zod";
 import { openaiCompatible } from "@/lib/cloudflare/ai";
 import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
@@ -98,9 +99,10 @@ export async function POST(req: NextRequest) {
       // Cloudflare 即使不传 stream_options 也会发 usage chunk，所以无需改请求体。
       const { stream: tap, done } = interceptOpenAIStream(res.body);
 
-      // 后台等待流读完，拿到真实 usage 后才计量。
-      // 注意：不能 await，否则会阻塞返回。
-      done.then(async ({ usage }) => {
+      // 用 next/server 的 after() 让 Vercel 在响应结束后继续运行（serverless
+      // 默认在 response return 时立即终止函数，会让 done 的 .then() 丢失）。
+      after(async () => {
+        const { usage } = await done;
         await logUsage({
           userId,
           apiKeyId,
@@ -112,7 +114,7 @@ export async function POST(req: NextRequest) {
           status: "ok",
           latencyMs: Date.now() - start,
         });
-      }).catch(console.error);
+      });
 
       return new Response(tap, {
         headers: {

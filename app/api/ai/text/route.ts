@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { after } from "next/server";
 import { z } from "zod";
 import { openaiCompatible } from "@/lib/cloudflare/ai";
 import { requireUser, logUsage, verifyBalance, getDefaultApiKey } from "@/lib/usage/meter";
@@ -91,7 +92,9 @@ export async function POST(req: NextRequest) {
       // 流式：拦截 SSE，结束后用真实 token 数计量 + 保存对话历史。
       const { stream: tap, done } = interceptOpenAIStream(res.body);
 
-      done.then(async ({ usage, content }) => {
+      // after() 让 Vercel serverless 在响应结束后保持运行直到完成 logUsage 和 saveConversation。
+      after(async () => {
+        const { usage, content } = await done;
         const inputTokens = usage?.promptTokens ?? Math.floor(estimatedInput);
         const outputTokens = usage?.completionTokens ?? 0;
         const creditsUsed = await calculateCredits(model, inputTokens, outputTokens);
@@ -121,7 +124,7 @@ export async function POST(req: NextRequest) {
             creditsUsed,
           });
         }
-      }).catch(console.error);
+      });
 
       return new Response(tap, {
         headers: {

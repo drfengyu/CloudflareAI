@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { after } from "next/server";
 import { z } from "zod";
 import { openaiCompatible } from "@/lib/cloudflare/ai";
 import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
@@ -103,7 +104,9 @@ export async function POST(req: NextRequest) {
       // 所以可以直接用 OpenAI 拦截器解析 usage chunk。
       const { stream: tap, done } = interceptOpenAIStream(res.body);
 
-      done.then(async ({ usage }) => {
+      // after() 让 Vercel serverless 在响应结束后保持函数运行直到 logUsage 完成。
+      after(async () => {
+        const { usage } = await done;
         await logUsage({
           userId,
           apiKeyId,
@@ -115,7 +118,7 @@ export async function POST(req: NextRequest) {
           status: "ok",
           latencyMs: Date.now() - start,
         });
-      }).catch(console.error);
+      });
 
       return new Response(tap, {
         headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
