@@ -171,12 +171,157 @@
 - **Phase B 剩余**：流式结束计量（当前流式按估算扣费）、网关 IP/模型白名单校验
 - **Phase D 剩余**：批量创建 key、分组管理、导出统计
 - **Phase E & F 剩余**：Server Actions 实现（充值/余额调整/兑换码生成/设置保存）、权限细化
+- **签到功能**（2026-06-16 新增）：参考 `D:\Download\new-api-main` 实现日历签到
+
+---
+
+## 签到功能设计（Phase G — 用户留存）
+
+### 数据库设计
+
+```sql
+-- 签到记录表
+CREATE TABLE checkin (
+  id TEXT PRIMARY KEY,
+  userId TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  checkinDate TEXT NOT NULL,  -- YYYY-MM-DD 格式
+  quotaAwarded REAL NOT NULL, -- 本次签到奖励的 credits
+  createdAt INTEGER NOT NULL, -- 签到时间戳
+  UNIQUE(userId, checkinDate) -- 每人每天只能签到一次
+);
+
+-- 签到设置（存储在 option 表）
+-- key: "checkin_enabled", value: "true" / "false"
+-- key: "checkin_min_quota", value: "10"
+-- key: "checkin_max_quota", value: "100"
+```
+
+### 后端 API
+
+**路由**：
+- `GET /api/user/checkin?month=YYYY-MM` - 获取签到状态和历史记录
+- `POST /api/user/checkin` - 执行签到
+
+**Server Actions**（`app/(dashboard)/wallet/actions.ts`）：
+```typescript
+export async function getCheckinStatus(month: string): Promise<{
+  enabled: boolean;
+  minQuota: number;
+  maxQuota: number;
+  stats: {
+    totalQuota: number;      // 累计获得额度
+    totalCheckins: number;   // 累计签到次数
+    checkinCount: number;    // 本月签到次数
+    checkedInToday: boolean; // 今天是否已签到
+    records: Array<{         // 本月签到记录
+      checkinDate: string;
+      quotaAwarded: number;
+    }>;
+  };
+}>;
+
+export async function performCheckin(): Promise<{
+  success: boolean;
+  quotaAwarded?: number;
+  checkinDate?: string;
+  message?: string;
+}>;
+```
+
+**逻辑要点**：
+1. 检查签到功能是否启用（`option.checkin_enabled`）
+2. 检查今天是否已签到（防止重复）
+3. 随机生成奖励额度（minQuota ~ maxQuota 之间）
+4. 原子操作：插入 checkin 记录 + 增加 user.balanceCredits + 记录 topup 流水
+5. D1 不支持嵌套事务，需手动回滚（失败时删除 checkin 记录）
+
+### 前端组件
+
+**位置**：`/wallet` 页面顶部
+
+**组件结构**（参考 new-api）：
+```
+CheckinCalendarCard
+├─ Header（标题 + "已签到" 徽章 + 签到按钮）
+├─ Stats（累计签到次数 / 本月获得 / 累计获得）
+├─ Calendar（月份导航 + 日历网格）
+│  ├─ 周日-周六表头
+│  ├─ 日期格子（已签到的显示绿点 + Tooltip 显示奖励）
+│  └─ 当前日期高亮
+└─ Footer（签到规则说明）
+```
+
+**交互**：
+- 可折叠（默认已签到时收起，未签到时展开）
+- 月份切换（上/下月）
+- 悬停已签到日期显示奖励额度
+- 签到按钮防抖（loading 状态）
+- Toast 提示签到成功/失败
+
+**状态管理**：
+- 使用 `@tanstack/react-query` 缓存签到状态
+- 签到成功后自动 refetch 更新日历
+
+### 管理后台配置
+
+**位置**：`/admin/settings` 新增"签到设置"区块
+
+**配置项**：
+- ☑ 启用签到功能
+- 最小奖励额度（cr）：`10`
+- 最大奖励额度（cr）：`100`
+
+**保存逻辑**：
+- 更新 `option` 表的 `checkin_enabled`、`checkin_min_quota`、`checkin_max_quota` 键值
+- 实时生效（无需重启）
+
+### Schema 扩展
+
+```typescript
+// lib/db/schema.ts
+export const checkins = sqliteTable("checkin", {
+  id: text("id").primaryKey().$defaultFn(uuid),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  checkinDate: text("checkinDate").notNull(), // YYYY-MM-DD
+  quotaAwarded: real("quotaAwarded").notNull(),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+}, (table) => ({
+  uniqueUserDate: unique().on(table.userId, table.checkinDate),
+}));
+
+export type Checkin = typeof checkins.$inferSelect;
+```
+
+### 实现优先级
+
+1. **后端基础**（优先）：
+   - 创建 checkin 表
+   - Server Actions：`getCheckinStatus` + `performCheckin`
+   - 签到逻辑（防重复 + 随机奖励 + 余额更新）
+
+2. **前端组件**（核心）：
+   - CheckinCalendarCard 组件
+   - 日历网格渲染
+   - 签到按钮 + Toast 反馈
+
+3. **管理后台**（补充）：
+   - 签到设置界面
+   - 启用/禁用开关
+   - 奖励额度配置
+
+### 参考文件
+
+- 后端逻辑：`D:\Download\new-api-main\model\checkin.go`
+- 前端组件：`D:\Download\new-api-main\web\default\src\features\profile\components\checkin-calendar-card.tsx`
+- 配置管理：`D:\Download\new-api-main\setting\operation_setting\checkin_setting.go`
 
 ---
 
 ## 版本发布
 
-**当前版本**：v0.2.0（2026-06-15）
+**当前版本**：v0.2.1（2026-06-16）
 
 所有版本变更记录见根目录 [`CHANGELOG.md`](CHANGELOG.md)，遵循 [Keep a Changelog](https://keepachangelog.com/) 规范。
 
