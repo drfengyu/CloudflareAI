@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "./d1-http";
-import { users, quotas, type User } from "./schema";
+import { users, quotas, topups, type User } from "./schema";
 
 /** Look up a user by (lowercased) email. */
 export async function getUserByEmail(email: string): Promise<User | undefined> {
@@ -41,14 +41,27 @@ export async function createCredentialUser(input: {
   // role: 100=superadmin, 10=admin, 1=user
   const role = isFirstUser || isAdminEmail ? 100 : 1;
 
+  // New user welcome bonus: 2000 credits
+  const WELCOME_BONUS = 2000;
+
   await db.insert(users).values({
     id,
     email,
     passwordHash: input.passwordHash,
     name: input.name ?? email.split("@")[0],
     role,
-    balanceCredits: 0, // Phase B: start with 0 balance (admin can grant via redemption/topup)
+    balanceCredits: WELCOME_BONUS, // Welcome bonus for new users
     status: 1, // 1=enabled
+  });
+
+  // Record the welcome bonus as a topup
+  await db.insert(topups).values({
+    id: crypto.randomUUID(),
+    userId: id,
+    amount: WELCOME_BONUS,
+    type: 4, // 4=other (welcome bonus)
+    description: "新用户注册奖励",
+    createdAt: new Date(),
   });
 
   await db.insert(quotas).values({ userId: id }).onConflictDoNothing();
