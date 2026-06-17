@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   if (!token) {
     return Response.json({ error: "Missing API key" }, { status: 401 });
   }
-
+  const start = Date.now();
   const clientIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
   const verified = await verifyApiKey(token, clientIp);
   if (!verified) {
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: balanceCheck.reason }, { status: 402 });
   }
 
-  const start = Date.now();
+
 
   try {
     const res = await openaiCompatible(

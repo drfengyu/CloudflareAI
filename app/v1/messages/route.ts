@@ -44,6 +44,7 @@ const schema = z.object({
  * Phase B: 增强鉴权 + 余额校验 + 真实计量。
  */
 export async function POST(req: NextRequest) {
+  const start = Date.now();
   // Anthropic 使用 x-api-key（裸 token）或 authorization（Bearer token）
   const xApiKey = req.headers.get("x-api-key");
   const authHeader = req.headers.get("authorization");
@@ -113,8 +114,6 @@ export async function POST(req: NextRequest) {
   if (!balanceCheck.ok) {
     return Response.json({ error: { type: "insufficient_balance", message: balanceCheck.reason } }, { status: 402 });
   }
-
-  const start = Date.now();
 
   try {
     // 转 OpenAI 格式

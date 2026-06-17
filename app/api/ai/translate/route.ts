@@ -39,6 +39,7 @@ function langName(code?: string): string | undefined {
  * 计费一律使用上游返回的真实 token usage（不再用 text.length × 1.5 估算）。
  */
 export async function POST(req: NextRequest) {
+  const start = Date.now();
   const userId = await requireUser();
   const apiKeyId = await getDefaultApiKey(userId);
 
@@ -80,8 +81,6 @@ export async function POST(req: NextRequest) {
   if (!balanceCheck.ok) {
     return Response.json({ error: balanceCheck.reason }, { status: 402 });
   }
-
-  const start = Date.now();
 
   try {
     let translated = "";

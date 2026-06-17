@@ -20,6 +20,7 @@ const IMAGE_INPUT_TOKENS = 576;
  * 图像理解（Phase B: 加入余额校验 + 真实扣费）
  */
 export async function POST(req: NextRequest) {
+  const start = Date.now();
   const userId = await requireUser();
   const apiKeyId = await getDefaultApiKey(userId);
 
@@ -61,8 +62,6 @@ export async function POST(req: NextRequest) {
   if (!balanceCheck.ok) {
     return Response.json({ error: balanceCheck.reason }, { status: 402 });
   }
-
-  const start = Date.now();
 
   try {
     // Cloudflare llava-1.5-7b-hf 需要 u8 字节数组（每个字节 0-255 的数字），

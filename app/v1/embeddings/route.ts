@@ -16,6 +16,7 @@ const schema = z.object({
  * OpenAI 兼容嵌入端点（Phase B: 增强鉴权 + 计量）
  */
 export async function POST(req: NextRequest) {
+  const start = Date.now();
   const token = extractBearerToken(req.headers.get("authorization"));
   if (!token) {
     return Response.json({ error: "Missing API key" }, { status: 401 });
@@ -62,8 +63,6 @@ export async function POST(req: NextRequest) {
   if (!balanceCheck.ok) {
     return Response.json({ error: balanceCheck.reason }, { status: 402 });
   }
-
-  const start = Date.now();
 
   try {
     const results = await Promise.all(

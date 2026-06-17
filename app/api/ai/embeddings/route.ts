@@ -15,6 +15,7 @@ const schema = z.object({
  * 文本嵌入（Phase B: 加入余额校验 + 真实扣费）
  */
 export async function POST(req: NextRequest) {
+  const start = Date.now();
   const userId = await requireUser();
   const apiKeyId = await getDefaultApiKey(userId);
 
@@ -55,8 +56,6 @@ export async function POST(req: NextRequest) {
   if (!balanceCheck.ok) {
     return Response.json({ error: balanceCheck.reason }, { status: 402 });
   }
-
-  const start = Date.now();
 
   try {
     const result = await runModelJSON<{ data: Array<{ embedding: number[] }> }>(
