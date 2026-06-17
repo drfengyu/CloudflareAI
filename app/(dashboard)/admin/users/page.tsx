@@ -1,10 +1,9 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { db } from "@/lib/db/d1-http";
 import { users } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
-import { requireUser } from "@/lib/usage/meter";
+import { requireUser, getUserTotalBalance } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
 import { UsersTable } from "./users-table";
 
@@ -43,10 +42,21 @@ export default async function AdminUsersPage() {
     .from(users)
     .orderBy(desc(users.createdAt));
 
-  const data = allUsers.map((u) => ({
-    ...u,
-    roleLabel: roleLabels[u.role || 1] || roleLabels[1],
-  }));
+  // 获取每个用户的真实总余额（永久 + 临时）
+  const usersWithBalance = await Promise.all(
+    allUsers.map(async (u) => {
+      const balance = await getUserTotalBalance(u.id);
+      return {
+        ...u,
+        totalBalance: balance.total,
+        permanentBalance: balance.permanent,
+        temporaryBalance: balance.temporary,
+        roleLabel: roleLabels[u.role || 1] || roleLabels[1],
+      };
+    })
+  );
+
+  const data = usersWithBalance;
 
   return (
     <>

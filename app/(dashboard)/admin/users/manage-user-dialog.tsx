@@ -97,9 +97,15 @@ export function ManageUserDialog({ user, currentUserId }: ManageUserDialogProps)
               <p className="text-sm font-medium">{user.name || user.email}</p>
               <p className="text-xs text-muted-foreground">{user.email}</p>
               <p className="mt-2 text-xs text-muted-foreground">
-                当前余额: {user.balanceCredits.toLocaleString()} cr
-                (≈ ${creditsToUsd(user.balanceCredits).toFixed(4)})
+                当前余额: {user.totalBalance.toLocaleString()} cr
+                (≈ ${creditsToUsd(user.totalBalance).toFixed(4)})
               </p>
+              {user.temporaryBalance > 0 && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  永久: {user.permanentBalance.toLocaleString()} cr +
+                  临时: {user.temporaryBalance.toLocaleString()} cr
+                </p>
+              )}
             </div>
 
             {/* 余额调整 */}

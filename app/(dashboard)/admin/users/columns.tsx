@@ -13,6 +13,9 @@ export interface UserRow {
   name: string | null;
   role: number;
   balanceCredits: number;
+  totalBalance: number;  // 真实总余额（永久 + 临时）
+  permanentBalance: number;  // 永久余额
+  temporaryBalance: number;  // 临时余额
   createdAt: Date | null;
   roleLabel: { label: string; tone: "success" | "warning" | "muted" };
 }
@@ -39,15 +42,23 @@ export function createColumns(currentUserId: string): ColumnDef<UserRow>[] {
       ),
     },
     {
-      accessorKey: "balanceCredits",
+      accessorKey: "totalBalance",
       header: "余额",
       cell: ({ row }) => {
-        const balance = row.original.balanceCredits;
-        const usd = creditsToUsd(balance).toFixed(4);
+        const total = row.original.totalBalance;
+        const permanent = row.original.permanentBalance;
+        const temporary = row.original.temporaryBalance;
+        const usd = creditsToUsd(total).toFixed(4);
+
         return (
           <div className="text-right">
-            <p className="font-medium">{balance.toLocaleString()} cr</p>
+            <p className="font-medium">{total.toLocaleString()} cr</p>
             <p className="text-xs text-muted-foreground">≈ ${usd}</p>
+            {temporary > 0 && (
+              <p className="text-xs text-muted-foreground">
+                (永久 {permanent.toLocaleString()} + 临时 {temporary.toLocaleString()})
+              </p>
+            )}
           </div>
         );
       },

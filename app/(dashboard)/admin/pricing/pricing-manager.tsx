@@ -46,13 +46,24 @@ export function PricingManager({ models }: { models: ModelWithPricing[] }) {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return models.filter((m) => {
+    const filtered = models.filter((m) => {
       if (filter !== "all" && m.category !== filter) return false;
       if (!q) return true;
       return (
         m.id.toLowerCase().includes(q) ||
         m.name.toLowerCase().includes(q)
       );
+    });
+
+    // 按价格从低到高排序
+    return filtered.sort((a, b) => {
+      const priceA = a.pricing?.isImage
+        ? (a.pricing.fixedPrice ?? 0)
+        : (a.pricing?.inputPrice ?? 0);
+      const priceB = b.pricing?.isImage
+        ? (b.pricing.fixedPrice ?? 0)
+        : (b.pricing?.inputPrice ?? 0);
+      return priceA - priceB;
     });
   }, [models, filter, query]);
 

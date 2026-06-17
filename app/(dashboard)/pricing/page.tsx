@@ -14,15 +14,26 @@ export default async function PricingPage() {
     getAllModelPricing(),
   ]);
 
-  // 按类别分组
+  // 按类别分组，并按价格从低到高排序
+  const sortByPrice = (modelsInCategory: typeof models) => {
+    return modelsInCategory.sort((a, b) => {
+      const priceA = getDisplayPrice(a, pricingMap);
+      const priceB = getDisplayPrice(b, pricingMap);
+      // 处理 null 值（排到最后）
+      if (priceA.credits === null) return 1;
+      if (priceB.credits === null) return -1;
+      return priceA.credits - priceB.credits;
+    });
+  };
+
   const categories = {
-    text: models.filter((m) => m.category === "text"),
-    image: models.filter((m) => m.category === "image"),
-    vision: models.filter((m) => m.category === "vision"),
-    embeddings: models.filter((m) => m.category === "embeddings"),
-    translate: models.filter((m) => m.category === "translate"),
-    speech: models.filter((m) => m.category === "speech"),
-    video: models.filter((m) => m.category === "video"),
+    text: sortByPrice(models.filter((m) => m.category === "text")),
+    image: sortByPrice(models.filter((m) => m.category === "image")),
+    vision: sortByPrice(models.filter((m) => m.category === "vision")),
+    embeddings: sortByPrice(models.filter((m) => m.category === "embeddings")),
+    translate: sortByPrice(models.filter((m) => m.category === "translate")),
+    speech: sortByPrice(models.filter((m) => m.category === "speech")),
+    video: sortByPrice(models.filter((m) => m.category === "video")),
   };
 
   const categoryNames = {
