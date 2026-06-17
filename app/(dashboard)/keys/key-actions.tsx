@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { MoreHorizontal, Edit, Trash2, Ban, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toggleApiKeyAction, deleteApiKeyAction } from "./actions";
@@ -11,25 +12,36 @@ interface KeyActionsProps {
   onEdit?: () => void;
 }
 
+const MENU_WIDTH = 160; // w-40
+const MENU_HEIGHT = 128; // 三项菜单的近似高度
+
 export function KeyActions({ keyId, status, onEdit }: KeyActionsProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [dropdownPosition, setDropdownPosition] = useState<"top" | "bottom">("bottom");
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
+  // 计算菜单的 fixed 坐标（基于按钮位置），渲染到 body 以脱离表格 overflow 裁剪
   useEffect(() => {
-    if (open && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
+    if (!open || !buttonRef.current) return;
+    const rect = buttonRef.current.getBoundingClientRect();
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < MENU_HEIGHT && rect.top > spaceBelow;
+    const top = openUp ? rect.top - MENU_HEIGHT - 4 : rect.bottom + 4;
+    const left = Math.max(8, rect.right - MENU_WIDTH);
+    setCoords({ top, left });
+  }, [open]);
 
-      // 如果下方空间不足 150px（菜单高度），且上方空间更多，则向上弹出
-      if (spaceBelow < 150 && spaceAbove > spaceBelow) {
-        setDropdownPosition("top");
-      } else {
-        setDropdownPosition("bottom");
-      }
-    }
+  // 滚动/缩放时关闭菜单，避免坐标失效后悬浮在错误位置
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
   }, [open]);
 
   function handleToggle() {
@@ -65,58 +77,57 @@ export function KeyActions({ keyId, status, onEdit }: KeyActionsProps) {
         <MoreHorizontal className="h-4 w-4" />
       </Button>
 
-      {open && (
-        <>
-          {/* 背景遮罩，点击关闭 */}
-          <div
-            className="fixed inset-0 z-10"
-            onClick={() => setOpen(false)}
-          />
+      {open &&
+        coords &&
+        createPortal(
+          <>
+            {/* 背景遮罩，点击关闭 */}
+            <div className="fixed inset-0 z-50" onClick={() => setOpen(false)} />
 
-          {/* 菜单 - 根据位置智能弹出 */}
-          <div
-            className={`absolute right-0 z-20 w-40 rounded-lg border border-border bg-surface shadow-lg ${
-              dropdownPosition === "top" ? "bottom-full mb-1" : "top-8"
-            }`}
-          >
-            <button
-              onClick={() => {
-                onEdit?.();
-                setOpen(false);
-              }}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2"
+            {/* 菜单 - fixed 定位，渲染在 body 顶层 */}
+            <div
+              className="fixed z-50 w-40 rounded-lg border border-border bg-surface shadow-lg"
+              style={{ top: coords.top, left: coords.left }}
             >
-              <Edit className="h-4 w-4" />
-              编辑
-            </button>
+              <button
+                onClick={() => {
+                  onEdit?.();
+                  setOpen(false);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2"
+              >
+                <Edit className="h-4 w-4" />
+                编辑
+              </button>
 
-            <button
-              onClick={handleToggle}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2"
-            >
-              {status === 1 ? (
-                <>
-                  <Ban className="h-4 w-4" />
-                  禁用
-                </>
-              ) : (
-                <>
-                  <Check className="h-4 w-4" />
-                  启用
-                </>
-              )}
-            </button>
+              <button
+                onClick={handleToggle}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2"
+              >
+                {status === 1 ? (
+                  <>
+                    <Ban className="h-4 w-4" />
+                    禁用
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4" />
+                    启用
+                  </>
+                )}
+              </button>
 
-            <button
-              onClick={handleDelete}
-              className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-danger hover:bg-danger/10"
-            >
-              <Trash2 className="h-4 w-4" />
-              删除
-            </button>
-          </div>
-        </>
-      )}
+              <button
+                onClick={handleDelete}
+                className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-danger hover:bg-danger/10"
+              >
+                <Trash2 className="h-4 w-4" />
+                删除
+              </button>
+            </div>
+          </>,
+          document.body,
+        )}
     </div>
   );
 }

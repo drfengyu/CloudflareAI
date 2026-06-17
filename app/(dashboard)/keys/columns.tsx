@@ -56,22 +56,13 @@ export const columns: ColumnDef<ApiKeyRow>[] = [
       const quota = row.original.quotaCredits;
       const remain = row.original.remainCredits;
       const actualUsed = row.original.actualUsed;
-      const userBalance = row.original.userBalance;
 
-      // 无限额度：显示该 key 实际使用量 / 账户余额
+      // 无限额度：该 key 无单独总额，仅展示累计已用量
       if (remain === null) {
-        const usedPercent = userBalance > 0 ? Math.min(100, (actualUsed / userBalance) * 100) : 0;
-
         return (
           <div className="min-w-[120px]">
-            <p className="text-xs font-medium">{actualUsed.toLocaleString()} / {userBalance.toLocaleString()} cr</p>
-            <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
-              <div
-                className="h-full bg-primary transition-all"
-                style={{ width: `${usedPercent}%` }}
-              />
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">无限额度 · 已用 {usedPercent.toFixed(1)}%</p>
+            <p className="text-xs font-medium">已用 {actualUsed.toLocaleString()} cr</p>
+            <p className="mt-1 text-xs text-muted-foreground">无限额度</p>
           </div>
         );
       }
