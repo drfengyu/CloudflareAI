@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeSwitch } from "@/components/theme/theme-switch";
+import { MobileNav } from "./mobile-nav";
 
 interface HeaderUser {
   name?: string | null;
@@ -21,16 +22,22 @@ interface HeaderUser {
 export function AppHeader({
   user,
   signOutAction,
+  userRole,
+  siteName,
 }: {
   user?: HeaderUser;
   signOutAction: () => void;
+  userRole?: number;
+  siteName?: string;
 }) {
   const label = user?.name || user?.email || "未登录";
   const initial = label.trim().charAt(0).toUpperCase() || "U";
 
   return (
-    <header className="flex h-12 shrink-0 items-center justify-end gap-1 border-b border-border bg-background px-4">
-      <ThemeSwitch />
+    <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background px-4">
+      <MobileNav userRole={userRole} siteName={siteName} />
+      <div className="ml-auto flex items-center gap-1">
+        <ThemeSwitch />
       <DropdownMenu>
         <DropdownMenuTrigger className="ml-1 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring">
           <Avatar className="h-7 w-7">
@@ -65,6 +72,7 @@ export function AppHeader({
           </form>
         </DropdownMenuContent>
       </DropdownMenu>
+      </div>
     </header>
   );
 }

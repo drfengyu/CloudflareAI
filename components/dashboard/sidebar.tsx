@@ -76,22 +76,29 @@ const NAV: NavGroup[] = [
   },
 ];
 
-export function Sidebar({
+/**
+ * 共用的导航内容（品牌头 + 分组链接）。桌面端 Sidebar 与移动端 Sheet 都渲染它。
+ * onNavigate 在每次点击链接后调用，供移动端关闭抽屉。
+ */
+export function SidebarNav({
   userRole = 1,
   siteName = "Cloudflare AI",
+  onNavigate,
 }: {
   userRole?: number;
   siteName?: string;
+  onNavigate?: () => void;
 }) {
   const pathname = usePathname();
-
-  // Filter out admin-only groups for non-admin users (role < 10)
-  const visibleGroups = NAV.filter((group) => !group.adminOnly || userRole >= 10);
+  const visibleGroups = NAV.filter(
+    (group) => !group.adminOnly || userRole >= 10,
+  );
 
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+    <>
       <Link
         href="/dashboard"
+        onClick={onNavigate}
         className="flex items-center gap-2 px-5 py-4 text-sm font-semibold"
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
@@ -116,6 +123,7 @@ export function Sidebar({
                   <li key={item.href}>
                     <Link
                       href={item.href}
+                      onClick={onNavigate}
                       className={cn(
                         "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
                         active
@@ -133,6 +141,23 @@ export function Sidebar({
           </div>
         ))}
       </nav>
+    </>
+  );
+}
+
+/**
+ * 桌面端固定侧边栏（< md 隐藏，由 MobileNav 接管）。
+ */
+export function Sidebar({
+  userRole = 1,
+  siteName = "Cloudflare AI",
+}: {
+  userRole?: number;
+  siteName?: string;
+}) {
+  return (
+    <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
+      <SidebarNav userRole={userRole} siteName={siteName} />
     </aside>
   );
 }

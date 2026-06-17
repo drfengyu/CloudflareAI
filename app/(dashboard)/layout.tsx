@@ -40,7 +40,12 @@ export default async function DashboardLayout({
     <div className="flex h-screen overflow-hidden">
       <Sidebar userRole={userRole} siteName={siteName} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <AppHeader user={session?.user} signOutAction={signOutAction} />
+        <AppHeader
+          user={session?.user}
+          signOutAction={signOutAction}
+          userRole={userRole}
+          siteName={siteName}
+        />
         <main className="flex-1 overflow-y-auto">{children}</main>
       </div>
     </div>
