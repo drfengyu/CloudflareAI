@@ -11,6 +11,7 @@ import {
   getHourlyUsageToday,
 } from "@/lib/usage/queries";
 import { formatCredits, creditsToUsd } from "@/lib/billing/credits";
+import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 import { Activity, Wallet, TrendingUp, Clock } from "lucide-react";
 import { UsageTrendChart } from "@/components/dashboard/usage-trend-chart";
 import { ModelDistributionChart } from "@/components/dashboard/model-distribution-chart";
@@ -42,6 +43,9 @@ export default async function DashboardPage({
   const todayUsd = creditsToUsd(today.totalCredits);
   const balanceUsd = creditsToUsd(balance);
 
+  // 计算显示用余额（负数补正）
+  const displayBalance = calculateDisplayBalance(balanceInfo.permanent, balanceInfo.temporary);
+
   return (
     <>
       <PageHeader
@@ -56,8 +60,8 @@ export default async function DashboardPage({
             label="当前余额"
             value={`${formatCredits(balance)} cr`}
             subtitle={
-              balanceInfo.temporary > 0
-                ? `≈ $${balanceUsd.toFixed(2)} · 永久 ${formatCredits(balanceInfo.permanent)} + 临时 ${formatCredits(balanceInfo.temporary)}`
+              balanceInfo.temporary > 0 || balanceInfo.permanent < 0
+                ? `≈ $${balanceUsd.toFixed(2)} · 永久 ${formatCredits(displayBalance.displayPermanent)} + 临时 ${formatCredits(displayBalance.displayTemporary)}`
                 : `≈ $${balanceUsd.toFixed(2)}`
             }
             tone="primary"

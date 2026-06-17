@@ -11,6 +11,7 @@ import { zhCN } from "date-fns/locale";
 import { RedeemCodeDialog } from "./redeem-code-dialog";
 import { CheckinCalendarCard } from "./checkin-calendar-card";
 import { formatCredits } from "@/lib/billing/credits";
+import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +47,9 @@ export default async function WalletPage() {
   const totalBalance = permanentBalance + temporaryTotal;
   const balanceUsd = totalBalance.toFixed(2);
 
+  // 计算显示用余额（负数补正）
+  const displayBalance = calculateDisplayBalance(permanentBalance, temporaryTotal);
+
   // 获取充值流水
   const topupRecords = await db
     .select()
@@ -77,11 +81,16 @@ export default async function WalletPage() {
                 <p className="text-2xl font-semibold">{formatCredits(totalBalance)} credits</p>
                 <p className="text-xs text-muted-foreground">≈ ${balanceUsd} USD</p>
                 <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
-                  <span>永久: {formatCredits(permanentBalance)} cr</span>
-                  {temporaryTotal > 0 && (
+                  <span>永久: {formatCredits(displayBalance.displayPermanent)} cr</span>
+                  {(temporaryTotal > 0 || permanentBalance < 0) && (
                     <span className="flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      临时: {formatCredits(temporaryTotal)} cr
+                      临时: {formatCredits(displayBalance.displayTemporary)} cr
+                    </span>
+                  )}
+                  {permanentBalance < 0 && temporaryTotal > 0 && (
+                    <span className="text-amber-600 dark:text-amber-400">
+                      (已用临时余额补正)
                     </span>
                   )}
                 </div>
