@@ -156,7 +156,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 架构决策
 
-- **积分单位**：整数 credits，`CREDITS_PER_USD = 500000`（1 credit = $0.000002）。两套账本：`user.balanceCredits` 与 `apiKey.remainCredits`（可无限），请求时都校验、都扣减。neuron 作为技术用量指标保留。
+- **积分单位**：credits（支持小数），`CREDITS_PER_USD = 1`（1 credit = $1 USD）。两套账本：`user.balanceCredits` 与 `apiKey.remainCredits`（可无限），请求时都校验、都扣减。neuron 作为技术用量指标保留。
 - **角色**：`user.role` 数值制 `1=普通 / 10=管理员 / 100=超管`。引导：`ADMIN_EMAILS` 命中或首个注册用户 → 超管。`proxy.ts` + 服务端双重 gate。
 - **令牌状态**：`status` 数值制 `1=启用 / 2=禁用 / 3=过期 / 4=耗尽`（迁移 `revoked`）。
 - **系统设置**：单个 `option(key,value)` KV 表，镜像到带缓存的内存 map（`lib/settings`），复杂值存 JSON。
@@ -271,7 +271,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   - 显示应用倍率后的实际美元价格和 credits
   - 模型来源标识（hosted/proxied）
   - 定价策略说明卡片（hosted ×1000 / proxied ×1 / 图像固定价）
-  - Credits 换算说明（500,000 credits = $1 USD）
+  - Credits 换算说明（1 credit = $1 USD）
 - ✅ 价格计算逻辑：
   - 复用 `lib/billing/display-price.ts`
   - 图像模型显示固定价格（3,000-4,000 cr/张）

@@ -28,8 +28,8 @@ CREATE INDEX idx_checkin_user_date ON checkin(userId, checkinDate);
 | Key | Value | 说明 |
 |-----|-------|------|
 | `checkin_enabled` | `"true"` / `"false"` | 是否启用签到功能 |
-| `checkin_min_quota` | `"10"` | 最小奖励额度 (cr) |
-| `checkin_max_quota` | `"100"` | 最大奖励额度 (cr) |
+| `checkin_min_quota` | `"0.01"` | 最小奖励额度 (cr, 1cr=$1) |
+| `checkin_max_quota` | `"0.1"` | 最大奖励额度 (cr, 1cr=$1) |
 
 ## API 接口
 
