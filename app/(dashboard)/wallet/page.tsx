@@ -41,14 +41,38 @@ export default async function WalletPage() {
   );
   const temporaryTotal = allValidTempBalances.reduce((sum, tb) => sum + tb.amount, 0);
 
-  // 显示用：只显示 >= 100 cr 的临时余额明细
-  const displayTempBalances = allValidTempBalances.filter((tb) => tb.amount >= 100);
+  // 计算显示用余额（负数补正）
+  const displayBalance = calculateDisplayBalance(permanentBalance, temporaryTotal);
+
+  // 临时余额明细显示逻辑：
+  // 1. 如果永久余额为负，计算每条临时余额的"已用于补正"部分
+  // 2. 只显示剩余可用额度 > 0 的临时余额
+  let remainingDeficit = permanentBalance < 0 ? Math.abs(permanentBalance) : 0;
+  const displayTempBalances = allValidTempBalances
+    .sort((a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime()) // 按过期时间排序
+    .map((tb) => {
+      if (remainingDeficit > 0) {
+        // 这条临时余额需要用于补正
+        const usedForCompensation = Math.min(tb.amount, remainingDeficit);
+        remainingDeficit -= usedForCompensation;
+        const availableAmount = tb.amount - usedForCompensation;
+        return {
+          ...tb,
+          displayAmount: availableAmount,
+          usedForCompensation,
+        };
+      }
+      // 无需补正，全部可用
+      return {
+        ...tb,
+        displayAmount: tb.amount,
+        usedForCompensation: 0,
+      };
+    })
+    .filter((tb) => tb.displayAmount >= 0.01); // 只显示剩余 >= 0.01 的
 
   const totalBalance = permanentBalance + temporaryTotal;
   const balanceUsd = totalBalance.toFixed(2);
-
-  // 计算显示用余额（负数补正）
-  const displayBalance = calculateDisplayBalance(permanentBalance, temporaryTotal);
 
   // 获取充值流水
   const topupRecords = await db
@@ -113,8 +137,15 @@ export default async function WalletPage() {
                     key={tb.id}
                     className="flex items-center justify-between rounded-lg border border-border bg-surface p-3"
                   >
-                    <div>
-                      <p className="text-sm font-medium">{formatCredits(tb.amount)} credits</p>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">
+                        {formatCredits(tb.displayAmount)} credits
+                        {tb.usedForCompensation > 0 && (
+                          <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
+                            ({formatCredits(tb.usedForCompensation)} 已用于补正)
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-muted-foreground">{tb.description}</p>
                     </div>
                     <div className="text-right">
