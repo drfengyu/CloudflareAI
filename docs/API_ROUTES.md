@@ -74,7 +74,7 @@ Content-Type: application/json
 #### 3. 模型列表
 ```
 GET /v1/models
-Authorization: Bearer sk-cfai-xxxxx
+（公开，无需鉴权）
 ```
 
 **响应**：

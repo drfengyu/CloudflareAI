@@ -24,8 +24,8 @@
 ### 1. 列出可用模型
 
 ```bash
-curl https://cloudflare-ai-tau.vercel.app/v1/models \
-  -H "Authorization: Bearer sk-cfai-xxxxx"
+# 公开端点，无需 API key
+curl https://cloudflare-ai-tau.vercel.app/v1/models
 ```
 
 **响应示例：**

@@ -1,22 +1,13 @@
-import { NextRequest } from "next/server";
-import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
 
 /**
  * GET /v1/models
- * 列出可用模型（OpenAI 格式）
+ *
+ * 公开的模型列表发现接口（OpenAI 格式），**无需鉴权**。
+ * 仅返回模型 ID 等公开元数据，不涉及用量/账户信息，故和官网 `/pricing`、`/models`
+ * 一样允许匿名访问 —— 方便客户端在配置 API key 之前先发现可用模型。
  */
-export async function GET(req: NextRequest) {
-  const token = extractBearerToken(req.headers.get("authorization"));
-  if (!token) {
-    return Response.json({ error: "Missing API key" }, { status: 401 });
-  }
-
-  const userId = await verifyApiKey(token);
-  if (!userId) {
-    return Response.json({ error: "Invalid or revoked API key" }, { status: 401 });
-  }
-
+export async function GET() {
   const catalog = await fetchModelCatalog();
   const models = catalog
     .filter((m) => m.source === "hosted")
@@ -27,8 +18,16 @@ export async function GET(req: NextRequest) {
       owned_by: "cloudflare",
     }));
 
-  return Response.json({
-    object: "list",
-    data: models,
-  });
+  return Response.json(
+    {
+      object: "list",
+      data: models,
+    },
+    {
+      headers: {
+        // 模型目录变化频率很低，允许 CDN 边缘缓存 5 分钟，stale 1 小时。
+        "Cache-Control": "public, max-age=300, s-maxage=300, stale-while-revalidate=3600",
+      },
+    },
+  );
 }

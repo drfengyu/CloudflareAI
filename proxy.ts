@@ -9,13 +9,15 @@ export default auth;
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - test (test page)
+     * Match all request paths except for:
+     * - api      Business API (handles its own session/API-key auth inline)
+     * - v1       OpenAI/Anthropic-compatible gateway (Bearer API-key auth in
+     *            route handlers; must NOT be redirected to /login or external
+     *            API clients lose access). /v1/models is intentionally public.
+     * - _next/static / _next/image
+     * - favicon.ico
+     * - test     Debug-only page
      */
-    "/((?!api|_next/static|_next/image|favicon.ico|test).*)",
+    "/((?!api|v1|_next/static|_next/image|favicon.ico|test).*)",
   ],
 };

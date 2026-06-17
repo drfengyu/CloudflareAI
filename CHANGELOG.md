@@ -37,6 +37,14 @@
 
 ### 修复
 
+- **`/v1/*` 网关被 Auth.js 中间件错误重定向到 `/login`**（外部 API 客户端不可用）
+  - 根因：路由从 `/api/openai/v1/*` 迁移到 `/v1/*` 后，`proxy.ts` 的 matcher 只排除了 `/api`，
+    导致 `/v1/*` 路径被 next-auth 当作页面访问，未登录会话直接 302 → `/login`，
+    Bearer API key 在路由处理器内根本没机会校验
+  - 修复：matcher 增加排除 `v1`，使 `/v1/*` 不再走 Auth.js 中间件，回到路由内 Bearer 校验
+- **`/v1/models` 改为公开端点**（OpenAI 客户端发现模型不应需要 API key）
+  - 旧逻辑：路由内强制 Bearer 校验
+  - 新逻辑：完全公开，仅返回模型 ID 等公开元数据；加 5 分钟边缘缓存（`Cache-Control: public, s-maxage=300, stale-while-revalidate=3600`）
 - **图像理解（Vision）token 计费**（高估）
   - **输出**：旧逻辑直接把 `max_tokens || 512` 当作实际输出 token 计费，**按上限收钱**而非实际生成长度；
     实测一张 2×2 图返回 `" Red"`（≈1 token），旧逻辑会计费 256–512
