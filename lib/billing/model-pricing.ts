@@ -250,23 +250,29 @@ export async function getPricingConfig() {
 }
 
 /**
- * 图像模型固定定价（$/张）
- * 注意：这些价格不参与 ×1000 基础倍率和调整规则，直接作为最终价格。
+ * 图像模型固定定价（credits/张）
+ *
+ * 定价策略：基于 Cloudflare 官方参考价，调整到合理区间
+ * - FLUX-2 系列：高质量模型，4-3.5 cr/张
+ * - FLUX-1 / SD Lightning：快速模型，3-3.33 cr/张
+ * - 其他 SD 系列：标准模型，3.5 cr/张
+ *
+ * 注意：1 credit = $1 USD，所以价格为 $3-4/张
  */
 const IMAGE_MODEL_PRICING: Record<string, number> = {
-  "@cf/bytedance/stable-diffusion-xl-lightning": 3333,
-  "@cf/black-forest-labs/flux-1-schnell": 3000,
-  "@cf/black-forest-labs/flux-2-dev": 4000,
-  "@cf/black-forest-labs/flux-2-klein-4b": 3500,
-  "@cf/black-forest-labs/flux-2-klein-9b": 3500,
-  "@cf/stabilityai/stable-diffusion-xl-base-1.0": 3500,
-  "@cf/leonardo/lucid-origin": 3500,
-  "@cf/leonardo/phoenix-1.0": 3500,
-  "@cf/lykon/dreamshaper-8-lcm": 3500,
-  "@cf/runwayml/stable-diffusion-v1-5-img2img": 3500,
-  "@cf/runwayml/stable-diffusion-v1-5-inpainting": 3500,
+  "@cf/black-forest-labs/flux-2-dev": 4.0,           // 最高质量
+  "@cf/black-forest-labs/flux-2-klein-9b": 3.5,      // 高质量 9B
+  "@cf/black-forest-labs/flux-2-klein-4b": 3.5,      // 高质量 4B
+  "@cf/black-forest-labs/flux-1-schnell": 3.0,       // 快速生成
+  "@cf/bytedance/stable-diffusion-xl-lightning": 3.33, // Lightning 快速
+  "@cf/stabilityai/stable-diffusion-xl-base-1.0": 3.5,
+  "@cf/leonardo/lucid-origin": 3.5,
+  "@cf/leonardo/phoenix-1.0": 3.5,
+  "@cf/lykon/dreamshaper-8-lcm": 3.5,
+  "@cf/runwayml/stable-diffusion-v1-5-img2img": 3.5,
+  "@cf/runwayml/stable-diffusion-v1-5-inpainting": 3.5,
 };
-const IMAGE_MODEL_DEFAULT_PRICE = 3500;
+const IMAGE_MODEL_DEFAULT_PRICE = 3.5;
 
 /**
  * 旧的 calculateFinalPrice 已废弃（×1000 + 阈值调整策略被取代）。
