@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { revalidatePath } from "next/cache";
 import { syncModelPricingWithSettings } from "@/lib/billing/model-pricing";
+import { invalidateCreditsPerUsdCache } from "@/lib/billing/credits";
 
 async function upsertOption(key: string, value: string) {
   const existing = await db
@@ -24,6 +25,7 @@ async function upsertOption(key: string, value: string) {
 export async function updateBasicSettings(formData: {
   siteName: string;
   defaultBalanceValidDays: string;
+  creditsPerUsd: string;
 }) {
   const currentUserId = await requireUser();
 
@@ -48,13 +50,29 @@ export async function updateBasicSettings(formData: {
     throw new Error("有效期必须是正整数");
   }
 
+  const ratio = parseFloat(formData.creditsPerUsd);
+  if (!Number.isFinite(ratio) || ratio <= 0) {
+    throw new Error("美元汇率必须 > 0");
+  }
+
   // 更新设置
   await upsertOption("siteName", formData.siteName.trim());
   await upsertOption("defaultBalanceValidDays", formData.defaultBalanceValidDays);
+  await upsertOption("creditsPerUsd", String(ratio));
+
+  // 立即让 credits.ts 缓存失效，下次读取拿到新值
+  invalidateCreditsPerUsdCache();
 
   revalidatePath("/admin/settings");
   // Sidebar brand lives in the dashboard layout — revalidate it so the name updates.
   revalidatePath("/", "layout");
+  // 这些页面会显示 USD 换算，汇率变化时一并刷新
+  revalidatePath("/dashboard");
+  revalidatePath("/wallet");
+  revalidatePath("/pricing");
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/redemptions");
+  revalidatePath("/admin/pricing");
   return { success: true };
 }
 

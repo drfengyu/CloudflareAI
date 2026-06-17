@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { updateModelMultiplier } from "./actions";
 import { toast } from "sonner";
+import { creditsToUsd } from "@/lib/billing/credits";
 
 type ModelWithPricing = {
   id: string;
@@ -28,7 +29,7 @@ type ModelWithPricing = {
 
 type Filter = "all" | "text" | "image" | "vision" | "embeddings" | "translate" | "speech" | "video";
 
-export function PricingManager({ models }: { models: ModelWithPricing[] }) {
+export function PricingManager({ models, ratio }: { models: ModelWithPricing[]; ratio: number }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -165,15 +166,15 @@ export function PricingManager({ models }: { models: ModelWithPricing[] }) {
                       <span>
                         基础价：
                         {pricing.isImage
-                          ? `$${((pricing.fixedPrice ?? 0) / (pricing.multiplier || 1)).toFixed(2)}/张`
-                          : `$${((pricing.inputPrice ?? 0) / (pricing.multiplier || 1)).toFixed(2)}/1M`}
+                          ? `$${creditsToUsd((pricing.fixedPrice ?? 0) / (pricing.multiplier || 1), ratio).toFixed(4)}/张`
+                          : `$${creditsToUsd((pricing.inputPrice ?? 0) / (pricing.multiplier || 1), ratio).toFixed(4)}/1M`}
                       </span>
                       <span>→</span>
                       <span className="font-medium text-foreground">
                         最终价：
                         {pricing.isImage
-                          ? `$${(pricing.fixedPrice ?? 0).toFixed(2)}/张`
-                          : `$${(pricing.inputPrice ?? 0).toFixed(2)}/1M`}
+                          ? `$${creditsToUsd(pricing.fixedPrice ?? 0, ratio).toFixed(4)}/张`
+                          : `$${creditsToUsd(pricing.inputPrice ?? 0, ratio).toFixed(4)}/1M`}
                       </span>
                     </div>
                   )}

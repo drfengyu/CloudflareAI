@@ -10,7 +10,7 @@ import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { RedeemCodeDialog } from "./redeem-code-dialog";
 import { CheckinCalendarCard } from "./checkin-calendar-card";
-import { formatCredits } from "@/lib/billing/credits";
+import { formatCredits, creditsToUsd, getCreditsPerUsd } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 
 export const dynamic = "force-dynamic";
@@ -72,7 +72,8 @@ export default async function WalletPage() {
     .filter((tb) => tb.displayAmount >= 0.01); // 只显示剩余 >= 0.01 的
 
   const totalBalance = permanentBalance + temporaryTotal;
-  const balanceUsd = totalBalance.toFixed(2);
+  const ratio = await getCreditsPerUsd();
+  const balanceUsd = creditsToUsd(totalBalance, ratio).toFixed(2);
 
   // 获取充值流水
   const topupRecords = await db
@@ -203,7 +204,7 @@ export default async function WalletPage() {
                         +{formatCredits(record.amount)} cr
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        ≈ ${record.amount.toFixed(2)}
+                        ≈ ${creditsToUsd(record.amount, ratio).toFixed(2)}
                       </p>
                     </div>
                   </div>

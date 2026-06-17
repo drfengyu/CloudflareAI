@@ -19,9 +19,10 @@ import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 interface ManageUserDialogProps {
   user: UserRow;
   currentUserId: string;
+  ratio: number;
 }
 
-export function ManageUserDialog({ user, currentUserId }: ManageUserDialogProps) {
+export function ManageUserDialog({ user, currentUserId, ratio }: ManageUserDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -126,7 +127,7 @@ export function ManageUserDialog({ user, currentUserId }: ManageUserDialogProps)
               <p className="text-xs text-muted-foreground">{user.email}</p>
               <p className="mt-2 text-xs text-muted-foreground">
                 当前余额: {user.totalBalance.toLocaleString()} cr
-                (≈ ${creditsToUsd(user.totalBalance).toFixed(4)})
+                (≈ ${creditsToUsd(user.totalBalance, ratio).toFixed(4)})
               </p>
               {(() => {
                 const display = calculateDisplayBalance(user.permanentBalance, user.temporaryBalance);
@@ -163,8 +164,8 @@ export function ManageUserDialog({ user, currentUserId }: ManageUserDialogProps)
                   placeholder="正数充值，负数扣减"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {amount > 0 && `+${amount.toFixed(2)} USD`}
-                  {amount < 0 && `${amount.toFixed(2)} USD`}
+                  {amount > 0 && `+$${creditsToUsd(amount, ratio).toFixed(4)} USD`}
+                  {amount < 0 && `$${creditsToUsd(amount, ratio).toFixed(4)} USD`}
                 </p>
               </div>
 

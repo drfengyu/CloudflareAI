@@ -49,6 +49,7 @@ export default async function AdminSettingsPage() {
               initialSettings={{
                 siteName: settings.siteName || "Cloudflare AI Console",
                 defaultBalanceValidDays: settings.defaultBalanceValidDays || "365",
+                creditsPerUsd: settings.creditsPerUsd || "1",
               }}
             />
           </CardContent>

@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PricingManager } from "./pricing-manager";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
+import { getCreditsPerUsd } from "@/lib/billing/credits";
 
 export const dynamic = "force-dynamic";
 
@@ -24,9 +25,10 @@ export default async function AdminPricingPage() {
   }
 
   // 获取所有模型价格数据
-  const [catalog, pricingRows] = await Promise.all([
+  const [catalog, pricingRows, ratio] = await Promise.all([
     fetchModelCatalog(),
     db.select().from(modelPricing),
+    getCreditsPerUsd(),
   ]);
 
   // 构建 pricingMap
@@ -65,7 +67,7 @@ export default async function AdminPricingPage() {
         title="定价管理"
         description="调整模型定价倍率（基础价格 × 倍率 = 最终价格）"
       />
-      <PricingManager models={models} />
+      <PricingManager models={models} ratio={ratio} />
     </>
   );
 }

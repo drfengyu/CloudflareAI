@@ -9,6 +9,7 @@ interface SettingsFormProps {
   initialSettings: {
     siteName: string;
     defaultBalanceValidDays: string;
+    creditsPerUsd: string;
   };
 }
 
@@ -17,6 +18,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const [defaultBalanceValidDays, setDefaultBalanceValidDays] = useState(
     initialSettings.defaultBalanceValidDays,
   );
+  const [creditsPerUsd, setCreditsPerUsd] = useState(initialSettings.creditsPerUsd);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -27,6 +29,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       await updateBasicSettings({
         siteName,
         defaultBalanceValidDays,
+        creditsPerUsd,
       });
       toast.success("设置已保存");
     } catch (error) {
@@ -35,6 +38,9 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       setLoading(false);
     }
   };
+
+  const ratio = parseFloat(creditsPerUsd);
+  const ratioValid = Number.isFinite(ratio) && ratio > 0;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -67,6 +73,34 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         <p className="mt-1 text-xs text-muted-foreground">
           生成兑换码时的默认有效期（充值后余额的过期时间）
         </p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">
+          美元汇率（1 USD = ? credits）
+        </label>
+        <input
+          type="number"
+          value={creditsPerUsd}
+          onChange={(e) => setCreditsPerUsd(e.target.value)}
+          min={0.0001}
+          step={0.0001}
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+          placeholder="1"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          内部账本以 credits 计价；此处定义 1 USD 兑换的 credits 数量，影响所有界面上的「≈ $X」换算显示
+          <span className="ml-1 opacity-70">（不影响实际扣费金额）</span>
+        </p>
+        {ratioValid && (
+          <div className="mt-2 rounded-lg border border-border bg-surface-2 p-3 text-xs">
+            <p className="font-medium">换算预览</p>
+            <p className="mt-1 text-muted-foreground">
+              1,000 credits ≈ ${(1000 / ratio).toFixed(2)} USD ·{" "}
+              $10 USD = {(10 * ratio).toLocaleString()} credits
+            </p>
+          </div>
+        )}
       </div>
 
       <Button type="submit" disabled={loading}>
@@ -314,7 +348,7 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
             placeholder="0.01"
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            用户每次签到最少获得的 credits（1 credit = $1 USD）
+            用户每次签到最少获得的 credits（按当前汇率换算成 USD）
           </p>
         </div>
 

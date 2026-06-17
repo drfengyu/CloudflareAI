@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
 import { RedemptionsTable } from "./redemptions-table";
 import { GenerateCodesDialog } from "./generate-codes-dialog";
+import { getCreditsPerUsd } from "@/lib/billing/credits";
 
 export const dynamic = "force-dynamic";
 
@@ -67,17 +68,19 @@ export default async function AdminRedemptionsPage() {
     };
   });
 
+  const ratio = await getCreditsPerUsd();
+
   return (
     <>
       <PageHeader
         title="兑换码管理"
         description="生成、查看、管理充值兑换码"
-        action={<GenerateCodesDialog />}
+        action={<GenerateCodesDialog ratio={ratio} />}
       />
       <div className="space-y-4 p-8">
         <Card>
           <CardContent className="pt-5">
-            <RedemptionsTable data={data} />
+            <RedemptionsTable data={data} ratio={ratio} />
           </CardContent>
         </Card>
       </div>

@@ -10,7 +10,7 @@ import {
   getUsageByModel,
   getHourlyUsageToday,
 } from "@/lib/usage/queries";
-import { formatCredits, creditsToUsd } from "@/lib/billing/credits";
+import { formatCredits, creditsToUsd, getCreditsPerUsd } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 import { Activity, Wallet, TrendingUp, Clock } from "lucide-react";
 import { UsageTrendChart } from "@/components/dashboard/usage-trend-chart";
@@ -29,7 +29,7 @@ export default async function DashboardPage({
   const range = params.range || "today"; // today | week | month
 
   // 使用 try-catch 包裹每个查询，防止单个查询失败导致整个页面崩溃
-  const [today, month, balanceInfo, recent, hourlyUsage, dailyUsage, modelUsage] = await Promise.all([
+  const [today, month, balanceInfo, recent, hourlyUsage, dailyUsage, modelUsage, ratio] = await Promise.all([
     getTodayUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 })),
     getMonthUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 })),
     getUserTotalBalance(userId).catch(() => ({ permanent: 0, temporary: 0, total: 0 })),
@@ -37,11 +37,12 @@ export default async function DashboardPage({
     getHourlyUsageToday(userId).catch(() => []),
     getDailyUsage(userId, range === "month" ? 30 : 7).catch(() => []),
     getUsageByModel(userId, 30).catch(() => []),
+    getCreditsPerUsd().catch(() => 1),
   ]);
 
   const balance = balanceInfo.total; // 总余额（永久+临时）
-  const todayUsd = creditsToUsd(today.totalCredits);
-  const balanceUsd = creditsToUsd(balance);
+  const todayUsd = creditsToUsd(today.totalCredits, ratio);
+  const balanceUsd = creditsToUsd(balance, ratio);
 
   // 计算显示用余额（负数补正）
   const displayBalance = calculateDisplayBalance(balanceInfo.permanent, balanceInfo.temporary);

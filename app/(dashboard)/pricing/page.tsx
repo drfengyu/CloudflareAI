@@ -4,14 +4,16 @@ import { Badge } from "@/components/ui/badge";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
 import { getDisplayPrice } from "@/lib/billing/display-price";
 import { getAllModelPricing } from "@/lib/billing/model-pricing";
+import { getCreditsPerUsd, creditsToUsd } from "@/lib/billing/credits";
 import { Info } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
 export default async function PricingPage() {
-  const [models, pricingMap] = await Promise.all([
+  const [models, pricingMap, ratio] = await Promise.all([
     fetchModelCatalog(),
     getAllModelPricing(),
+    getCreditsPerUsd(),
   ]);
 
   // 按类别分组，并按价格从低到高排序
@@ -64,7 +66,7 @@ export default async function PricingPage() {
                 <ul className="space-y-1 text-muted-foreground">
                   <li>• <strong>文本模型</strong>：按 token 计费，价格单位为「每百万 token」</li>
                   <li>• <strong>图像模型</strong>：固定价格，价格单位为「每张图片」</li>
-                  <li>• <strong>Credits 换算</strong>：1 credit = $1 USD</li>
+                  <li>• <strong>Credits 换算</strong>：1 USD = {ratio.toLocaleString()} credits（由管理员配置）</li>
                 </ul>
               </div>
             </div>
@@ -110,11 +112,11 @@ export default async function PricingPage() {
                               </Badge>
                             </td>
                             <td className="py-3 text-right">
-                              {price.usd !== null ? (
+                              {price.credits !== null ? (
                                 <div>
-                                  <p className="font-medium">${price.usd.toFixed(2)}</p>
+                                  <p className="font-medium">${creditsToUsd(price.credits, ratio).toFixed(4)}</p>
                                   <p className="text-xs text-muted-foreground">
-                                    {price.credits?.toLocaleString()} cr
+                                    {price.credits.toLocaleString()} cr
                                   </p>
                                   <p className="text-xs text-muted-foreground">/ {price.unit}</p>
                                 </div>

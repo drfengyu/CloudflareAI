@@ -21,7 +21,7 @@ export interface UserRow {
   roleLabel: { label: string; tone: "success" | "warning" | "muted" };
 }
 
-export function createColumns(currentUserId: string): ColumnDef<UserRow>[] {
+export function createColumns(currentUserId: string, ratio: number): ColumnDef<UserRow>[] {
   return [
     {
       accessorKey: "email",
@@ -49,7 +49,7 @@ export function createColumns(currentUserId: string): ColumnDef<UserRow>[] {
         const total = row.original.totalBalance;
         const permanent = row.original.permanentBalance;
         const temporary = row.original.temporaryBalance;
-        const usd = creditsToUsd(total).toFixed(4);
+        const usd = creditsToUsd(total, ratio).toFixed(4);
 
         // 计算显示用余额（负数补正）
         const display = calculateDisplayBalance(permanent, temporary);
@@ -84,7 +84,7 @@ export function createColumns(currentUserId: string): ColumnDef<UserRow>[] {
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <ManageUserDialog user={row.original} currentUserId={currentUserId} />
+        <ManageUserDialog user={row.original} currentUserId={currentUserId} ratio={ratio} />
       ),
     },
   ];
