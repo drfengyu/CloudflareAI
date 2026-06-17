@@ -66,7 +66,7 @@ export default async function PricingPage() {
                 <ul className="space-y-1 text-muted-foreground">
                   <li>• <strong>文本模型</strong>：按 token 计费，价格单位为「每百万 token」</li>
                   <li>• <strong>图像模型</strong>：固定价格，价格单位为「每张图片」</li>
-                  <li>• <strong>Credits 换算</strong>：1 USD = {ratio.toLocaleString()} credits（由管理员配置）</li>
+                  <li>• <strong>Credits 换算</strong>：1 USD = {ratio.toLocaleString()} credits</li>
                 </ul>
               </div>
             </div>
