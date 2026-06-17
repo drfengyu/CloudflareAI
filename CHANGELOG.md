@@ -9,6 +9,13 @@
 
 ### 新增
 
+- **翻译双路径架构（LLM + m2m100）**
+  - 新增 LLM 翻译路径：用文本模型 + 翻译提示词（`/api/ai/translate`），CJK 质量远优于 m2m100
+  - `@cf/meta/m2m100-1.2b` 保留为「快速 · CJK 有限」选项
+  - 翻译页 `/playground/translate`：模型下拉新增所有 hosted 文本模型，默认排序优先非推理 instruct 模型
+    （`llama-3.3` / `llama-4` / `gemma-4` / `mistral-small` / `gpt-oss`），避免推理模型为隐藏思考多计 output token
+  - 新增**源语言选择器**（自动检测 / zh / en / es / fr / de / ja / ko）
+  - 路由防御性剥离 `<think>…</think>` 块，避免推理模型思考内容混入译文
 - **主题配色扩展**
   - 新增 4 套配色预设：Ocean（蓝）/ Emerald（绿）/ Violet（紫）/ Rose（玫红）
   - 连同原有 default / anthropic / cloudflare 共 7 套，可在右上角主题菜单切换
@@ -30,6 +37,16 @@
 
 ### 修复
 
+- **图像理解（Vision）token 计费**（高估）
+  - **输出**：旧逻辑直接把 `max_tokens || 512` 当作实际输出 token 计费，**按上限收钱**而非实际生成长度；
+    实测一张 2×2 图返回 `" Red"`（≈1 token），旧逻辑会计费 256–512
+  - **输入**：旧逻辑 `prompt.length × 1.5` 方向错（×1.5 高估文本 ~6×）且**完全忽略图像**
+  - 新逻辑：input = `estimateTokens(prompt) + IMAGE_INPUT_TOKENS(576)`（计入图像 patch token，llava-1.5 典型值）；
+    output = `estimateTokens(实际返回文本)`
+- **翻译 token 计费**（高估 + CJK 损坏）
+  - 旧路由 `text.length × 1.5` 估算输入和输出，而 m2m100 **本身就返回真实 usage**，估算值白白覆盖
+  - 旧 UI 无源语言选择，且 m2m100-1.2b 对 CJK 源语言基本损坏（实测 `你好`→`by`、`おはよう`→`by`、中文常返回空字符串）
+  - 新逻辑：两条路径都用上游真实 `usage.prompt_tokens / completion_tokens` 计费；CJK 由 LLM 路径正确翻译
 - **嵌入 Token 估算错误**（计费偏差）
   - 旧逻辑用 `字符数 × 1.5` 估算嵌入输入 token，方向相反、对英文高估约 6×
   - 嵌入模型上游不返回真实 usage，估算值即计费值，故偏差直接体现在扣费
@@ -54,7 +71,7 @@
 - **`docs/BILLING_GUIDE.md` 计费口径修订**
   - 修正 `base_multiplier` 为线上部署值 **100**（原文档误写 1000）
   - 明确「**展示价 ≠ 实扣价**」口径：实扣单价 = 展示价 × base_multiplier × 模型倍率（维持现状，仅文档说明）
-  - 新增「Token 估算」章节：嵌入计费公式、扣费示例、线上 `usage_log` 实测对账
+  - 新增「Token 估算」「图像理解（Vision）计费」「翻译计费」三个章节，含公式、扣费示例与实测对账
   - 修正图像固定价笔误（`4.00 cr/张` → `4000 cr/张`）
 
 ### 规划中

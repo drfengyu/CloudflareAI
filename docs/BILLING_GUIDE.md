@@ -224,6 +224,95 @@ creditsUsed = (estimateTokens(input) / 1,000,000) × inputPrice × base_multipli
 
 ---
 
+## 图像理解（Vision）计费
+
+### 为什么也要估算
+
+视觉模型（`@cf/llava-hf/llava-1.5-7b-hf` 等）**响应不返回 `usage`**，
+和嵌入一样需要本地估算 token —— 估算值即计费 token 数。
+此外 vision 的输入由「文本 prompt + 图像」组成，**图像才是输入的大头**。
+
+### 输入 token
+
+```typescript
+inputTokens = estimateTokens(prompt) + IMAGE_INPUT_TOKENS  // 当前 IMAGE_INPUT_TOKENS = 576
+```
+
+- 576 为 llava-1.5 系列的典型 patch token 数（24×24 patches），作为统一近似常量
+- prompt 用 `lib/usage/tokens.ts` 同款 CJK/拉丁加权估算
+
+### 输出 token
+
+```typescript
+outputTokens = estimateTokens(模型实际返回的 description/response 文本)
+```
+
+> 🐛 **历史修复（2026-06-17）**：旧实现 `outputTokens = max_tokens || 512` —— **按用户请求的上限计费而非实际生成**。
+> 实测一张 2×2 图返回 `" Red"`（≈1 token），旧逻辑会计费 256–512，新逻辑按真实 1 token。
+
+### 余额预检
+
+预检仍用 `max_tokens` 上限算保守估计（防止刚好压线时调用一半失败），
+但**实际计费**用上面的输入+真实文本输出。
+
+### 扣费示例（vision 区间 inputPrice 300-800，线上 base_multiplier=100）
+
+| 场景 | 输入 token | 输出 token | inputPrice | 实扣 |
+|------|-----------|-----------|-----------|------|
+| 短问 + 简单返回（"What color?" → "Red"） | 576+3=579 | 1 | 500 | (579/1M)×500×100 + (1/1M)×500×100 ≈ **29 cr** |
+| 长问 + 段落描述 | 576+20≈596 | 80 | 500 | (596/1M)×500×100 + (80/1M)×500×100 ≈ **33.8 cr** |
+
+---
+
+## 翻译计费
+
+### 两条路径（2026-06-17 重构）
+
+| 引擎 | 适用 | 计费 |
+|------|------|------|
+| **LLM 翻译**（默认，文本模型 + 翻译提示词） | 全语言（**CJK 也正常**） | 用上游真实 `usage.prompt_tokens / completion_tokens` |
+| **m2m100-1.2b**（保留为「快速·CJK 有限」选项） | 欧洲语言互译 | 用 m2m100 返回的真实 `usage`（也会返回） |
+
+### 为什么不再用 m2m100 作默认
+
+`@cf/meta/m2m100-1.2b` 实测：欧洲语言互译正常，但 **CJK 作为源语言基本损坏** ——
+中文输入翻译目标常返回空字符串或乱码（如 `你好` → `by`、`おはよう` → `by`）。
+这是模型自身能力问题，故默认改走 LLM 翻译。详见 [`/playground/translate` 引擎选择]。
+
+### 路由识别（`/api/ai/translate`）
+
+```typescript
+const isM2m100 = model.includes("m2m100");
+// isM2m100 → runModelJSON(m2m100, {text, source_lang, target_lang})
+// 否则     → openaiCompatible("chat/completions", {model, messages: [system+user], temperature: 0.3})
+```
+
+LLM 翻译的 system prompt 模板：
+```
+You are a professional translation engine. Translate the user's text into {Target}.
+{The source language is {Source}. | Detect the source language automatically.}
+Output ONLY the translated text, with no quotes, explanations, or extra content.
+```
+
+### 推理模型注意事项
+
+部分推理模型（`qwq-32b`、`qwen3-30b-a3b`、`deepseek-r1-distill`）会**为隐藏思考额外计 output token**。
+实测 qwen3-30b 翻译 "Good morning" 计 209 output tokens，而 llama-3.3-70b 仅 7-8 tokens。
+因此页面默认排序优先非推理 instruct 模型（`llama-3.3` / `llama-4` / `gemma-4` / `mistral-small` / `gpt-oss`）。
+路由层面同时**防御性剥离 `<think>…</think>` 块**，避免思考块被当作译文返回。
+
+### 扣费示例
+
+| 用例 | 模型 | prompt_tokens | completion_tokens | 计算（textLarge inputPrice~3500, line outputPrice~5000 估） | 实扣 |
+|------|------|--------------|-------------------|------|------|
+| `Hello, world` → 中文 | llama-3.3-70b | 78 | 8 | (78/1M)×3500×100 + (8/1M)×5000×100 | **≈31.3 cr** |
+| `人工智能正在改变世界` → en | llama-3.3-70b | 80 | 8 | 同上量级 | **≈32 cr** |
+
+> ⚠️ LLM 翻译的「per call」成本明显高于 m2m100（后者按 translate 区间 200-500 cr/M 计），
+> 但换来 CJK 正确性 + 全语言通用，是当前最稳妥的默认。
+
+---
+
 ## 计费流程
 
 ### 完整流程图

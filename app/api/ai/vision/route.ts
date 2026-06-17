@@ -3,6 +3,7 @@ import { z } from "zod";
 import { runModelJSON } from "@/lib/cloudflare/ai";
 import { requireUser, logUsage, verifyBalance, getDefaultApiKey } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
+import { estimateTokens } from "@/lib/usage/tokens";
 
 const schema = z.object({
   model: z.string(),
@@ -10,6 +11,9 @@ const schema = z.object({
   image: z.string(), // base64 data URL
   max_tokens: z.number().min(1).max(4096).optional(),
 });
+
+// 视觉模型图像本身消耗的输入 token（patch token）。llava-1.5 约 576，作为统一近似值。
+const IMAGE_INPUT_TOKENS = 576;
 
 /**
  * POST /api/ai/vision
@@ -36,10 +40,11 @@ export async function POST(req: NextRequest) {
 
   const { model, prompt, image, max_tokens } = parsed.data;
 
-  // 余额预检（vision: 按 prompt 长度 + max_tokens 估算）
-  const estimatedInput = prompt.length * 1.5;
+  // 输入 token = prompt 估算 + 图像 patch token（图像才是 vision 输入的大头）。
+  const inputTokens = estimateTokens(prompt) + IMAGE_INPUT_TOKENS;
+  // 预检按 max_tokens 上限保守估算输出；真正计费用实际返回文本。
   const estimatedOutput = max_tokens || 512;
-  const estimatedCredits = await calculateCredits(model, estimatedInput, estimatedOutput);
+  const estimatedCredits = await calculateCredits(model, inputTokens, estimatedOutput);
 
   const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
   if (!balanceCheck.ok) {
@@ -73,19 +78,23 @@ export async function POST(req: NextRequest) {
       req.signal,
     );
 
+    const outputText = result.description || result.response || "";
+    // 视觉模型不返回 usage，按实际返回文本估算输出 token（而非 max_tokens 上限）。
+    const outputTokens = estimateTokens(outputText);
+
     await logUsage({
       userId,
       apiKeyId,
       model,
       task: "Image Understanding",
       channel: "web",
-      inputTokens: Math.floor(estimatedInput),
-      outputTokens: estimatedOutput,
+      inputTokens,
+      outputTokens,
       status: "ok",
       latencyMs: Date.now() - start,
     });
 
-    return Response.json({ text: result.description || result.response || "" });
+    return Response.json({ text: outputText });
   } catch (err) {
     await logUsage({
       userId,

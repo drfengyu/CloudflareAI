@@ -375,6 +375,22 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   - 明确「**展示价 ≠ 实扣价**」：实扣单价 = 展示价 × base_multiplier × 模型倍率（决策：维持现状，仅文档说明）
   - 新增 Token 估算章节 + 嵌入扣费示例 + 线上 `usage_log` 实测对账（bge-base 3 token = 0.02783 cr ✓）
 
+### ✅ Vision / 翻译 计费与正确性修订（2026-06-17）
+
+**已完成**：
+- ✅ **图像理解（Vision）token 计费修复**（`app/api/ai/vision/route.ts`）：
+  - 输出：旧 `max_tokens || 512` 按上限计费 → 改为 `estimateTokens(实际返回文本)`
+  - 输入：旧 `prompt.length × 1.5` 忽略图像 → 改为 `estimateTokens(prompt) + IMAGE_INPUT_TOKENS(576)`（计入 patch token）
+  - 实测：2×2 图返回 `" Red"`（≈1 token），旧逻辑会计 256–512，新逻辑按真实 1 token
+- ✅ **翻译双路径架构 + 计费修复**（`app/api/ai/translate/route.ts` + 翻译页/客户端）：
+  - 新增 LLM 翻译路径（文本模型 + 翻译提示词），CJK 质量远优于 m2m100；m2m100 保留为「快速 · CJK 有限」选项
+  - 路由按 `model.includes("m2m100")` 分派；两条路径**均使用上游真实 usage** 计费
+  - 防御性剥离 `<think>…</think>` 块，避免推理模型思考内容混入译文
+  - 翻译页：模型下拉新增 hosted 文本模型，默认排序优先非推理 instruct 模型（llama-3.3/llama-4/gemma-4/mistral-small/gpt-oss）
+  - 客户端：新增**源语言选择器**（自动检测/zh/en/es/fr/de/ja/ko）
+  - 实测验证：zh→en `人工智能正在改变世界` m2m100 返回空 `''`、LLM 返回 `Artificial intelligence is changing the world` ✓
+- ✅ **文档同步**：`docs/BILLING_GUIDE.md` 新增「图像理解（Vision）计费」「翻译计费」两章，含公式/扣费示例/推理模型注意事项
+
 ### 🚧 待完成
 
 - **Phase B 剩余**：网关 IP/模型白名单校验优化（已实现基础逻辑）

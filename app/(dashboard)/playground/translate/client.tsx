@@ -18,6 +18,7 @@ const LANGS = [
 export function TranslateClient({ models }: { models: Array<{ id: string; name: string }> }) {
   const [model, setModel] = useState(models[0]?.id || "");
   const [text, setText] = useState("");
+  const [sourceLang, setSourceLang] = useState("auto");
   const [targetLang, setTargetLang] = useState("en");
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
@@ -31,7 +32,13 @@ export function TranslateClient({ models }: { models: Array<{ id: string; name: 
       const res = await fetch("/api/ai/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ model, text: text.trim(), target_lang: targetLang }),
+        body: JSON.stringify({
+          model,
+          text: text.trim(),
+          target_lang: targetLang,
+          // "auto" = 不传源语言，由模型自动检测
+          ...(sourceLang !== "auto" ? { source_lang: sourceLang } : {}),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -47,7 +54,7 @@ export function TranslateClient({ models }: { models: Array<{ id: string; name: 
     <div className="p-8">
       <Card>
         <CardContent className="space-y-4 pt-5">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <label className="flex flex-col gap-2">
               <span className="text-xs text-muted-foreground">模型</span>
               <select
@@ -57,6 +64,19 @@ export function TranslateClient({ models }: { models: Array<{ id: string; name: 
               >
                 {models.map((m) => (
                   <option key={m.id} value={m.id}>{m.name}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-2">
+              <span className="text-xs text-muted-foreground">源语言</span>
+              <select
+                value={sourceLang}
+                onChange={(e) => setSourceLang(e.target.value)}
+                className="h-9 rounded-lg border border-border bg-surface px-3 text-sm outline-none"
+              >
+                <option value="auto">自动检测</option>
+                {LANGS.map((l) => (
+                  <option key={l.code} value={l.code}>{l.label}</option>
                 ))}
               </select>
             </label>
