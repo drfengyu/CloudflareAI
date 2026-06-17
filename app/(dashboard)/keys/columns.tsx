@@ -56,13 +56,16 @@ export const columns: ColumnDef<ApiKeyRow>[] = [
       const quota = row.original.quotaCredits;
       const remain = row.original.remainCredits;
       const actualUsed = row.original.actualUsed;
+      const userBalance = row.original.userBalance;
 
-      // 无限额度：该 key 无单独总额，仅展示累计已用量
+      // 无限额度：无单独总额，展示累计已用量 + 账户实际余额
       if (remain === null) {
         return (
           <div className="min-w-[120px]">
             <p className="text-xs font-medium">已用 {actualUsed.toLocaleString()} cr</p>
-            <p className="mt-1 text-xs text-muted-foreground">无限额度</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              无限额度 · 余额 {Math.round(userBalance).toLocaleString()} cr
+            </p>
           </div>
         );
       }
