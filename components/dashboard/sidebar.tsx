@@ -76,7 +76,13 @@ const NAV: NavGroup[] = [
   },
 ];
 
-export function Sidebar({ userRole = 1 }: { userRole?: number }) {
+export function Sidebar({
+  userRole = 1,
+  siteName = "Cloudflare AI",
+}: {
+  userRole?: number;
+  siteName?: string;
+}) {
   const pathname = usePathname();
 
   // Filter out admin-only groups for non-admin users (role < 10)
@@ -91,7 +97,7 @@ export function Sidebar({ userRole = 1 }: { userRole?: number }) {
         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
           <Cpu className="h-4 w-4" />
         </span>
-        <span>Cloudflare AI</span>
+        <span>{siteName}</span>
       </Link>
 
       <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-2">

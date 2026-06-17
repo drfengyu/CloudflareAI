@@ -53,6 +53,8 @@ export async function updateBasicSettings(formData: {
   await upsertOption("defaultBalanceValidDays", formData.defaultBalanceValidDays);
 
   revalidatePath("/admin/settings");
+  // Sidebar brand lives in the dashboard layout — revalidate it so the name updates.
+  revalidatePath("/", "layout");
   return { success: true };
 }
 

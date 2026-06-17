@@ -47,7 +47,7 @@ export function UsageTrendChart({ data }: { data: DailyUsageData[] }) {
         />
         <Tooltip
           contentStyle={{
-            backgroundColor: "var(--surface)",
+            backgroundColor: "var(--card)",
             border: "1px solid var(--border)",
             borderRadius: "8px",
             fontSize: "12px",

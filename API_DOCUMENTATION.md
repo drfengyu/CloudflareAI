@@ -142,6 +142,10 @@ curl https://cloudflare-ai-tau.vercel.app/v1/embeddings \
 }
 ```
 
+> **关于嵌入的 `prompt_tokens`**：嵌入模型上游只返回向量、不返回 token 计数，
+> 故 `prompt_tokens` 由服务端估算（CJK ≈ 1 token/字，拉丁 ≈ 1 token/4 字符，最小 1），
+> 该估算值即为计费 token 数。计费公式与扣费口径详见 [`docs/BILLING_GUIDE.md`](docs/BILLING_GUIDE.md)。
+
 ---
 
 ## 🤖 Anthropic 兼容端点

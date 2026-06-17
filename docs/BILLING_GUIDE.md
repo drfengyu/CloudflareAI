@@ -62,23 +62,25 @@ CREDITS_PER_USD = 1
 
 ### 其他模型类型
 
-| 类型 | 输入价区间（$/M tokens） | 输出价区间（$/M tokens） | 用途 |
+| 类型 | 输入价区间（$/M tokens, 展示价） | 输出价区间（$/M tokens） | 用途 |
 |------|------------------------|------------------------|------|
-| **Embeddings** | 50-200 | 50-200 | 向量嵌入 |
+| **Embeddings** | 50-200 | 50-200 | 向量嵌入（详见 [Token 估算](#token-估算嵌入计费关键)） |
 | **Vision** | 300-800 | 600-1500 | 视觉理解 |
 | **Translate** | 200-500 | 200-500 | 翻译 |
 | **Classify** | 100-300 | 100-300 | 分类 |
 | **Speech** | 200-800 | 200-800 | 语音 |
 
+> 注：上表为**展示价**（`model_pricing.inputPrice`）。实际扣费会再乘 `base_multiplier`（线上=100），详见[倍率调整](#倍率调整)。
+
 ### 图像模型（固定价格）
 
 ```typescript
-// 单位：credits/张（1cr=$1）
-FLUX-2 Dev:              4.00 cr/张
-FLUX-2 Klein (4B/9B):    3.50 cr/张
-FLUX-1 Schnell:          3.00 cr/张
-SD XL Lightning:         3.333 cr/张
-其他图像模型:            3.50 cr/张（默认）
+// 单位：credits/张（1cr=$1，图像生成成本高，固定价 3000-4000 cr/张）
+FLUX-2 Dev:              4000 cr/张
+FLUX-2 Klein (4B/9B):    3500 cr/张
+FLUX-1 Schnell:          3000 cr/张
+SD XL Lightning:         3333 cr/张
+其他图像模型:            3500 cr/张（默认）
 ```
 
 **特点**：
@@ -94,15 +96,31 @@ SD XL Lightning:         3.333 cr/张
 
 #### 1. 基础倍率（Base Multiplier）
 
-全局倍率，**仅对文本/嵌入模型生效**，图像模型不受影响。
+全局倍率，**对所有按 token 计费的模型生效**（文本/嵌入/视觉/翻译/分类/语音），图像模型固定价不受影响。
 
 ```typescript
-// 默认值：1000（图像除外）
-pricing_base_multiplier = 1000
+// 线上部署值：100（可在 /admin/settings 调整）
+pricing_base_multiplier = 100
 
-// 最终价格计算
-finalPrice = basePrice × baseMultiplier
+// 实际扣费价格计算（在 calculateCredits 内生效）
+实扣单价 = inputPrice × baseMultiplier
 ```
+
+> ⚠️ **展示价 ≠ 实扣价（重要口径说明）**
+>
+> `model_pricing` 表里的 `inputPrice`（即定价页 `/pricing` 和模型库展示的数字）
+> **不包含** base_multiplier。真正扣费时 `calculateCredits` 会再乘一次 base_multiplier。
+>
+> ```
+> 实际每百万 token 扣费 = 展示价(inputPrice) × base_multiplier(100) × 模型倍率
+> ```
+>
+> 例：`bge-large-en-v1.5` 定价页显示 `200 cr / M tokens`，
+> 实际扣费为 `200 × 100 = 20,000 cr / M tokens`。
+>
+> 当前为**有意保留**的设计（展示「基准价」、扣费按「基准价 × 全局倍率」）。
+> 如需让两者一致，可二选一：① 扣费侧去掉 ×base_multiplier；② 展示侧也乘 base_multiplier。
+> 目前结论：维持现状，仅在此文档说明口径。
 
 **配置位置**：`/admin/settings` > 定价倍率配置
 
@@ -141,17 +159,68 @@ finalPrice = basePrice × baseMultiplier × multiplier
 
 ```typescript
 // 示例：Llama 3.1 8B（Medium 档）
-baseInputPrice = 600 ($/M tokens, 来自 CATEGORY_RANGES)
-baseMultiplier = 1000  // 全局配置
+baseInputPrice = 600 ($/M tokens, 来自 CATEGORY_RANGES, 即定价页展示价)
+baseMultiplier = 100   // 全局配置（线上部署值）
 modelMultiplier = 0.8  // 单个模型配置
 
-// 最终输入价
-finalInputPrice = 600 × 1000 × 0.8 = 480,000 cr/M tokens
+// 实际输入单价
+finalInputPrice = 600 × 100 × 0.8 = 48,000 cr/M tokens
 
 // 用户调用 1000 tokens
 inputTokens = 1000
-creditsUsed = (1000 / 1,000,000) × 480,000 = 0.48 cr = $0.48
+creditsUsed = (1000 / 1,000,000) × 48,000 = 48 cr = $48
 ```
+
+---
+
+## Token 估算（嵌入计费关键）
+
+### 为什么需要估算
+
+文本/对话类模型调用后，Cloudflare 上游会在响应（或流式末尾 `usage` chunk）里返回**真实** token 数，
+计费用真实值。但**嵌入模型（BGE / Qwen3-Embedding / EmbeddingGemma 等）的响应只含向量，不含 token 计数**，
+因此嵌入的输入 token 必须由本地估算 —— 估算值**即最终计费 token 数**，必须尽量贴近真实分词。
+
+### 估算规则（`lib/usage/tokens.ts`）
+
+```typescript
+// CJK（中日韩）字符 ≈ 1 token/字；其余（拉丁/ASCII）≈ 1 token/4 字符；最小 1
+estimateTokens(text):
+  cjk   = 匹配 [一-鿿…] 的字符数
+  other = text.length - cjk
+  return max(1, ceil(cjk + other / 4))
+```
+
+> 🐛 **历史修复（2026-06-17）**：旧实现用 `字符数 × 1.5` 估算 token，方向完全相反——
+> token 永远**少于**字符数，该公式对英文高估约 6 倍。已替换为上面的分类加权估算。
+>
+> | 输入 | 字符数 | 旧 `×1.5` | 新估算 |
+> |------|-------|----------|--------|
+> | `The quick brown fox jumps over the lazy dog` | 43 | 64 | **11** |
+> | `人工智能是未来的发展趋势` | 12 | 18 | **12** |
+
+### 嵌入计费公式
+
+```
+creditsUsed = (estimateTokens(input) / 1,000,000) × inputPrice × base_multiplier × 模型倍率
+```
+
+- `outputTokens` 对嵌入恒为 **0**（无输出计费）
+- `inputPrice`：嵌入区间 50–200（定价页展示价），线上各模型实测：
+  - `bge-m3` / `qwen3-embedding-0.6b`：50 → 实扣 **5,000 cr/M**
+  - `bge-base-en-v1.5`：92.77 → 实扣 **9,277 cr/M**
+  - `bge-large-en-v1.5`：200 → 实扣 **20,000 cr/M**
+
+### 扣费示例（线上 base_multiplier=100）
+
+| 输入 | 模型 | 估算 token | 计算 | 扣费 |
+|------|------|-----------|------|------|
+| `The quick brown fox…`（43 字符英文） | bge-m3 | 11 | 11/1M×50×100 | **0.055 cr** |
+| `人工智能是未来的发展趋势`（12 中文字） | bge-m3 | 12 | 12/1M×50×100 | **0.06 cr** |
+| ~1000 token 文档 | bge-large | 1000 | 1000/1M×200×100 | **20 cr** |
+
+**实测对账**（线上 `usage_log` 真实记录，bge-base，3 token）：
+`3/1,000,000 × 92.768 × 100 = 0.027830385 cr`，与数据库记录完全一致 ✓
 
 ---
 

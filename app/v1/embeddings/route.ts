@@ -4,6 +4,7 @@ import { runModelJSON } from "@/lib/cloudflare/ai";
 import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
 import { logUsage, verifyBalance } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
+import { estimateTokensTotal } from "@/lib/usage/tokens";
 
 const schema = z.object({
   model: z.string(),
@@ -43,8 +44,8 @@ export async function POST(req: NextRequest) {
 
   const texts = Array.isArray(input) ? input : [input];
 
-  // 余额预检（按文本总长 * 1.5 估算 token）
-  const estimatedTokens = texts.reduce((sum, t) => sum + t.length, 0) * 1.5;
+  // 嵌入模型不返回真实 usage，按字符类别估算 token（CJK≈1/字，其余≈1/4字符）
+  const estimatedTokens = estimateTokensTotal(texts);
   const estimatedCredits = await calculateCredits(model, estimatedTokens, 0);
   const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
   if (!balanceCheck.ok) {

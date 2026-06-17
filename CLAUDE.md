@@ -361,6 +361,20 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 - 兑换码列表显示使用者信息
 - 设置页面简洁清晰
 
+### ✅ UI 与计费口径修订（2026-06-17）
+
+**已完成**：
+- ✅ **嵌入 Token 估算修复**：旧 `字符数 × 1.5` 高估约 6×（嵌入上游不返回 usage，估算即计费）；
+  新增 `lib/usage/tokens.ts`（CJK≈1/字、拉丁≈1/4 字符），应用到 `/v1/embeddings` 与 `/api/ai/embeddings`
+- ✅ **30 日模型柱状图配色失效修复**：`hsl(var(--primary))` 包裹 oklch 令牌非法 → 改用 `var(--chart-1..5)`；
+  三图表 tooltip `var(--surface)`（未定义）→ `var(--card)`
+- ✅ **主题配色扩展**：新增 Ocean/Emerald/Violet/Rose 共 7 套预设
+- ✅ **侧边栏品牌名可配置**：导航顶部读取 `siteName` 设置，保存后 `revalidatePath("/", "layout")` 即时生效
+- ✅ **计费文档口径修订**（`docs/BILLING_GUIDE.md`）：
+  - `base_multiplier` 实为线上部署值 **100**（原文档误写 1000）
+  - 明确「**展示价 ≠ 实扣价**」：实扣单价 = 展示价 × base_multiplier × 模型倍率（决策：维持现状，仅文档说明）
+  - 新增 Token 估算章节 + 嵌入扣费示例 + 线上 `usage_log` 实测对账（bge-base 3 token = 0.02783 cr ✓）
+
 ### 🚧 待完成
 
 - **Phase B 剩余**：网关 IP/模型白名单校验优化（已实现基础逻辑）

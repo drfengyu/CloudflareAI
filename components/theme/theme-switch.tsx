@@ -23,6 +23,10 @@ const PRESETS: { id: ThemePreset; label: string }[] = [
   { id: "default", label: "默认（中性）" },
   { id: "anthropic", label: "Anthropic（暖奶油）" },
   { id: "cloudflare", label: "Cloudflare（橙）" },
+  { id: "ocean", label: "Ocean（蓝）" },
+  { id: "emerald", label: "Emerald（绿）" },
+  { id: "violet", label: "Violet（紫）" },
+  { id: "rose", label: "Rose（玫红）" },
 ];
 
 export function ThemeSwitch() {

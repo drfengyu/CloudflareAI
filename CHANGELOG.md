@@ -9,6 +9,13 @@
 
 ### 新增
 
+- **主题配色扩展**
+  - 新增 4 套配色预设：Ocean（蓝）/ Emerald（绿）/ Violet（紫）/ Rose（玫红）
+  - 连同原有 default / anthropic / cloudflare 共 7 套，可在右上角主题菜单切换
+  - 每套覆盖 primary / ring / sidebar-primary / chart-1·2 的明暗两套 oklch 令牌
+- **侧边栏品牌名可配置**
+  - 导航顶部品牌名改为读取系统设置 `siteName`（`/admin/settings` > 站点名称）
+  - 保存后 `revalidatePath("/", "layout")`，改名即时生效
 - **流式真实计量**
   - 拦截 OpenAI/Anthropic gateway 和 playground 的 SSE 流
   - 解析末尾 `usage` chunk 拿到真实 `prompt_tokens` / `completion_tokens`
@@ -21,6 +28,18 @@
   - 类内极差大幅收敛：classify 2112× → 3×、text 246× → 35×（含 3 档）、speech 73× → 4×
   - 管理员调整的 multiplier 在 sync 时保留（不被覆盖）
 
+### 修复
+
+- **嵌入 Token 估算错误**（计费偏差）
+  - 旧逻辑用 `字符数 × 1.5` 估算嵌入输入 token，方向相反、对英文高估约 6×
+  - 嵌入模型上游不返回真实 usage，估算值即计费值，故偏差直接体现在扣费
+  - 新增 `lib/usage/tokens.ts`：CJK ≈ 1 token/字、拉丁 ≈ 1 token/4 字符，最小 1
+  - 应用到 `/v1/embeddings` 与 `/api/ai/embeddings` 两个路由
+- **数据看板 30 日模型柱状图配色失效**
+  - 根因：`hsl(var(--primary))` 包裹的是 oklch 令牌，`hsl(oklch(...))` 非法导致柱子回退黑色
+  - 改为直接引用 `var(--chart-1..5)`，并随主题预设变色
+  - 顺带修复三个图表 tooltip 背景 `var(--surface)`（未定义）→ `var(--card)`
+
 ### 变更
 
 - **API 路由标准化**（遵循 new-api 约定）
@@ -29,6 +48,14 @@
   - Anthropic 兼容：`/v1/messages`
   - 业务 API 保持 `/api/*` 路径不变
   - 更新所有文档和示例配置
+
+### 文档
+
+- **`docs/BILLING_GUIDE.md` 计费口径修订**
+  - 修正 `base_multiplier` 为线上部署值 **100**（原文档误写 1000）
+  - 明确「**展示价 ≠ 实扣价**」口径：实扣单价 = 展示价 × base_multiplier × 模型倍率（维持现状，仅文档说明）
+  - 新增「Token 估算」章节：嵌入计费公式、扣费示例、线上 `usage_log` 实测对账
+  - 修正图像固定价笔误（`4.00 cr/张` → `4000 cr/张`）
 
 ### 规划中
 

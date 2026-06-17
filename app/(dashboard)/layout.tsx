@@ -2,7 +2,7 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 import { AppHeader } from "@/components/dashboard/app-header";
 import { auth, signOut } from "@/auth";
 import { db } from "@/lib/db/d1-http";
-import { users } from "@/lib/db/schema";
+import { users, options } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 export default async function DashboardLayout({
@@ -23,6 +23,14 @@ export default async function DashboardLayout({
     userRole = userRows[0]?.role ?? 1;
   }
 
+  // Site name from options (admin-configurable), fall back to brand default
+  const siteRows = await db
+    .select({ value: options.value })
+    .from(options)
+    .where(eq(options.key, "siteName"))
+    .limit(1);
+  const siteName = siteRows[0]?.value?.trim() || "Cloudflare AI";
+
   async function signOutAction() {
     "use server";
     await signOut({ redirectTo: "/login" });
@@ -30,7 +38,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar userRole={userRole} />
+      <Sidebar userRole={userRole} siteName={siteName} />
       <div className="flex min-w-0 flex-1 flex-col">
         <AppHeader user={session?.user} signOutAction={signOutAction} />
         <main className="flex-1 overflow-y-auto">{children}</main>

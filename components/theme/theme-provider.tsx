@@ -22,7 +22,14 @@ export function ThemeProvider({
 }
 
 // ── Theme preset (color scheme) — orthogonal to light/dark ──
-export type ThemePreset = "default" | "anthropic" | "cloudflare";
+export type ThemePreset =
+  | "default"
+  | "anthropic"
+  | "cloudflare"
+  | "ocean"
+  | "emerald"
+  | "violet"
+  | "rose";
 
 const PRESET_KEY = "cfai-theme-preset";
 

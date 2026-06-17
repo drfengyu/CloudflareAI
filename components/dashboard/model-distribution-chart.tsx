@@ -17,12 +17,13 @@ interface ModelUsageData {
   credits: number;
 }
 
+// 直接引用 oklch 设计令牌（不能用 hsl() 包裹，否则颜色失效）。
 const COLORS = [
-  "hsl(var(--primary))",
-  "hsl(var(--accent))",
-  "hsl(var(--success))",
-  "hsl(var(--warning))",
-  "hsl(var(--muted-foreground))",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
 ];
 
 export function ModelDistributionChart({ data }: { data: ModelUsageData[] }) {
@@ -59,7 +60,7 @@ export function ModelDistributionChart({ data }: { data: ModelUsageData[] }) {
         />
         <Tooltip
           contentStyle={{
-            backgroundColor: "var(--surface)",
+            backgroundColor: "var(--card)",
             border: "1px solid var(--border)",
             borderRadius: "8px",
             fontSize: "12px",
