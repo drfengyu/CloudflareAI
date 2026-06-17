@@ -7,6 +7,7 @@ import { logUsage, verifyBalance } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { interceptOpenAIStream } from "@/lib/usage/stream-intercept";
+import { convertToAnthropicStream } from "@/lib/usage/anthropic-stream";
 
 // Anthropic Messages API content 可以是纯字符串或 content block 数组（多模态 / tool_use / tool_result）。
 // 仅提取文本用于：余额估算 + 转 OpenAI 时构造 message.content。
@@ -142,10 +143,13 @@ export async function POST(req: NextRequest) {
     }
 
     if (stream) {
-      // 流式：拦截 SSE 流，解析末尾 usage 后按真实 token 扣费。
-      // 注意：这个 gateway 透传 OpenAI 格式 SSE 给客户端（route 未做 Anthropic 格式转换），
-      // 所以可以直接用 OpenAI 拦截器解析 usage chunk。
-      const { stream: tap, done } = interceptOpenAIStream(res.body);
+      // 流式：把 OpenAI SSE 转换为 Anthropic SSE 格式，供 Claude Code 等客户端正确解析。
+      const messageId = `msg_${Date.now().toString(36)}`;
+      const { stream: tap, done } = convertToAnthropicStream(res.body, {
+        model,
+        messageId,
+        inputTokens: Math.floor(estimatedInput),
+      });
 
       // after() 让 Vercel serverless 在响应结束后保持函数运行直到 logUsage 完成。
       after(async () => {
