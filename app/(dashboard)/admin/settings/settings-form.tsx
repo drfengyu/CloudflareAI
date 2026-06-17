@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { updateBasicSettings, updatePricingSettings } from "./actions";
+import { updateBasicSettings, updatePricingSettings, updateCheckinSettings } from "./actions";
 import { toast } from "sonner";
 
 interface SettingsFormProps {
@@ -244,6 +244,134 @@ export function PricingSettingsForm({ initialSettings }: PricingSettingsFormProp
           保存后将自动重新计算所有模型价格（保留已有的自定义倍率）
         </p>
       </div>
+    </form>
+  );
+}
+
+interface CheckinSettingsFormProps {
+  initialSettings: {
+    enabled: boolean;
+    minQuota: string;
+    maxQuota: string;
+    validDays: string;
+  };
+}
+
+export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProps) {
+  const [enabled, setEnabled] = useState(initialSettings.enabled);
+  const [minQuota, setMinQuota] = useState(initialSettings.minQuota);
+  const [maxQuota, setMaxQuota] = useState(initialSettings.maxQuota);
+  const [validDays, setValidDays] = useState(initialSettings.validDays);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      await updateCheckinSettings({
+        enabled,
+        minQuota,
+        maxQuota,
+        validDays,
+      });
+      toast.success("签到设置已保存");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="checkin-enabled"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+          className="h-4 w-4 rounded border-border"
+        />
+        <label htmlFor="checkin-enabled" className="text-sm font-medium">
+          启用签到功能
+        </label>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            最小奖励额度（credits）
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={minQuota}
+            onChange={(e) => setMinQuota(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="0.01"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            用户每次签到最少获得的 credits（1 credit = $1 USD）
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            最大奖励额度（credits）
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={maxQuota}
+            onChange={(e) => setMaxQuota(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="0.1"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            用户每次签到最多获得的 credits
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">
+          临时余额有效期（天）
+        </label>
+        <input
+          type="number"
+          min="1"
+          value={validDays}
+          onChange={(e) => setValidDays(e.target.value)}
+          disabled={!enabled}
+          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm disabled:opacity-50"
+          placeholder="7"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          签到奖励作为临时余额的有效期（过期自动删除）
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+        <p className="text-xs text-muted-foreground">
+          <strong>签到规则：</strong>
+          <br />
+          • 每人每天只能签到一次
+          <br />
+          • 随机奖励：在最小和最大额度之间随机生成
+          <br />
+          • 奖励形式：临时余额（有效期 {validDays} 天）
+          <br />• 优先消耗：使用时优先扣减临时余额，不够再扣永久余额
+        </p>
+      </div>
+
+      <Button type="submit" disabled={loading}>
+        {loading ? "保存中..." : "保存设置"}
+      </Button>
     </form>
   );
 }

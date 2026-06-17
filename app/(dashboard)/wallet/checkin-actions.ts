@@ -12,20 +12,22 @@ async function getCheckinSettings(): Promise<{
   enabled: boolean;
   minQuota: number;
   maxQuota: number;
+  validDays: number;
 }> {
   const settings = await db
     .select()
     .from(options)
     .where(
-      sql`${options.key} IN ('checkin_enabled', 'checkin_min_quota', 'checkin_max_quota')`
+      sql`${options.key} IN ('checkin_enabled', 'checkin_min_quota', 'checkin_max_quota', 'checkin_valid_days')`
     );
 
   const settingsMap = new Map(settings.map((s) => [s.key, s.value]));
 
   return {
     enabled: settingsMap.get("checkin_enabled") === "true",
-    minQuota: parseInt(settingsMap.get("checkin_min_quota") ?? "10"),
-    maxQuota: parseInt(settingsMap.get("checkin_max_quota") ?? "100"),
+    minQuota: parseFloat(settingsMap.get("checkin_min_quota") ?? "0.01"),
+    maxQuota: parseFloat(settingsMap.get("checkin_max_quota") ?? "0.1"),
+    validDays: parseInt(settingsMap.get("checkin_valid_days") ?? "7"),
   };
 }
 
@@ -160,15 +162,14 @@ export async function performCheckin(): Promise<{
       return { success: false, message: "今日已签到" };
     }
 
-    // 计算随机奖励额度
-    const quotaAwarded =
-      settings.minQuota +
-      Math.floor(Math.random() * (settings.maxQuota - settings.minQuota + 1));
+    // 计算随机奖励额度（支持小数）
+    const range = settings.maxQuota - settings.minQuota;
+    const quotaAwarded = settings.minQuota + Math.random() * range;
 
     const checkinId = crypto.randomUUID();
     const now = new Date();
-    // 签到奖励有效期：7 天
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    // 签到奖励有效期：从配置读取
+    const expiresAt = new Date(Date.now() + settings.validDays * 24 * 60 * 60 * 1000);
 
     try {
       // 步骤1: 插入签到记录（UNIQUE 约束防止并发重复）
@@ -186,7 +187,7 @@ export async function performCheckin(): Promise<{
         userId,
         amount: quotaAwarded,
         expiresAt,
-        description: `每日签到奖励 ${quotaAwarded} cr（有效期 7 天）`,
+        description: `每日签到奖励 ${quotaAwarded.toFixed(4)} cr（有效期 ${settings.validDays} 天）`,
         createdAt: now,
       });
 
@@ -196,7 +197,7 @@ export async function performCheckin(): Promise<{
         userId,
         amount: quotaAwarded,
         type: 3, // 签到充值
-        description: `每日签到奖励 ${quotaAwarded} cr（有效期至 ${expiresAt.toLocaleDateString()}）`,
+        description: `每日签到奖励 ${quotaAwarded.toFixed(4)} cr（有效期至 ${expiresAt.toLocaleDateString()}）`,
         createdAt: now,
       });
 

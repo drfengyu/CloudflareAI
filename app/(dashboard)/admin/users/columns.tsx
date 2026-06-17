@@ -6,6 +6,7 @@ import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { ManageUserDialog } from "./manage-user-dialog";
 import { creditsToUsd } from "@/lib/billing/credits";
+import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 
 export interface UserRow {
   id: string;
@@ -50,13 +51,16 @@ export function createColumns(currentUserId: string): ColumnDef<UserRow>[] {
         const temporary = row.original.temporaryBalance;
         const usd = creditsToUsd(total).toFixed(4);
 
+        // 计算显示用余额（负数补正）
+        const display = calculateDisplayBalance(permanent, temporary);
+
         return (
           <div className="text-right">
             <p className="font-medium">{total.toLocaleString()} cr</p>
             <p className="text-xs text-muted-foreground">≈ ${usd}</p>
-            {temporary > 0 && (
+            {(temporary > 0 || permanent < 0) && (
               <p className="text-xs text-muted-foreground">
-                (永久 {permanent.toLocaleString()} + 临时 {temporary.toLocaleString()})
+                (永久 {display.displayPermanent.toLocaleString()} + 临时 {display.displayTemporary.toLocaleString()})
               </p>
             )}
           </div>

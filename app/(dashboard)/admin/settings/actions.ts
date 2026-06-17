@@ -119,3 +119,52 @@ export async function updatePricingSettings(formData: {
     updated: result.updated,
   };
 }
+
+export async function updateCheckinSettings(formData: {
+  enabled: boolean;
+  minQuota: string;
+  maxQuota: string;
+  validDays: string;
+}) {
+  const currentUserId = await requireUser();
+
+  // 检查权限
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  // 验证输入
+  const minQuota = parseFloat(formData.minQuota);
+  const maxQuota = parseFloat(formData.maxQuota);
+  const validDays = parseInt(formData.validDays);
+
+  if (isNaN(minQuota) || minQuota < 0) {
+    throw new Error("最小奖励必须 ≥ 0");
+  }
+  if (isNaN(maxQuota) || maxQuota < 0) {
+    throw new Error("最大奖励必须 ≥ 0");
+  }
+  if (minQuota > maxQuota) {
+    throw new Error("最小奖励不能大于最大奖励");
+  }
+  if (isNaN(validDays) || validDays < 1) {
+    throw new Error("有效期必须 ≥ 1 天");
+  }
+
+  // 更新设置
+  await upsertOption("checkin_enabled", formData.enabled ? "true" : "false");
+  await upsertOption("checkin_min_quota", formData.minQuota);
+  await upsertOption("checkin_max_quota", formData.maxQuota);
+  await upsertOption("checkin_valid_days", formData.validDays);
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/wallet");
+
+  return { success: true };
+}

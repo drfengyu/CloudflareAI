@@ -5,7 +5,7 @@ import { users, options } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
-import { SettingsForm, PricingSettingsForm } from "./settings-form";
+import { SettingsForm, PricingSettingsForm, CheckinSettingsForm } from "./settings-form";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +66,22 @@ export default async function AdminSettingsPage() {
                 adjustMultiplierLow: settings.pricing_adjust_multiplier_low || "5",
                 adjustMultiplierHigh: settings.pricing_adjust_multiplier_high || "1",
                 defaultPricePerMillion: settings.pricing_default_price_per_million || "100",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">签到设置</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CheckinSettingsForm
+              initialSettings={{
+                enabled: settings.checkin_enabled === "true",
+                minQuota: settings.checkin_min_quota || "0.01",
+                maxQuota: settings.checkin_max_quota || "0.1",
+                validDays: settings.checkin_valid_days || "7",
               }}
             />
           </CardContent>

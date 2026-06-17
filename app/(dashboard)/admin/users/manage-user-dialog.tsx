@@ -13,6 +13,7 @@ import { adjustUserBalance, updateUserRole } from "./actions";
 import { toast } from "sonner";
 import type { UserRow } from "./columns";
 import { creditsToUsd } from "@/lib/billing/credits";
+import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 
 interface ManageUserDialogProps {
   user: UserRow;
@@ -100,12 +101,23 @@ export function ManageUserDialog({ user, currentUserId }: ManageUserDialogProps)
                 当前余额: {user.totalBalance.toLocaleString()} cr
                 (≈ ${creditsToUsd(user.totalBalance).toFixed(4)})
               </p>
-              {user.temporaryBalance > 0 && (
-                <p className="mt-1 text-xs text-muted-foreground">
-                  永久: {user.permanentBalance.toLocaleString()} cr +
-                  临时: {user.temporaryBalance.toLocaleString()} cr
-                </p>
-              )}
+              {(() => {
+                const display = calculateDisplayBalance(user.permanentBalance, user.temporaryBalance);
+                if (user.temporaryBalance > 0 || user.permanentBalance < 0) {
+                  return (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      永久: {display.displayPermanent.toLocaleString()} cr +
+                      临时: {display.displayTemporary.toLocaleString()} cr
+                      {user.permanentBalance < 0 && (
+                        <span className="ml-1 text-amber-600 dark:text-amber-400">
+                          (已用临时余额补正)
+                        </span>
+                      )}
+                    </p>
+                  );
+                }
+                return null;
+              })()}
             </div>
 
             {/* 余额调整 */}
