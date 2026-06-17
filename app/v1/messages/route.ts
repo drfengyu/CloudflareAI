@@ -141,11 +141,14 @@ export async function POST(req: NextRequest) {
     });
 
     // 转回 Anthropic 格式
+    const message = data.choices?.[0]?.message || {};
+    // 兼容不同模型的内容字段：部分模型（如智谱 glm 系列）使用 reasoning_content
+    const textContent = message.content || message.reasoning_content || "";
     return Response.json({
       id: data.id,
       type: "message",
       role: "assistant",
-      content: [{ type: "text", text: data.choices?.[0]?.message?.content || "" }],
+      content: [{ type: "text", text: textContent }],
       model: data.model,
       usage: {
         input_tokens: usage.prompt_tokens || 0,

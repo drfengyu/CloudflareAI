@@ -60,10 +60,14 @@ export function interceptOpenAIStream(
         try {
           const obj = JSON.parse(payload);
           if (obj && typeof obj === "object") {
-            // 累积 assistant content
+            // 累积 assistant content：兼容 OpenAI content 和部分模型的 reasoning_content
             const delta = obj.choices?.[0]?.delta;
-            if (delta && typeof delta.content === "string" && delta.content) {
-              content += delta.content;
+            if (delta) {
+              // 优先取 content，次之 reasoning_content（智谱 glm 系列）
+              const deltaContent = delta.content || delta.reasoning_content;
+              if (typeof deltaContent === "string" && deltaContent) {
+                content += deltaContent;
+              }
             }
             // 抓最后一个非空 usage
             if (obj.usage) {
