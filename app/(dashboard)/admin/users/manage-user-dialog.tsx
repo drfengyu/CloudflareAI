@@ -8,8 +8,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Settings } from "lucide-react";
+import { Settings, Trash2 } from "lucide-react";
 import { adjustUserBalance, updateUserRole } from "./actions";
+import { deleteUser } from "./delete-user-action";
 import { toast } from "sonner";
 import type { UserRow } from "./columns";
 import { creditsToUsd } from "@/lib/billing/credits";
@@ -23,11 +24,14 @@ interface ManageUserDialogProps {
 export function ManageUserDialog({ user, currentUserId }: ManageUserDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [amount, setAmount] = useState(0);
   const [description, setDescription] = useState("");
   const [selectedRole, setSelectedRole] = useState(user.role);
 
   const isCurrentUser = user.id === currentUserId;
+  const isSuperAdmin = user.role >= 100;
+  const canDelete = !isCurrentUser && !isSuperAdmin;
 
   const handleAdjustBalance = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,6 +76,29 @@ export function ManageUserDialog({ user, currentUserId }: ManageUserDialogProps)
       toast.error(error instanceof Error ? error.message : "更新失败");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirm(`确定要删除用户 ${user.email} 吗？\n\n此操作将删除：\n- 用户账户\n- 所有 API Keys\n- 用量记录\n- 充值记录\n- 临时余额\n- 签到记录\n\n此操作不可恢复！`)) {
+      return;
+    }
+
+    setDeleting(true);
+    try {
+      const result = await deleteUser(user.id);
+      if (result.success) {
+        toast.success(result.message || "用户已删除");
+        setOpen(false);
+        // 刷新页面
+        window.location.reload();
+      } else {
+        toast.error(result.message || "删除失败");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "删除失败");
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -185,6 +212,30 @@ export function ManageUserDialog({ user, currentUserId }: ManageUserDialogProps)
               </div>
             )}
           </div>
+
+          {/* 危险操作区 */}
+          {canDelete && (
+            <div className="border-t border-border pt-4">
+              <div className="rounded-lg border border-red-200 bg-red-50 dark:border-red-900/50 dark:bg-red-950/20 p-4">
+                <h3 className="text-sm font-semibold text-red-900 dark:text-red-400 mb-2">
+                  危险操作
+                </h3>
+                <p className="text-xs text-red-700 dark:text-red-500 mb-3">
+                  删除用户将同时删除其所有数据（API Keys、用量记录、充值记录等），此操作不可恢复！
+                </p>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="w-full"
+                >
+                  <Trash2 className="h-3 w-3 mr-1" />
+                  {deleting ? "删除中..." : "删除用户"}
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </>
