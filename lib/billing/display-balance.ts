@@ -16,6 +16,10 @@
  *    → display: permanent 100, temporary 50 (无需补正)
  */
 
+import { db } from "@/lib/db/d1-http";
+import { users, temporaryBalances } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+
 export interface BalanceBreakdown {
   permanent: number;        // 真实永久余额
   temporary: number;        // 真实临时余额
@@ -66,4 +70,36 @@ export function calculateDisplayBalance(
       displayTemporary: 0,
     };
   }
+}
+
+/**
+ * 查询用户的实际可用余额 = 永久余额 + 未过期的临时余额。
+ *
+ * 这是钱包页展示、API key 额度上限校验、未来扣费判断的统一口径。
+ * 任何只读 `users.balanceCredits`（永久余额）做对比的代码都是错的：
+ * 永久余额可能因超扣变成负数，但临时余额仍在补正。
+ */
+export async function getActualBalance(userId: string): Promise<number> {
+  const [userRow] = await db
+    .select({ balanceCredits: users.balanceCredits })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  const permanent = userRow?.balanceCredits ?? 0;
+
+  const tempRows = await db
+    .select({
+      amount: temporaryBalances.amount,
+      expiresAt: temporaryBalances.expiresAt,
+    })
+    .from(temporaryBalances)
+    .where(eq(temporaryBalances.userId, userId));
+
+  const now = new Date();
+  const temporary = tempRows
+    .filter((tb) => new Date(tb.expiresAt) > now)
+    .reduce((acc, tb) => acc + tb.amount, 0);
+
+  return permanent + temporary;
 }

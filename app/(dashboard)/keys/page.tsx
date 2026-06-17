@@ -3,8 +3,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
-import { apiKeys, users, usageLogs, temporaryBalances } from "@/lib/db/schema";
+import { apiKeys, usageLogs } from "@/lib/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
+import { getActualBalance } from "@/lib/billing/display-balance";
 import { Plus } from "lucide-react";
 import { type ApiKeyRow } from "./columns";
 import { KeysClient } from "./client";
@@ -15,26 +16,8 @@ export const dynamic = "force-dynamic";
 export default async function KeysPage() {
   const userId = await requireUser();
 
-  // 获取用户余额
-  const userRows = await db
-    .select({ balanceCredits: users.balanceCredits })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
-
-  const permanentBalance = userRows[0]?.balanceCredits || 0;
-
-  // 实际余额 = 永久余额 + 未过期临时余额（与钱包页口径一致）
-  const now = new Date();
-  const tempRows = await db
-    .select()
-    .from(temporaryBalances)
-    .where(eq(temporaryBalances.userId, userId));
-  const temporaryTotal = tempRows
-    .filter((tb) => new Date(tb.expiresAt) > now)
-    .reduce((acc, tb) => acc + tb.amount, 0);
-
-  const userBalance = permanentBalance + temporaryTotal;
+  // 实际余额 = 永久 + 未过期临时（与钱包页 / 编辑校验同口径）
+  const userBalance = await getActualBalance(userId);
 
   const keys = await db
     .select()

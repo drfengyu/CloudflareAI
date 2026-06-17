@@ -6,6 +6,7 @@ import { generateApiKey } from "@/lib/auth/api-key";
 import { db } from "@/lib/db/d1-http";
 import { apiKeys, users, usageLogs } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { getActualBalance } from "@/lib/billing/display-balance";
 
 export interface CreateKeyResult {
   success: boolean;
@@ -124,20 +125,14 @@ export async function updateApiKeyAction(
   try {
     const userId = await requireUser();
 
-    // 如果设置了额度限制，检查是否超过账户余额
+    // 如果设置了额度限制，检查是否超过账户实际余额（永久 + 未过期临时）
     if (data.quotaCredits !== null) {
-      const userRows = await db
-        .select({ balanceCredits: users.balanceCredits })
-        .from(users)
-        .where(eq(users.id, userId))
-        .limit(1);
-
-      const userBalance = userRows[0]?.balanceCredits || 0;
+      const userBalance = await getActualBalance(userId);
 
       if (data.quotaCredits > userBalance) {
         return {
           success: false,
-          error: `API Key 额度不能超过账户余额（${userBalance.toLocaleString()} credits）`,
+          error: `API Key 额度不能超过账户余额（${Math.round(userBalance).toLocaleString()} credits）`,
         };
       }
     }
