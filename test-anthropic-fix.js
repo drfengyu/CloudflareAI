@@ -4,8 +4,13 @@
  * 快速测试 Anthropic API 认证修复
  */
 
-const BASE_URL = 'https://cloudai.fuwari.fun';
-const API_KEY = process.env.API_KEY || 'sk-cfai-5YbdQtmleCXkDrt1qM-yK2rtvbGia-DA';
+const BASE_URL = process.env.BASE_URL || 'https://cloudai.fuwari.fun';
+const API_KEY = process.env.API_KEY || '';
+
+if (!API_KEY) {
+  console.error('❌ 请设置 API_KEY 环境变量: export API_KEY="sk-cfai-..."');
+  process.exit(1);
+}
 
 async function testAnthropicAuth() {
   console.log('🔍 测试 Anthropic Messages API 认证\n');
