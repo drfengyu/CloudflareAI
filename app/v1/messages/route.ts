@@ -8,19 +8,35 @@ import { calculateCredits } from "@/lib/billing/pricing";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { interceptOpenAIStream } from "@/lib/usage/stream-intercept";
 
+// Anthropic Messages API content 可以是纯字符串或 content block 数组（多模态 / tool_use / tool_result）。
+// 仅提取文本用于：余额估算 + 转 OpenAI 时构造 message.content。
+const contentBlock = z.object({ type: z.string().optional(), text: z.string().optional() }).passthrough();
+const messageContent = z.union([z.string(), z.array(z.union([contentBlock, z.string()]))]);
+
 const schema = z.object({
   model: z.string(),
-  messages: z.array(
-    z.object({
-      role: z.enum(["user", "assistant"]),
-      content: z.string(),
-    }),
-  ),
-  max_tokens: z.number().min(1),
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant", "system"]),
+        content: messageContent,
+      }),
+    )
+    .min(1),
+  // max_tokens 在 Anthropic 规范里是必填，但客户端偶尔不发 → 缺省给 4096 占位估算。
+  max_tokens: z.number().min(1).default(4096),
   stream: z.boolean().optional(),
   temperature: z.number().min(0).max(1).optional(),
-  system: z.string().optional(),
-});
+  // system 可为字符串或 content block 数组（带 cache_control 等）。
+  system: z.union([z.string(), z.array(contentBlock)]).optional(),
+  // 透传字段：Anthropic 客户端常带这些，但我们不识别时不能直接 400。
+  metadata: z.unknown().optional(),
+  stop_sequences: z.array(z.string()).optional(),
+  top_p: z.number().min(0).max(1).optional(),
+  top_k: z.number().min(0).optional(),
+  tools: z.array(z.unknown()).optional(),
+  tool_choice: z.unknown().optional(),
+}).passthrough();
 
 /**
  * POST /v1/messages
@@ -46,16 +62,41 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: { type: "rate_limit_error", message: "Rate limit exceeded" } }, { status: 429 });
   }
 
-  const body = await req.json();
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    return Response.json(
-      { error: { type: "invalid_request_error", message: "Invalid request" } },
-      { status: 400 },
-    );
-  }
+ const body = await req.json();
+ const parsed = schema.safeParse(body);
+ if (!parsed.success) {
+   const errorMsg = `Invalid request: ${parsed.error.issues.map(i => i.message).join('; ')}`;
+   await logUsage({
+     userId,
+     apiKeyId,
+     model: body.model || "unknown",
+     task: "Text Generation",
+     channel: "anthropic",
+     status: "error",
+     errorReason: errorMsg,
+     latencyMs: Date.now() - start,
+   });
+   return Response.json(
+     { error: { type: "invalid_request_error", message: "Invalid request" } },
+     { status: 400 },
+   );
+ }
 
   const { model, messages, max_tokens, stream = false, temperature, system } = parsed.data;
+
+  // content 可能是字符串或 content block 数组 → 展平为纯文本（仅取 text 部分）。
+  const flatten = (content: unknown): string => {
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      return content
+        .map((b) => (typeof b === "string" ? b : typeof b?.text === "string" ? b.text : ""))
+        .join("");
+    }
+    return "";
+  };
+
+  const flatMessages = messages.map((m) => ({ role: m.role, content: flatten(m.content) }));
+  const systemText = system ? flatten(system) : undefined;
 
   // 模型白名单检查
   if (allowedModels && !allowedModels.includes(model)) {
@@ -63,7 +104,7 @@ export async function POST(req: NextRequest) {
   }
 
   // 余额预检
-  const estimatedInput = messages.reduce((sum, m) => sum + m.content.length, 0) * 1.5;
+  const estimatedInput = flatMessages.reduce((sum, m) => sum + m.content.length, 0) * 1.5;
   const estimatedCredits = await calculateCredits(model, estimatedInput, max_tokens);
   const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
   if (!balanceCheck.ok) {
@@ -74,9 +115,9 @@ export async function POST(req: NextRequest) {
 
   try {
     // 转 OpenAI 格式
-    const openaiMessages = system
-      ? [{ role: "system" as const, content: system }, ...messages]
-      : messages;
+    const openaiMessages = systemText
+      ? [{ role: "system" as const, content: systemText }, ...flatMessages]
+      : flatMessages;
 
     const res = await openaiCompatible(
       "chat/completions",

@@ -31,12 +31,23 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body = await req.json();
-  const parsed = schema.safeParse(body);
+ const body = await req.json();
+ const parsed = schema.safeParse(body);
 
-  if (!parsed.success) {
-    return Response.json({ error: "Invalid request" }, { status: 400 });
-  }
+ if (!parsed.success) {
+   const errorMsg = `Invalid request: ${parsed.error.issues.map(i => i.message).join('; ')}`;
+   await logUsage({
+     userId,
+     apiKeyId,
+     model: body.model || "unknown",
+     task: "Image Understanding",
+     channel: "web",
+     status: "error",
+     errorReason: errorMsg,
+     latencyMs: Date.now() - start,
+   });
+   return Response.json({ error: "Invalid request" }, { status: 400 });
+ }
 
   const { model, prompt, image, max_tokens } = parsed.data;
 

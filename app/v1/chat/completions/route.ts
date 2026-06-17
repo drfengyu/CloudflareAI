@@ -8,18 +8,24 @@ import { calculateCredits } from "@/lib/billing/pricing";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { interceptOpenAIStream } from "@/lib/usage/stream-intercept";
 
+// OpenAI content 可以是字符串或 content part 数组（多模态）。
+const contentPart = z.object({ type: z.string().optional(), text: z.string().optional() }).passthrough();
+const messageContent = z.union([z.string(), z.array(z.union([contentPart, z.string()]))]);
+
 const schema = z.object({
   model: z.string(),
-  messages: z.array(
-    z.object({
-      role: z.enum(["system", "user", "assistant"]),
-      content: z.string(),
-    }),
-  ),
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["system", "user", "assistant", "tool", "developer"]),
+        content: messageContent.nullable().optional(),
+      }).passthrough(),
+    )
+    .min(1),
   stream: z.boolean().optional(),
   temperature: z.number().min(0).max(2).optional(),
   max_tokens: z.number().min(1).optional(),
-});
+}).passthrough();
 
 /**
  * POST /v1/chat/completions
@@ -45,14 +51,25 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
 
-  const body = await req.json();
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    return Response.json(
-      { error: "Invalid request", details: parsed.error.issues },
-      { status: 400 },
-    );
-  }
+ const body = await req.json();
+ const parsed = schema.safeParse(body);
+ if (!parsed.success) {
+   const errorMsg = `Invalid request: ${parsed.error.issues.map(i => i.message).join('; ')}`;
+   await logUsage({
+     userId,
+     apiKeyId,
+     model: body.model || "unknown",
+     task: "Text Generation",
+     channel: "openai",
+     status: "error",
+     errorReason: errorMsg,
+     latencyMs: Date.now() - start,
+   });
+   return Response.json(
+     { error: "Invalid request", details: parsed.error.issues },
+     { status: 400 },
+   );
+ }
 
   const { model, messages, stream = false, temperature, max_tokens } = parsed.data;
 
@@ -62,7 +79,17 @@ export async function POST(req: NextRequest) {
   }
 
   // 余额预检（粗略估算：输入按消息总长*1.5，输出按max_tokens或默认512）
-  const estimatedInput = messages.reduce((sum, m) => sum + m.content.length, 0) * 1.5;
+  const contentLength = (content: unknown): number => {
+    if (typeof content === "string") return content.length;
+    if (Array.isArray(content)) {
+      return content.reduce(
+        (n, b) => n + (typeof b === "string" ? b.length : typeof b?.text === "string" ? b.text.length : 0),
+        0,
+      );
+    }
+    return 0;
+  };
+  const estimatedInput = messages.reduce((sum, m) => sum + contentLength(m.content), 0) * 1.5;
   const estimatedOutput = max_tokens || 512;
   const estimatedCredits = await calculateCredits(model, estimatedInput, estimatedOutput);
 
