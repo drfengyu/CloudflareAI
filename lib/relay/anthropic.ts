@@ -125,13 +125,14 @@ function convertMessage(role: string, content: unknown): OpenAIMessage[] {
 
   // 组装该消息本体（tool_result 已单独 push 到 out 前面/后面，保持顺序）
   if (role === "assistant") {
+    // Cloudflare 要求 content 必须是字符串（不接受 null），即使只有 tool_calls。
     const msg: OpenAIMessage = {
       role: "assistant",
-      content: plainText || null,
+      content: plainText,
     };
     if (toolCalls.length > 0) msg.tool_calls = toolCalls;
     // 只有当有文本或工具调用时才加入（避免空 assistant 消息）
-    if (msg.content || (msg.tool_calls && msg.tool_calls.length > 0)) {
+    if (plainText || (msg.tool_calls && msg.tool_calls.length > 0)) {
       out.push(msg);
     }
   } else {

@@ -6,7 +6,7 @@ import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
 import { logUsage, verifyBalance } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { convertToAnthropicStream } from "@/lib/usage/anthropic-stream";
+import { convertToAnthropicStream, anthropicMessageToSSE } from "@/lib/usage/anthropic-stream";
 import {
   anthropicToOpenAIMessages,
   anthropicToolsToOpenAI,
@@ -117,11 +117,15 @@ export async function POST(req: NextRequest) {
     const openaiTools = anthropicToolsToOpenAI(rawTools);
     const openaiToolChoice = anthropicToolChoiceToOpenAI(tool_choice);
 
+    // Cloudflare 流式端点不返回结构化 tool_calls（会序列化进 content 文本），
+    // 因此有工具时强制非流式上游，再合成 Anthropic SSE 保证 tool_use 结构。
+    const upstreamStream = stream && !openaiTools;
+
     const upstreamBody: Record<string, unknown> = {
       model,
       messages: openaiMessages,
       max_tokens,
-      stream,
+      stream: upstreamStream,
       temperature,
     };
     if (openaiTools) upstreamBody.tools = openaiTools;
@@ -144,8 +148,28 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: { type: "api_error", message: text } }, { status: res.status });
     }
 
+    if (stream && !upstreamStream) {
+      // 流式 + 工具：上游已是非流式 JSON。转换为结构化 Anthropic message 后合成 SSE。
+      const data = await res.json();
+      const usage = data.usage || {};
+      await logUsage({
+        userId,
+        apiKeyId,
+        model,
+        task: "Text Generation",
+        channel: "anthropic",
+        inputTokens: usage.prompt_tokens || 0,
+        outputTokens: usage.completion_tokens || 0,
+        status: "ok",
+        latencyMs: Date.now() - start,
+      });
+      const anth = openAIResponseToAnthropic(data, model);
+      return new Response(anthropicMessageToSSE(anth), {
+        headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+      });
+    }
+
     if (stream) {
-      // 流式：把 OpenAI SSE 转换为 Anthropic SSE 格式，供 Claude Code 等客户端正确解析。
       const messageId = `msg_${Date.now().toString(36)}`;
       const { stream: tap, done } = convertToAnthropicStream(res.body, {
         model,

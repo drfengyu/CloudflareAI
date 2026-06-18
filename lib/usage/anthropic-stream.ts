@@ -225,3 +225,91 @@ export function convertToAnthropicStream(
 
   return { stream: transformed, done };
 }
+
+/**
+ * 从一个完整的 Anthropic message 对象合成 SSE 事件流。
+ *
+ * 用于「流式 + 工具」场景：Cloudflare 的流式端点会把工具调用序列化进
+ * delta.content（纯文本），不发结构化 tool_calls，因此无法边收边转。
+ * 解决办法是有工具时改用非流式上游拿到结构化结果，再用本函数回放成
+ * 标准 Anthropic SSE（含 tool_use content block + input_json_delta），
+ * 让 Claude Code 等客户端正确识别工具调用。
+ */
+export function anthropicMessageToSSE(msg: {
+  id: string;
+  model: string;
+  content: any[];
+  stop_reason: string;
+  usage: { input_tokens: number; output_tokens: number };
+}): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const sse = (event: string, data: unknown): Uint8Array =>
+    encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(
+        sse("message_start", {
+          type: "message_start",
+          message: {
+            id: msg.id,
+            type: "message",
+            role: "assistant",
+            content: [],
+            model: msg.model,
+            stop_reason: null,
+            stop_sequence: null,
+            usage: { input_tokens: msg.usage.input_tokens, output_tokens: 0 },
+          },
+        }),
+      );
+
+      msg.content.forEach((block, index) => {
+        if (block.type === "text") {
+          controller.enqueue(
+            sse("content_block_start", {
+              type: "content_block_start",
+              index,
+              content_block: { type: "text", text: "" },
+            }),
+          );
+          if (block.text) {
+            controller.enqueue(
+              sse("content_block_delta", {
+                type: "content_block_delta",
+                index,
+                delta: { type: "text_delta", text: block.text },
+              }),
+            );
+          }
+        } else if (block.type === "tool_use") {
+          controller.enqueue(
+            sse("content_block_start", {
+              type: "content_block_start",
+              index,
+              content_block: { type: "tool_use", id: block.id, name: block.name, input: {} },
+            }),
+          );
+          controller.enqueue(
+            sse("content_block_delta", {
+              type: "content_block_delta",
+              index,
+              delta: { type: "input_json_delta", partial_json: JSON.stringify(block.input ?? {}) },
+            }),
+          );
+        }
+        controller.enqueue(sse("content_block_stop", { type: "content_block_stop", index }));
+      });
+
+      controller.enqueue(
+        sse("message_delta", {
+          type: "message_delta",
+          delta: { stop_reason: msg.stop_reason, stop_sequence: null },
+          usage: { output_tokens: msg.usage.output_tokens },
+        }),
+      );
+      controller.enqueue(sse("message_stop", { type: "message_stop" }));
+      controller.close();
+    },
+  });
+}
