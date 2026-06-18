@@ -7,6 +7,9 @@ import { calculateCredits } from "@/lib/billing/pricing";
 import { saveConversation } from "@/lib/usage/conversation";
 import { interceptOpenAIStream } from "@/lib/usage/stream-intercept";
 import { routeToChannel, getChannelConfig } from "@/lib/channels/router";
+import { db } from "@/lib/db/d1-http";
+import { apiKeys } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 const schema = z.object({
   model: z.string(),
@@ -60,6 +63,21 @@ export async function POST(req: NextRequest) {
  }
 
   const { model, messages, stream = true, temperature, max_tokens } = parsed.data;
+
+  // 渠道路由：如果 API Key 绑定了非 Cloudflare 渠道，转发到对应上游
+  const keyChRows = await db
+    .select({ channelId: apiKeys.channelId })
+    .from(apiKeys)
+    .where(eq(apiKeys.id, apiKeyId!))
+    .limit(1);
+  const chId = keyChRows[0]?.channelId ?? null;
+  if (chId) {
+    const chCfg = await getChannelConfig(chId);
+    if (chCfg && chCfg.type !== 'cloudflare') {
+      const chResp = await routeToChannel(chId, '/chat/completions', req);
+      if (chResp) return chResp;
+    }
+  }
 
   // 余额预检（粗略估算）
   const estimatedInput = messages.reduce((sum, m) => sum + m.content.length, 0) * 1.5;
