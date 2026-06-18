@@ -4,48 +4,98 @@ import { fetchModelCatalog, type NormalizedModel } from "@/lib/cloudflare/catalo
 import { getDisplayPrice } from "@/lib/billing/display-price";
 import { getAllModelPricing } from "@/lib/billing/model-pricing";
 import { getCreditsPerUsd, creditsToUsd } from "@/lib/billing/credits";
-import { fetchAllChannelsModels } from "@/lib/cloudflare/channel-catalog";
+import { db } from "@/lib/db/d1-http";
+import { channels, modelPricing } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { Info } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
 export default async function PricingPage() {
-  const [cfModels, pricingMap, ratio, rawChannelData] = await Promise.all([
+  const [cfModels, pricingMap, ratio, channelRows] = await Promise.all([
     fetchModelCatalog(),
     getAllModelPricing(),
     getCreditsPerUsd(),
-    fetchAllChannelsModels().catch((): { channels: { id: string; type: string; name: string; label: string }[]; modelsByChannel: Record<string, NormalizedModel[]> } => ({
-      channels: [],
-      modelsByChannel: {},
-    })),
+    db
+      .select({ id: channels.id, name: channels.name, type: channels.type })
+      .from(channels)
+      .where(eq(channels.status, 1)),
   ]);
-  const channelData = rawChannelData as { channels: { id: string; type: string; name: string; label: string }[]; modelsByChannel: Record<string, NormalizedModel[]> };
 
   // Cloudflare 模型标记来源
-  const cfWithSource = cfModels.map((m) => ({
+  const cfWithSource: (NormalizedModel & { channelSource: string })[] = cfModels.map((m) => ({
     ...m,
-    channelSource: "cloudflare" as const,
+    channelSource: "cloudflare",
   }));
 
-  // 渠道 tab 数据
+  // 从 model_pricing 表获取所有渠道的定价记录
+  const allPricingRows = await db
+    .select({
+      modelId: modelPricing.modelId,
+      channelId: modelPricing.channelId,
+      inputPrice: modelPricing.inputPrice,
+      isImage: modelPricing.isImage,
+      fixedPrice: modelPricing.fixedPrice,
+      unit: modelPricing.unit,
+    })
+    .from(modelPricing);
+
+  // 按 channelId 分组定价数据
+  const pricingByChannel: Record<string, typeof allPricingRows> = {};
+  for (const row of allPricingRows) {
+    const cid = row.channelId || "default";
+    if (!pricingByChannel[cid]) pricingByChannel[cid] = [];
+    pricingByChannel[cid].push(row);
+  }
+
+  // 构建渠道 tab
   const cloudflareTab = {
     id: "cloudflare",
     type: "cloudflare" as const,
     name: "Cloudflare Workers AI",
     label: "Cloudflare",
   };
-  const allChannels = [cloudflareTab, ...channelData.channels];
-  const modelsByChannel: Record<string, any[]> = {
-    cloudflare: cfWithSource,
+  const allChannels = [
+    cloudflareTab,
+    ...channelRows
+      .filter((c) => c.type && c.type !== "cloudflare")
+      .map((c) => ({
+        id: c.id,
+        type: c.type!,
+        name: c.name,
+        label: channelLabel(c.type!),
+      })),
+  ];
+
+  // 按渠道分组模型数据（从 pricing 表 + 定价 map）
+  // Cloudflare 模型
+  const cfPricingMap = pricingMap;
+  const cloudflareModels: (NormalizedModel & { channelSource: string })[] = cfWithSource;
+
+  // 非 Cloudflare 渠道模型：从 pricing 表提取
+  const modelsByChannel: Record<string, (NormalizedModel & { channelSource: string })[]> = {
+    cloudflare: cloudflareModels,
   };
-  const srcMap = channelData.modelsByChannel;
-  for (const ch of channelData.channels) {
-    const src = srcMap[ch.id] || [];
-    modelsByChannel[ch.id] = src.map((m: any) => ({
-      ...m,
+
+  for (const ch of allChannels) {
+    if (ch.id === "cloudflare") continue;
+    const channelPricing = pricingByChannel[ch.id] || [];
+    const models = channelPricing.map((p) => ({
+      id: p.modelId,
+      name: friendlyName(p.modelId),
+      description: "",
+      task: "Text Generation",
+      category: p.isImage ? "image" as any : "text" as any,
+      source: "proxied" as const,
       channelSource: ch.type,
+      beta: false,
+      contextWindow: undefined,
+      functionCalling: true,
+      pricing: [],
+      author: "",
     }));
+    modelsByChannel[ch.id] = models;
   }
 
   return (
@@ -85,4 +135,20 @@ export default async function PricingPage() {
       </div>
     </>
   );
+}
+
+function friendlyName(id: string): string {
+  const seg = id.split("/").pop() ?? id;
+  return seg.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function channelLabel(type: string): string {
+  const labels: Record<string, string> = {
+    openai: "OpenAI",
+    deepseek: "DeepSeek",
+    anthropic: "Anthropic",
+    azure: "Azure",
+    "openai-compatible": "第三方",
+  };
+  return labels[type] || type;
 }
