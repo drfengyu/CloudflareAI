@@ -56,8 +56,15 @@ export function TextGenPlayground({ models }: TextGenProps) {
       });
 
       if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Request failed");
+        const text = await res.text();
+        let errMsg: string;
+        try {
+          const json = JSON.parse(text);
+          errMsg = json.error || text;
+        } catch {
+          errMsg = text || "Request failed";
+        }
+        throw new Error(errMsg);
       }
 
       const reader = res.body?.getReader();

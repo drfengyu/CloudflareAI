@@ -82,7 +82,27 @@ export async function POST(req: NextRequest) {
         body: forwardBody,
       });
       const chResp = await routeToChannel(chId, '/chat/completions', forwardReq);
-      if (chResp) return chResp;
+      if (chResp) {
+        // 将上游响应克隆一份回传给客户端
+        const upstreamText = await chResp.text();
+        let upstreamJson: Record<string, unknown>;
+        try {
+          upstreamJson = JSON.parse(upstreamText);
+        } catch {
+          return new Response(upstreamText, {
+            status: chResp.status,
+            headers: { 'Content-Type': chResp.headers.get('Content-Type') || 'text/plain' },
+          });
+        }
+        if (!chResp.ok) {
+          // 上游错误：提取错误信息返回给用户
+          const errMsg = (upstreamJson.error as string) ||
+            (upstreamJson.error as Record<string, unknown>)?.message as string ||
+            `Upstream error (${chResp.status})`;
+          return Response.json({ error: errMsg }, { status: chResp.status });
+        }
+        return Response.json(upstreamJson);
+      }
     }
   }
 
@@ -208,6 +228,7 @@ export async function POST(req: NextRequest) {
 
     return Response.json(data);
   } catch (err) {
+    const errMsg = err instanceof Error ? err.message : "Unknown error";
     await logUsage({
       userId,
       apiKeyId,
@@ -215,11 +236,11 @@ export async function POST(req: NextRequest) {
       task: "Text Generation",
       channel: "web",
       status: "error",
-      errorReason: err instanceof Error ? err.message : "Unknown error",
+      errorReason: errMsg,
       latencyMs: Date.now() - start,
     });
     return Response.json(
-      { error: err instanceof Error ? err.message : "Unknown error" },
+      { error: errMsg },
       { status: 500 },
     );
   }
