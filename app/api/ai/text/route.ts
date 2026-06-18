@@ -74,7 +74,14 @@ export async function POST(req: NextRequest) {
   if (chId) {
     const chCfg = await getChannelConfig(chId);
     if (chCfg && chCfg.type !== 'cloudflare') {
-      const chResp = await routeToChannel(chId, '/chat/completions', req);
+      // 重新构造请求（原始 request body 已被读取）
+      const forwardBody = JSON.stringify(parsed.data);
+      const forwardReq = new Request(req.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: forwardBody,
+      });
+      const chResp = await routeToChannel(chId, '/chat/completions', forwardReq);
       if (chResp) return chResp;
     }
   }
