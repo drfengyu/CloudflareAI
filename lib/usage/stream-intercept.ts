@@ -132,18 +132,75 @@ export function interceptOpenAIStream(
 }
 
 /**
- * Anthropic-format SSE events differ:
- *   event: message_start
- *   data: {"type": "message_start", "message": {"usage": {...}}}
- *   ...
- *   event: message_delta
- *   data: {"type": "message_delta", "usage": {"output_tokens": N}}
- *   ...
- *   event: message_stop
+ * 从完整的 OpenAI 非流式 chat.completion 响应合成 chat.completion.chunk SSE 流。
  *
- * For our `/v1/messages` route we currently forward the upstream
- * OpenAI-format SSE without rewrapping (the route's stream branch returns
- * `res.body` directly), so input/output tokens are still parsable via the
- * OpenAI intercept above. If we ever wrap the response into proper Anthropic
- * SSE format, port the intercept logic.
+ * 用于「流式 + 工具」场景：Cloudflare 流式端点把工具调用序列化进 delta.content
+ * 文本、不发结构化 tool_calls deltas。有工具时改用非流式上游拿到结构化结果，
+ * 再用本函数回放成标准 OpenAI SSE（含 tool_calls deltas + finish_reason + usage），
+ * 让 OpenAI SDK 客户端正确识别工具调用。
  */
+export function openAIResponseToSSE(data: any): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  const choice = data?.choices?.[0] || {};
+  const message = choice.message || {};
+  const base = {
+    id: data?.id || `chatcmpl-${Date.now().toString(36)}`,
+    object: "chat.completion.chunk",
+    created: data?.created || Math.floor(Date.now() / 1000),
+    model: data?.model || "",
+  };
+  const emit = (obj: unknown): Uint8Array =>
+    encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
+
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      // 1) role
+      controller.enqueue(
+        emit({ ...base, choices: [{ index: 0, delta: { role: "assistant", content: "" }, finish_reason: null }] }),
+      );
+      // 2) 文本内容
+      const content = message.content;
+      if (typeof content === "string" && content) {
+        controller.enqueue(
+          emit({ ...base, choices: [{ index: 0, delta: { content }, finish_reason: null }] }),
+        );
+      }
+      // 3) 工具调用
+      if (Array.isArray(message.tool_calls)) {
+        message.tool_calls.forEach((tc: any, index: number) => {
+          controller.enqueue(
+            emit({
+              ...base,
+              choices: [
+                {
+                  index: 0,
+                  delta: {
+                    tool_calls: [
+                      {
+                        index,
+                        id: tc.id,
+                        type: "function",
+                        function: { name: tc.function?.name || "", arguments: tc.function?.arguments ?? "" },
+                      },
+                    ],
+                  },
+                  finish_reason: null,
+                },
+              ],
+            }),
+          );
+        });
+      }
+      // 4) finish_reason
+      controller.enqueue(
+        emit({ ...base, choices: [{ index: 0, delta: {}, finish_reason: choice.finish_reason || "stop" }] }),
+      );
+      // 5) usage（含 choices:[] 的尾块，兼容 OpenAI include_usage 约定）
+      if (data?.usage) {
+        controller.enqueue(emit({ ...base, choices: [], usage: data.usage }));
+      }
+      controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      controller.close();
+    },
+  });
+}

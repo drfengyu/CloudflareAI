@@ -6,7 +6,7 @@ import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
 import { logUsage, verifyBalance } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { interceptOpenAIStream } from "@/lib/usage/stream-intercept";
+import { interceptOpenAIStream, openAIResponseToSSE } from "@/lib/usage/stream-intercept";
 
 // OpenAI content 可以是字符串或 content part 数组（多模态）。
 const contentPart = z.object({ type: z.string().optional(), text: z.string().optional() }).passthrough();
@@ -102,9 +102,14 @@ export async function POST(req: NextRequest) {
   try {
     // 透传完整请求体（含 tools / tool_choice / top_p / response_format 等），
     // 而非只挑几个字段——否则 OpenAI 工具调用客户端会因 tools 被丢弃而失败。
+    // Cloudflare 流式端点不返回结构化 tool_calls（序列化进 content），故有工具时
+    // 强制非流式上游，再合成 OpenAI SSE 保证 tool_calls deltas。
+    const rawTools = (body as { tools?: unknown }).tools;
+    const hasTools = Array.isArray(rawTools) && rawTools.length > 0;
+    const upstreamStream = stream && !hasTools;
     const res = await openaiCompatible(
       "chat/completions",
-      { ...parsed.data, model, messages, stream },
+      { ...parsed.data, model, messages, stream: upstreamStream },
       req.signal,
     );
 
@@ -122,8 +127,27 @@ export async function POST(req: NextRequest) {
       return Response.json({ error: text || "Model run failed" }, { status: res.status });
     }
 
+    if (stream && !upstreamStream) {
+      // 流式 + 工具：上游已是非流式 JSON。合成 OpenAI SSE（含 tool_calls deltas）。
+      const data = await res.json();
+      const usage = data.usage || {};
+      await logUsage({
+        userId,
+        apiKeyId,
+        model,
+        task: "Text Generation",
+        channel: "openai",
+        inputTokens: usage.prompt_tokens || 0,
+        outputTokens: usage.completion_tokens || 0,
+        status: "ok",
+        latencyMs: Date.now() - start,
+      });
+      return new Response(openAIResponseToSSE(data), {
+        headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache" },
+      });
+    }
+
     if (stream) {
-      // 流式：拦截 SSE 流，解析末尾的 usage chunk 后再按真实 token 扣费。
       // Cloudflare 即使不传 stream_options 也会发 usage chunk，所以无需改请求体。
       const { stream: tap, done } = interceptOpenAIStream(res.body);
 
