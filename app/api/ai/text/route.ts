@@ -83,7 +83,28 @@ export async function POST(req: NextRequest) {
       });
       const chResp = await routeToChannel(chId, '/chat/completions', forwardReq);
       if (chResp) {
-        // 将上游响应克隆一份回传给客户端
+        // 记录用量
+        const latencyMs = Date.now() - start;
+        after(() => {
+          void logUsage({
+            userId,
+            apiKeyId: apiKeyId!,
+            model,
+            task: "Text Generation",
+            channel: "web",
+            channelId: chId,
+            status: chResp.ok ? "ok" : "error",
+            latencyMs,
+          });
+        });
+        // 流式转发
+        const isStream = parsed.data.stream;
+        if (isStream && chResp.body) {
+          return new Response(chResp.body, {
+            headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+          });
+        }
+        // 非流式：解析 JSON 返回
         const upstreamText = await chResp.text();
         let upstreamJson: Record<string, unknown>;
         try {
@@ -91,13 +112,13 @@ export async function POST(req: NextRequest) {
         } catch {
           return new Response(upstreamText, {
             status: chResp.status,
-            headers: { 'Content-Type': chResp.headers.get('Content-Type') || 'text/plain' },
+            headers: { "Content-Type": chResp.headers.get("Content-Type") || "text/plain" },
           });
         }
         if (!chResp.ok) {
-          // 上游错误：提取错误信息返回给用户
-          const errMsg = (upstreamJson.error as string) ||
-            (upstreamJson.error as Record<string, unknown>)?.message as string ||
+          const errMsg =
+            (upstreamJson.error as string) ||
+            ((upstreamJson.error as Record<string, unknown>)?.message as string) ||
             `Upstream error (${chResp.status})`;
           return Response.json({ error: errMsg }, { status: chResp.status });
         }
