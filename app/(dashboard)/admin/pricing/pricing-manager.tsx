@@ -9,11 +9,24 @@ import { updateModelMultiplier } from "./actions";
 import { toast } from "sonner";
 import { creditsToUsd } from "@/lib/billing/credits";
 
+const CATEGORY_LABELS: Record<string, string> = {
+  text: "文本生成",
+  image: "图像生成",
+  vision: "图像理解",
+  embeddings: "嵌入向量",
+  translate: "翻译",
+  speech: "语音",
+  classify: "分类/检测",
+  video: "视频",
+  remote: "远程渠道",
+};
+
 type ModelWithPricing = {
   id: string;
   name: string;
   category: string;
   source: string;
+  channelSource?: string;
   pricing?: {
     category: string | null;
     source: string | null;
@@ -27,210 +40,215 @@ type ModelWithPricing = {
   };
 };
 
-type Filter = "all" | "text" | "image" | "vision" | "embeddings" | "translate" | "speech" | "video";
+interface PricingManagerProps {
+  models: ModelWithPricing[];
+  ratio: number;
+  /** 是否从服务端传入了渠道模型 */
+  channelModels?: ModelWithPricing[];
+  /** 渠道列表 */
+  channels?: { id: string; name: string; type: string; label: string }[];
+  /** 当前选中的渠道 */
+  activeChannel?: string;
+  /** 切换渠道 */
+  onChannelChange?: (id: string) => void;
+}
 
-export function PricingManager({ models, ratio }: { models: ModelWithPricing[]; ratio: number }) {
-  const [filter, setFilter] = useState<Filter>("all");
+export function PricingManager({
+  models = [],
+  ratio,
+  channelModels = [],
+  channels = [],
+  activeChannel = "cloudflare",
+  onChannelChange,
+}: PricingManagerProps) {
   const [query, setQuery] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [localActiveChannel, setLocalActiveChannel] = useState(activeChannel);
 
-  const counts = useMemo(() => {
-    const c: Partial<Record<Filter, number>> = {};
-    for (const m of models) {
-      const cat = m.category as Filter;
-      c[cat] = (c[cat] ?? 0) + 1;
-    }
-    return c;
-  }, [models]);
+  const currentChannel = onChannelChange ? activeChannel : localActiveChannel;
+  const setCurrentChannel = onChannelChange || setLocalActiveChannel;
 
+  // 合并所有渠道的模型
+  const allChannelTabs = [
+    { id: "cloudflare", name: "Cloudflare Workers AI", type: "cloudflare", label: "Cloudflare" },
+    ...channels.filter((c) => c.type !== "cloudflare"),
+  ];
+
+  const currentModels = useMemo(() => {
+    if (currentChannel === "cloudflare") return models;
+    return channelModels.filter((m) => m.channelSource === currentChannel || m.source === currentChannel);
+  }, [currentChannel, models, channelModels]);
+
+  // 分类
+  const categories = useMemo(() => {
+    const cats = new Set(currentModels.map((m) => m.category));
+    return Array.from(cats).sort();
+  }, [currentModels]);
+
+  // 过滤
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const filtered = models.filter((m) => {
-      if (filter !== "all" && m.category !== filter) return false;
+    return currentModels.filter((m) => {
+      if (categoryFilter !== "all" && m.category !== categoryFilter) return false;
       if (!q) return true;
       return (
         m.id.toLowerCase().includes(q) ||
         m.name.toLowerCase().includes(q)
       );
     });
-
-    // 按价格从低到高排序
-    return filtered.sort((a, b) => {
-      const priceA = a.pricing?.isImage
-        ? (a.pricing.fixedPrice ?? 0)
-        : (a.pricing?.inputPrice ?? 0);
-      const priceB = b.pricing?.isImage
-        ? (b.pricing.fixedPrice ?? 0)
-        : (b.pricing?.inputPrice ?? 0);
-      return priceA - priceB;
-    });
-  }, [models, filter, query]);
-
-  const tabs: { id: Filter; label: string; count: number }[] = [
-    { id: "all" as const, label: "全部", count: models.length },
-    { id: "text" as const, label: "文本生成", count: counts.text ?? 0 },
-    { id: "image" as const, label: "图像生成", count: counts.image ?? 0 },
-    { id: "vision" as const, label: "图像理解", count: counts.vision ?? 0 },
-    { id: "embeddings" as const, label: "嵌入向量", count: counts.embeddings ?? 0 },
-    { id: "translate" as const, label: "翻译", count: counts.translate ?? 0 },
-    { id: "speech" as const, label: "语音", count: counts.speech ?? 0 },
-    { id: "video" as const, label: "视频", count: counts.video ?? 0 },
-  ].filter((t) => t.id === "all" || (t.count ?? 0) > 0);
-
-  const handleEdit = (modelId: string, currentMultiplier: number) => {
-    setEditingId(modelId);
-    setEditValue(currentMultiplier.toString());
-  };
-
-  const handleCancel = () => {
-    setEditingId(null);
-    setEditValue("");
-  };
-
-  const handleSave = async (modelId: string) => {
-    const multiplier = parseFloat(editValue);
-    if (isNaN(multiplier) || multiplier < 0.01 || multiplier > 100) {
-      toast.error("倍率必须在 0.01 ~ 100 之间");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const result = await updateModelMultiplier(modelId, multiplier);
-      if (result.success) {
-        toast.success("更新成功");
-        setEditingId(null);
-        setEditValue("");
-        // 刷新页面以获取最新数据
-        window.location.reload();
-      } else {
-        toast.error(result.error ?? "更新失败");
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "更新失败");
-    } finally {
-      setSaving(false);
-    }
-  };
+  }, [currentModels, query, categoryFilter]);
 
   return (
     <div className="space-y-5 p-8">
-      <div className="relative max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="搜索模型 id / 名称"
-          className="h-9 w-full rounded-lg border border-border bg-surface pl-9 pr-3 text-sm outline-none focus:border-[color:var(--primary)]"
-        />
+      {/* 渠道选项卡 */}
+      {allChannelTabs.length > 1 && (
+        <div className="flex flex-wrap gap-1.5 border-b border-border pb-3">
+          {allChannelTabs.map((ch) => (
+            <button
+              key={ch.id}
+              onClick={() => setCurrentChannel(ch.id)}
+              className={cn(
+                "rounded-t-lg px-4 py-2 text-xs font-medium transition-colors",
+                currentChannel === ch.id
+                  ? "border-b-2 border-[color:var(--primary)] text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {ch.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Search + Category filter */}
+      <div className="flex items-center gap-3">
+        <div className="relative max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索模型 ID / 名称"
+            className="h-9 w-full rounded-lg border border-border bg-surface pl-9 pr-3 text-sm outline-none focus:border-[color:var(--primary)]"
+          />
+        </div>
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="h-9 rounded-lg border border-border bg-surface px-3 text-xs outline-none focus:border-[color:var(--primary)]"
+        >
+          <option value="all">全部分类</option>
+          {categories.map((cat) => (
+            <option key={cat} value={cat}>
+              {CATEGORY_LABELS[cat] || cat} ({currentModels.filter((m) => m.category === cat).length})
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-muted-foreground">{visible.length} 个模型</span>
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {tabs.map((t) => (
+      {/* 模型列表 */}
+      <div className="space-y-2">
+        {visible.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">没有匹配的模型</p>
+        ) : (
+          visible.map((model) => (
+            <ModelPricingRow
+              key={model.id}
+              model={model}
+              ratio={ratio}
+            />
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ModelPricingRow({
+  model,
+  ratio,
+}: {
+  model: ModelWithPricing;
+  ratio: number;
+}) {
+  const [multiplier, setMultiplier] = useState(String(model.pricing?.multiplier ?? 1.0));
+  const [saving, setSaving] = useState(false);
+
+  const p = model.pricing;
+  const displayPrice = p
+    ? p.isImage
+      ? `$${creditsToUsd(p.fixedPrice ?? 0, ratio).toFixed(2)} / image`
+      : `$${creditsToUsd(p.inputPrice ?? 0, ratio).toFixed(4)} / ${p.unit || "M"}`
+    : "—";
+
+  const finalPrice = p
+    ? p.isImage
+      ? `$${creditsToUsd((p.fixedPrice ?? 0) * (parseFloat(multiplier) || 1), ratio).toFixed(2)} / image`
+      : `$${creditsToUsd((p.inputPrice ?? 0) * (parseFloat(multiplier) || 1), ratio).toFixed(4)} / ${p.unit || "M"}`
+    : "—";
+
+  async function handleSave() {
+    const val = parseFloat(multiplier);
+    if (isNaN(val) || val < 0.01 || val > 100) {
+      toast.error("倍率必须在 0.01 到 100 之间");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await updateModelMultiplier(model.id, val);
+      if (!res.success) throw new Error(res.error);
+      toast.success(`倍率已更新: ${multiplier}x`);
+    } catch (err) {
+      toast.error((err as Error).message || "保存失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium truncate">{model.name}</p>
+            <Badge tone="muted" className="text-[10px]">{model.source}</Badge>
+            {model.channelSource && model.channelSource !== "cloudflare" && (
+              <Badge tone="accent" className="text-[10px]">{model.channelSource}</Badge>
+            )}
+          </div>
+          <code className="text-xs text-muted-foreground block truncate">{model.id}</code>
+        </div>
+
+        <div className="hidden md:block text-right text-xs text-muted-foreground min-w-[120px]">
+          <div>基础: {displayPrice}</div>
+          <div>最终: <span className="text-foreground font-medium">{finalPrice}</span></div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              max="100"
+              value={multiplier}
+              onChange={(e) => setMultiplier(e.target.value)}
+              className="h-8 w-20 rounded border border-border bg-surface px-2 text-xs text-right outline-none focus:border-[color:var(--primary)]"
+            />
+            <span className="text-xs text-muted-foreground">x</span>
+          </div>
           <button
-            key={t.id}
-            onClick={() => setFilter(t.id)}
+            onClick={handleSave}
+            disabled={saving}
             className={cn(
-              "rounded-full border px-3 py-1 text-xs transition-colors",
-              filter === t.id
-                ? "border-[color:var(--primary)] bg-[color:var(--primary)]/10 text-foreground"
-                : "border-border text-muted-foreground hover:text-foreground",
+              "h-8 rounded-md px-3 text-xs font-medium transition-colors",
+              "bg-[color:var(--primary)] text-white hover:opacity-90 disabled:opacity-50",
             )}
           >
-            {t.label}
-            <span className="ml-1.5 opacity-60">{t.count}</span>
+            {saving ? "..." : "保存"}
           </button>
-        ))}
-      </div>
-
-      <div className="space-y-2">
-        {visible.map((m) => {
-          const pricing = m.pricing;
-          const isEditing = editingId === m.id;
-
-          return (
-            <Card key={m.id}>
-              <CardContent className="flex items-center justify-between gap-4 py-4">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-medium">{m.name}</p>
-                    <Badge tone={m.source === "hosted" ? "success" : "warning"}>
-                      {m.source}
-                    </Badge>
-                  </div>
-                  <code className="text-[11px] text-muted-foreground">{m.id}</code>
-                  {pricing && (
-                    <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                      <span>
-                        基础价：
-                        {pricing.isImage
-                          ? `$${creditsToUsd((pricing.fixedPrice ?? 0) / (pricing.multiplier || 1), ratio).toFixed(4)}/张`
-                          : `$${creditsToUsd((pricing.inputPrice ?? 0) / (pricing.multiplier || 1), ratio).toFixed(4)}/1M`}
-                      </span>
-                      <span>→</span>
-                      <span className="font-medium text-foreground">
-                        最终价：
-                        {pricing.isImage
-                          ? `$${creditsToUsd(pricing.fixedPrice ?? 0, ratio).toFixed(4)}/张`
-                          : `$${creditsToUsd(pricing.inputPrice ?? 0, ratio).toFixed(4)}/1M`}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {isEditing ? (
-                    <>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        max="100"
-                        value={editValue}
-                        onChange={(e) => setEditValue(e.target.value)}
-                        disabled={saving}
-                        className="h-8 w-24 rounded border border-border bg-surface px-2 text-sm outline-none focus:border-[color:var(--primary)]"
-                      />
-                      <button
-                        onClick={() => handleSave(m.id)}
-                        disabled={saving}
-                        className="h-8 rounded bg-[color:var(--primary)] px-3 text-sm text-white hover:opacity-90 disabled:opacity-50"
-                      >
-                        {saving ? "保存中..." : "保存"}
-                      </button>
-                      <button
-                        onClick={handleCancel}
-                        disabled={saving}
-                        className="h-8 rounded border border-border px-3 text-sm hover:bg-surface disabled:opacity-50"
-                      >
-                        取消
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-sm font-mono font-medium">
-                        ×{pricing?.multiplier?.toFixed(2) ?? "1.00"}
-                      </span>
-                      <button
-                        onClick={() => handleEdit(m.id, pricing?.multiplier ?? 1.0)}
-                        className="h-8 rounded border border-border px-3 text-sm hover:bg-surface"
-                      >
-                        调整
-                      </button>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {visible.length === 0 && (
-        <p className="py-12 text-center text-sm text-muted-foreground">没有匹配的模型</p>
-      )}
-    </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

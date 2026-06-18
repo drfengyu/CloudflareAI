@@ -1,61 +1,61 @@
 import { PageHeader } from "@/components/dashboard/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
+import { PricingTabs } from "@/components/pricing/pricing-tabs";
+import { fetchModelCatalog, type NormalizedModel } from "@/lib/cloudflare/catalog";
 import { getDisplayPrice } from "@/lib/billing/display-price";
 import { getAllModelPricing } from "@/lib/billing/model-pricing";
 import { getCreditsPerUsd, creditsToUsd } from "@/lib/billing/credits";
+import { fetchAllChannelsModels } from "@/lib/cloudflare/channel-catalog";
 import { Info } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
 export default async function PricingPage() {
-  const [models, pricingMap, ratio] = await Promise.all([
+  const [cfModels, pricingMap, ratio, rawChannelData] = await Promise.all([
     fetchModelCatalog(),
     getAllModelPricing(),
     getCreditsPerUsd(),
+    fetchAllChannelsModels().catch((): { channels: { id: string; type: string; name: string; label: string }[]; modelsByChannel: Record<string, NormalizedModel[]> } => ({
+      channels: [],
+      modelsByChannel: {},
+    })),
   ]);
+  const channelData = rawChannelData as { channels: { id: string; type: string; name: string; label: string }[]; modelsByChannel: Record<string, NormalizedModel[]> };
 
-  // 按类别分组，并按价格从低到高排序
-  const sortByPrice = (modelsInCategory: typeof models) => {
-    return modelsInCategory.sort((a, b) => {
-      const priceA = getDisplayPrice(a, pricingMap);
-      const priceB = getDisplayPrice(b, pricingMap);
-      // 处理 null 值（排到最后）
-      if (priceA.credits === null) return 1;
-      if (priceB.credits === null) return -1;
-      return priceA.credits - priceB.credits;
-    });
-  };
+  // Cloudflare 模型标记来源
+  const cfWithSource = cfModels.map((m) => ({
+    ...m,
+    channelSource: "cloudflare" as const,
+  }));
 
-  const categories = {
-    text: sortByPrice(models.filter((m) => m.category === "text")),
-    image: sortByPrice(models.filter((m) => m.category === "image")),
-    vision: sortByPrice(models.filter((m) => m.category === "vision")),
-    embeddings: sortByPrice(models.filter((m) => m.category === "embeddings")),
-    translate: sortByPrice(models.filter((m) => m.category === "translate")),
-    speech: sortByPrice(models.filter((m) => m.category === "speech")),
-    video: sortByPrice(models.filter((m) => m.category === "video")),
+  // 渠道 tab 数据
+  const cloudflareTab = {
+    id: "cloudflare",
+    type: "cloudflare" as const,
+    name: "Cloudflare Workers AI",
+    label: "Cloudflare",
   };
-
-  const categoryNames = {
-    text: "文本生成",
-    image: "图像生成",
-    vision: "图像理解",
-    embeddings: "嵌入向量",
-    translate: "翻译",
-    speech: "语音",
-    video: "视频",
+  const allChannels = [cloudflareTab, ...channelData.channels];
+  const modelsByChannel: Record<string, any[]> = {
+    cloudflare: cfWithSource,
   };
+  const srcMap = channelData.modelsByChannel;
+  for (const ch of channelData.channels) {
+    const src = srcMap[ch.id] || [];
+    modelsByChannel[ch.id] = src.map((m: any) => ({
+      ...m,
+      channelSource: ch.type,
+    }));
+  }
 
   return (
     <>
       <PageHeader
         title="定价"
-        description="所有模型的实际计费价格"
+        description="所有模型的实际计费价格，按渠道和分类浏览"
       />
 
-      <div className="space-y-8 p-8">
+      <div className="space-y-6 p-8">
         {/* 定价说明 */}
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="space-y-3 pt-5">
@@ -66,6 +66,7 @@ export default async function PricingPage() {
                 <ul className="space-y-1 text-muted-foreground">
                   <li>• <strong>文本模型</strong>：按 token 计费，价格单位为「每百万 token」</li>
                   <li>• <strong>图像模型</strong>：固定价格，价格单位为「每张图片」</li>
+                  <li>• <strong>其他渠道</strong>：价格为上游供应商定价 × 本平台倍率</li>
                   <li>• <strong>Credits 换算</strong>：1 USD = {ratio.toLocaleString()} credits</li>
                 </ul>
               </div>
@@ -73,67 +74,14 @@ export default async function PricingPage() {
           </CardContent>
         </Card>
 
-        {/* 各类别定价表 */}
-        {Object.entries(categories).map(([key, categoryModels]) => {
-          if (categoryModels.length === 0) return null;
-
-          return (
-            <Card key={key}>
-              <CardHeader>
-                <CardTitle className="text-base">
-                  {categoryNames[key as keyof typeof categoryNames]} ({categoryModels.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border">
-                        <th className="py-2 text-left font-medium text-muted-foreground">模型</th>
-                        <th className="py-2 text-left font-medium text-muted-foreground">来源</th>
-                        <th className="py-2 text-right font-medium text-muted-foreground">价格</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {categoryModels.map((model) => {
-                        const price = getDisplayPrice(model, pricingMap);
-
-                        return (
-                          <tr key={model.id} className="border-b border-border/50 last:border-0">
-                            <td className="py-3">
-                              <div>
-                                <p className="font-medium">{model.name}</p>
-                                <code className="text-xs text-muted-foreground">{model.id}</code>
-                              </div>
-                            </td>
-                            <td className="py-3">
-                              <Badge tone={model.source === "hosted" ? "warning" : "success"}>
-                                {model.source}
-                              </Badge>
-                            </td>
-                            <td className="py-3 text-right">
-                              {price.credits !== null ? (
-                                <div>
-                                  <p className="font-medium">${creditsToUsd(price.credits, ratio).toFixed(4)}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {price.credits.toLocaleString()} cr
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">/ {price.unit}</p>
-                                </div>
-                              ) : (
-                                <span className="text-muted-foreground">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+        <PricingTabs
+          allChannels={allChannels}
+          modelsByChannel={modelsByChannel}
+          pricingMap={pricingMap}
+          ratio={ratio}
+          getDisplayPrice={getDisplayPrice}
+          creditsToUsd={creditsToUsd}
+        />
       </div>
     </>
   );
