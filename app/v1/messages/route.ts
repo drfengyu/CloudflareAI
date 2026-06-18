@@ -6,8 +6,14 @@ import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
 import { logUsage, verifyBalance } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { interceptOpenAIStream } from "@/lib/usage/stream-intercept";
 import { convertToAnthropicStream } from "@/lib/usage/anthropic-stream";
+import {
+  anthropicToOpenAIMessages,
+  anthropicToolsToOpenAI,
+  anthropicToolChoiceToOpenAI,
+  openAIResponseToAnthropic,
+  flattenAnthropicContent,
+} from "@/lib/relay/anthropic";
 
 // Anthropic Messages API content 可以是纯字符串或 content block 数组（多模态 / tool_use / tool_result）。
 // 仅提取文本用于：余额估算 + 转 OpenAI 时构造 message.content。
@@ -87,29 +93,18 @@ export async function POST(req: NextRequest) {
    );
  }
 
-  const { model, messages, max_tokens, stream = false, temperature, system } = parsed.data;
-
-  // content 可能是字符串或 content block 数组 → 展平为纯文本（仅取 text 部分）。
-  const flatten = (content: unknown): string => {
-    if (typeof content === "string") return content;
-    if (Array.isArray(content)) {
-      return content
-        .map((b) => (typeof b === "string" ? b : typeof b?.text === "string" ? b.text : ""))
-        .join("");
-    }
-    return "";
-  };
-
-  const flatMessages = messages.map((m) => ({ role: m.role, content: flatten(m.content) }));
-  const systemText = system ? flatten(system) : undefined;
+  const { model, messages, max_tokens, stream = false, temperature, system, tool_choice } = parsed.data;
+  // tools 走 passthrough，未在 schema 中显式取出，从 body 读原始值。
+  const rawTools = (body as { tools?: unknown }).tools;
 
   // 模型白名单检查
   if (allowedModels && !allowedModels.includes(model)) {
     return Response.json({ error: { type: "permission_error", message: "Model not allowed" } }, { status: 403 });
   }
 
-  // 余额预检
-  const estimatedInput = flatMessages.reduce((sum, m) => sum + m.content.length, 0) * 1.5;
+  // 余额预检（按消息文本估算输入）
+  const estimatedInput =
+    messages.reduce((sum, m) => sum + flattenAnthropicContent(m.content).length, 0) * 1.5;
   const estimatedCredits = await calculateCredits(model, estimatedInput, max_tokens);
   const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
   if (!balanceCheck.ok) {
@@ -117,16 +112,22 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // 转 OpenAI 格式
-    const openaiMessages = systemText
-      ? [{ role: "system" as const, content: systemText }, ...flatMessages]
-      : flatMessages;
+    // 转 OpenAI 格式：保留工具调用 / 工具结果 / 图片，而非展平为文本。
+    const openaiMessages = anthropicToOpenAIMessages(messages, system);
+    const openaiTools = anthropicToolsToOpenAI(rawTools);
+    const openaiToolChoice = anthropicToolChoiceToOpenAI(tool_choice);
 
-    const res = await openaiCompatible(
-      "chat/completions",
-      { model, messages: openaiMessages, max_tokens, stream, temperature },
-      req.signal,
-    );
+    const upstreamBody: Record<string, unknown> = {
+      model,
+      messages: openaiMessages,
+      max_tokens,
+      stream,
+      temperature,
+    };
+    if (openaiTools) upstreamBody.tools = openaiTools;
+    if (openaiToolChoice !== undefined) upstreamBody.tool_choice = openaiToolChoice;
+
+    const res = await openaiCompatible("chat/completions", upstreamBody, req.signal);
 
     if (!res.ok) {
       const text = await res.text();
@@ -137,6 +138,7 @@ export async function POST(req: NextRequest) {
         task: "Text Generation",
         channel: "anthropic",
         status: "error",
+        errorReason: text?.slice(0, 500) || `Upstream ${res.status}`,
         latencyMs: Date.now() - start,
       });
       return Response.json({ error: { type: "api_error", message: text } }, { status: res.status });
@@ -187,21 +189,8 @@ export async function POST(req: NextRequest) {
       latencyMs: Date.now() - start,
     });
 
-    // 转回 Anthropic 格式
-    const message = data.choices?.[0]?.message || {};
-    // 兼容不同模型的内容字段：部分模型（如智谱 glm 系列）使用 reasoning_content
-    const textContent = message.content || message.reasoning_content || "";
-    return Response.json({
-      id: data.id,
-      type: "message",
-      role: "assistant",
-      content: [{ type: "text", text: textContent }],
-      model: data.model,
-      usage: {
-        input_tokens: usage.prompt_tokens || 0,
-        output_tokens: usage.completion_tokens || 0,
-      },
-    });
+    // 转回 Anthropic 格式（含 tool_use block + stop_reason）
+    return Response.json(openAIResponseToAnthropic(data, model));
   } catch (err) {
     await logUsage({
       userId,
@@ -210,6 +199,7 @@ export async function POST(req: NextRequest) {
       task: "Text Generation",
       channel: "anthropic",
       status: "error",
+      errorReason: err instanceof Error ? err.message.slice(0, 500) : "Unknown error",
       latencyMs: Date.now() - start,
     });
     return Response.json(

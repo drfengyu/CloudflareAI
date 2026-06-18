@@ -71,13 +71,12 @@ export async function POST(req: NextRequest) {
    );
  }
 
-  const { model, messages, stream = false, temperature, max_tokens } = parsed.data;
+  const { model, messages, stream = false, max_tokens } = parsed.data;
 
   // 模型白名单检查
   if (allowedModels && !allowedModels.includes(model)) {
     return Response.json({ error: "Model not allowed for this API key" }, { status: 403 });
   }
-
   // 余额预检（粗略估算：输入按消息总长*1.5，输出按max_tokens或默认512）
   const contentLength = (content: unknown): number => {
     if (typeof content === "string") return content.length;
@@ -101,9 +100,11 @@ export async function POST(req: NextRequest) {
 
 
   try {
+    // 透传完整请求体（含 tools / tool_choice / top_p / response_format 等），
+    // 而非只挑几个字段——否则 OpenAI 工具调用客户端会因 tools 被丢弃而失败。
     const res = await openaiCompatible(
       "chat/completions",
-      { model, messages, stream, temperature, max_tokens },
+      { ...parsed.data, model, messages, stream },
       req.signal,
     );
 
