@@ -6,6 +6,7 @@ import { requireUser, logUsage, verifyBalance, getDefaultApiKey } from "@/lib/us
 import { calculateCredits } from "@/lib/billing/pricing";
 import { saveConversation } from "@/lib/usage/conversation";
 import { interceptOpenAIStream } from "@/lib/usage/stream-intercept";
+import { routeToChannel, getChannelConfig } from "@/lib/channels/router";
 
 const schema = z.object({
   model: z.string(),

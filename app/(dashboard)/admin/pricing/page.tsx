@@ -1,32 +1,25 @@
 import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
-import { users, modelPricing } from "@/lib/db/schema";
+import { users, modelPricing, channels } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PricingManager } from "./pricing-manager";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
 import { getCreditsPerUsd } from "@/lib/billing/credits";
-import { getAdapter } from "@/lib/channels/registry";
-import { channels } from "@/lib/db/schema";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminPricingPage() {
   const userId = await requireUser();
-
-  // 校验管理员权限
   const userRows = await db
     .select({ role: users.role })
     .from(users)
     .where(eq(users.id, userId))
     .limit(1);
+  if (!userRows[0] || userRows[0].role < 10) redirect("/dashboard");
 
-  if (!userRows[0] || userRows[0].role < 10) {
-    redirect("/dashboard");
-  }
-
-  // 获取所有渠道列表
+  // 所有启用渠道
   const channelRows = await db
     .select({ id: channels.id, name: channels.name, type: channels.type })
     .from(channels)
@@ -36,7 +29,7 @@ export default async function AdminPricingPage() {
     .filter((c) => c.type && c.type !== "cloudflare")
     .map((c) => ({ id: c.id, name: c.name, type: c.type!, label: typeLabel(c.type!) }));
 
-  // 获取 Cloudflare 模型价格数据
+  // 定价数据
   const [catalog, pricingRows, ratio] = await Promise.all([
     fetchModelCatalog(),
     db.select().from(modelPricing),
@@ -73,7 +66,7 @@ export default async function AdminPricingPage() {
     };
   });
 
-  // 非 Cloudflare 渠道模型（从 model_pricing 和 adapter 收集）
+  // 非 Cloudflare 渠道模型：直接从 model_pricing 表读取，不调用外部 API
   const channelModels: Array<{
     id: string;
     name: string;
@@ -84,26 +77,15 @@ export default async function AdminPricingPage() {
   }> = [];
 
   for (const ch of channelList) {
-    const adapter = getAdapter(ch.type);
-    if (!adapter?.listModels) continue;
-
-    const chRow = channelRows.find((r) => r.id === ch.id);
-    let configObj: Record<string, unknown> = {};
-    if (chRow) {
-      const full = await db.select().from(channels).where(eq(channels.id, ch.id)).limit(1);
-      try { configObj = full[0]?.config ? JSON.parse(full[0].config) : {}; } catch { /* ignore */ }
-    }
-
-    const remoteModels = await adapter.listModels({ config: configObj }).catch(() => []);
-    for (const m of remoteModels) {
-      const pricing = pricingMap.get(m.id);
+    const pricingForChannel = pricingRows.filter((r) => r.channelId === ch.id);
+    for (const row of pricingForChannel) {
       channelModels.push({
-        id: m.id,
-        name: friendlyName(m.id),
-        category: "remote",
+        id: row.modelId,
+        name: friendlyName(row.modelId),
+        category: row.category || "text",
         source: ch.type,
         channelSource: ch.type,
-        pricing,
+        pricing: pricingMap.get(row.modelId),
       });
     }
   }
