@@ -122,6 +122,7 @@ export async function updateApiKeyAction(
     expiresAt: number | null;
     allowedIps: string | null;
     allowedModels: string | null;
+    channelId?: string | null;
   }
 ) {
   try {
@@ -174,6 +175,7 @@ export async function updateApiKeyAction(
         expiresAt: data.expiresAt ? new Date(data.expiresAt) : null,
         allowedIps: data.allowedIps,
         allowedModels: data.allowedModels,
+        channelId: data.channelId || null,
       })
       .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)));
 

@@ -10,8 +10,14 @@ interface Message {
   content: string;
 }
 
+interface ModelOption {
+  id: string;
+  name: string;
+  channel?: string;
+}
+
 interface TextGenProps {
-  models: Array<{ id: string; name: string }>;
+  models: ModelOption[];
 }
 
 export function TextGenPlayground({ models }: TextGenProps) {
@@ -108,13 +114,24 @@ export function TextGenPlayground({ models }: TextGenProps) {
           <select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
-            className="h-8 rounded-lg border border-border bg-surface px-2 text-sm outline-none"
+            className="h-8 min-w-[280px] rounded-lg border border-border bg-surface px-2 text-sm outline-none"
           >
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
+            <optgroup label="Cloudflare 托管">
+              {models.filter(m => m.channel === "cloudflare" || !m.channel).map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </optgroup>
+            {models.filter(m => m.channel && m.channel !== "cloudflare").length > 0 && (
+              <optgroup label="第三方渠道">
+                {models.filter(m => m.channel && m.channel !== "cloudflare").map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} [{m.channel}]
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
         </label>
 

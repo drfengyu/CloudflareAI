@@ -5,14 +5,21 @@ import { DataTable } from "@/components/data-table/data-table";
 import { columns, type ApiKeyRow } from "./columns";
 import { KeySheet } from "./key-sheet";
 
-interface KeysTableProps {
-  data: ApiKeyRow[];
+interface Channel {
+  id: string;
+  name: string;
+  type: string;
 }
 
-export function KeysTable({ data }: KeysTableProps) {
+interface KeysTableProps {
+  data: ApiKeyRow[];
+  channels?: Channel[];
+  models?: { id: string; name: string }[];
+}
+
+export function KeysTable({ data, channels = [], models = [] }: KeysTableProps) {
   const [editingKey, setEditingKey] = useState<ApiKeyRow | null>(null);
 
-  // 传递 onEdit 回调到 columns
   const columnsWithEdit = columns.map((col) => {
     if (col.id === "actions") {
       return {
@@ -35,7 +42,13 @@ export function KeysTable({ data }: KeysTableProps) {
   return (
     <>
       <DataTable columns={columnsWithEdit} data={data} />
-      <KeySheet key={editingKey?.id} apiKey={editingKey} onClose={() => setEditingKey(null)} />
+      <KeySheet
+        key={editingKey?.id}
+        apiKey={editingKey}
+        onClose={() => setEditingKey(null)}
+        channelsProp={channels}
+        modelsProp={models}
+      />
     </>
   );
 }

@@ -1,38 +1,38 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { X } from "lucide-react";
+import { useState, useTransition, useEffect, useMemo, useRef } from "react";
+import { X, Search, Check, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { MultiSelect } from "@/components/ui/multi-select";
 import { updateApiKeyAction } from "./actions";
 import type { ApiKeyRow } from "./columns";
 
-// 常用模型列表（后续可以从 API 动态获取）
-const POPULAR_MODELS = [
-  { id: "@cf/meta/llama-3.1-8b-instruct", name: "Llama 3.1 8B" },
-  { id: "@cf/meta/llama-3.1-70b-instruct", name: "Llama 3.1 70B" },
-  { id: "@cf/qwen/qwen2.5-coder-32b-instruct", name: "Qwen 2.5 Coder 32B" },
-  { id: "@cf/deepseek-ai/deepseek-v3", name: "DeepSeek V3" },
-  { id: "@cf/black-forest-labs/flux-1-schnell", name: "FLUX.1 Schnell" },
-  { id: "@cf/stabilityai/stable-diffusion-xl-base-1.0", name: "SDXL 1.0" },
-  { id: "@cf/baai/bge-base-en-v1.5", name: "BGE Base EN v1.5 (Embedding)" },
+// Channel types
+interface Channel {
+  id: string;
+  name: string;
+  type: string;
+}
+
+// All available models (fetched from server)
+const MODEL_SOURCES = [
+  { label: "Cloudflare 模型", prefix: "@cf" },
+  { label: "DeepSeek 模型", prefix: "deepseek" },
+  { label: "OpenAI 模型", prefix: "gpt" },
+  { label: "其他", prefix: "" },
 ];
 
 interface KeySheetProps {
   apiKey: ApiKeyRow | null;
   onClose: () => void;
+  channelsProp?: Channel[];
+  modelsProp?: { id: string; name: string }[];
 }
 
-export function KeySheet({ apiKey, onClose }: KeySheetProps) {
+export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }: KeySheetProps) {
   const [isPending, startTransition] = useTransition();
 
-  // 解析已有的模型白名单
   const initialModels = apiKey?.allowedModels ? (() => {
-    try {
-      return JSON.parse(apiKey.allowedModels);
-    } catch {
-      return [];
-    }
+    try { return JSON.parse(apiKey.allowedModels); } catch { return []; }
   })() : [];
 
   const [formData, setFormData] = useState({
@@ -41,42 +41,72 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
     expiresAt: apiKey?.expiresAt?.toISOString().split("T")[0] || "",
     allowedIps: apiKey?.allowedIps || "",
     allowedModels: initialModels as string[],
+    channelId: apiKey?.channelId || "",
   });
+  const [modelSearch, setModelSearch] = useState("");
+  const [modelPanelOpen, setModelPanelOpen] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const allModels = useMemo(() => {
+    if (!apiKey) return modelsProp;
+    // Merge with API key's allowed models in case they reference models not in list
+    const existing = new Map(modelsProp.map(m => [m.id, m]));
+    for (const mid of initialModels) {
+      if (!existing.has(mid)) existing.set(mid, { id: mid, name: mid.split("/").pop() || mid });
+    }
+    return Array.from(existing.values());
+  }, [apiKey, modelsProp, initialModels]);
+
+  const filteredModels = useMemo(() => {
+    const q = modelSearch.toLowerCase().trim();
+    if (!q) return allModels;
+    return allModels.filter(m => m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q));
+  }, [allModels, modelSearch]);
+
+  const toggleModel = (id: string) => {
+    setFormData(f => ({
+      ...f,
+      allowedModels: f.allowedModels.includes(id)
+        ? f.allowedModels.filter(i => i !== id)
+        : [...f.allowedModels, id],
+    }));
+  };
+
+  // Close panel on outside click
+  useEffect(() => {
+    if (!modelPanelOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setModelPanelOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [modelPanelOpen]);
 
   if (!apiKey) return null;
+  const keyId: string = apiKey.id;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!apiKey) return; // Type guard
-
     startTransition(async () => {
       const quotaCredits = formData.quotaCredits.trim();
       const quotaValue = quotaCredits ? parseInt(quotaCredits, 10) : null;
-
-      const result = await updateApiKeyAction(apiKey.id, {
+      const result = await updateApiKeyAction(keyId, {
         name: formData.name,
         quotaCredits: quotaValue,
         expiresAt: formData.expiresAt ? new Date(formData.expiresAt).getTime() : null,
         allowedIps: formData.allowedIps || null,
         allowedModels: formData.allowedModels.length > 0 ? JSON.stringify(formData.allowedModels) : null,
+        channelId: formData.channelId || null,
       });
-      if (result.success) {
-        onClose();
-      } else {
-        alert(result.error || "更新失败");
-      }
+      if (result.success) onClose();
+      else alert(result.error || "更新失败");
     });
   }
 
   return (
     <>
-      {/* 背景遮罩 */}
-      <div
-        className="fixed inset-0 z-40 bg-black/50"
-        onClick={onClose}
-      />
-
-      {/* Sheet 侧边栏 */}
+      <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
       <div className="fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-border p-4">
           <h2 className="text-lg font-semibold">编辑 API Key</h2>
@@ -85,10 +115,10 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
           </Button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6 p-6">
+        <form onSubmit={handleSubmit} className="space-y-5 p-6">
           {/* 名称 */}
           <div>
-            <label className="mb-2 block text-sm font-medium">名称</label>
+            <label className="mb-1.5 block text-sm font-medium">名称</label>
             <input
               type="text"
               value={formData.name}
@@ -98,9 +128,33 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
             />
           </div>
 
+          {/* 渠道 */}
+          {channelsProp.length > 0 && (
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">绑定渠道</label>
+              <select
+                value={formData.channelId}
+                onChange={(e) => setFormData({ ...formData, channelId: e.target.value })}
+                className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+              >
+                <option value="">默认（Cloudflare）</option>
+                {channelsProp.map((ch) => (
+                  <option key={ch.id} value={ch.id}>
+                    {ch.name} ({ch.type})
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                选择后，使用此 Key 的请求将路由到该渠道
+              </p>
+            </div>
+          )}
+
           {/* 总额度 */}
           <div>
-            <label className="mb-2 block text-sm font-medium">总额度（credits）</label>
+            <label className="mb-1.5 block text-sm font-medium">
+              总额度（credits）
+            </label>
             <input
               type="number"
               value={formData.quotaCredits}
@@ -108,17 +162,11 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
               placeholder="留空=无限额度"
               className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              设置此 API Key 可使用的最大额度
-            </p>
-            <p className="mt-1 text-xs text-amber-600">
-              ⚠️ 设置的额度不能超过您的账户余额
-            </p>
           </div>
 
-          {/* 已使用额度（只读显示） */}
+          {/* 已使用 */}
           <div>
-            <label className="mb-2 block text-sm font-medium">已使用 / 剩余</label>
+            <label className="mb-1.5 block text-sm font-medium">已使用 / 剩余</label>
             <div className="rounded-lg border border-border bg-surface-2 p-3">
               <div className="flex items-center justify-between text-sm">
                 <span>
@@ -126,19 +174,13 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
                     ? (apiKey.quotaCredits - apiKey.remainCredits).toLocaleString()
                     : "—"} cr
                 </span>
-                <span>
-                  剩余：{apiKey.remainCredits?.toLocaleString() || "无限制"}
-                </span>
+                <span>剩余：{apiKey.remainCredits?.toLocaleString() || "无限制"}</span>
               </div>
               {apiKey.quotaCredits !== null && apiKey.remainCredits !== null && (
                 <div className="mt-2">
                   <div className="h-2 w-full overflow-hidden rounded-full bg-surface">
-                    <div
-                      className="h-full bg-primary transition-all"
-                      style={{
-                        width: `${Math.min(100, ((apiKey.quotaCredits - apiKey.remainCredits) / apiKey.quotaCredits) * 100)}%`,
-                      }}
-                    />
+                    <div className="h-full bg-primary transition-all"
+                      style={{ width: `${Math.min(100, ((apiKey.quotaCredits - apiKey.remainCredits) / apiKey.quotaCredits) * 100)}%` }} />
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground text-center">
                     使用率：{Math.round(((apiKey.quotaCredits - apiKey.remainCredits) / apiKey.quotaCredits) * 100)}%
@@ -146,14 +188,11 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
                 </div>
               )}
             </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              剩余额度由系统根据实际调用自动扣减，不可手动修改
-            </p>
           </div>
 
           {/* 有效期 */}
           <div>
-            <label className="mb-2 block text-sm font-medium">有效期</label>
+            <label className="mb-1.5 block text-sm font-medium">有效期</label>
             <input
               type="date"
               value={formData.expiresAt}
@@ -165,7 +204,7 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
 
           {/* IP 白名单 */}
           <div>
-            <label className="mb-2 block text-sm font-medium">IP 白名单</label>
+            <label className="mb-1.5 block text-sm font-medium">IP 白名单</label>
             <textarea
               value={formData.allowedIps}
               onChange={(e) => setFormData({ ...formData, allowedIps: e.target.value })}
@@ -175,22 +214,75 @@ export function KeySheet({ apiKey, onClose }: KeySheetProps) {
             />
           </div>
 
-          {/* 模型白名单 */}
-          <div>
-            <label className="mb-2 block text-sm font-medium">模型白名单</label>
-            <MultiSelect
-              value={formData.allowedModels}
-              options={POPULAR_MODELS}
-              onChange={(models) => setFormData({ ...formData, allowedModels: models })}
-              placeholder="留空=全部模型"
-            />
-            <p className="mt-1 text-xs text-muted-foreground">
-              选择允许调用的模型，留空则不限制
-            </p>
+          {/* 模型白名单 - 搜索+选择 */}
+          <div ref={panelRef} className="relative">
+            <label className="mb-1.5 block text-sm font-medium">
+              模型白名单
+              {formData.allowedModels.length > 0 && (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  （已选 {formData.allowedModels.length} 个）
+                </span>
+              )}
+            </label>
+            <button
+              type="button"
+              onClick={() => setModelPanelOpen(!modelPanelOpen)}
+              className="flex h-9 w-full items-center justify-between rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+            >
+              <span className="text-muted-foreground">
+                {formData.allowedModels.length === 0
+                  ? "留空=全部模型"
+                  : `已选择 ${formData.allowedModels.length} 个模型`}
+              </span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            </button>
+
+            {modelPanelOpen && (
+              <div className="absolute left-0 right-0 z-50 mt-1 max-h-80 overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
+                {/* 搜索 */}
+                <div className="border-b border-border p-2">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      autoFocus
+                      value={modelSearch}
+                      onChange={(e) => setModelSearch(e.target.value)}
+                      placeholder="搜索模型 ID..."
+                      className="h-8 w-full rounded-md border border-border bg-background pl-8 pr-2 text-xs outline-none focus:border-primary"
+                    />
+                  </div>
+                </div>
+                {/* 模型列表 */}
+                <div className="overflow-y-auto max-h-60">
+                  {filteredModels.length === 0 ? (
+                    <p className="p-3 text-xs text-center text-muted-foreground">无匹配模型</p>
+                  ) : (
+                    filteredModels.map((m) => {
+                      const selected = formData.allowedModels.includes(m.id);
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          onClick={() => toggleModel(m.id)}
+                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-surface-2"
+                        >
+                          <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+                            selected ? "border-primary bg-primary text-white" : "border-border"
+                          }`}>
+                            {selected && <Check className="h-3 w-3" />}
+                          </div>
+                          <span className="truncate">{m.id}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* 操作按钮 */}
-          <div className="flex gap-3">
+          {/* 按钮 */}
+          <div className="flex gap-3 pt-2">
             <Button type="submit" disabled={isPending} className="flex-1">
               {isPending ? "保存中..." : "保存"}
             </Button>
