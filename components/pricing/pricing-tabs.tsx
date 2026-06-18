@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { NormalizedModel } from "@/lib/cloudflare/catalog";
 import { CATEGORIES } from "@/lib/categories";
 
 interface ChannelTab {
@@ -12,6 +11,17 @@ interface ChannelTab {
   type: string;
   name: string;
   label: string;
+}
+
+interface ModelRow {
+  id: string;
+  name: string;
+  category: string;
+  channelSource: string;
+  priceUsd: number | null;
+  priceCr: number | null;
+  unit: string;
+  isImage: boolean;
 }
 
 const CATEGORY_NAMES: Record<string, string> = {
@@ -28,17 +38,9 @@ const CATEGORY_NAMES: Record<string, string> = {
 export function PricingTabs({
   allChannels,
   modelsByChannel,
-  pricingMap,
-  ratio,
-  getDisplayPrice,
-  creditsToUsd: toUsd,
 }: {
   allChannels: ChannelTab[];
-  modelsByChannel: Record<string, NormalizedModel[]>;
-  pricingMap?: Map<string, any>;
-  ratio: number;
-  getDisplayPrice: (model: NormalizedModel, map?: Map<string, any>) => { credits: number | null; usd: number | null; unit: string; isImage: boolean };
-  creditsToUsd: (credits: number, ratio: number) => number;
+  modelsByChannel: Record<string, ModelRow[]>;
 }) {
   const [activeChannel, setActiveChannel] = useState("cloudflare");
   const currentModels = useMemo(
@@ -46,28 +48,26 @@ export function PricingTabs({
     [modelsByChannel, activeChannel],
   );
 
-  // 按 CATEGORIES 顺序分组并排序
+  // 按 CATEGORIES 顺序分组
   const categories = useMemo(() => {
-    const groups: Record<string, NormalizedModel[]> = {};
+    const groups: Record<string, ModelRow[]> = {};
     for (const m of currentModels) {
       const cat = m.category || "text";
       if (!groups[cat]) groups[cat] = [];
       groups[cat].push(m);
     }
-    const ordered: Record<string, NormalizedModel[]> = {};
+    const ordered: Record<string, ModelRow[]> = {};
     for (const c of CATEGORIES) {
       if (groups[c.id]) {
         ordered[c.id] = [...groups[c.id]].sort((a, b) => {
-          const pA = getDisplayPrice(a, pricingMap);
-          const pB = getDisplayPrice(b, pricingMap);
-          if (pA.credits === null) return 1;
-          if (pB.credits === null) return -1;
-          return pA.credits - pB.credits;
+          if (a.priceUsd === null) return 1;
+          if (b.priceUsd === null) return -1;
+          return a.priceUsd - b.priceUsd;
         });
       }
     }
     return ordered;
-  }, [currentModels, pricingMap, getDisplayPrice]);
+  }, [currentModels]);
 
   return (
     <div>
@@ -118,35 +118,32 @@ export function PricingTabs({
                     </tr>
                   </thead>
                   <tbody>
-                    {categoryModels.map((model) => {
-                      const price = getDisplayPrice(model, pricingMap);
-                      return (
-                        <tr key={model.id} className="border-b border-border/50 last:border-0">
-                          <td className="py-3">
+                    {categoryModels.map((model) => (
+                      <tr key={model.id} className="border-b border-border/50 last:border-0">
+                        <td className="py-3">
+                          <div>
+                            <p className="font-medium">{model.name}</p>
+                            <code className="text-xs text-muted-foreground">{model.id}</code>
+                          </div>
+                        </td>
+                        <td className="py-3">
+                          <ChannelBadge channelSource={model.channelSource} />
+                        </td>
+                        <td className="py-3 text-right">
+                          {model.priceUsd !== null ? (
                             <div>
-                              <p className="font-medium">{model.name}</p>
-                              <code className="text-xs text-muted-foreground">{model.id}</code>
+                              <p className="font-medium">${model.priceUsd.toFixed(4)}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {model.priceCr?.toLocaleString()} cr
+                              </p>
+                              <p className="text-xs text-muted-foreground">/ {model.unit}</p>
                             </div>
-                          </td>
-                          <td className="py-3">
-                            <ChannelBadge channelSource={model.channelSource} />
-                          </td>
-                          <td className="py-3 text-right">
-                            {price.credits !== null ? (
-                              <div>
-                                <p className="font-medium">${toUsd(price.credits, ratio).toFixed(4)}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {price.credits.toLocaleString()} cr
-                                </p>
-                                <p className="text-xs text-muted-foreground">/ {price.unit}</p>
-                              </div>
-                            ) : (
-                              <span className="text-muted-foreground">—</span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
