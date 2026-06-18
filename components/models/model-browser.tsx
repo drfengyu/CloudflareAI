@@ -11,11 +11,20 @@ import { getDisplayPrice } from "@/lib/billing/display-price";
 
 type Filter = CategoryId | "all";
 
+interface ChannelTab {
+  id: string;
+  type: string;
+  name: string;
+  label: string;
+}
+
 export function ModelBrowser({
-  models,
+  allChannels,
+  modelsByChannel,
   pricingMap,
 }: {
-  models: NormalizedModel[];
+  allChannels: ChannelTab[];
+  modelsByChannel: Record<string, NormalizedModel[]>;
   pricingMap?: Map<
     string,
     {
@@ -28,18 +37,27 @@ export function ModelBrowser({
     }
   >;
 }) {
+  const [activeChannel, setActiveChannel] = useState("cloudflare");
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
 
+  // 当前渠道的模型
+  const currentModels = useMemo(
+    () => modelsByChannel[activeChannel] || [],
+    [modelsByChannel, activeChannel],
+  );
+
+  // 分类计数（当前渠道内）
   const counts = useMemo(() => {
     const c: Partial<Record<CategoryId, number>> = {};
-    for (const m of models) c[m.category] = (c[m.category] ?? 0) + 1;
+    for (const m of currentModels) c[m.category] = (c[m.category] ?? 0) + 1;
     return c;
-  }, [models]);
+  }, [currentModels]);
 
+  // 过滤后的模型
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return models.filter((m) => {
+    return currentModels.filter((m) => {
       if (filter !== "all" && m.category !== filter) return false;
       if (!q) return true;
       return (
@@ -50,10 +68,11 @@ export function ModelBrowser({
         (m.author?.toLowerCase().includes(q) ?? false)
       );
     });
-  }, [models, filter, query]);
+  }, [currentModels, filter, query]);
 
-  const tabs: { id: Filter; label: string; count: number }[] = [
-    { id: "all", label: "全部", count: models.length },
+  // 分类 tab（仅当前渠道有数据的分类）
+  const categoryTabs: { id: Filter; label: string; count: number }[] = [
+    { id: "all", label: "全部", count: currentModels.length },
     ...CATEGORIES.filter((c) => (counts[c.id] ?? 0) > 0).map((c) => ({
       id: c.id as Filter,
       label: c.label,
@@ -73,24 +92,54 @@ export function ModelBrowser({
         />
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        {tabs.map((t) => (
+      {/* 渠道选项卡 */}
+      <div className="flex flex-wrap gap-1.5 border-b border-border pb-3">
+        {allChannels.map((ch) => (
           <button
-            key={t.id}
-            onClick={() => setFilter(t.id)}
+            key={ch.id}
+            onClick={() => {
+              setActiveChannel(ch.id);
+              setFilter("all");
+            }}
             className={cn(
-              "rounded-full border px-3 py-1 text-xs transition-colors",
-              filter === t.id
-                ? "border-[color:var(--primary)] bg-[color:var(--primary)]/10 text-foreground"
-                : "border-border text-muted-foreground hover:text-foreground",
+              "rounded-t-lg px-4 py-2 text-xs font-medium transition-colors",
+              activeChannel === ch.id
+                ? "border-b-2 border-[color:var(--primary)] text-foreground"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
-            {t.label}
-            <span className="ml-1.5 opacity-60">{t.count}</span>
+            <span className="flex items-center gap-1.5">
+              {ch.label}
+              <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] tabular-nums">
+                {modelsByChannel[ch.id]?.length || 0}
+              </span>
+            </span>
           </button>
         ))}
       </div>
 
+      {/* 分类选项卡（仅当前渠道有数据时显示） */}
+      {currentModels.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {categoryTabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setFilter(t.id)}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs transition-colors",
+                filter === t.id
+                  ? "border-[color:var(--primary)] bg-[color:var(--primary)]/10 text-foreground"
+                  : "border-border text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.label}
+              <span className="ml-1.5 opacity-60">{t.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 模型网格 */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {visible.map((m) => (
           <ModelCard key={m.id} model={m} pricingMap={pricingMap} />
@@ -139,7 +188,18 @@ function ModelCard({
               )}
             </div>
           </div>
-          {model.source === "hosted" ? (
+          {/* 来源渠道标签 */}
+          {model.channelSource === "cloudflare" ? (
+            <Badge tone="success">CF 托管</Badge>
+          ) : model.channelSource === "deepseek" ? (
+            <Badge tone="accent">DeepSeek</Badge>
+          ) : model.channelSource === "openai" ? (
+            <Badge tone="accent">OpenAI</Badge>
+          ) : model.channelSource === "anthropic" ? (
+            <Badge tone="accent">Anthropic</Badge>
+          ) : model.channelSource ? (
+            <Badge tone="warning">第三方</Badge>
+          ) : model.source === "hosted" ? (
             <Badge tone="success">CF 托管</Badge>
           ) : (
             <Badge tone="warning">第三方计费</Badge>
@@ -176,7 +236,6 @@ function ModelCard({
   );
 }
 
-/** 厂商 Logo，缺失时回退到作者/名称首字母占位。 */
 function VendorLogo({
   author,
   name,
@@ -188,7 +247,6 @@ function VendorLogo({
 }) {
   if (logo) {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- 远程 Cloudflare 文档站 SVG，无需 next/image 优化
       <img
         src={logo}
         alt={author ?? name}
@@ -205,7 +263,6 @@ function VendorLogo({
   );
 }
 
-/** 能力标签 → 配色：已弃用=警示，测试版=弱化，其余=强调。 */
 function tagTone(tag: string): "accent" | "warning" | "muted" {
   if (tag === "已弃用") return "warning";
   if (tag === "测试版") return "muted";

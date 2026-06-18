@@ -37,6 +37,8 @@ const typeLabels: Record<string, string> = {
   openai: "OpenAI",
   anthropic: "Anthropic",
   azure: "Azure",
+  deepseek: "DeepSeek",
+  "openai-compatible": "OpenAI 兼容",
 };
 
 const keyStatusMap: Record<number, { label: string; tone: "success" | "danger" | "warning" | "muted" }> = {

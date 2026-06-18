@@ -6,6 +6,7 @@ import type { ChannelAdapter } from "./adapter";
 import { OpenAIAdapter } from "./openai-adapter";
 import { AnthropicAdapter } from "./anthropic-adapter";
 import { CloudflareAdapter } from "./cloudflare-adapter";
+import { DeepSeekAdapter } from "./deepseek-adapter";
 
 const registry = new Map<string, ChannelAdapter>();
 
@@ -16,6 +17,7 @@ function init() {
     new OpenAIAdapter(),
     new AnthropicAdapter(),
     new CloudflareAdapter(),
+    new DeepSeekAdapter(),
   ];
   for (const a of adapters) {
     registry.set(a.type, a);
@@ -40,6 +42,8 @@ export const CHANNEL_TYPES = [
   { value: "openai", label: "OpenAI" },
   { value: "anthropic", label: "Anthropic" },
   { value: "azure", label: "Azure OpenAI" },
+  { value: "deepseek", label: "DeepSeek" },
+  { value: "openai-compatible", label: "OpenAI 兼容 (通用)" },
 ] as const;
 
 /** 各渠道类型的配置字段说明（供 UI 动态表单使用） */
@@ -68,6 +72,26 @@ export const CHANNEL_CONFIG_FIELDS: Record<string, ConfigField[]> = {
       type: "text",
       required: false,
       placeholder: "org-...",
+    },
+  ],
+  deepseek: [
+    { key: "apiKey", label: "API Key", type: "password", required: true, placeholder: "sk-..." },
+    {
+      key: "baseUrl",
+      label: "Base URL",
+      type: "text",
+      required: false,
+      placeholder: "https://api.deepseek.com/v1",
+    },
+  ],
+  "openai-compatible": [
+    { key: "apiKey", label: "API Key", type: "password", required: true, placeholder: "sk-..." },
+    {
+      key: "baseUrl",
+      label: "Base URL",
+      type: "text",
+      required: true,
+      placeholder: "https://api.xxx.com/v1",
     },
   ],
   anthropic: [

@@ -25,6 +25,8 @@ export interface NormalizedModel {
   category: CategoryId;
   /** hosted = Cloudflare GPUs (neuron free tier applies); proxied = third-party billing. */
   source: "hosted" | "proxied";
+  /** 来源渠道标识：cloudflare / openai / deepseek / anthropic / ... */
+  channelSource?: string;
   beta: boolean;
   contextWindow?: number;
   functionCalling: boolean;

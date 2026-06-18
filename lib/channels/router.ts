@@ -65,6 +65,8 @@ export async function routeToChannel(
 
   switch (channel.type) {
     case "openai":
+    case "deepseek":
+    case "openai-compatible":
       return forwardToOpenAI(path, request, config);
     case "anthropic":
       return forwardToAnthropic(path, request, config);
