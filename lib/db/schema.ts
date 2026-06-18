@@ -82,6 +82,21 @@ export const verificationTokens = sqliteTable(
 );
 
 // ── App tables ───────────────────────────────────────────────────────────
+/** 渠道表：管理不同的 API 提供商（Cloudflare / OpenAI / Anthropic 等）。 */
+export const channels = sqliteTable("channels", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  /** 渠道类型：cloudflare / openai / anthropic / azure 等。 */
+  type: text("type"),
+  /** 1=启用 / 2=禁用 / 3=已删除。 */
+  status: integer("status").notNull().default(1),
+  /** 渠道配置（JSON 字符串），如 API Key、Base URL 等。 */
+  config: text("config"),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+});
+
+export type Channel = typeof channels.$inferSelect;
+
 export const apiKeys = sqliteTable("api_key", {
   id: text("id").primaryKey().$defaultFn(uuid),
   userId: text("userId")
@@ -106,6 +121,8 @@ export const apiKeys = sqliteTable("api_key", {
   allowedIps: text("allowedIps"),
   /** 分组倍率覆盖（若设置则覆盖用户分组倍率）。 */
   groupMultiplier: real("groupMultiplier").default(1.0),
+  /** 渠道ID，关联到 channels 表 */
+  channelId: text("channelId").references(() => channels.id, { onDelete: "set null" }),
   lastUsedAt: integer("lastUsedAt", { mode: "timestamp_ms" }),
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });
@@ -120,6 +137,8 @@ export const usageLogs = sqliteTable("usage_log", {
   source: text("source"),
   /** web | openai | anthropic — which surface issued the call. */
   channel: text("channel").notNull(),
+  /** 渠道ID，关联到 channels 表 */
+  channelId: text("channelId").references(() => channels.id, { onDelete: "set null" }),
   inputTokens: integer("inputTokens").default(0),
   outputTokens: integer("outputTokens").default(0),
   neurons: real("neurons").default(0),
@@ -258,6 +277,7 @@ export const temporaryBalances = sqliteTable("temporary_balance", {
  * - 图像模型：fixedPrice 单位为 $/张，isImage=1。
  * - multiplier 为管理员可调整的倍率（默认 1.0），最终价格 = 基础价格 × multiplier。
  * - 计费和 UI 显示都从此表读取。
+ * - channelId 关联到 channels 表，支持按渠道定制定价。
  */
 export const modelPricing = sqliteTable("model_pricing", {
   modelId: text("modelId").primaryKey(),
@@ -275,6 +295,8 @@ export const modelPricing = sqliteTable("model_pricing", {
   fixedPrice: real("fixedPrice"),
   /** 管理员可调整的定价倍率（默认 1.0）。最终价格 = 基础价格 × multiplier。 */
   multiplier: real("multiplier").default(1.0).notNull(),
+  /** 渠道ID，关联到 channels 表 */
+  channelId: text("channelId").references(() => channels.id, { onDelete: "set null" }),
   updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });
 

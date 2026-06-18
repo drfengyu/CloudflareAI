@@ -21,6 +21,9 @@ export interface ApiKeyRow {
   actualUsed: number; // 实际使用量（从 usage_log）
   callCount: number; // 调用次数
   userBalance: number; // 账户余额
+  channelId: string | null;
+  channelName: string | null;
+  channelType: string | null;
 }
 
 const statusLabels: Record<number, { label: string; tone: "success" | "danger" | "warning" | "muted" }> = {
@@ -101,6 +104,23 @@ export const columns: ColumnDef<ApiKeyRow>[] = [
       } catch {
         return <span className="text-xs text-muted-foreground">—</span>;
       }
+    },
+  },
+  {
+    id: "channel",
+    header: "渠道",
+    cell: ({ row }) => {
+      const name = row.original.channelName;
+      const type = row.original.channelType;
+      if (!name) {
+        return <Badge tone="muted" className="text-xs">Cloudflare</Badge>;
+      }
+      return (
+        <div className="text-xs">
+          <p className="font-medium">{name}</p>
+          <p className="text-muted-foreground">{type}</p>
+        </div>
+      );
     },
   },
   {

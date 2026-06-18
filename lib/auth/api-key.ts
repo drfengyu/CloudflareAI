@@ -13,14 +13,14 @@ export function generateApiKey(): { key: string; hash: string; prefix: string } 
 }
 
 /**
- * 根据明文 API key 查找并返回验证后的 { userId, apiKeyId }（Phase B 增强版）。
+ * 根据明文 API key 查找并返回验证后的 { userId, apiKeyId, allowedModels, channelId }（Phase B 增强版）。
  * 校验：status=1（启用）、未过期、IP白名单（如有）。
  * 返回 null 表示无效/不通过。
  */
 export async function verifyApiKey(
   key: string,
   clientIp?: string,
-): Promise<{ userId: string; apiKeyId: string; allowedModels: string[] | null } | null> {
+): Promise<{ userId: string; apiKeyId: string; allowedModels: string[] | null; channelId: string | null } | null> {
   if (!key.startsWith("sk-cfai-")) return null;
 
   const hash = crypto.createHash("sha256").update(key).digest("hex");
@@ -67,6 +67,7 @@ export async function verifyApiKey(
     userId: apiKey.userId,
     apiKeyId: apiKey.id,
     allowedModels,
+    channelId: apiKey.channelId ?? null,
   };
 }
 

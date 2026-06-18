@@ -9,6 +9,27 @@
 
 ### 新增
 
+- **AI 供应商渠道管理（Channel Management）**
+  - 完整 CRUD 管理界面：`/admin/channels` + `/admin/channels/[id]` 详情页
+  - 动态配置表单：根据渠道类型（OpenAI/Anthropic/Azure/Cloudflare）自动切换配置字段
+  - 适配器注册表（`lib/channels/registry.ts`）：统一管理各渠道适配器实例
+  - **OpenAI 适配器**（`lib/channels/openai-adapter.ts`）：直通 OpenAI API、健康检查、模型列表获取
+  - **Anthropic 适配器**（`lib/channels/anthropic-adapter.ts`）：直通 Anthropic API、健康检查、内置模型列表
+  - **Cloudflare 适配器**（`lib/channels/cloudflare-adapter.ts`）：占位（内置逻辑）
+  - **渠道健康检查**：`GET /api/channels/[channelId]/health` — 验证上游 API 连接是否正常
+  - **渠道模型同步**：`POST /api/channels/[channelId]/models/sync` — 从上游拉取模型列表写入定价表
+  - **渠道模型倍率管理**：`PUT/DELETE /api/channels/[channelId]/models/[modelId]`
+  - **渠道统计 API**：`GET /api/channels/[channelId]/stats` — 总览/日趋势/模型排行/近期错误
+  - 详情页：关联密钥列表 + 渠道模型展示 + 热门模型排行 + 配置信息
+  - 列表页支持搜索过滤、状态切换、健康检查操作
+- **工具调用（Function Calling）端到端支持**（`/v1/messages` + `/v1/chat/completions`）
+  - 新增 `lib/relay/anthropic.ts`：Anthropic ⇆ OpenAI 双向转换（参考 new-api `relay-claude.go`）
+    - 请求：`tool_use`(assistant) → OpenAI `tool_calls`；`tool_result`(user) → 独立 `role:"tool"` 消息；
+      `image` block → `image_url`；`tools` / `tool_choice` 正确映射
+    - 响应：OpenAI `tool_calls` → Anthropic `tool_use` block；`finish_reason` → `stop_reason`
+  - `lib/usage/anthropic-stream.ts` 重写为块索引状态机：发射 `tool_use` content block + `input_json_delta`
+  - `lib/usage/stream-intercept.ts` 新增 `openAIResponseToSSE`：把非流式结果回放成 OpenAI SSE（含 `tool_calls` deltas）
+  - 适配 Claude Code 的 `tool_use → tool_result` 智能体循环
 - **翻译双路径架构（LLM + m2m100）**
   - 新增 LLM 翻译路径：用文本模型 + 翻译提示词（`/api/ai/translate`），CJK 质量远优于 m2m100
   - `@cf/meta/m2m100-1.2b` 保留为「快速 · CJK 有限」选项
@@ -37,6 +58,16 @@
 
 ### 修复
 
+- **Claude Code 工具调用失败 / 400 / 流式解析错误**（`/v1/messages`）
+  - 根因：旧实现把所有 content block **展平为纯文本**，丢弃 `tools` / `tool_use` / `tool_result`，
+    流式转换器只发文本 delta → Claude Code 拿不到 `tool_use`、智能体循环断裂
+  - **400 被拒**：多轮回传时 assistant 消息 `content` 给了 `null`，而 Cloudflare 要求必须是字符串
+    （`Type mismatch '/messages/N/content' 'string' not in 'null'`）→ 改为 `""`
+  - **流式工具丢失**：Cloudflare 流式端点把工具调用序列化进 `delta.content` 文本，**不发**结构化
+    `tool_calls` deltas → 有工具时改用非流式上游拿结构化结果，再合成标准 SSE（`anthropicMessageToSSE` /
+    `openAIResponseToSSE`），保证 `tool_use` / `tool_calls` 结构
+  - `/v1/chat/completions` 同步修复：旧实现只挑 `model/messages/stream/temperature/max_tokens` 转发，
+    **丢弃了 `tools` / `tool_choice`** → 改为透传完整校验后的请求体
 - **`/v1/*` 网关被 Auth.js 中间件错误重定向到 `/login`**（外部 API 客户端不可用）
   - 根因：路由从 `/api/openai/v1/*` 迁移到 `/v1/*` 后，`proxy.ts` 的 matcher 只排除了 `/api`，
     导致 `/v1/*` 路径被 next-auth 当作页面访问，未登录会话直接 302 → `/login`，
@@ -84,9 +115,11 @@
 
 ### 规划中
 
-- **Phase B 剩余**：网关 IP/模型白名单校验
-- **Phase F 剩余**：Server Actions 实现（兑换码生成 UI、用户余额调整 UI）
-- **管理后台签到配置界面**（`/admin/settings`）
+- **Phase A**：视觉地基（oklch 主题 + shadcn primitives + 布局重做）
+- **Phase D 剩余**：批量创建 key、分组管理（groupMultiplier）、导出统计
+- **渠道图表**：使用统计图表按渠道分组
+- **Server Actions**：兑换码生成 UI、用户余额调整 UI
+- **签到配置界面**：`/admin/settings` 中管理签到参数
 
 ## [0.2.2] - 2026-06-16
 

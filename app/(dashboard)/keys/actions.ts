@@ -18,6 +18,7 @@ export async function createApiKeyAction(formData: FormData): Promise<CreateKeyR
   try {
     const userId = await requireUser();
     const name = String(formData.get("name") || "").trim();
+    const channelId = String(formData.get("channelId") || "").trim() || null;
 
     if (!name) {
       return { success: false, error: "API key 名称不能为空" };
@@ -30,6 +31,7 @@ export async function createApiKeyAction(formData: FormData): Promise<CreateKeyR
       name,
       keyHash: hash,
       prefix,
+      channelId: channelId || undefined,
     });
 
     revalidatePath("/keys");

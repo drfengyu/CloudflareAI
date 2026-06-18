@@ -14,6 +14,7 @@ import {
   openAIResponseToAnthropic,
   flattenAnthropicContent,
 } from "@/lib/relay/anthropic";
+import { routeToChannel, getChannelConfig } from "@/lib/channels/router";
 
 // Anthropic Messages API content 可以是纯字符串或 content block 数组（多模态 / tool_use / tool_result）。
 // 仅提取文本用于：余额估算 + 转 OpenAI 时构造 message.content。
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: { type: "authentication_error", message: "Invalid API key" } }, { status: 401 });
   }
 
-  const { userId, apiKeyId, allowedModels } = verified;
+  const { userId, apiKeyId, allowedModels, channelId } = verified;
 
   // 限流：每用户每分钟 60 次请求
   if (!checkRateLimit(`anthropic:${userId}`, { window: 60_000, limit: 60 })) {
@@ -83,6 +84,7 @@ export async function POST(req: NextRequest) {
      model: body.model || "unknown",
      task: "Text Generation",
      channel: "anthropic",
+     channelId,
      status: "error",
      errorReason: errorMsg,
      latencyMs: Date.now() - start,
@@ -109,6 +111,32 @@ export async function POST(req: NextRequest) {
   const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
   if (!balanceCheck.ok) {
     return Response.json({ error: { type: "insufficient_balance", message: balanceCheck.reason } }, { status: 402 });
+  }
+
+  // 渠道路由：如果 API Key 绑定了非 Cloudflare 渠道，转发到对应上游
+  if (channelId) {
+    const channelConfig = await getChannelConfig(channelId);
+    if (channelConfig && channelConfig.type !== "cloudflare") {
+      const channelResponse = await routeToChannel(channelId, "/chat/completions", req);
+      if (channelResponse) {
+        const latencyMs = Date.now() - start;
+        after(() => {
+          void logUsage({
+            userId,
+            apiKeyId,
+            model,
+            task: "Text Generation",
+            channel: "anthropic",
+            channelId,
+            inputTokens: Math.floor(estimatedInput),
+            outputTokens: max_tokens,
+            status: "ok",
+            latencyMs,
+          });
+        });
+        return channelResponse;
+      }
+    }
   }
 
   try {
@@ -141,6 +169,7 @@ export async function POST(req: NextRequest) {
         model,
         task: "Text Generation",
         channel: "anthropic",
+        channelId,
         status: "error",
         errorReason: text?.slice(0, 500) || `Upstream ${res.status}`,
         latencyMs: Date.now() - start,
@@ -158,6 +187,7 @@ export async function POST(req: NextRequest) {
         model,
         task: "Text Generation",
         channel: "anthropic",
+        channelId,
         inputTokens: usage.prompt_tokens || 0,
         outputTokens: usage.completion_tokens || 0,
         status: "ok",
@@ -186,6 +216,7 @@ export async function POST(req: NextRequest) {
           model,
           task: "Text Generation",
           channel: "anthropic",
+          channelId,
           inputTokens: usage?.promptTokens ?? Math.floor(estimatedInput),
           outputTokens: usage?.completionTokens ?? 0,
           status: "ok",
@@ -207,6 +238,7 @@ export async function POST(req: NextRequest) {
       model,
       task: "Text Generation",
       channel: "anthropic",
+      channelId,
       inputTokens: usage.prompt_tokens || 0,
       outputTokens: usage.completion_tokens || 0,
       status: "ok",
@@ -222,6 +254,7 @@ export async function POST(req: NextRequest) {
       model,
       task: "Text Generation",
       channel: "anthropic",
+      channelId,
       status: "error",
       errorReason: err instanceof Error ? err.message.slice(0, 500) : "Unknown error",
       latencyMs: Date.now() - start,

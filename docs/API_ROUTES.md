@@ -45,6 +45,7 @@ Content-Type: application/json
 - 自动计量真实 token 用量
 - 余额预检 + 双重扣减（user + apiKey）
 - 错误不计费
+- **工具调用（Function Calling）**：透传 `tools` / `tool_choice`，返回标准 `tool_calls`
 
 **实现文件**：`app/v1/chat/completions/route.ts`
 
@@ -121,6 +122,14 @@ Content-Type: application/json
 - 内部转换为 OpenAI 格式调用 Cloudflare
 - 返回 Anthropic 格式响应
 - 支持流式和非流式
+- **工具调用（Function Calling）**：`tools`（`{name, description, input_schema}`）→ OpenAI `tools`；
+  `tool_use` / `tool_result` content block 正确转换，返回 `tool_use` block + `stop_reason: tool_use`，
+  适配 Claude Code 智能体循环
+  - Cloudflare 流式端点不返回结构化 tool_calls（序列化进 content 文本），故本网关在**请求带 `tools` 且
+    `stream:true`** 时改用非流式上游 + 合成 Anthropic SSE（`message_start` → `content_block_start(tool_use)`
+    → `input_json_delta` → `message_delta(stop_reason:tool_use)` → `message_stop`）
+
+**实现文件**：`app/v1/messages/route.ts` + `lib/relay/anthropic.ts`
 
 **响应**：
 ```json
@@ -418,7 +427,43 @@ export function checkRateLimit(
 
 ### Phase I - 渠道管理（Channel）
 
-new-api 的 `/api/channel` 管理多个上游 API 提供商（OpenAI / Anthropic / Azure 等），本项目目前只对接 Cloudflare，此功能暂不需要。
+渠道管理用于连接多个上游 AI 供应商（OpenAI / Anthropic / Cloudflare / Azure 等）。
+
+```
+# CRUD
+GET    /api/channels                       # 列出所有渠道（需管理员）
+POST   /api/channels                       # 创建渠道（需管理员）
+GET    /api/channels/:id                   # 获取渠道详情（需管理员）
+PUT    /api/channels/:id                   # 更新渠道（需管理员）
+DELETE /api/channels/:id                   # 软删除渠道（需管理员）
+
+# 健康检查 & 统计
+GET    /api/channels/:id/health            # 渠道健康检查（需管理员）
+GET    /api/channels/:id/stats             # 渠道使用统计（需管理员）
+
+# 模型管理
+GET    /api/channels/:id/models            # 列出渠道关联模型（需管理员）
+POST   /api/channels/:id/models/sync       # 从上游同步模型列表（需管理员）
+PUT    /api/channels/:id/models/:modelId   # 更新模型倍率（需管理员）
+DELETE /api/channels/:id/models/:modelId   # 移除模型关联（需管理员）
+```
+
+**渠道类型**：
+- `cloudflare` — Cloudflare Workers AI（内置逻辑）
+- `openai` — OpenAI API 直通
+- `anthropic` — Anthropic API 直通
+- `azure` — Azure OpenAI 服务
+
+**适配器注册表**：`lib/channels/registry.ts`
+- 根据渠道类型自动选择对应适配器
+- 支持 `healthCheck()` / `listModels()` 扩展方法
+- 配置字段按渠道类型动态展示（API Key、Base URL、Organization ID 等）
+
+**渠道路由网关**（`lib/channels/router.ts`）：
+- 根据 API Key 的 `channelId` 自动路由到对应上游
+- OpenAI 渠道 → 直通 OpenAI API
+- Anthropic 渠道 → 直通 Anthropic API
+- Cloudflare 渠道 → 内置 Workers AI 逻辑
 
 ### Phase J - 订阅计费（Subscription）
 
@@ -426,4 +471,4 @@ new-api 的 `/api/subscription` 支持订阅套餐，本项目使用积分制，
 
 ---
 
-**最后更新**：2026-06-16
+**最后更新**：2026-06-18

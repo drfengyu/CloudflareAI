@@ -1,10 +1,12 @@
 import { NextRequest } from "next/server";
+import { after } from "next/server";
 import { z } from "zod";
 import { runModelJSON } from "@/lib/cloudflare/ai";
 import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
 import { logUsage, verifyBalance } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { estimateTokensTotal } from "@/lib/usage/tokens";
+import { routeToChannel, getChannelConfig } from "@/lib/channels/router";
 
 const schema = z.object({
   model: z.string(),
@@ -28,7 +30,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid or unauthorized API key" }, { status: 401 });
   }
 
-  const { userId, apiKeyId, allowedModels } = verified;
+  const { userId, apiKeyId, allowedModels, channelId } = verified;
 
  const body = await req.json();
  const parsed = schema.safeParse(body);
@@ -40,6 +42,7 @@ export async function POST(req: NextRequest) {
      model: body.model || "unknown",
      task: "Text Embeddings",
      channel: "openai",
+     channelId,
      status: "error",
      errorReason: errorMsg,
      latencyMs: Date.now() - start,
@@ -64,6 +67,32 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: balanceCheck.reason }, { status: 402 });
   }
 
+  // 渠道路由：如果 API Key 绑定了非 Cloudflare 渠道，转发到对应上游
+  if (channelId) {
+    const channelConfig = await getChannelConfig(channelId);
+    if (channelConfig && channelConfig.type !== "cloudflare") {
+      const channelResponse = await routeToChannel(channelId, "/embeddings", req);
+      if (channelResponse) {
+        const latencyMs = Date.now() - start;
+        after(() => {
+          void logUsage({
+            userId,
+            apiKeyId,
+            model,
+            task: "Text Embeddings",
+            channel: "openai",
+            channelId,
+            inputTokens: Math.floor(estimatedTokens),
+            outputTokens: 0,
+            status: "ok",
+            latencyMs,
+          });
+        });
+        return channelResponse;
+      }
+    }
+  }
+
   try {
     const results = await Promise.all(
       texts.map((text) => runModelJSON(model, { text })),
@@ -81,6 +110,7 @@ export async function POST(req: NextRequest) {
       model,
       task: "Text Embeddings",
       channel: "openai",
+      channelId,
       inputTokens: Math.floor(estimatedTokens),
       outputTokens: 0,
       status: "ok",
@@ -100,6 +130,7 @@ export async function POST(req: NextRequest) {
       model,
       task: "Text Embeddings",
       channel: "openai",
+      channelId,
       status: "error",
       latencyMs: Date.now() - start,
     });

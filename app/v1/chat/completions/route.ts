@@ -7,6 +7,7 @@ import { logUsage, verifyBalance } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { interceptOpenAIStream, openAIResponseToSSE } from "@/lib/usage/stream-intercept";
+import { routeToChannel, getChannelConfig } from "@/lib/channels/router";
 
 // OpenAI content 可以是字符串或 content part 数组（多模态）。
 const contentPart = z.object({ type: z.string().optional(), text: z.string().optional() }).passthrough();
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: "Invalid or unauthorized API key" }, { status: 401 });
   }
 
-  const { userId, apiKeyId, allowedModels } = verified;
+  const { userId, apiKeyId, allowedModels, channelId } = verified;
 
   // 限流：每用户每分钟 60 次请求
   if (!checkRateLimit(`openai:${userId}`, { window: 60_000, limit: 60 })) {
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest) {
      model: body.model || "unknown",
      task: "Text Generation",
      channel: "openai",
+     channelId,
      status: "error",
      errorReason: errorMsg,
      latencyMs: Date.now() - start,
@@ -97,7 +99,32 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: balanceCheck.reason }, { status: 402 });
   }
 
-
+  // 渠道路由：如果 API Key 绑定了非 Cloudflare 渠道，转发到对应上游
+  if (channelId) {
+    const channelConfig = await getChannelConfig(channelId);
+    if (channelConfig && channelConfig.type !== "cloudflare") {
+      const channelResponse = await routeToChannel(channelId, "/chat/completions", req);
+      if (channelResponse) {
+        // 记录用量（简化：非 Cloudflare 渠道按估算 token 计费）
+        const latencyMs = Date.now() - start;
+        after(() => {
+          void logUsage({
+            userId,
+            apiKeyId,
+            model,
+            task: "Text Generation",
+            channel: "openai",
+            channelId,
+            inputTokens: Math.floor(estimatedInput),
+            outputTokens: estimatedOutput,
+            status: "ok",
+            latencyMs,
+          });
+        });
+        return channelResponse;
+      }
+    }
+  }
 
   try {
     // 透传完整请求体（含 tools / tool_choice / top_p / response_format 等），
@@ -121,6 +148,7 @@ export async function POST(req: NextRequest) {
         model,
         task: "Text Generation",
         channel: "openai",
+        channelId,
         status: "error",
         latencyMs: Date.now() - start,
       });
@@ -137,6 +165,7 @@ export async function POST(req: NextRequest) {
         model,
         task: "Text Generation",
         channel: "openai",
+        channelId,
         inputTokens: usage.prompt_tokens || 0,
         outputTokens: usage.completion_tokens || 0,
         status: "ok",
@@ -161,6 +190,7 @@ export async function POST(req: NextRequest) {
           model,
           task: "Text Generation",
           channel: "openai",
+          channelId,
           inputTokens: usage?.promptTokens ?? Math.floor(estimatedInput),
           outputTokens: usage?.completionTokens ?? 0,
           status: "ok",
@@ -185,6 +215,7 @@ export async function POST(req: NextRequest) {
       model,
       task: "Text Generation",
       channel: "openai",
+      channelId,
       inputTokens: usage.prompt_tokens || 0,
       outputTokens: usage.completion_tokens || 0,
       status: "ok",
@@ -199,6 +230,7 @@ export async function POST(req: NextRequest) {
       model,
       task: "Text Generation",
       channel: "openai",
+      channelId,
       status: "error",
       latencyMs: Date.now() - start,
     });

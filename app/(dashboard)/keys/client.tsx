@@ -1,14 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useFormStatus } from "react-dom";
 import { Copy, Check, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { createApiKeyAction } from "./actions";
 
+interface Channel {
+  id: string;
+  name: string;
+  type: string | null;
+  status: number;
+}
+
 export function KeysClient() {
   const [newKey, setNewKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [channels, setChannels] = useState<Channel[]>([]);
+
+  useEffect(() => {
+    fetch("/api/channels")
+      .then((r) => r.json())
+      .then((data) => {
+        const active = (data.data || []).filter((c: Channel) => c.status === 1);
+        setChannels(active);
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleCreate(formData: FormData) {
     const result = await createApiKeyAction(formData);
@@ -48,14 +66,35 @@ export function KeysClient() {
           </Button>
         </div>
       ) : (
-        <form action={handleCreate} className="flex gap-2">
-          <input
-            name="name"
-            placeholder="密钥名称（如：claude-code-dev）"
-            required
-            className="h-9 flex-1 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-[color:var(--primary)]"
-          />
-          <SubmitButton />
+        <form action={handleCreate} className="space-y-2">
+          <div className="flex gap-2">
+            <input
+              name="name"
+              placeholder="密钥名称（如：claude-code-dev）"
+              required
+              className="h-9 flex-1 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-[color:var(--primary)]"
+            />
+            <SubmitButton />
+          </div>
+          {channels.length > 0 && (
+            <div className="flex items-center gap-2">
+              <label htmlFor="channelId" className="text-xs text-muted-foreground whitespace-nowrap">
+                绑定渠道
+              </label>
+              <select
+                name="channelId"
+                id="channelId"
+                className="h-8 flex-1 rounded-lg border border-border bg-surface px-2 text-xs outline-none focus:border-[color:var(--primary)]"
+              >
+                <option value="">默认（Cloudflare）</option>
+                {channels.map((ch) => (
+                  <option key={ch.id} value={ch.id}>
+                    {ch.name} ({ch.type})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </form>
       )}
     </div>

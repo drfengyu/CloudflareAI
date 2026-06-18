@@ -19,6 +19,7 @@ import {
   Wallet,
   Users,
   Ticket,
+  Radio,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -68,6 +69,7 @@ const NAV: NavGroup[] = [
     title: "管理",
     adminOnly: true,
     items: [
+      { href: "/admin/channels", label: "渠道管理", icon: Radio },
       { href: "/admin/users", label: "用户管理", icon: Users },
       { href: "/admin/redemptions", label: "兑换码", icon: Ticket },
       { href: "/admin/pricing", label: "定价管理", icon: Settings },

@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
-import { apiKeys, usageLogs } from "@/lib/db/schema";
+import { apiKeys, usageLogs, channels } from "@/lib/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import { getActualBalance } from "@/lib/billing/display-balance";
 import { Plus } from "lucide-react";
@@ -20,8 +20,24 @@ export default async function KeysPage() {
   const userBalance = await getActualBalance(userId);
 
   const keys = await db
-    .select()
+    .select({
+      id: apiKeys.id,
+      name: apiKeys.name,
+      prefix: apiKeys.prefix,
+      status: apiKeys.status,
+      quotaCredits: apiKeys.quotaCredits,
+      remainCredits: apiKeys.remainCredits,
+      expiresAt: apiKeys.expiresAt,
+      allowedModels: apiKeys.allowedModels,
+      allowedIps: apiKeys.allowedIps,
+      lastUsedAt: apiKeys.lastUsedAt,
+      createdAt: apiKeys.createdAt,
+      channelId: apiKeys.channelId,
+      channelName: channels.name,
+      channelType: channels.type,
+    })
     .from(apiKeys)
+    .leftJoin(channels, eq(apiKeys.channelId, channels.id))
     .where(eq(apiKeys.userId, userId))
     .orderBy(desc(apiKeys.createdAt));
 
@@ -59,6 +75,9 @@ export default async function KeysPage() {
       actualUsed: usage.used,
       callCount: usage.calls,
       userBalance,
+      channelId: k.channelId,
+      channelName: k.channelName,
+      channelType: k.channelType,
     };
   });
 

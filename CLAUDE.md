@@ -391,18 +391,68 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   - 实测验证：zh→en `人工智能正在改变世界` m2m100 返回空 `''`、LLM 返回 `Artificial intelligence is changing the world` ✓
 - ✅ **文档同步**：`docs/BILLING_GUIDE.md` 新增「图像理解（Vision）计费」「翻译计费」两章，含公式/扣费示例/推理模型注意事项
 
+### ✅ 渠道管理（Channel Management）完整实现（2026-06-18）
+
+**已完成**：
+- ✅ **数据库扩展**：
+  - 新增 `channels` 表（id、name、type、status、config、createdAt）
+  - `api_keys` 表新增 `channelId` 外键（关联 channels）
+  - `model_pricing` 表新增 `channelId` 外键（关联 channels）
+  - `usage_logs` 表新增 `channelId` 外键（关联 channels）
+  - 默认渠道 `default-cloudflare` 自动创建并迁移现有数据
+- ✅ **渠道 API**：
+  - `GET /api/channels` — 列出所有渠道（管理员）
+  - `POST /api/channels` — 创建渠道（管理员）
+  - `GET /api/channels/[id]` — 获取渠道详情（管理员）
+  - `PUT /api/channels/[id]` — 更新渠道（管理员）
+  - `DELETE /api/channels/[id]` — 软删除渠道（管理员）
+  - `GET /api/channels/[id]/models` — 渠道关联模型列表
+  - `POST /api/channels/[id]/models/sync` — 从上游同步模型列表
+  - `PUT /api/channels/[id]/models/[modelId]` — 更新模型倍率
+  - `DELETE /api/channels/[id]/models/[modelId]` — 移除模型关联
+  - `GET /api/channels/[id]/health` — 渠道健康检查
+  - `GET /api/channels/[id]/stats` — 渠道使用统计（总览/日趋势/模型排行/错误）
+- ✅ **渠道路由网关**（`lib/channels/router.ts`）：
+  - 根据 API Key 的 `channelId` 自动路由到对应上游
+  - 支持 `openai`（直通 OpenAI API）和 `anthropic`（直通 Anthropic API，含格式转换）
+  - `cloudflare` 保持现有内置逻辑不变
+- ✅ **三端路由集成**：
+  - `/v1/chat/completions` — 非 Cloudflare 渠道自动转发
+  - `/v1/messages` — 同上
+  - `/v1/embeddings` — 同上
+  - 所有路由的 `logUsage` 调用已传入 `channelId`
+- ✅ **模型发现**：
+  - `/v1/models?channel_id=xxx` — 按渠道过滤可用模型列表
+  - 默认无参数时返回所有 hosted 模型（向后兼容）
+- ✅ **管理员界面**：
+  - `/admin/channels` — 渠道管理页面（列表 + 动态配置表单 + 搜索过滤 + 健康检查 + 状态切换）
+  - `/admin/channels/[id]` — 渠道详情页（关联密钥/模型列表/热门排行/统计）
+  - 服务端权限校验（role ≥ 10）
+- ✅ **适配器框架**：
+  - `lib/channels/adapter.ts` — ChannelAdapter 接口（含 healthCheck / listModels）
+  - `lib/channels/registry.ts` — 适配器注册表 + 配置字段定义 + 类型常量
+  - `lib/channels/openai-adapter.ts` — OpenAI 适配器（直通、健康检查、模型列表）
+  - `lib/channels/anthropic-adapter.ts` — Anthropic 适配器（直通、健康检查、模型列表）
+  - `lib/channels/cloudflare-adapter.ts` — Cloudflare 适配器（占位）
+  - `lib/channels/router.ts` — 路由分发 + OpenAI/Anthropic 转换
+- ✅ **所有 API 路由适配 Next.js 16 Promise<params> 规范**
+- ✅ **TypeScript 类型检查通过（0 errors）**
+- ✅ **修复 keys/page.tsx 中 leftJoin 导入（drizzle-orm v0.45.2 无该导出）**
+
 ### 🚧 待完成
 
-- **Phase B 剩余**：网关 IP/模型白名单校验优化（已实现基础逻辑）
+- **Phase A**：视觉地基（oklch 主题 + shadcn primitives + 重做布局）
 - **Phase D 剩余**：批量创建 key、分组管理（groupMultiplier）、导出统计
-- **Phase F 剩余**：Server Actions UI 完善（充值/余额调整/兑换码生成前端表单）、权限细化
+- **渠道图表**：使用统计图表按渠道分组
+- **Server Actions**：兑换码生成 UI、用户余额调整 UI
+- **签到配置界面**：`/admin/settings` 中管理签到参数
 
 ---
 
 ## 版本发布
 
-**当前版本**：v0.2.2（2026-06-16）
-**下一版本**：v0.3.0（流式计量 + 定价重构，待发布）
+**当前版本**：v0.3.0（2026-06-18）
+**下一版本**：v0.4.0（视觉地基 + 管理后台完善，待发布）
 
 所有版本变更记录见根目录 [`CHANGELOG.md`](CHANGELOG.md)，遵循 [Keep a Changelog](https://keepachangelog.com/) 规范。
 

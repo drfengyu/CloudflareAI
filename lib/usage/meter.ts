@@ -19,6 +19,7 @@ export async function logUsage(input: {
   task?: string;
   source?: "hosted" | "proxied";
   channel: "web" | "openai" | "anthropic";
+  channelId?: string | null;
   inputTokens?: number;
   outputTokens?: number;
   neurons?: number;
@@ -82,6 +83,7 @@ export async function logUsage(input: {
     task: input.task,
     source: input.source,
     channel: input.channel,
+    channelId: input.channelId ?? null,
     inputTokens,
     outputTokens,
     neurons: input.neurons ?? 0,
