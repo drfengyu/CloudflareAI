@@ -154,10 +154,10 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
         channelId: formData.channelId || null,
       });
       if (result.success) {
-        // 强制刷新页面数据，确保显示最新的 key 名字
+        // 先关闭对话框
+        onClose();
+        // 然后强制刷新页面数据
         router.refresh();
-        // 短暂延迟后关闭对话框，让数据有时间更新
-        setTimeout(() => onClose(), 100);
       } else {
         alert(result.error || "更新失败");
       }

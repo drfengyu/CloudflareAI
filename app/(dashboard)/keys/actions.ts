@@ -179,7 +179,10 @@ export async function updateApiKeyAction(
       })
       .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)));
 
+    // 强制重新验证 /keys 页面缓存
     revalidatePath("/keys");
+    revalidatePath("/keys", "page");
+
     return { success: true };
   } catch (err) {
     console.error("[updateApiKeyAction] error:", err);
