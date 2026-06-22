@@ -8,7 +8,7 @@ import { saveConversation } from "@/lib/usage/conversation";
 import { interceptOpenAIStream } from "@/lib/usage/stream-intercept";
 import { routeToChannel, getChannelConfig } from "@/lib/channels/router";
 import { db } from "@/lib/db/d1-http";
-import { apiKeys } from "@/lib/db/schema";
+import { apiKeys, modelPricing } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 const schema = z.object({
@@ -64,13 +64,24 @@ export async function POST(req: NextRequest) {
 
   const { model, messages, stream = true, temperature, max_tokens } = parsed.data;
 
-  // 渠道路由：如果 API Key 绑定了非 Cloudflare 渠道，转发到对应上游
-  const keyChRows = await db
-    .select({ channelId: apiKeys.channelId })
-    .from(apiKeys)
-    .where(eq(apiKeys.id, apiKeyId!))
+  // 渠道路由：优先按所选模型查 model_pricing.channelId（模型归属哪个渠道），
+  // 找不到再回退到 API Key 绑定的 channelId（适用于 key 强制锁渠道的场景）。
+  const modelChRows = await db
+    .select({ channelId: modelPricing.channelId })
+    .from(modelPricing)
+    .where(eq(modelPricing.modelId, model))
     .limit(1);
-  const chId = keyChRows[0]?.channelId ?? null;
+  const modelChannelId = modelChRows[0]?.channelId ?? null;
+
+  let chId: string | null = modelChannelId;
+  if (!chId) {
+    const keyChRows = await db
+      .select({ channelId: apiKeys.channelId })
+      .from(apiKeys)
+      .where(eq(apiKeys.id, apiKeyId!))
+      .limit(1);
+    chId = keyChRows[0]?.channelId ?? null;
+  }
   if (chId) {
     const chCfg = await getChannelConfig(chId);
     if (chCfg && chCfg.type !== 'cloudflare') {
