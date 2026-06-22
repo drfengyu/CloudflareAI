@@ -46,6 +46,26 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
   const [modelPanelOpen, setModelPanelOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
+  // 同步 formData 当 apiKey prop 变化时
+  useEffect(() => {
+    if (apiKey) {
+      const models = apiKey.allowedModels ? (() => {
+        try { return JSON.parse(apiKey.allowedModels); } catch { return []; }
+      })() : [];
+
+      setFormData({
+        name: apiKey.name || "",
+        quotaCredits: apiKey.quotaCredits?.toString() || "",
+        expiresAt: apiKey.expiresAt?.toISOString().split("T")[0] || "",
+        allowedIps: apiKey.allowedIps || "",
+        allowedModels: models,
+        channelId: apiKey.channelId || "",
+      });
+      setModelSearch("");
+      setModelPanelOpen(false);
+    }
+  }, [apiKey]);
+
   // 当前生效的渠道 ID：表单选择 > Cloudflare 默认渠道。
   // 默认渠道 = channelsProp 里 type=cloudflare 的那个。
   const defaultCfChannelId = useMemo(

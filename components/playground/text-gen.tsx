@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Send, Loader2, Brain, ChevronDown, ChevronRight } from "lucide-react";
+import { Send, Loader2, Brain, ChevronDown, ChevronRight, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
@@ -53,7 +53,47 @@ export function TextGenPlayground({ models }: TextGenProps) {
   const [temperature, setTemperature] = useState(0.7);
   // Folded reasoning UI: assistant message index → collapsed flag
   const [foldedReasoning, setFoldedReasoning] = useState<Record<number, boolean>>({});
+  // Copy feedback: assistant message index → copied flag
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // 持久化：从 localStorage 恢复状态
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("text-playground-state");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.messages) setMessages(parsed.messages);
+        if (parsed.selectedModel && models.some((m) => m.id === parsed.selectedModel)) {
+          setSelectedModel(parsed.selectedModel);
+        }
+        if (typeof parsed.temperature === "number") setTemperature(parsed.temperature);
+        if (parsed.foldedReasoning) setFoldedReasoning(parsed.foldedReasoning);
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, [models]);
+
+  // 持久化：保存状态到 localStorage（防抖）
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          "text-playground-state",
+          JSON.stringify({
+            messages,
+            selectedModel,
+            temperature,
+            foldedReasoning,
+          }),
+        );
+      } catch {
+        // ignore storage errors
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [messages, selectedModel, temperature, foldedReasoning]);
 
   const currentModel = useMemo(
     () => models.find((m) => m.id === selectedModel),
@@ -78,6 +118,13 @@ export function TextGenPlayground({ models }: TextGenProps) {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
+
+  function copyToClipboard(text: string, index: number) {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopiedIndex(index);
+      setTimeout(() => setCopiedIndex(null), 2000);
+    });
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -118,6 +165,7 @@ export function TextGenPlayground({ models }: TextGenProps) {
       let assistantContent = "";
       let assistantReasoning = "";
       let assistantIndex = -1;
+      let insideThinkTag = false; // 追踪是否在 <think> 标签内
 
       setMessages((m) => {
         const copy = [...m, { role: "assistant" as const, content: "", reasoning: "" }];
@@ -149,14 +197,49 @@ export function TextGenPlayground({ models }: TextGenProps) {
               const delta = parsed.choices?.[0]?.delta;
               if (!delta) continue;
 
+              // DeepSeek 等模型使用独立的 reasoning_content 字段
               const reasoningDelta = delta.reasoning_content;
+              // Qwen/QwQ 等模型把思考内容混在 content 里，用 <think> 标签包裹
               const contentDelta = delta.content;
 
               if (typeof reasoningDelta === "string" && reasoningDelta) {
                 assistantReasoning += reasoningDelta;
               }
+
               if (typeof contentDelta === "string" && contentDelta) {
-                assistantContent += contentDelta;
+                // 检测 <think> 标签开始/结束
+                let remainingDelta = contentDelta;
+
+                while (remainingDelta) {
+                  if (!insideThinkTag) {
+                    const thinkStart = remainingDelta.indexOf("<think>");
+                    if (thinkStart !== -1) {
+                      // 在 <think> 前的正文
+                      if (thinkStart > 0) {
+                        assistantContent += remainingDelta.slice(0, thinkStart);
+                      }
+                      insideThinkTag = true;
+                      remainingDelta = remainingDelta.slice(thinkStart + 7); // "<think>".length = 7
+                    } else {
+                      // 没有 <think> 标签，全部是正文
+                      assistantContent += remainingDelta;
+                      break;
+                    }
+                  } else {
+                    // 在 <think> 标签内
+                    const thinkEnd = remainingDelta.indexOf("</think>");
+                    if (thinkEnd !== -1) {
+                      // 思考内容结束
+                      assistantReasoning += remainingDelta.slice(0, thinkEnd);
+                      insideThinkTag = false;
+                      remainingDelta = remainingDelta.slice(thinkEnd + 8); // "</think>".length = 8
+                    } else {
+                      // <think> 标签未闭合，整段是思考内容
+                      assistantReasoning += remainingDelta;
+                      break;
+                    }
+                  }
+                }
               }
 
               if (reasoningDelta || contentDelta) {
@@ -276,18 +359,35 @@ export function TextGenPlayground({ models }: TextGenProps) {
               const isUser = msg.role === "user";
               const reasoning = msg.reasoning;
               const folded = foldedReasoning[i] ?? false;
+              const isCopied = copiedIndex === i;
               return (
                 <div
                   key={i}
                   className={
                     isUser
                       ? "ml-12 rounded-lg bg-primary/10 p-3 text-sm"
-                      : "mr-12 rounded-lg bg-surface-2 p-3 text-sm"
+                      : "group relative mr-12 rounded-lg bg-surface-2 p-3 text-sm"
                   }
                 >
                   <p className="mb-1 text-[11px] font-medium uppercase opacity-60">
                     {isUser ? "你" : "助手"}
                   </p>
+
+                  {/* Copy button for assistant messages (hover to show) */}
+                  {!isUser && msg.content && (
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(msg.content, i)}
+                      className="absolute right-2 top-2 rounded-md border border-border bg-surface p-1.5 opacity-0 transition-opacity hover:bg-surface-2 group-hover:opacity-100"
+                      title="复制回复"
+                    >
+                      {isCopied ? (
+                        <Check className="h-3.5 w-3.5 text-green-600" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  )}
 
                   {/* Reasoning (assistant only, separately shown) */}
                   {!isUser && reasoning && (

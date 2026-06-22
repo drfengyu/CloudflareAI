@@ -150,10 +150,13 @@
 ### 规划中
 
 - **Phase A**：视觉地基（oklch 主题 + shadcn primitives + 布局重做）
-- **Phase D 剩余**：批量创建 key、分组管理（groupMultiplier）、导出统计
-- **渠道图表**：使用统计图表按渠道分组
-- **Server Actions**：兑换码生成 UI、用户余额调整 UI
-- **签到配置界面**：`/admin/settings` 中管理签到参数
+- **Phase D 剩余**：
+  - API Key 批量创建（一次生成 N 个带前缀的 key）
+  - API Key 分组管理（新增 `key_groups` 表 + 组倍率）
+  - API Key 用量导出（CSV/JSON 导出统计）
+- **渠道图表增强**：
+  - Dashboard 新增渠道分布饼图
+  - 渠道详情页 30 日趋势图 + 错误率曲线
 
 ## [0.2.2] - 2026-06-16
 

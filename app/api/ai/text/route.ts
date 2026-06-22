@@ -64,6 +64,11 @@ export async function POST(req: NextRequest) {
 
   const { model, messages, stream = true, temperature, max_tokens } = parsed.data;
 
+  // 获取模型上下文窗口（用于计算合理的 max_tokens）
+  const catalog = await import("@/lib/cloudflare/catalog").then((m) => m.fetchModelCatalog());
+  const modelInfo = catalog.find((m) => m.id === model);
+  const contextWindow = modelInfo?.contextWindow;
+
   // 渠道路由：优先按所选模型查 model_pricing.channelId（模型归属哪个渠道），
   // 找不到再回退到 API Key 绑定的 channelId（适用于 key 强制锁渠道的场景）。
   const modelChRows = await db
@@ -263,8 +268,16 @@ export async function POST(req: NextRequest) {
 
   // 余额预检（粗略估算）
   const estimatedInput = messages.reduce((sum, m) => sum + m.content.length, 0) * 1.5;
-  const estimatedOutput = max_tokens || 2048;
-  const estimatedCredits = await calculateCredits(model, estimatedInput, estimatedOutput);
+  // 计算实际可用的 max_tokens：
+  // 1. 用户显式传入则优先使用
+  // 2. 否则使用 contextWindow - estimatedInput（留 20% buffer）
+  // 3. 最小 512，最大 32768
+  const effectiveMaxTokens = max_tokens || (
+    contextWindow
+      ? Math.min(32768, Math.max(512, Math.floor((contextWindow - estimatedInput) * 0.8)))
+      : 4096
+  );
+  const estimatedCredits = await calculateCredits(model, estimatedInput, effectiveMaxTokens);
 
   const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
   if (!balanceCheck.ok) {
@@ -279,7 +292,8 @@ export async function POST(req: NextRequest) {
         messages,
         stream,
         temperature,
-        max_tokens,
+        // 使用动态计算的 max_tokens（基于模型 ctx 窗口）
+        max_tokens: effectiveMaxTokens,
       },
       req.signal,
     );

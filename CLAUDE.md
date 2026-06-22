@@ -439,20 +439,36 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 - ✅ **TypeScript 类型检查通过（0 errors）**
 - ✅ **修复 keys/page.tsx 中 leftJoin 导入（drizzle-orm v0.45.2 无该导出）**
 
+### ✅ Phase F（补充）— 管理后台增强（2026-06-17 完成）
+
+- ✅ **兑换码批量生成 UI**（`/admin/redemptions`）：
+  - `GenerateCodesDialog` 组件：数量、额度、最大使用次数、兑换码有效期、余额有效期
+  - Server Action：`generateRedemptionCodes`
+- ✅ **用户余额调整 UI**（`/admin/users`）：
+  - `ManageUserDialog` 组件：充值/扣减、备注、角色修改
+  - Server Actions：`adjustUserBalance` + `updateUserRole`
+  - 记录到 `topup` 表（type 2 = 管理员充值）
+- ✅ **签到配置界面**（`/admin/settings`）：
+  - `CheckinSettingsForm` 组件：开关、最小/最大奖励、有效期配置
+  - Server Action：`updateCheckinSettings`
+
 ### 🚧 待完成
 
 - **Phase A**：视觉地基（oklch 主题 + shadcn primitives + 重做布局）
-- **Phase D 剩余**：批量创建 key、分组管理（groupMultiplier）、导出统计
-- **渠道图表**：使用统计图表按渠道分组
-- **Server Actions**：兑换码生成 UI、用户余额调整 UI
-- **签到配置界面**：`/admin/settings` 中管理签到参数
+- **Phase D 剩余**：
+  - API Key 批量创建（一次生成 N 个带前缀的 key）
+  - API Key 分组管理（新增 `key_groups` 表 + 组倍率）
+  - API Key 用量导出（CSV/JSON 导出统计）
+- **渠道图表增强**：
+  - Dashboard 新增渠道分布饼图
+  - 渠道详情页 30 日趋势图 + 错误率曲线
 
 ---
 
 ## 版本发布
 
 **当前版本**：v0.3.0（2026-06-18）
-**下一版本**：v0.4.0（视觉地基 + 管理后台完善，待发布）
+**下一版本**：v0.4.0（待规划）
 
 所有版本变更记录见根目录 [`CHANGELOG.md`](CHANGELOG.md)，遵循 [Keep a Changelog](https://keepachangelog.com/) 规范。
 
