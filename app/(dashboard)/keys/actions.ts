@@ -195,7 +195,7 @@ export async function updateApiKeyAction(
 
     console.log("[updateApiKeyAction] Revalidation triggered");
 
-    return { success: true };
+    return { success: true, version: "v2.0.1" };
   } catch (err) {
     console.error("[updateApiKeyAction] error:", err);
     return {

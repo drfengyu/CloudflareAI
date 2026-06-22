@@ -56,6 +56,13 @@ test("verify database actually updates", async ({ page }) => {
     console.log(log);
   }
 
+  // 检查返回的版本号
+  const versionLog = logs.find(l => l.includes("Update result"));
+  if (versionLog) {
+    const hasVersion = versionLog.includes("version");
+    console.log(`\n=== 服务端版本标识: ${hasVersion ? "✅ v2.0.1 (新)" : "❌ 无 (旧)"} ===`);
+  }
+
   // 检查是否有 "Database updated successfully"
   const hasDbUpdate = logs.some(l => l.includes("Database updated successfully"));
   console.log(`\n=== 数据库更新日志: ${hasDbUpdate ? "✅ 找到" : "❌ 未找到"} ===`);
