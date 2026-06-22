@@ -162,6 +162,7 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
       });
 
       console.log("[KeySheet] Update result:", result);
+      console.log("[KeySheet] Debug info:", JSON.stringify(result.debug || {}));
 
       if (result.success) {
         console.log("[KeySheet] Update successful, redirecting...");
