@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { updateBasicSettings, updatePricingSettings, updateCheckinSettings } from "./actions";
+import { updateBasicSettings, updatePricingSettings, updateCheckinSettings, updateAuthChannels } from "./actions";
 import { toast } from "sonner";
 
 interface SettingsFormProps {
@@ -400,6 +400,101 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
           <br />
           • 奖励形式：临时余额（有效期 {validDays} 天）
           <br />• 优先消耗：使用时优先扣减临时余额，不够再扣永久余额
+        </p>
+      </div>
+
+      <Button type="submit" disabled={loading}>
+        {loading ? "保存中..." : "保存设置"}
+      </Button>
+    </form>
+  );
+}
+
+interface AuthChannelsFormProps {
+  initialSettings: {
+    emailEnabled: boolean;
+    githubEnabled: boolean;
+    linuxdoEnabled: boolean;
+  };
+}
+
+export function AuthChannelsForm({ initialSettings }: AuthChannelsFormProps) {
+  const [emailEnabled, setEmailEnabled] = useState(initialSettings.emailEnabled);
+  const [githubEnabled, setGithubEnabled] = useState(initialSettings.githubEnabled);
+  const [linuxdoEnabled, setLinuxdoEnabled] = useState(initialSettings.linuxdoEnabled);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // 至少保留一个渠道
+    if (!emailEnabled && !githubEnabled && !linuxdoEnabled) {
+      toast.error("至少需要启用一个登录渠道");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await updateAuthChannels({
+        emailEnabled,
+        githubEnabled,
+        linuxdoEnabled,
+      });
+      toast.success("认证渠道设置已保存");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-3">
+        <label className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={emailEnabled}
+            onChange={(e) => setEmailEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-border"
+          />
+          <div>
+            <span className="text-sm font-medium">邮箱+密码登录</span>
+            <p className="text-xs text-muted-foreground">允许用户使用邮箱和密码注册/登录</p>
+          </div>
+        </label>
+
+        <label className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={githubEnabled}
+            onChange={(e) => setGithubEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-border"
+          />
+          <div>
+            <span className="text-sm font-medium">GitHub OAuth</span>
+            <p className="text-xs text-muted-foreground">允许用户使用 GitHub 账号登录</p>
+          </div>
+        </label>
+
+        <label className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={linuxdoEnabled}
+            onChange={(e) => setLinuxdoEnabled(e.target.checked)}
+            className="h-4 w-4 rounded border-border"
+          />
+          <div>
+            <span className="text-sm font-medium">LinuxDO OAuth</span>
+            <p className="text-xs text-muted-foreground">允许用户使用 LinuxDO 账号登录</p>
+          </div>
+        </label>
+      </div>
+
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+        <p className="text-xs text-muted-foreground">
+          <strong>注意：</strong>至少需要保留一个登录渠道，否则用户将无法访问系统。
         </p>
       </div>
 

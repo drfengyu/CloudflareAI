@@ -5,7 +5,7 @@ import { users, options } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
-import { SettingsForm, PricingSettingsForm, CheckinSettingsForm } from "./settings-form";
+import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, AuthChannelsForm } from "./settings-form";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +83,21 @@ export default async function AdminSettingsPage() {
                 minQuota: settings.checkin_min_quota || "0.01",
                 maxQuota: settings.checkin_max_quota || "0.1",
                 validDays: settings.checkin_valid_days || "7",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">认证渠道</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AuthChannelsForm
+              initialSettings={{
+                emailEnabled: settings.auth_email_enabled !== "false",
+                githubEnabled: settings.auth_github_enabled !== "false",
+                linuxdoEnabled: settings.auth_linuxdo_enabled !== "false",
               }}
             />
           </CardContent>

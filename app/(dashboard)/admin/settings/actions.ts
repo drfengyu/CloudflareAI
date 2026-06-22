@@ -188,3 +188,38 @@ export async function updateCheckinSettings(formData: {
 
   return { success: true };
 }
+
+export async function updateAuthChannels(formData: {
+  emailEnabled: boolean;
+  githubEnabled: boolean;
+  linuxdoEnabled: boolean;
+}) {
+  const currentUserId = await requireUser();
+
+  // 检查权限
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  // 至少保留一个渠道
+  if (!formData.emailEnabled && !formData.githubEnabled && !formData.linuxdoEnabled) {
+    throw new Error("至少需要启用一个登录渠道");
+  }
+
+  // 更新设置
+  await upsertOption("auth_email_enabled", formData.emailEnabled ? "true" : "false");
+  await upsertOption("auth_github_enabled", formData.githubEnabled ? "true" : "false");
+  await upsertOption("auth_linuxdo_enabled", formData.linuxdoEnabled ? "true" : "false");
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/login");
+  revalidatePath("/register");
+
+  return { success: true };
+}

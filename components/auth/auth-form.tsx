@@ -31,13 +31,30 @@ function SubmitButton({ label }: { label: string }) {
   );
 }
 
-export function AuthForm({ mode }: { mode: "login" | "register" }) {
+export function AuthForm({
+  mode,
+  channels = { email: true, github: true, linuxdo: true }
+}: {
+  mode: "login" | "register";
+  channels?: { email: boolean; github: boolean; linuxdo: boolean };
+}) {
   const action = mode === "login" ? loginAction : registerAction;
   const [state, formAction] = useActionState<AuthActionState, FormData>(
     action,
     {},
   );
   const isLogin = mode === "login";
+
+  // 如果所有渠道都禁用，显示错误
+  const hasAnyChannel = channels.email || channels.github || channels.linuxdo;
+
+  if (!hasAnyChannel) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-8 shadow-sm">
+        <p className="text-center text-danger">所有登录渠道已禁用，请联系管理员。</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -58,52 +75,64 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
           </p>
         </div>
 
-        <form action={formAction} className="space-y-5">
-          {!isLogin && (
-            <Field name="name" type="text" label="昵称（可选）" required={false} />
-          )}
-          <Field name="email" type="email" label="邮箱" />
-          <Field name="password" type="password" label="密码" />
+        {channels.email && (
+          <>
+            <form action={formAction} className="space-y-5">
+              {!isLogin && (
+                <Field name="name" type="text" label="昵称（可选）" required={false} />
+              )}
+              <Field name="email" type="email" label="邮箱" />
+              <Field name="password" type="password" label="密码" />
 
-          {state.error && (
-            <p className="animate-in fade-in slide-in-from-top-1 text-sm text-danger duration-200">
-              {state.error}
-            </p>
-          )}
+              {state.error && (
+                <p className="animate-in fade-in slide-in-from-top-1 text-sm text-danger duration-200">
+                  {state.error}
+                </p>
+              )}
 
-          <SubmitButton label={isLogin ? "登录" : "注册"} />
-        </form>
+              <SubmitButton label={isLogin ? "登录" : "注册"} />
+            </form>
 
-        <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
-          <span className="h-px flex-1 bg-border" />
-          或使用第三方账号
-          <span className="h-px flex-1 bg-border" />
-        </div>
+            {(channels.github || channels.linuxdo) && (
+              <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="h-px flex-1 bg-border" />
+                或使用第三方账号
+                <span className="h-px flex-1 bg-border" />
+              </div>
+            )}
+          </>
+        )}
 
-        <div className="space-y-3">
-          <form action={githubSignIn}>
-            <Button
-              type="submit"
-              variant="outline"
-              size="lg"
-              className="w-full"
-            >
-              <GithubIcon className="h-4 w-4" />
-              使用 GitHub 继续
-            </Button>
-          </form>
+        {(channels.github || channels.linuxdo) && (
+          <div className="space-y-3">
+            {channels.github && (
+              <form action={githubSignIn}>
+                <Button
+                  type="submit"
+                  variant="outline"
+                  size="lg"
+                  className="w-full"
+                >
+                  <GithubIcon className="h-4 w-4" />
+                  使用 GitHub 继续
+                </Button>
+              </form>
+            )}
 
-          <Button
-            type="button"
-            variant="outline"
-            size="lg"
-            className="w-full"
-            onClick={() => signIn("linuxdo", { callbackUrl: "/dashboard" })}
-          >
-            <IconLinuxDo className="h-4 w-4" />
-            使用 LinuxDO 继续
-          </Button>
-        </div>
+            {channels.linuxdo && (
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full"
+                onClick={() => signIn("linuxdo", { callbackUrl: "/dashboard" })}
+              >
+                <IconLinuxDo className="h-4 w-4" />
+                使用 LinuxDO 继续
+              </Button>
+            )}
+          </div>
+        )}
 
         <p className="mt-6 text-center text-sm text-muted-foreground">
           {isLogin ? (
