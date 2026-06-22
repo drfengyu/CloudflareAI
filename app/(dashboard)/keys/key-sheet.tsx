@@ -145,6 +145,13 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
     startTransition(async () => {
       const quotaCredits = formData.quotaCredits.trim();
       const quotaValue = quotaCredits ? parseInt(quotaCredits, 10) : null;
+
+      console.log("[KeySheet] Submitting update:", {
+        keyId,
+        newName: formData.name,
+        oldName: apiKey?.name,
+      });
+
       const result = await updateApiKeyAction(keyId, {
         name: formData.name,
         quotaCredits: quotaValue,
@@ -153,7 +160,11 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
         allowedModels: formData.allowedModels.length > 0 ? JSON.stringify(formData.allowedModels) : null,
         channelId: formData.channelId || null,
       });
+
+      console.log("[KeySheet] Update result:", result);
+
       if (result.success) {
+        console.log("[KeySheet] Closing and refreshing...");
         // 先关闭对话框
         onClose();
         // 然后强制刷新页面数据

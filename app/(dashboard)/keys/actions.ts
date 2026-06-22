@@ -126,6 +126,8 @@ export async function updateApiKeyAction(
   }
 ) {
   try {
+    console.log("[updateApiKeyAction] Starting update:", { keyId, newName: data.name });
+
     const userId = await requireUser();
 
     // 如果设置了额度限制，检查是否超过账户实际余额（永久 + 未过期临时）
@@ -142,14 +144,17 @@ export async function updateApiKeyAction(
 
     // 获取当前 key 信息
     const keyRows = await db
-      .select({ remainCredits: apiKeys.remainCredits, quotaCredits: apiKeys.quotaCredits })
+      .select({ remainCredits: apiKeys.remainCredits, quotaCredits: apiKeys.quotaCredits, name: apiKeys.name })
       .from(apiKeys)
       .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)))
       .limit(1);
 
     if (!keyRows[0]) {
+      console.log("[updateApiKeyAction] Key not found");
       return { success: false, error: "API Key 不存在" };
     }
+
+    console.log("[updateApiKeyAction] Current key:", { oldName: keyRows[0].name, keyId });
 
     // 从 usage_log 计算实际使用量
     const usageRows = await db
@@ -166,6 +171,8 @@ export async function updateApiKeyAction(
       newRemainCredits = Math.max(0, data.quotaCredits - actualUsed);
     }
 
+    console.log("[updateApiKeyAction] Updating database...", { newName: data.name });
+
     await db
       .update(apiKeys)
       .set({
@@ -179,9 +186,13 @@ export async function updateApiKeyAction(
       })
       .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)));
 
+    console.log("[updateApiKeyAction] Database updated successfully");
+
     // 强制重新验证 /keys 页面缓存
     revalidatePath("/keys");
     revalidatePath("/keys", "page");
+
+    console.log("[updateApiKeyAction] Revalidation triggered");
 
     return { success: true };
   } catch (err) {
