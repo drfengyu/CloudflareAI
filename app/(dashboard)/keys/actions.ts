@@ -190,6 +190,15 @@ export async function updateApiKeyAction(
     console.log("[updateApiKeyAction] Database update result:", updateResult);
     console.log("[updateApiKeyAction] Database updated successfully");
 
+    // 立即查询验证更新是否生效
+    const verifyRows = await db
+      .select({ name: apiKeys.name })
+      .from(apiKeys)
+      .where(eq(apiKeys.id, keyId))
+      .limit(1);
+
+    console.log("[updateApiKeyAction] Verification query result:", verifyRows[0]?.name);
+
     // 强制重新验证 /keys 页面缓存
     revalidatePath("/keys");
     revalidatePath("/keys", "page");
@@ -203,7 +212,8 @@ export async function updateApiKeyAction(
         keyId,
         oldName: keyRows[0].name,
         newName: data.name,
-        updateExecuted: true
+        updateExecuted: true,
+        verifiedName: verifyRows[0]?.name || "query failed"
       }
     };
   } catch (err) {
