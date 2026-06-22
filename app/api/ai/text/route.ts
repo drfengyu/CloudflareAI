@@ -83,33 +83,104 @@ export async function POST(req: NextRequest) {
       });
       const chResp = await routeToChannel(chId, '/chat/completions', forwardReq);
       if (chResp) {
-        // 记录用量
-        const latencyMs = Date.now() - start;
-        after(() => {
-          void logUsage({
-            userId,
-            apiKeyId: apiKeyId!,
-            model,
-            task: "Text Generation",
-            channel: "web",
-            channelId: chId,
-            status: chResp.ok ? "ok" : "error",
-            latencyMs,
-          });
-        });
-        // 流式转发
         const isStream = parsed.data.stream;
+
+        // 流式：经 interceptOpenAIStream 拦截，结束后用真实 usage 计量并保存对话
         if (isStream && chResp.body) {
-          return new Response(chResp.body, {
-            headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive" },
+          if (!chResp.ok) {
+            // 上游流式接口返回错误（HTTP != 200），通常 body 是 JSON 错误消息而非 SSE
+            const upstreamText = await chResp.text();
+            after(() => {
+              void logUsage({
+                userId,
+                apiKeyId: apiKeyId!,
+                model,
+                task: "Text Generation",
+                channel: "web",
+                channelId: chId,
+                status: "error",
+                errorReason: upstreamText.slice(0, 500) || `Upstream error (${chResp.status})`,
+                latencyMs: Date.now() - start,
+              });
+            });
+            try {
+              const j = JSON.parse(upstreamText);
+              const errMsg =
+                (typeof j.error === "string" ? j.error : null) ||
+                (j.error as Record<string, unknown>)?.message ||
+                `Upstream error (${chResp.status})`;
+              return Response.json({ error: errMsg }, { status: chResp.status });
+            } catch {
+              return Response.json(
+                { error: upstreamText || `Upstream error (${chResp.status})` },
+                { status: chResp.status },
+              );
+            }
+          }
+
+          const { stream: tap, done } = interceptOpenAIStream(chResp.body);
+          after(async () => {
+            const { usage, content } = await done;
+            const inputTokens = usage?.promptTokens ?? 0;
+            const outputTokens = usage?.completionTokens ?? 0;
+            const creditsUsed = await calculateCredits(model, inputTokens, outputTokens);
+
+            await logUsage({
+              userId,
+              apiKeyId: apiKeyId!,
+              model,
+              task: "Text Generation",
+              channel: "web",
+              channelId: chId,
+              inputTokens,
+              outputTokens,
+              status: "ok",
+              latencyMs: Date.now() - start,
+            });
+
+            const userMessage = messages.findLast((m) => m.role === "user");
+            if (userMessage && content) {
+              await saveConversation({
+                userId,
+                model,
+                prompt: userMessage.content,
+                response: content,
+                inputTokens,
+                outputTokens,
+                creditsUsed,
+              });
+            }
+          });
+
+          return new Response(tap, {
+            headers: {
+              "Content-Type": "text/event-stream",
+              "Cache-Control": "no-cache",
+              "X-Accel-Buffering": "no",
+              Connection: "keep-alive",
+            },
           });
         }
+
         // 非流式：解析 JSON 返回
         const upstreamText = await chResp.text();
         let upstreamJson: Record<string, unknown>;
         try {
           upstreamJson = JSON.parse(upstreamText);
         } catch {
+          after(() => {
+            void logUsage({
+              userId,
+              apiKeyId: apiKeyId!,
+              model,
+              task: "Text Generation",
+              channel: "web",
+              channelId: chId,
+              status: chResp.ok ? "ok" : "error",
+              errorReason: chResp.ok ? undefined : upstreamText.slice(0, 500),
+              latencyMs: Date.now() - start,
+            });
+          });
           return new Response(upstreamText, {
             status: chResp.status,
             headers: { "Content-Type": chResp.headers.get("Content-Type") || "text/plain" },
@@ -120,8 +191,60 @@ export async function POST(req: NextRequest) {
             (upstreamJson.error as string) ||
             ((upstreamJson.error as Record<string, unknown>)?.message as string) ||
             `Upstream error (${chResp.status})`;
+          after(() => {
+            void logUsage({
+              userId,
+              apiKeyId: apiKeyId!,
+              model,
+              task: "Text Generation",
+              channel: "web",
+              channelId: chId,
+              status: "error",
+              errorReason: errMsg,
+              latencyMs: Date.now() - start,
+            });
+          });
           return Response.json({ error: errMsg }, { status: chResp.status });
         }
+
+        // 非流式成功：用上游 usage 真实计量 + 保存对话
+        const usage = (upstreamJson.usage as Record<string, number>) || {};
+        const inputTokens = usage.prompt_tokens || 0;
+        const outputTokens = usage.completion_tokens || 0;
+        const creditsUsed = await calculateCredits(model, inputTokens, outputTokens);
+
+        after(async () => {
+          await logUsage({
+            userId,
+            apiKeyId: apiKeyId!,
+            model,
+            task: "Text Generation",
+            channel: "web",
+            channelId: chId,
+            inputTokens,
+            outputTokens,
+            status: "ok",
+            latencyMs: Date.now() - start,
+          });
+
+          const userMessage = messages.findLast((m) => m.role === "user");
+          // 兼容 OpenAI content 与推理模型 reasoning_content
+          const choice = (upstreamJson.choices as Array<Record<string, any>>)?.[0];
+          const assistantMessage =
+            (choice?.message?.content as string | undefined) ||
+            (choice?.message?.reasoning_content as string | undefined);
+          if (userMessage && assistantMessage) {
+            await saveConversation({
+              userId,
+              model,
+              prompt: userMessage.content,
+              response: assistantMessage,
+              inputTokens,
+              outputTokens,
+              creditsUsed,
+            });
+          }
+        });
         return Response.json(upstreamJson);
       }
     }

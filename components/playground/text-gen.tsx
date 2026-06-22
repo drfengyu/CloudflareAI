@@ -86,7 +86,12 @@ export function TextGenPlayground({ models }: TextGenProps) {
 
           try {
             const parsed = JSON.parse(data);
-            const delta = parsed.choices?.[0]?.delta?.content;
+            const choice = parsed.choices?.[0];
+            // 兼容 OpenAI content 和推理模型 reasoning_content（DeepSeek-R1/GLM/Qwen Thinking）
+            const delta =
+              choice?.delta?.content ??
+              choice?.delta?.reasoning_content ??
+              "";
             if (delta) {
               assistantMsg += delta;
               setMessages((m) => {
