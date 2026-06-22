@@ -84,6 +84,10 @@ test("verify database actually updates", async ({ page }) => {
   console.log(`=== 当前名称: "${nameAfter}" ===`);
   console.log(`=== 是否包含新名称: ${nameAfter?.includes(newName) ? "✅ 是" : "❌ 否"} ===`);
 
+  // 等待 D1 同步（Cloudflare D1 通过 HTTP API 可能有延迟）
+  console.log("\n=== 等待 10 秒让 Cloudflare D1 同步... ===");
+  await page.waitForTimeout(10000);
+
   // 手动刷新页面再检查一次
   console.log("\n=== 手动刷新后再检查 ===");
   await page.goto(`${BASE_URL}/keys`);
