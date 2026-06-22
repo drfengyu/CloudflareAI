@@ -9,6 +9,24 @@
 
 ### 新增
 
+- **站内 Playground 增强**
+  - **思考链与正文分离**（`/playground/text`）
+    - DeepSeek-v4 等推理模型的 `reasoning_content` 渲染为可折叠灰色块
+    - 显示「🧠 思考过程」标签 + token 估算，默认展开，点击可折叠
+    - 正文内容与思考链视觉分离，移动端体验友好
+  - **动态上下文窗口显示**
+    - toolbar 新增只读进度条：`已用 tokens / contextWindow (百分比)`
+    - 切换模型时自动加载该模型的 ctx 元数据（Cloudflare hosted 模型有值，第三方渠道模型未知时显示「模型 ctx 未知」）
+    - 本地估算对话累计 token（CJK ≈ 1 token/char，拉丁 ≈ 1 token / 4 chars）
+  - **简化输出控制**
+    - 移除 `max_tokens` 手动输入框，单次输出长度交由模型默认值决定
+    - 避免用户混淆「单次输出上限」与「上下文窗口」两个概念
+- **API Key 模型白名单按渠道过滤**（`/keys`）
+  - 创建/编辑 key 时，模型白名单候选列表自动按所选渠道过滤
+  - 默认渠道（Cloudflare）→ 显示所有 hosted 模型
+  - 第三方渠道（DeepSeek/OpenAI/...）→ 仅显示该渠道关联模型
+  - 切换渠道时自动重置已勾选模型，避免跨渠道误配
+  - 编辑历史 key 时，已勾选但不属于当前渠道的模型标记为「不属于当前渠道」（灰色提示），避免意外丢失
 - **AI 供应商渠道管理（Channel Management）**
   - 完整 CRUD 管理界面：`/admin/channels` + `/admin/channels/[id]` 详情页
   - 动态配置表单：根据渠道类型（OpenAI/Anthropic/Azure/Cloudflare）自动切换配置字段
@@ -40,7 +58,10 @@
 - **主题配色扩展**
   - 新增 4 套配色预设：Ocean（蓝）/ Emerald（绿）/ Violet（紫）/ Rose（玫红）
   - 连同原有 default / anthropic / cloudflare 共 7 套，可在右上角主题菜单切换
-  - 每套覆盖 primary / ring / sidebar-primary / chart-1·2 的明暗两套 oklch 令牌
+  - **每套配色现均定义完整的背景色系**（--background / --card / --border 等 25+ 令牌），
+    不再共享中性灰背景 —— Ocean 有淡蓝背景、Emerald 有薄荷背景、Violet 有淡紫背景、Rose 有腮红背景、
+    Cloudflare 有暖橙调背景、Anthropic 保持奶油纸背景
+  - 明暗两套（light + dark）各配色独立调校，sidebar / chart / ring 等辅助色随主题一致
 - **侧边栏品牌名可配置**
   - 导航顶部品牌名改为读取系统设置 `siteName`（`/admin/settings` > 站点名称）
   - 保存后 `revalidatePath("/", "layout")`，改名即时生效
@@ -95,6 +116,19 @@
   - 根因：`hsl(var(--primary))` 包裹的是 oklch 令牌，`hsl(oklch(...))` 非法导致柱子回退黑色
   - 改为直接引用 `var(--chart-1..5)`，并随主题预设变色
   - 顺带修复三个图表 tooltip 背景 `var(--surface)`（未定义）→ `var(--card)`
+- **站内 Playground 调用 DeepSeek-v4-flash 返回空内容**
+  - **根因 1（前端）**：前端仅监听 `delta.content` 流式 delta，DeepSeek 推理模型先发 `delta.reasoning_content`（思考链），
+    再发 `delta.content`（正文），旧逻辑只累积正文、丢弃思考，且思考期间 UI 无反馈
+  - **根因 2（路由）**：路由仅按 API Key 绑定的 `channelId` 决定上游，不看所选模型属于哪个渠道 →
+    站内 playground 用默认 key（绑定 `default-cloudflare` 渠道），选 `deepseek-v4-flash` 后请求被发到 Cloudflare，
+    上游返回 `AiError: No such model deepseek-v4-flash`
+  - **根因 3（baseUrl）**：`forwardToOpenAI` 对所有 OpenAI 兼容渠道（包括 DeepSeek）硬编码 `baseUrl = "https://api.openai.com/v1"`，
+    DeepSeek 请求被误发到 OpenAI，上游返回 `Incorrect API key provided`
+  - 修复 1：前端 `text-gen.tsx` 同时监听 `reasoning_content` 和 `content`，分别累积到 `Message.reasoning` 和 `Message.content`，
+    思考与正文分离渲染（可折叠灰色块 + 正文）
+  - 修复 2：`/api/ai/text` 路由改为优先按模型查 `model_pricing.channelId` 找归属渠道，找不到再回退到 key 的 `channelId`
+  - 修复 3：`lib/channels/router.ts` 的 switch 分发时按渠道 type 传入正确的 `defaultBaseUrl`（openai → `api.openai.com`，
+    deepseek → `api.deepseek.com`，openai-compatible → 必须显式配置）
 
 ### 变更
 
