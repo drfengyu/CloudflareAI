@@ -164,11 +164,9 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
       console.log("[KeySheet] Update result:", result);
 
       if (result.success) {
-        console.log("[KeySheet] Closing and refreshing...");
-        // 先关闭对话框
-        onClose();
-        // 然后强制刷新页面数据
-        router.refresh();
+        console.log("[KeySheet] Update successful, reloading page...");
+        // 直接重新加载页面，确保显示最新数据
+        window.location.reload();
       } else {
         alert(result.error || "更新失败");
       }

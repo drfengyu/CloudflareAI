@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Deployment Check</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #0f0;
+    }
+    .status { margin: 10px 0; }
+    .pass { color: #0f0; }
+    .fail { color: #f00; }
+    .pending { color: #ff0; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Deployment Status Check</h1>
+  <div id="status"></div>
+
+  <script>
+    const log = (msg, type = 'info') => {
+      const div = document.createElement('div');
+      div.className = `status ${type}`;
+      div.textContent = msg;
+      document.getElementById('status').appendChild(div);
+    };
+
+    async function checkDeployment() {
+      log('Checking deployment...', 'pending');
+
+      try {
+        // 1. Check if API is accessible
+        log('1. Checking API accessibility...', 'pending');
+        const apiRes = await fetch('https://cloudai.fuwari.fun/api/health').catch(() => null);
+        if (apiRes?.ok) {
+          log('   ✓ API accessible', 'pass');
+        } else {
+          log('   ✗ API not accessible (expected if no health endpoint)', 'fail');
+        }
+
+        // 2. Check main page
+        log('2. Checking main page...', 'pending');
+        const mainRes = await fetch('https://cloudai.fuwari.fun/');
+        if (mainRes.ok) {
+          log('   ✓ Main page loads (HTTP ' + mainRes.status + ')', 'pass');
+        } else {
+          log('   ✗ Main page error (HTTP ' + mainRes.status + ')', 'fail');
+        }
+
+        // 3. Check if keys page is accessible (will redirect to login)
+        log('3. Checking keys page...', 'pending');
+        const keysRes = await fetch('https://cloudai.fuwari.fun/keys');
+        if (keysRes.ok || keysRes.redirected) {
+          log('   ✓ Keys page accessible (HTTP ' + keysRes.status + ')', 'pass');
+        } else {
+          log('   ✗ Keys page error (HTTP ' + keysRes.status + ')', 'fail');
+        }
+
+        // 4. Try to detect console.log in the page source
+        log('4. Checking for debug logs in code...', 'pending');
+        const text = await mainRes.text();
+        if (text.includes('KeySheet') || text.includes('updateApiKeyAction')) {
+          log('   ✓ Code contains expected identifiers', 'pass');
+        } else {
+          log('   ⚠ Could not verify code deployment from main page', 'pending');
+        }
+
+        log('', 'info');
+        log('✅ Basic checks complete!', 'pass');
+        log('', 'info');
+        log('Next steps:', 'info');
+        log('1. Login to https://cloudai.fuwari.fun/keys', 'info');
+        log('2. Open browser DevTools (F12)', 'info');
+        log('3. Try editing a key name', 'info');
+        log('4. Check Console for [KeySheet] and [updateApiKeyAction] logs', 'info');
+
+      } catch (err) {
+        log('✗ Error: ' + err.message, 'fail');
+      }
+    }
+
+    checkDeployment();
+  </script>
+</body>
+</html>
