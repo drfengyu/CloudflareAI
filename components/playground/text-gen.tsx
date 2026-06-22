@@ -244,8 +244,27 @@ export function TextGenPlayground({ models }: TextGenProps) {
 
               if (reasoningDelta || contentDelta) {
                 const idx = assistantIndex;
-                const snapshotContent = assistantContent;
-                const snapshotReasoning = assistantReasoning;
+                let snapshotContent = assistantContent;
+                let snapshotReasoning = assistantReasoning;
+
+                // Qwen QwQ-32B 启发式分离：如果没有 <think> 标签，
+                // 但内容以推理关键词开头，尝试分离思考与正文
+                if (!snapshotReasoning && snapshotContent) {
+                  // 检测 QwQ 推理模式：以"嗯，"、"首先，"等开头的长段推理
+                  const reasoningPattern = /^(嗯，|首先，|让我|我需要|好的，让我|Alright, let me|First, I need to|Let me think)/;
+                  if (reasoningPattern.test(snapshotContent)) {
+                    // 查找推理结束标记：换行 + 非推理性语句（如"你好"、"我是"等）
+                    const answerPattern = /\n\n(你好|我是|很高兴|Hello|I am|I'm|Nice to meet)/;
+                    const answerMatch = snapshotContent.match(answerPattern);
+
+                    if (answerMatch && answerMatch.index !== undefined) {
+                      // 分离思考和正文
+                      snapshotReasoning = snapshotContent.slice(0, answerMatch.index).trim();
+                      snapshotContent = snapshotContent.slice(answerMatch.index).trim();
+                    }
+                  }
+                }
+
                 setMessages((m) => {
                   const copy = [...m];
                   copy[idx] = {
