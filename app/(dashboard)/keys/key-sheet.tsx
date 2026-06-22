@@ -164,9 +164,9 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
       console.log("[KeySheet] Update result:", result);
 
       if (result.success) {
-        console.log("[KeySheet] Update successful, reloading page...");
-        // 直接重新加载页面，确保显示最新数据
-        window.location.reload();
+        console.log("[KeySheet] Update successful, redirecting...");
+        // 使用重定向而不是 reload，避免 transition 阻止刷新
+        window.location.href = "/keys";
       } else {
         alert(result.error || "更新失败");
       }
