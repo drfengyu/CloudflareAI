@@ -179,7 +179,7 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
       <div className="fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto bg-surface shadow-2xl">
         <div className="flex items-center justify-between border-b border-border p-4">
           <h2 className="text-lg font-semibold">编辑 API Key</h2>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="关闭" title="关闭">
             <X className="h-5 w-5" />
           </Button>
         </div>
