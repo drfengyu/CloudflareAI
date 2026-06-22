@@ -174,7 +174,7 @@ export async function updateApiKeyAction(
 
     console.log("[updateApiKeyAction] Updating database...", { newName: data.name });
 
-    await db
+    const updateResult = await db
       .update(apiKeys)
       .set({
         name: data.name,
@@ -187,6 +187,7 @@ export async function updateApiKeyAction(
       })
       .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)));
 
+    console.log("[updateApiKeyAction] Database update result:", updateResult);
     console.log("[updateApiKeyAction] Database updated successfully");
 
     // 强制重新验证 /keys 页面缓存
@@ -195,7 +196,16 @@ export async function updateApiKeyAction(
 
     console.log("[updateApiKeyAction] Revalidation triggered");
 
-    return { success: true, version: "v2.0.1" };
+    return {
+      success: true,
+      version: "v2.0.1",
+      debug: {
+        keyId,
+        oldName: keyRows[0].name,
+        newName: data.name,
+        updateExecuted: true
+      }
+    };
   } catch (err) {
     console.error("[updateApiKeyAction] error:", err);
     return {
