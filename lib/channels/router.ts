@@ -65,9 +65,12 @@ export async function routeToChannel(
 
   switch (channel.type) {
     case "openai":
+      return forwardToOpenAI(path, request, config, "https://api.openai.com/v1");
     case "deepseek":
+      return forwardToOpenAI(path, request, config, "https://api.deepseek.com/v1");
     case "openai-compatible":
-      return forwardToOpenAI(path, request, config);
+      // openai-compatible 必须显式配置 baseUrl，没有默认值
+      return forwardToOpenAI(path, request, config, "");
     case "anthropic":
       return forwardToAnthropic(path, request, config);
     case "cloudflare":
@@ -81,11 +84,14 @@ export async function routeToChannel(
 
 /**
  * 转发请求到 OpenAI 兼容 API
+ * @param defaultBaseUrl 该渠道类型的默认 baseUrl（如 OpenAI / DeepSeek）；
+ *                       传 "" 表示无默认（如 openai-compatible 必须显式配置）
  */
 async function forwardToOpenAI(
   path: string,
   request: Request,
   config: Record<string, string>,
+  defaultBaseUrl: string,
 ): Promise<Response> {
   const apiKey = config.apiKey;
   if (!apiKey) {
@@ -95,8 +101,14 @@ async function forwardToOpenAI(
     );
   }
 
-  const baseUrl = config.baseUrl || "https://api.openai.com/v1";
-  const targetUrl = `${baseUrl}${path}`;
+  const baseUrl = config.baseUrl || defaultBaseUrl;
+  if (!baseUrl) {
+    return Response.json(
+      { error: "Channel configuration missing: baseUrl" },
+      { status: 500 },
+    );
+  }
+  const targetUrl = `${baseUrl.replace(/\/$/, "")}${path}`;
   const body = await request.text();
 
   const headers: Record<string, string> = {
