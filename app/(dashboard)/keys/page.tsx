@@ -87,19 +87,32 @@ export default async function KeysPage() {
   ).filter((c): c is { id: string; name: string; type: string } => c.type !== null);
 
   // 获取所有模型列表（供 KeySheet 模型白名单使用）
+  // 每个模型携带 channelId：Cloudflare hosted 模型 channelId = null（属于默认 Cloudflare 渠道，
+  // 因为默认渠道 default-cloudflare 在数据库里独立存在，但 hosted 模型并不在 model_pricing 表里
+  // 写它的 channelId — 这里统一用 'default-cloudflare' 占位，便于按渠道过滤）。
   const catalog = await fetchModelCatalog();
+  const defaultCfChannel = channelList.find((c) => c.type === "cloudflare");
   const cfModels = catalog
     .filter((m) => m.source === "hosted")
-    .map((m) => ({ id: m.id, name: m.name }));
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      channelId: defaultCfChannel?.id || null,
+    }));
 
+  // 从 model_pricing 拿其他渠道的模型（含 channelId）
   const pricingModels = await db
-    .select({ modelId: modelPricing.modelId })
+    .select({ modelId: modelPricing.modelId, channelId: modelPricing.channelId })
     .from(modelPricing);
 
-  const pricingModelIds = new Set(pricingModels.map((p) => p.modelId));
+  const cfModelIds = new Set(cfModels.map((c) => c.id));
   const extraModels = pricingModels
-    .filter((p) => !pricingModelIds.has(p.modelId) || !cfModels.some((c) => c.id === p.modelId))
-    .map((p) => ({ id: p.modelId, name: p.modelId.split("/").pop() || p.modelId }));
+    .filter((p) => !cfModelIds.has(p.modelId))
+    .map((p) => ({
+      id: p.modelId,
+      name: p.modelId.split("/").pop() || p.modelId,
+      channelId: p.channelId,
+    }));
 
   const allModelOptions = [...cfModels, ...extraModels].filter(
     (m, i, arr) => arr.findIndex((x) => x.id === m.id) === i,

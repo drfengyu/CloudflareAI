@@ -1,23 +1,48 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Send, Loader2 } from "lucide-react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { Send, Loader2, Brain, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface Message {
   role: "user" | "assistant" | "system";
   content: string;
+  /** Reasoning chain (thinking) — separated from content so we can fold it. */
+  reasoning?: string;
 }
 
 interface ModelOption {
   id: string;
   name: string;
   channel?: string;
+  /** Model context window (token budget). Undefined for proxied models without metadata. */
+  contextWindow?: number;
 }
 
 interface TextGenProps {
   models: ModelOption[];
+}
+
+/** Naive token estimator: CJK ≈ 1 token/char, latin ≈ 1 token / 4 chars. */
+function estimateTokens(text: string): number {
+  if (!text) return 0;
+  let cjk = 0;
+  let other = 0;
+  for (const ch of text) {
+    const code = ch.codePointAt(0)!;
+    // CJK Unified Ideographs / Hangul / Hiragana / Katakana ranges
+    if (
+      (code >= 0x3400 && code <= 0x9fff) ||
+      (code >= 0xac00 && code <= 0xd7af) ||
+      (code >= 0x3040 && code <= 0x30ff)
+    ) {
+      cjk++;
+    } else {
+      other++;
+    }
+  }
+  return Math.ceil(cjk + other / 4);
 }
 
 export function TextGenPlayground({ models }: TextGenProps) {
@@ -26,8 +51,29 @@ export function TextGenPlayground({ models }: TextGenProps) {
   const [selectedModel, setSelectedModel] = useState(models[0]?.id || "");
   const [loading, setLoading] = useState(false);
   const [temperature, setTemperature] = useState(0.7);
-  const [maxTokens, setMaxTokens] = useState(2048);
+  // Folded reasoning UI: assistant message index → collapsed flag
+  const [foldedReasoning, setFoldedReasoning] = useState<Record<number, boolean>>({});
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const currentModel = useMemo(
+    () => models.find((m) => m.id === selectedModel),
+    [models, selectedModel],
+  );
+
+  // Conversation token usage estimate: sum all message bodies (incl. reasoning).
+  const usedTokens = useMemo(() => {
+    let sum = 0;
+    for (const m of messages) {
+      sum += estimateTokens(m.content);
+      if (m.reasoning) sum += estimateTokens(m.reasoning);
+    }
+    sum += estimateTokens(input);
+    return sum;
+  }, [messages, input]);
+
+  const ctxPercent = currentModel?.contextWindow
+    ? Math.min(100, (usedTokens / currentModel.contextWindow) * 100)
+    : 0;
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -51,7 +97,7 @@ export function TextGenPlayground({ models }: TextGenProps) {
           messages: [...messages, userMsg],
           stream: true,
           temperature,
-          max_tokens: maxTokens,
+          // max_tokens 不再由前端传入，交由模型默认值
         }),
       });
 
@@ -69,39 +115,67 @@ export function TextGenPlayground({ models }: TextGenProps) {
 
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
-      let assistantMsg = "";
+      let assistantContent = "";
+      let assistantReasoning = "";
+      let assistantIndex = -1;
 
-      setMessages((m) => [...m, { role: "assistant", content: "" }]);
+      setMessages((m) => {
+        const copy = [...m, { role: "assistant" as const, content: "", reasoning: "" }];
+        assistantIndex = copy.length - 1;
+        return copy;
+      });
+      // Auto-fold reasoning by default for this new assistant message
+      setFoldedReasoning((f) => ({ ...f, [assistantIndex]: false }));
 
+      // Buffer SSE across chunks: events end with \n\n. Splitting on each
+      // received chunk's newlines drops events that span chunk boundaries.
+      let sseBuf = "";
       while (reader) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n").filter((l) => l.trim().startsWith("data:"));
+        sseBuf += decoder.decode(value, { stream: true });
+        const events = sseBuf.split(/\n\n|\r\n\r\n/);
+        sseBuf = events.pop() ?? "";
 
-        for (const line of lines) {
-          const data = line.replace(/^data:\s*/, "");
-          if (data === "[DONE]") break;
+        for (const ev of events) {
+          for (const line of ev.split(/\r?\n/)) {
+            if (!line.startsWith("data:")) continue;
+            const data = line.slice(5).trim();
+            if (!data || data === "[DONE]") continue;
 
-          try {
-            const parsed = JSON.parse(data);
-            const choice = parsed.choices?.[0];
-            // 兼容 OpenAI content 和推理模型 reasoning_content（DeepSeek-R1/GLM/Qwen Thinking）
-            const delta =
-              choice?.delta?.content ??
-              choice?.delta?.reasoning_content ??
-              "";
-            if (delta) {
-              assistantMsg += delta;
-              setMessages((m) => {
-                const copy = [...m];
-                copy[copy.length - 1] = { role: "assistant", content: assistantMsg };
-                return copy;
-              });
+            try {
+              const parsed = JSON.parse(data);
+              const delta = parsed.choices?.[0]?.delta;
+              if (!delta) continue;
+
+              const reasoningDelta = delta.reasoning_content;
+              const contentDelta = delta.content;
+
+              if (typeof reasoningDelta === "string" && reasoningDelta) {
+                assistantReasoning += reasoningDelta;
+              }
+              if (typeof contentDelta === "string" && contentDelta) {
+                assistantContent += contentDelta;
+              }
+
+              if (reasoningDelta || contentDelta) {
+                const idx = assistantIndex;
+                const snapshotContent = assistantContent;
+                const snapshotReasoning = assistantReasoning;
+                setMessages((m) => {
+                  const copy = [...m];
+                  copy[idx] = {
+                    role: "assistant",
+                    content: snapshotContent,
+                    reasoning: snapshotReasoning || undefined,
+                  };
+                  return copy;
+                });
+              }
+            } catch {
+              // ignore non-JSON SSE lines
             }
-          } catch {
-            // ignore parse errors
           }
         }
       }
@@ -129,15 +203,15 @@ export function TextGenPlayground({ models }: TextGenProps) {
             className="h-8 min-w-[280px] rounded-lg border border-border bg-surface px-2 text-sm outline-none"
           >
             <optgroup label="Cloudflare 托管">
-              {models.filter(m => m.channel === "cloudflare" || !m.channel).map((m) => (
+              {models.filter((m) => m.channel === "cloudflare" || !m.channel).map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.name}
                 </option>
               ))}
             </optgroup>
-            {models.filter(m => m.channel && m.channel !== "cloudflare").length > 0 && (
+            {models.filter((m) => m.channel && m.channel !== "cloudflare").length > 0 && (
               <optgroup label="第三方渠道">
-                {models.filter(m => m.channel && m.channel !== "cloudflare").map((m) => (
+                {models.filter((m) => m.channel && m.channel !== "cloudflare").map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.name} [{m.channel}]
                   </option>
@@ -160,24 +234,33 @@ export function TextGenPlayground({ models }: TextGenProps) {
           />
         </label>
 
-        <label className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">最大 tokens</span>
-          <input
-            type="number"
-            value={maxTokens}
-            onChange={(e) => setMaxTokens(parseInt(e.target.value, 10))}
-            min="1"
-            max="32768"
-            step="256"
-            className="h-8 w-24 rounded-lg border border-border bg-surface px-2 text-sm outline-none"
-          />
-        </label>
+        {/* Context window usage — readonly, dynamic per selected model. */}
+        <div className="flex min-w-[220px] flex-1 items-center gap-2">
+          <span className="shrink-0 text-xs text-muted-foreground">上下文</span>
+          {currentModel?.contextWindow ? (
+            <>
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
+                <div
+                  className="h-full bg-primary transition-all"
+                  style={{ width: `${ctxPercent}%` }}
+                />
+              </div>
+              <span className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                {usedTokens.toLocaleString()} / {currentModel.contextWindow.toLocaleString()}
+                <span className="ml-1 opacity-60">({ctxPercent.toFixed(1)}%)</span>
+              </span>
+            </>
+          ) : (
+            <span className="text-[11px] text-muted-foreground">
+              {usedTokens.toLocaleString()} tokens · 模型 ctx 未知
+            </span>
+          )}
+        </div>
 
         <Button
           variant="outline"
           onClick={() => setMessages([])}
           disabled={loading || messages.length === 0}
-          className="ml-auto"
         >
           清空对话
         </Button>
@@ -189,21 +272,61 @@ export function TextGenPlayground({ models }: TextGenProps) {
             {messages.length === 0 && (
               <p className="text-center text-sm text-muted-foreground">开始对话，测试文本生成模型</p>
             )}
-            {messages.map((msg, i) => (
-              <div
-                key={i}
-                className={
-                  msg.role === "user"
-                    ? "ml-12 rounded-lg bg-primary/10 p-3 text-sm"
-                    : "mr-12 rounded-lg bg-surface-2 p-3 text-sm"
-                }
-              >
-                <p className="mb-1 text-[11px] font-medium uppercase opacity-60">
-                  {msg.role === "user" ? "你" : "助手"}
-                </p>
-                <p className="whitespace-pre-wrap">{msg.content}</p>
-              </div>
-            ))}
+            {messages.map((msg, i) => {
+              const isUser = msg.role === "user";
+              const reasoning = msg.reasoning;
+              const folded = foldedReasoning[i] ?? false;
+              return (
+                <div
+                  key={i}
+                  className={
+                    isUser
+                      ? "ml-12 rounded-lg bg-primary/10 p-3 text-sm"
+                      : "mr-12 rounded-lg bg-surface-2 p-3 text-sm"
+                  }
+                >
+                  <p className="mb-1 text-[11px] font-medium uppercase opacity-60">
+                    {isUser ? "你" : "助手"}
+                  </p>
+
+                  {/* Reasoning (assistant only, separately shown) */}
+                  {!isUser && reasoning && (
+                    <div className="mb-2 rounded-md border border-dashed border-border bg-background/40 text-xs text-muted-foreground">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFoldedReasoning((f) => ({ ...f, [i]: !(f[i] ?? false) }))
+                        }
+                        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left hover:bg-surface-2/50"
+                      >
+                        {folded ? (
+                          <ChevronRight className="h-3 w-3" />
+                        ) : (
+                          <ChevronDown className="h-3 w-3" />
+                        )}
+                        <Brain className="h-3 w-3" />
+                        <span>思考过程</span>
+                        <span className="ml-auto opacity-60">
+                          {estimateTokens(reasoning).toLocaleString()} tokens
+                        </span>
+                      </button>
+                      {!folded && (
+                        <p className="whitespace-pre-wrap border-t border-dashed border-border px-2.5 py-2 leading-relaxed opacity-90">
+                          {reasoning}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Final content */}
+                  {msg.content ? (
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                  ) : !isUser && reasoning && loading ? (
+                    <p className="text-xs italic opacity-50">思考中…</p>
+                  ) : null}
+                </div>
+              );
+            })}
           </div>
 
           <form onSubmit={handleSubmit} className="border-t border-border p-4">

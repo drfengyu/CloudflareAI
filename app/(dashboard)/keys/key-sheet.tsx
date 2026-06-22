@@ -13,19 +13,18 @@ interface Channel {
   type: string;
 }
 
-// All available models (fetched from server)
-const MODEL_SOURCES = [
-  { label: "Cloudflare 模型", prefix: "@cf" },
-  { label: "DeepSeek 模型", prefix: "deepseek" },
-  { label: "OpenAI 模型", prefix: "gpt" },
-  { label: "其他", prefix: "" },
-];
+interface ModelOption {
+  id: string;
+  name: string;
+  /** 模型所属渠道 ID。Cloudflare hosted 模型 = 默认渠道 ID（如 default-cloudflare）。 */
+  channelId: string | null;
+}
 
 interface KeySheetProps {
   apiKey: ApiKeyRow | null;
   onClose: () => void;
   channelsProp?: Channel[];
-  modelsProp?: { id: string; name: string }[];
+  modelsProp?: ModelOption[];
 }
 
 export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }: KeySheetProps) {
@@ -46,21 +45,38 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
   const [modelSearch, setModelSearch] = useState("");
   const [modelPanelOpen, setModelPanelOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
-  const allModels = useMemo(() => {
-    if (!apiKey) return modelsProp;
-    // Merge with API key's allowed models in case they reference models not in list
-    const existing = new Map(modelsProp.map(m => [m.id, m]));
-    for (const mid of initialModels) {
-      if (!existing.has(mid)) existing.set(mid, { id: mid, name: mid.split("/").pop() || mid });
-    }
-    return Array.from(existing.values());
-  }, [apiKey, modelsProp, initialModels]);
+
+  // 当前生效的渠道 ID：表单选择 > Cloudflare 默认渠道。
+  // 默认渠道 = channelsProp 里 type=cloudflare 的那个。
+  const defaultCfChannelId = useMemo(
+    () => channelsProp.find((c) => c.type === "cloudflare")?.id || null,
+    [channelsProp],
+  );
+  const effectiveChannelId = formData.channelId || defaultCfChannelId;
+
+  // 按渠道过滤可选模型：模型 channelId 匹配当前渠道 OR 模型属于历史记录但渠道未知。
+  const channelModels = useMemo(() => {
+    if (!effectiveChannelId) return modelsProp;
+    const filtered = modelsProp.filter((m) => m.channelId === effectiveChannelId);
+    // 合并历史已勾选但不在当前渠道列表里的模型（避免编辑时丢失，但视觉上提示）
+    const filteredIds = new Set(filtered.map((m) => m.id));
+    const orphans = (initialModels as string[])
+      .filter((id) => !filteredIds.has(id))
+      .map((id) => ({
+        id,
+        name: `${id.split("/").pop() || id}（不属于当前渠道）`,
+        channelId: null,
+      }));
+    return [...filtered, ...orphans];
+  }, [modelsProp, effectiveChannelId, initialModels]);
 
   const filteredModels = useMemo(() => {
     const q = modelSearch.toLowerCase().trim();
-    if (!q) return allModels;
-    return allModels.filter(m => m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q));
-  }, [allModels, modelSearch]);
+    if (!q) return channelModels;
+    return channelModels.filter(
+      (m) => m.id.toLowerCase().includes(q) || m.name.toLowerCase().includes(q),
+    );
+  }, [channelModels, modelSearch]);
 
   const toggleModel = (id: string) => {
     setFormData(f => ({
@@ -70,6 +86,22 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
         : [...f.allowedModels, id],
     }));
   };
+
+  // 切换渠道时自动重置白名单：移除不属于新渠道的所有已勾选模型。
+  function handleChannelChange(newChannelId: string) {
+    const effective = newChannelId || defaultCfChannelId;
+    setFormData((f) => {
+      if (!effective) return { ...f, channelId: newChannelId, allowedModels: [] };
+      const validIds = new Set(
+        modelsProp.filter((m) => m.channelId === effective).map((m) => m.id),
+      );
+      return {
+        ...f,
+        channelId: newChannelId,
+        allowedModels: f.allowedModels.filter((id) => validIds.has(id)),
+      };
+    });
+  }
 
   // Close panel on outside click
   useEffect(() => {
@@ -134,18 +166,20 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
               <label className="mb-1.5 block text-sm font-medium">绑定渠道</label>
               <select
                 value={formData.channelId}
-                onChange={(e) => setFormData({ ...formData, channelId: e.target.value })}
+                onChange={(e) => handleChannelChange(e.target.value)}
                 className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
               >
                 <option value="">默认（Cloudflare）</option>
-                {channelsProp.map((ch) => (
-                  <option key={ch.id} value={ch.id}>
-                    {ch.name} ({ch.type})
-                  </option>
-                ))}
+                {channelsProp
+                  .filter((ch) => ch.type !== "cloudflare")
+                  .map((ch) => (
+                    <option key={ch.id} value={ch.id}>
+                      {ch.name} ({ch.type})
+                    </option>
+                  ))}
               </select>
               <p className="mt-1 text-xs text-muted-foreground">
-                选择后，使用此 Key 的请求将路由到该渠道
+                选择后，使用此 Key 的请求将路由到该渠道；切换渠道会自动重置模型白名单
               </p>
             </div>
           )}

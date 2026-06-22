@@ -14,7 +14,7 @@ interface Channel {
 interface KeysTableProps {
   data: ApiKeyRow[];
   channels?: Channel[];
-  models?: { id: string; name: string }[];
+  models?: { id: string; name: string; channelId: string | null }[];
 }
 
 export function KeysTable({ data, channels = [], models = [] }: KeysTableProps) {

@@ -28,7 +28,12 @@ export default async function TextPlaygroundPage() {
   const catalog = await fetchModelCatalog();
   const cfTextModels = catalog
     .filter((m) => m.category === "text" && m.source === "hosted")
-    .map((m) => ({ id: m.id, name: m.name, channel: "cloudflare" as const }));
+    .map((m) => ({
+      id: m.id,
+      name: m.name,
+      channel: "cloudflare" as const,
+      contextWindow: m.contextWindow,
+    }));
 
   // 从 model_pricing 表获取其他渠道的文本模型
   const channelRows = await db
@@ -36,7 +41,7 @@ export default async function TextPlaygroundPage() {
     .from(channels)
     .where(eq(channels.status, 1));
 
-  const otherModels: { id: string; name: string; channel: string }[] = [];
+  const otherModels: { id: string; name: string; channel: string; contextWindow?: number }[] = [];
   for (const ch of channelRows) {
     if (ch.type === "cloudflare") continue;
     const pricing = await db
@@ -48,6 +53,7 @@ export default async function TextPlaygroundPage() {
         id: p.modelId,
         name: p.modelId.split("/").pop() || p.modelId,
         channel: ch.type || "other",
+        // 非 Cloudflare 模型 ctx 未知，保留 undefined 让 UI 提示
       });
     }
   }
