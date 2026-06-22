@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { KeyActions } from "./key-actions";
+import { KeyDisplay } from "./key-display";
 
 export interface ApiKeyRow {
   id: string;
@@ -39,8 +40,8 @@ export const columns: ColumnDef<ApiKeyRow>[] = [
     header: "名称",
     cell: ({ row }) => (
       <div>
-        <p className="font-medium">{row.original.name}</p>
-        <code className="text-xs text-muted-foreground">{row.original.prefix}••••••••</code>
+        <p className="font-medium mb-1">{row.original.name}</p>
+        <KeyDisplay keyId={row.original.id} prefix={row.original.prefix} />
       </div>
     ),
   },

@@ -80,3 +80,7 @@ CREATE TABLE IF NOT EXISTS `verificationToken` (
 	`expires` integer NOT NULL,
 	PRIMARY KEY(`identifier`, `token`)
 );
+
+-- Migration 0004: Add encryptedKey column to api_keys table (2026-06-22)
+ALTER TABLE api_key ADD COLUMN encryptedKey TEXT;
+

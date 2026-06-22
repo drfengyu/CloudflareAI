@@ -3,7 +3,7 @@
 // Server Actions version marker - force rebuild: v2.0.1
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/usage/meter";
-import { generateApiKey } from "@/lib/auth/api-key";
+import { generateApiKey, decryptApiKey } from "@/lib/auth/api-key";
 import { db } from "@/lib/db/d1-http";
 import { apiKeys, users, usageLogs } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
@@ -25,13 +25,14 @@ export async function createApiKeyAction(formData: FormData): Promise<CreateKeyR
       return { success: false, error: "API key 名称不能为空" };
     }
 
-    const { key, hash, prefix } = generateApiKey();
+    const { key, hash, prefix, encrypted } = generateApiKey();
 
     await db.insert(apiKeys).values({
       userId,
       name,
       keyHash: hash,
       prefix,
+      encryptedKey: encrypted,
       channelId: channelId || undefined,
     });
 
@@ -221,6 +222,48 @@ export async function updateApiKeyAction(
     return {
       success: false,
       error: err instanceof Error ? err.message : "更新失败",
+    };
+  }
+}
+
+/**
+ * 解密并返回完整的 API Key
+ * 仅限 key 所有者访问
+ */
+export async function revealApiKeyAction(keyId: string): Promise<{ success: boolean; key?: string; error?: string }> {
+  try {
+    const userId = await requireUser();
+
+    // 查询 encryptedKey（验证所有权）
+    const rows = await db
+      .select({ encryptedKey: apiKeys.encryptedKey })
+      .from(apiKeys)
+      .where(and(eq(apiKeys.id, keyId), eq(apiKeys.userId, userId)))
+      .limit(1);
+
+    if (!rows[0]) {
+      return { success: false, error: "API Key 不存在" };
+    }
+
+    const { encryptedKey } = rows[0];
+
+    if (!encryptedKey) {
+      return { success: false, error: "此 API Key 未保存完整密钥（旧版本创建）" };
+    }
+
+    // 解密
+    const plaintext = decryptApiKey(encryptedKey);
+
+    if (!plaintext) {
+      return { success: false, error: "解密失败" };
+    }
+
+    return { success: true, key: plaintext };
+  } catch (err) {
+    console.error("[revealApiKeyAction] error:", err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : "获取失败",
     };
   }
 }

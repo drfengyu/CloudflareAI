@@ -3,13 +3,56 @@ import { db } from "@/lib/db/d1-http";
 import { apiKeys } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
+// AES-256-GCM 加密密钥（从环境变量获取，32 字节）
+function getEncryptionKey(): Buffer {
+  const key = process.env.API_KEY_ENCRYPTION_SECRET || "default-32-byte-secret-change-me!!";
+  // 确保是 32 字节
+  return crypto.createHash("sha256").update(key).digest();
+}
+
+/** 加密 API Key（AES-256-GCM） */
+export function encryptApiKey(plaintext: string): string {
+  const key = getEncryptionKey();
+  const iv = crypto.randomBytes(12); // GCM 推荐 12 字节 IV
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+
+  let encrypted = cipher.update(plaintext, "utf8", "base64");
+  encrypted += cipher.final("base64");
+  const authTag = cipher.getAuthTag();
+
+  // 格式: iv:authTag:ciphertext (all base64)
+  return `${iv.toString("base64")}:${authTag.toString("base64")}:${encrypted}`;
+}
+
+/** 解密 API Key（AES-256-GCM） */
+export function decryptApiKey(encrypted: string): string | null {
+  try {
+    const key = getEncryptionKey();
+    const [ivBase64, authTagBase64, ciphertext] = encrypted.split(":");
+
+    const iv = Buffer.from(ivBase64, "base64");
+    const authTag = Buffer.from(authTagBase64, "base64");
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAuthTag(authTag);
+
+    let decrypted = decipher.update(ciphertext, "base64", "utf8");
+    decrypted += decipher.final("utf8");
+
+    return decrypted;
+  } catch (err) {
+    console.error("[decryptApiKey] Failed:", err);
+    return null;
+  }
+}
+
 /** 生成一个新的 API key（明文，仅显示一次）和它的 SHA-256 哈希 */
-export function generateApiKey(): { key: string; hash: string; prefix: string } {
+export function generateApiKey(): { key: string; hash: string; prefix: string; encrypted: string } {
   const randomBytes = crypto.randomBytes(24);
   const key = `sk-cfai-${randomBytes.toString("base64url")}`;
   const hash = crypto.createHash("sha256").update(key).digest("hex");
   const prefix = key.slice(0, 16); // "sk-cfai-AbC1..."
-  return { key, hash, prefix };
+  const encrypted = encryptApiKey(key);
+  return { key, hash, prefix, encrypted };
 }
 
 /**

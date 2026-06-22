@@ -107,6 +107,8 @@ export const apiKeys = sqliteTable("api_key", {
   prefix: text("prefix").notNull(),
   /** SHA-256 hex of the full key; the plaintext is shown only once. */
   keyHash: text("keyHash").notNull().unique(),
+  /** Encrypted full key (AES-256-GCM), can be decrypted for display. */
+  encryptedKey: text("encryptedKey"),
   /** 1=启用 / 2=禁用 / 3=过期 / 4=额度耗尽 (migrated from revoked boolean). */
   status: integer("status").notNull().default(1),
   /** 初始总额度（credits）；null = 无限额度。支持小数。 */
