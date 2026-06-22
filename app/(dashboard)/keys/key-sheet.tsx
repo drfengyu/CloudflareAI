@@ -165,9 +165,11 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
       console.log("[KeySheet] Debug info:", JSON.stringify(result.debug || {}));
 
       if (result.success) {
-        console.log("[KeySheet] Update successful, redirecting...");
-        // 使用重定向而不是 reload，避免 transition 阻止刷新
-        window.location.href = "/keys";
+        console.log("[KeySheet] Update successful, waiting for D1 sync...");
+        // Cloudflare D1 是最终一致性数据库，需要短暂延迟等待同步
+        setTimeout(() => {
+          window.location.href = "/keys";
+        }, 1500);
       } else {
         alert(result.error || "更新失败");
       }
