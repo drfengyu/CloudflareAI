@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useEffect, useMemo, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { X, Search, Check, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { updateApiKeyAction } from "./actions";
@@ -29,6 +30,7 @@ interface KeySheetProps {
 
 export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }: KeySheetProps) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
 
   const initialModels = apiKey?.allowedModels ? (() => {
     try { return JSON.parse(apiKey.allowedModels); } catch { return []; }
@@ -151,8 +153,14 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
         allowedModels: formData.allowedModels.length > 0 ? JSON.stringify(formData.allowedModels) : null,
         channelId: formData.channelId || null,
       });
-      if (result.success) onClose();
-      else alert(result.error || "更新失败");
+      if (result.success) {
+        // 强制刷新页面数据，确保显示最新的 key 名字
+        router.refresh();
+        // 短暂延迟后关闭对话框，让数据有时间更新
+        setTimeout(() => onClose(), 100);
+      } else {
+        alert(result.error || "更新失败");
+      }
     });
   }
 
