@@ -67,10 +67,10 @@ test("find and verify the specific key being updated", async ({ page }) => {
     }
   }
 
-  // 刷新后查找这个 key
-  await page.goto(`${BASE_URL}/keys`);
+  // 等待 D1 同步延迟 + 页面跳转
+  await page.waitForURL("**/keys**", { timeout: 10000 }).catch(() => {});
   await page.waitForLoadState("networkidle");
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(3000);
 
   console.log("\n=== 刷新后的所有 Keys ===");
   const rowsAfter = await page.locator("table tbody tr").all();

@@ -165,11 +165,16 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
       console.log("[KeySheet] Debug info:", JSON.stringify(result.debug || {}));
 
       if (result.success) {
-        console.log("[KeySheet] Update successful, waiting for D1 sync...");
-        // Cloudflare D1 是最终一致性数据库，需要短暂延迟等待同步
+        console.log("[KeySheet] Update successful, closing dialog and refreshing...");
+        // 关闭对话框
+        onClose();
+        // 使用 router.refresh() 刷新服务端数据
+        // D1 最终一致性可能需要几秒，但先刷新一次
+        router.refresh();
+        // Toast 提示用户
         setTimeout(() => {
-          window.location.href = "/keys";
-        }, 1500);
+          alert("API Key 已更新。如果名称未立即更新，请稍等片刻再刷新页面。");
+        }, 500);
       } else {
         alert(result.error || "更新失败");
       }
