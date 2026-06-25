@@ -7,6 +7,7 @@ import { OpenAIAdapter } from "./openai-adapter";
 import { AnthropicAdapter } from "./anthropic-adapter";
 import { CloudflareAdapter } from "./cloudflare-adapter";
 import { DeepSeekAdapter } from "./deepseek-adapter";
+import { OpenAICompatibleAdapter } from "./openai-compatible-adapter";
 
 const registry = new Map<string, ChannelAdapter>();
 
@@ -18,6 +19,7 @@ function init() {
     new AnthropicAdapter(),
     new CloudflareAdapter(),
     new DeepSeekAdapter(),
+    new OpenAICompatibleAdapter(),
   ];
   for (const a of adapters) {
     registry.set(a.type, a);
@@ -85,13 +87,13 @@ export const CHANNEL_CONFIG_FIELDS: Record<string, ConfigField[]> = {
     },
   ],
   "openai-compatible": [
-    { key: "apiKey", label: "API Key", type: "password", required: true, placeholder: "sk-..." },
+    { key: "apiKey", label: "API Key", type: "password", required: false, placeholder: "sk-...（可选，部分网关免费模型无需）" },
     {
       key: "baseUrl",
       label: "Base URL",
       type: "text",
       required: true,
-      placeholder: "https://api.xxx.com/v1",
+      placeholder: "https://api.xxx.com/v1 或 https://ai-gateway.vercel.sh/v1",
     },
   ],
   anthropic: [
