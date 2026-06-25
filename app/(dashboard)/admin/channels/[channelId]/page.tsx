@@ -6,7 +6,6 @@ import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -18,11 +17,10 @@ import {
 import {
   ArrowLeft,
   Key,
-  Activity,
   BarChart3,
   Cpu,
-  RefreshCw,
 } from "lucide-react";
+import { ChannelActions } from "./channel-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -163,59 +161,7 @@ export default async function ChannelDetailPage({
           返回渠道列表
         </Link>
 
-        <div className="flex items-center gap-2">
-          <form
-            action={`/api/channels/${channelId}/health`}
-            method="GET"
-            target="healthFrame"
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={async () => {
-                const res = await fetch(`/api/channels/${channelId}/health`);
-                const data = await res.json();
-                if (data.ok) {
-                  const toast = await import("sonner");
-                  toast.toast.success("健康检查通过: " + (data.message || ""));
-                } else {
-                  const toast = await import("sonner");
-                  toast.toast.error("健康检查失败: " + (data.message || ""));
-                }
-              }}
-            >
-              <Activity className="h-3.5 w-3.5" />
-              健康检查
-            </Button>
-          </form>
-
-          <form
-            action={`/api/channels/${channelId}/models/sync`}
-            method="POST"
-          >
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5"
-              onClick={async () => {
-                const res = await fetch(`/api/channels/${channelId}/models/sync`, {
-                  method: "POST",
-                });
-                const data = await res.json();
-                const toast = await import("sonner");
-                if (res.ok) {
-                  toast.toast.success(data.message || "同步完成");
-                } else {
-                  toast.toast.error(data.error || "同步失败");
-                }
-              }}
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              同步模型
-            </Button>
-          </form>
-        </div>
+        <ChannelActions channelId={channelId} />
       </div>
 
       {/* Title */}
