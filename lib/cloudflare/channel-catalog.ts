@@ -11,6 +11,7 @@ import type { NormalizedModel } from "./catalog";
 export async function fetchChannelModels(
   channelId: string,
   channelType: string,
+  channelName?: string,
 ): Promise<NormalizedModel[]> {
   const adapter = getAdapter(channelType);
   if (!adapter || !adapter.listModels) return [];
@@ -44,7 +45,7 @@ export async function fetchChannelModels(
     contextWindow: undefined,
     functionCalling: true,
     pricing: [],
-    author: channelLabel(channelType),
+    author: channelName || channelLabel(channelType),
   }));
 }
 
@@ -65,7 +66,7 @@ export async function fetchAllChannelsModels(): Promise<{
   for (const ch of channelRows) {
     if (ch.type === "cloudflare") continue; // Cloudflare 单独处理
     if (!ch.type) continue;
-    const models = await fetchChannelModels(ch.id, ch.type);
+    const models = await fetchChannelModels(ch.id, ch.type, ch.name);
     result[ch.id] = models;
   }
 
@@ -76,7 +77,7 @@ export async function fetchAllChannelsModels(): Promise<{
         id: c.id,
         type: c.type!,
         name: c.name,
-        label: channelLabel(c.type!),
+        label: c.name, // 使用渠道名称而不是类型标签
       })),
     modelsByChannel: result,
   };

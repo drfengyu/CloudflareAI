@@ -51,9 +51,9 @@ const keyStatusMap: Record<number, { label: string; tone: "success" | "danger" |
 export default async function ChannelDetailPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: Promise<{ channelId: string }>;
 }) {
-  const { id } = await params;
+  const { channelId } = await params;
   const session = await auth();
   if (!session?.user?.id) {
     notFound();
@@ -69,7 +69,7 @@ export default async function ChannelDetailPage({
   const channelRows = await db
     .select()
     .from(channels)
-    .where(eq(channels.id, id))
+    .where(eq(channels.id, channelId))
     .limit(1);
   const channel = channelRows[0];
   if (!channel) {
@@ -89,7 +89,7 @@ export default async function ChannelDetailPage({
       userId: apiKeys.userId,
     })
     .from(apiKeys)
-    .where(eq(apiKeys.channelId, id));
+    .where(eq(apiKeys.channelId, channelId));
 
   // Usage stats
   const statsRows = await db
@@ -100,7 +100,7 @@ export default async function ChannelDetailPage({
       totalOutputTokens: sql<number>`coalesce(sum(${usageLogs.outputTokens}), 0)`,
     })
     .from(usageLogs)
-    .where(eq(usageLogs.channelId, id));
+    .where(eq(usageLogs.channelId, channelId));
   const stats: {
     totalCalls: number;
     totalCredits: number;
@@ -121,7 +121,7 @@ export default async function ChannelDetailPage({
       creditsUsed: sql<number>`coalesce(sum(${usageLogs.creditsUsed}), 0)`,
     })
     .from(usageLogs)
-    .where(eq(usageLogs.channelId, id))
+    .where(eq(usageLogs.channelId, channelId))
     .groupBy(usageLogs.model)
     .orderBy(desc(sql<number>`count(*)`))
     .limit(10);
@@ -139,7 +139,7 @@ export default async function ChannelDetailPage({
       multiplier: modelPricing.multiplier,
     })
     .from(modelPricing)
-    .where(eq(modelPricing.channelId, id))
+    .where(eq(modelPricing.channelId, channelId))
     .orderBy(desc(modelPricing.updatedAt))
     .limit(50);
 
@@ -165,7 +165,7 @@ export default async function ChannelDetailPage({
 
         <div className="flex items-center gap-2">
           <form
-            action={`/api/channels/${id}/health`}
+            action={`/api/channels/${channelId}/health`}
             method="GET"
             target="healthFrame"
           >
@@ -174,7 +174,7 @@ export default async function ChannelDetailPage({
               size="sm"
               className="gap-1.5"
               onClick={async () => {
-                const res = await fetch(`/api/channels/${id}/health`);
+                const res = await fetch(`/api/channels/${channelId}/health`);
                 const data = await res.json();
                 if (data.ok) {
                   const toast = await import("sonner");
@@ -191,7 +191,7 @@ export default async function ChannelDetailPage({
           </form>
 
           <form
-            action={`/api/channels/${id}/models/sync`}
+            action={`/api/channels/${channelId}/models/sync`}
             method="POST"
           >
             <Button
@@ -199,7 +199,7 @@ export default async function ChannelDetailPage({
               size="sm"
               className="gap-1.5"
               onClick={async () => {
-                const res = await fetch(`/api/channels/${id}/models/sync`, {
+                const res = await fetch(`/api/channels/${channelId}/models/sync`, {
                   method: "POST",
                 });
                 const data = await res.json();

@@ -109,15 +109,16 @@ export default async function KeysPage() {
   // 从 model_pricing 拿其他渠道的模型（含 channelId）
   const pricingModels = await db
     .select({ modelId: modelPricing.modelId, channelId: modelPricing.channelId })
-    .from(modelPricing);
+    .from(modelPricing)
+    .where(sql`${modelPricing.channelId} IS NOT NULL`);
 
   const cfModelIds = new Set(cfModels.map((c) => c.id));
   const extraModels = pricingModels
-    .filter((p) => !cfModelIds.has(p.modelId))
+    .filter((p) => p.channelId && !cfModelIds.has(p.modelId))
     .map((p) => ({
       id: p.modelId,
       name: p.modelId.split("/").pop() || p.modelId,
-      channelId: p.channelId,
+      channelId: p.channelId!,
     }));
 
   const allModelOptions = [...cfModels, ...extraModels].filter(
