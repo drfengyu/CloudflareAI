@@ -12,7 +12,7 @@ import {
   type ColumnFiltersState,
 } from "@tanstack/react-table";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { DataTablePagination } from "./pagination";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -43,15 +43,15 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="space-y-4">
-      <div className="overflow-hidden rounded-lg border border-border">
+      <div className="rounded-md border">
         <table className="w-full">
-          <thead className="bg-surface-2">
+          <thead>
             {table.getHeaderGroups().map((headerGroup) => (
-              <tr key={headerGroup.id}>
+              <tr key={headerGroup.id} className="border-b bg-muted/50">
                 {headerGroup.headers.map((header) => (
                   <th
                     key={header.id}
-                    className="px-4 py-3 text-left text-xs font-medium text-muted-foreground"
+                    className="h-10 px-4 text-left align-middle font-medium text-muted-foreground"
                   >
                     {header.isPlaceholder
                       ? null
@@ -66,10 +66,10 @@ export function DataTable<TData, TValue>({
               table.getRowModel().rows.map((row) => (
                 <tr
                   key={row.id}
-                  className="border-t border-border hover:bg-surface-2/50"
+                  className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
                 >
                   {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3 text-sm">
+                    <td key={cell.id} className="p-4 align-middle">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
@@ -79,7 +79,7 @@ export function DataTable<TData, TValue>({
               <tr>
                 <td
                   colSpan={columns.length}
-                  className="px-4 py-8 text-center text-sm text-muted-foreground"
+                  className="h-24 text-center text-muted-foreground"
                 >
                   暂无数据
                 </td>
@@ -88,31 +88,7 @@ export function DataTable<TData, TValue>({
           </tbody>
         </table>
       </div>
-
-      {/* Pagination */}
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
-          共 {table.getFilteredRowModel().rows.length} 条
-        </p>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            上一页
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            下一页
-          </Button>
-        </div>
-      </div>
+      <DataTablePagination table={table} />
     </div>
   );
 }
