@@ -33,6 +33,8 @@ export interface NormalizedModel {
   pricing: ModelPrice[];
   /** 厂商/作者（来自中文元数据覆盖层）。 */
   author?: string;
+  /** 渠道展示名（用于 UI 标签，如 "Vercel"）。 */
+  channelName?: string;
   /** 中文描述（来自中文元数据覆盖层，优先于英文 description 展示）。 */
   descriptionZh?: string;
   /** 中文能力标签（函数调用 / 推理 / 视觉 / 已弃用 等）。 */

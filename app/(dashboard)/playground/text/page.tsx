@@ -52,7 +52,7 @@ export default async function TextPlaygroundPage() {
       otherModels.push({
         id: p.modelId,
         name: p.modelId.split("/").pop() || p.modelId,
-        channel: ch.type || "other",
+        channel: ch.name || ch.type || "other",
         // 非 Cloudflare 模型 ctx 未知，保留 undefined 让 UI 提示
       });
     }

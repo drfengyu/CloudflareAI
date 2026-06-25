@@ -198,9 +198,9 @@ function ModelCard({
           ) : model.channelSource === "anthropic" ? (
             <Badge tone="accent">Anthropic</Badge>
           ) : model.channelSource === "openai-compatible" ? (
-            <Badge tone="info">{model.author || "兼容网关"}</Badge>
+            <Badge tone="info">{model.channelName || "兼容网关"}</Badge>
           ) : model.channelSource ? (
-            <Badge tone="info">{model.author || "第三方"}</Badge>
+            <Badge tone="info">{model.channelName || model.channelSource}</Badge>
           ) : model.source === "hosted" ? (
             <Badge tone="success">CF 托管</Badge>
           ) : (

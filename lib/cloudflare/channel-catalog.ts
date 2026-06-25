@@ -3,6 +3,7 @@ import { channels } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getAdapter } from "@/lib/channels/registry";
 import type { NormalizedModel } from "./catalog";
+import { logoForAuthor } from "./model-meta.zh";
 
 /**
  * 从 model_pricing 表中读取某个渠道关联的所有模型。
@@ -33,20 +34,30 @@ export async function fetchChannelModels(
 
   const remoteModels = await adapter.listModels({ config: configObj });
 
-  return remoteModels.map((m) => ({
-    id: m.id,
-    name: friendlyName(m.id),
-    description: "",
-    task: "Text Generation",
-    category: channelType === "image" ? "image" : "text" as any,
-    source: "proxied" as const,
-    channelSource: channelType,
-    beta: false,
-    contextWindow: undefined,
-    functionCalling: true,
-    pricing: [],
-    author: channelName || channelLabel(channelType),
-  }));
+  return remoteModels.map((m) => {
+    const vendor = extractVendor(m.id);
+    const author = vendor || channelName || channelLabel(channelType);
+    return {
+      id: m.id,
+      name: friendlyName(m.id),
+      description: "",
+      task: "Text Generation",
+      category: channelType === "image" ? "image" : "text" as any,
+      source: "proxied" as const,
+      channelSource: channelType,
+      beta: false,
+      contextWindow: undefined,
+      functionCalling: true,
+      pricing: [],
+      // 优先从模型 ID 提取真实厂商（如 meta-llama, openai, mistralai）
+      // 提取不到则使用渠道名作为兜底
+      author,
+      /** 渠道展示名，用于 UI 显示标签（如 "Vercel"） */
+      channelName: channelName,
+      /** 厂商 Logo（来自 AUTHOR_LOGOS 表） */
+      logo: logoForAuthor(author),
+    };
+  });
 }
 
 /**
@@ -86,6 +97,90 @@ export async function fetchAllChannelsModels(): Promise<{
 function friendlyName(id: string): string {
   const seg = id.split("/").pop() ?? id;
   return seg
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
+ * 从模型 ID 中提取真实厂商名。
+ *
+ * 规则：
+ * - 包含 "/" 的取斜杠前的部分（如 "meta-llama/Llama-3.3-70B" → "meta-llama"）
+ * - 不含斜杠时，尝试匹配常见厂商前缀
+ * - 都匹配不到返回 null
+ */
+function extractVendor(modelId: string): string | null {
+  // 1. 优先取斜杠前部分
+  if (modelId.includes("/")) {
+    const vendor = modelId.split("/")[0];
+    return formatVendorName(vendor);
+  }
+
+  // 2. 常见厂商前缀匹配（不带斜杠的情况）
+  const id = modelId.toLowerCase();
+  const prefixes: Record<string, string> = {
+    "gpt-": "OpenAI",
+    "o1-": "OpenAI",
+    "o3-": "OpenAI",
+    "claude-": "Anthropic",
+    "gemini-": "Google",
+    "deepseek": "DeepSeek",
+    "llama": "Meta",
+    "mistral": "Mistral",
+    "mixtral": "Mistral",
+    "qwen": "Qwen",
+    "yi-": "01.AI",
+    "command-": "Cohere",
+    "flux": "Black Forest Labs",
+    "stable-diffusion": "Stability AI",
+    "sd-": "Stability AI",
+    "whisper": "OpenAI",
+    "phi-": "Microsoft",
+    "grok": "xAI",
+  };
+
+  for (const [prefix, vendor] of Object.entries(prefixes)) {
+    if (id.startsWith(prefix) || id.includes(prefix)) {
+      return vendor;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * 格式化 vendor slug 为可显示的名称。
+ * - "meta-llama" → "Meta Llama"
+ * - "openai" → "OpenAI"
+ * - "mistralai" → "Mistral AI"
+ */
+function formatVendorName(slug: string): string {
+  const aliases: Record<string, string> = {
+    "openai": "OpenAI",
+    "meta-llama": "Meta",
+    "meta": "Meta",
+    "mistralai": "Mistral AI",
+    "mistral": "Mistral",
+    "deepseek-ai": "DeepSeek",
+    "deepseek": "DeepSeek",
+    "google": "Google",
+    "anthropic": "Anthropic",
+    "qwen": "Qwen",
+    "01-ai": "01.AI",
+    "cohere": "Cohere",
+    "stabilityai": "Stability AI",
+    "microsoft": "Microsoft",
+    "huggingfaceh4": "HuggingFace",
+    "nousresearch": "Nous Research",
+    "togethercomputer": "Together",
+    "xai": "xAI",
+  };
+
+  const lower = slug.toLowerCase();
+  if (aliases[lower]) return aliases[lower];
+
+  // 默认格式化：连字符转空格 + 首字母大写
+  return slug
     .replace(/[-_]/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
