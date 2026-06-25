@@ -18,6 +18,7 @@ export default async function KeysPage() {
   const userId = await requireUser();
   const userBalance = await getActualBalance(userId);
 
+  // Fetch API keys (without leftJoin to avoid Drizzle field mapping bug)
   const keys = await db
     .select({
       id: apiKeys.id,
@@ -32,13 +33,17 @@ export default async function KeysPage() {
       lastUsedAt: apiKeys.lastUsedAt,
       createdAt: apiKeys.createdAt,
       channelId: apiKeys.channelId,
-      channelName: channels.name,
-      channelType: channels.type,
     })
     .from(apiKeys)
-    .leftJoin(channels, eq(apiKeys.channelId, channels.id))
     .where(eq(apiKeys.userId, userId))
     .orderBy(desc(apiKeys.createdAt));
+
+  // Fetch all channels separately
+  const allChannels = await db
+    .select({ id: channels.id, name: channels.name, type: channels.type })
+    .from(channels);
+
+  const channelMap = new Map(allChannels.map(c => [c.id, c]));
 
   const keyUsageMap = new Map<string, { used: number; calls: number }>();
   for (const key of keys) {
@@ -57,6 +62,7 @@ export default async function KeysPage() {
 
   const data: ApiKeyRow[] = keys.map((k) => {
     const usage = keyUsageMap.get(k.id) || { used: 0, calls: 0 };
+    const channel = k.channelId ? channelMap.get(k.channelId) : null;
     return {
       id: k.id,
       name: k.name,
@@ -73,8 +79,8 @@ export default async function KeysPage() {
       callCount: usage.calls,
       userBalance,
       channelId: k.channelId,
-      channelName: k.channelName,
-      channelType: k.channelType,
+      channelName: channel?.name || null,
+      channelType: channel?.type || null,
     };
   });
 
