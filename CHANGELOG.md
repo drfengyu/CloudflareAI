@@ -5,6 +5,42 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.3.1] - 2025-06-25
+
+### 修复
+
+- **API Key 创建功能**
+  - 修复 `encryptedKey` 列缺失导致创建失败的问题
+  - 添加缺失的环境变量 `API_KEY_ENCRYPTION_SECRET`
+  - 更新 `.env.example` 添加加密密钥说明
+- **API Key 查看功能**
+  - 修复密钥查看按钮提示"解密失败"的问题
+  - 配置独立的开发和生产环境加密密钥
+- **API Key 名称显示**
+  - 修复 Drizzle ORM leftJoin 字段映射 bug
+  - Key 名称不再错误显示为渠道名称
+  - 改用手动查询映射避免字段错位
+
+### 新增
+
+- **数据库迁移工具**
+  - `scripts/run-migration.js` - 通过 D1 HTTP API 执行 SQL 迁移
+  - `scripts/check-schema.js` - 检查表结构
+  - `scripts/check-keys.js` - 验证 API Keys 数据
+  - `scripts/add-encrypted-key.js` - 添加 encryptedKey 列
+- **文档**
+  - `docs/fixes/2025-06-25-keys-page-fixes.md` - API Key 修复详细记录
+  - `docs/fixes/2025-06-25-drizzle-leftjoin-bug.md` - Drizzle ORM Bug 分析
+  - `docs/VERCEL_ENV_SETUP.md` - Vercel 环境变量配置指南
+  - `COMPLETE_FIX_SUMMARY.md` - 完整修复总结
+
+### 技术债务
+
+- 识别并记录 Drizzle ORM leftJoin 在同名字段时的映射问题
+- 建议对所有使用 leftJoin 的查询进行 code review
+
+---
+
 ## [未发布]
 
 ### 新增

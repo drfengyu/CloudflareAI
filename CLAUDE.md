@@ -452,6 +452,42 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   - `CheckinSettingsForm` 组件：开关、最小/最大奖励、有效期配置
   - Server Action：`updateCheckinSettings`
 
+### ✅ API Key 功能修复（2025-06-25）
+
+**已完成**：
+- ✅ **环境变量配置**：
+  - 添加 `API_KEY_ENCRYPTION_SECRET` 到 `.env.local` 和 `.env.example`
+  - 修复密钥查看功能解密失败问题
+  - 生成独立的生产环境加密密钥
+- ✅ **数据库修复**：
+  - `api_key` 表添加 `encryptedKey` 列（修复 0004 迁移错误表名）
+  - 创建 D1 HTTP API 迁移工具（`scripts/run-migration.js`）
+  - 新增表结构检查工具（`scripts/check-schema.js`）
+- ✅ **Drizzle leftJoin Bug 修复**：
+  - 修复字段映射错位导致 key 名称显示为渠道名的问题
+  - 移除 leftJoin，改为分别查询 + 手动映射
+  - 新增 `scripts/check-keys.js` 用于数据验证
+- ✅ **文档完善**：
+  - `docs/fixes/2025-06-25-keys-page-fixes.md` - 环境变量修复记录
+  - `docs/fixes/2025-06-25-drizzle-leftjoin-bug.md` - ORM Bug 详细分析
+  - `docs/VERCEL_ENV_SETUP.md` - 生产环境配置指南
+  - `COMPLETE_FIX_SUMMARY.md` - 完整修复总结
+
+**验证通过**：
+- ✅ API Key 创建功能正常
+- ✅ 密钥查看功能解密成功
+- ✅ Key 名称正确显示（不被渠道名覆盖）
+- ✅ 类型检查通过
+
+**相关 Commits**：
+- 1bc837e - 环境变量配置
+- 08bc0bb - 部署文档
+- 4b9dbd0 - 数据库修复
+- 3c28ea1 - 字段映射修复
+- 8b05ef7 - 文档补充
+
+---
+
 ### 🚧 待完成
 
 - **Phase A**：视觉地基（oklch 主题 + shadcn primitives + 重做布局）
@@ -462,12 +498,15 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 - **渠道图表增强**：
   - Dashboard 新增渠道分布饼图
   - 渠道详情页 30 日趋势图 + 错误率曲线
+- **生产环境部署**：
+  - Vercel 环境变量配置（`API_KEY_ENCRYPTION_SECRET`）
+  - 生产数据库执行迁移（添加 `encryptedKey` 列）
 
 ---
 
 ## 版本发布
 
-**当前版本**：v0.3.0（2026-06-18）
+**当前版本**：v0.3.1（2025-06-25）
 **下一版本**：v0.4.0（待规划）
 
 所有版本变更记录见根目录 [`CHANGELOG.md`](CHANGELOG.md)，遵循 [Keep a Changelog](https://keepachangelog.com/) 规范。
