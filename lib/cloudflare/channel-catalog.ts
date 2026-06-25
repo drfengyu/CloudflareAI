@@ -36,26 +36,39 @@ export async function fetchChannelModels(
 
   return remoteModels.map((m) => {
     const vendor = extractVendor(m.id);
-    const author = vendor || channelName || channelLabel(channelType);
+    const author = vendor || m.owned_by || channelName || channelLabel(channelType);
+
+    // 从上游 type 映射到本项目的 category
+    let category: "text" | "image" | "embeddings" | "speech" | "vision" | "translate" | "video" | "classify" = "text";
+    if (m.type === "language") category = "text";
+    else if (m.type === "embedding") category = "embeddings";
+    else if (m.type === "image") category = "image";
+    else if (m.type === "speech" || m.type === "transcription") category = "speech";
+    else if (m.type === "video") category = "video";
+    else if (m.type === "reranking") category = "classify";
+
     return {
       id: m.id,
-      name: friendlyName(m.id),
-      description: "",
-      task: "Text Generation",
-      category: channelType === "image" ? "image" : "text" as any,
+      name: m.name || friendlyName(m.id),
+      description: m.description || "",
+      task: m.type === "language" ? "Text Generation" : m.type || "Text Generation",
+      category,
       source: "proxied" as const,
       channelSource: channelType,
       beta: false,
-      contextWindow: undefined,
-      functionCalling: true,
+      contextWindow: m.context_window,
+      functionCalling: m.tags?.includes("tool-use") ?? true,
       pricing: [],
-      // 优先从模型 ID 提取真实厂商（如 meta-llama, openai, mistralai）
-      // 提取不到则使用渠道名作为兜底
       author,
-      /** 渠道展示名，用于 UI 显示标签（如 "Vercel"） */
       channelName: channelName,
-      /** 厂商 Logo（来自 AUTHOR_LOGOS 表） */
       logo: logoForAuthor(author),
+      // 保留原始 tags
+      tags: m.tags,
+      // 保留上游定价（美元/token）
+      upstreamPricing: m.pricing ? {
+        input: parseFloat(m.pricing.input || "0"),
+        output: parseFloat(m.pricing.output || "0"),
+      } : undefined,
     };
   });
 }

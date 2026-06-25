@@ -3,7 +3,8 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db/d1-http";
 import { channels, modelPricing, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { getAdapter } from "@/lib/channels/registry";
+import { fetchChannelModels } from "@/lib/cloudflare/channel-catalog";
+import { getCreditsPerUsd } from "@/lib/billing/credits";
 
 async function isAdmin(): Promise<boolean> {
   const session = await auth();
@@ -69,20 +70,14 @@ export async function POST(
     return NextResponse.json({ error: "Channel not found" }, { status: 404 });
   }
 
-  const adapter = getAdapter(channel.type || "");
-  if (!adapter || !adapter.listModels) {
-    return NextResponse.json({ error: "该渠道类型不支持模型同步" }, { status: 400 });
-  }
+  // 使用 fetchChannelModels 获取带完整元数据的模型列表
+  const normalizedModels = await fetchChannelModels(
+    channelId,
+    channel.type || "",
+    channel.name,
+  );
 
-  let configObj: Record<string, unknown> = {};
-  try {
-    configObj = channel.config ? JSON.parse(channel.config) : {};
-  } catch {
-    // ignore
-  }
-
-  const remoteModels = await adapter.listModels({ config: configObj });
-  if (remoteModels.length === 0) {
+  if (normalizedModels.length === 0) {
     return NextResponse.json({ error: "未获取到远程模型列表" }, { status: 500 });
   }
 
@@ -94,21 +89,40 @@ export async function POST(
 
   const existingIds = new Set(existing.map((e) => e.modelId));
 
-  // 批量插入新模型
-  const toInsert = remoteModels.filter((m) => !existingIds.has(m.id));
+  // 批量插入新模型（带完整元数据）
+  const toInsert = normalizedModels.filter((m) => !existingIds.has(m.id));
   let inserted = 0;
+
+  // 获取 credits/USD 倍率
+  const creditsPerUsd = await getCreditsPerUsd();
 
   for (const model of toInsert) {
     try {
+      // 从上游定价计算 credits per M tokens
+      let inputPrice = 0;
+      let outputPrice = 0;
+
+      if (model.upstreamPricing) {
+        // 上游定价是 美元/token，转换为 credits per M tokens
+        // credits per M tokens = (美元/token) × 1,000,000 × creditsPerUsd
+        inputPrice = model.upstreamPricing.input * 1_000_000 * creditsPerUsd;
+        outputPrice = model.upstreamPricing.output * 1_000_000 * creditsPerUsd;
+      }
+
       await db.insert(modelPricing).values({
         modelId: model.id,
-        category: "remote",
+        category: model.category,
         source: channel.type || "remote",
         channelId,
         multiplier: 1.0,
+        inputPrice: Math.round(inputPrice),
+        outputPrice: Math.round(outputPrice),
+        unit: "M tokens",
+        isImage: model.category === "image" ? 1 : 0,
       });
       inserted++;
-    } catch {
+    } catch (e) {
+      console.error(`Failed to insert model ${model.id}:`, e);
       // 跳过冲突
     }
   }

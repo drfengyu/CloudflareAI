@@ -1,4 +1,4 @@
-import type { ChannelAdapter } from "./adapter";
+import type { ChannelAdapter, UpstreamModel } from "./adapter";
 
 /**
  * OpenAI 渠道适配器
@@ -74,7 +74,7 @@ export class OpenAIAdapter implements ChannelAdapter {
   /** List available models */
   async listModels(
     context: Record<string, unknown>,
-  ): Promise<{ id: string; object: string }[]> {
+  ): Promise<UpstreamModel[]> {
     try {
       const config = (context.config || {}) as Record<string, string>;
       const apiKey = config.apiKey || process.env.OPENAI_API_KEY || "";
@@ -85,8 +85,8 @@ export class OpenAIAdapter implements ChannelAdapter {
       });
       if (!res.ok) return [];
 
-      const data = (await res.json()) as { data: { id: string; object: string }[] };
-      return (data.data || []).map((m) => ({ id: m.id, object: m.object || "model" }));
+      const data = (await res.json()) as { data: UpstreamModel[] };
+      return data.data || [];
     } catch {
       return [];
     }

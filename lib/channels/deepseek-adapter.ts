@@ -1,4 +1,4 @@
-import type { ChannelAdapter } from "./adapter";
+import type { ChannelAdapter, UpstreamModel } from "./adapter";
 import { OpenAIAdapter } from "./openai-adapter";
 
 /**
@@ -32,7 +32,7 @@ export class DeepSeekAdapter extends OpenAIAdapter {
   /** 列出 DeepSeek 模型 */
   async listModels(
     context: Record<string, unknown>,
-  ): Promise<{ id: string; object: string }[]> {
+  ): Promise<UpstreamModel[]> {
     try {
       const config = (context.config || {}) as Record<string, string>;
       const apiKey = config.apiKey || "";
@@ -43,8 +43,8 @@ export class DeepSeekAdapter extends OpenAIAdapter {
       });
       if (!res.ok) return [];
 
-      const data = (await res.json()) as { data: { id: string; object: string }[] };
-      return (data.data || []).map((m) => ({ id: m.id, object: m.object || "model" }));
+      const data = (await res.json()) as { data: UpstreamModel[] };
+      return data.data || [];
     } catch {
       return [];
     }

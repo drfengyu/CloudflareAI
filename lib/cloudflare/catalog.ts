@@ -41,6 +41,11 @@ export interface NormalizedModel {
   tags?: string[];
   /** 厂商 Logo（SVG）URL。 */
   logo?: string;
+  /** 上游定价（美元/token，来自第三方网关如 Vercel）。 */
+  upstreamPricing?: {
+    input: number;   // 美元 per token
+    output: number;  // 美元 per token
+  };
 }
 
 // ── Raw payload shapes (defensive: Cloudflare's fields are loosely typed) ──

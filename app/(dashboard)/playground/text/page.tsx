@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { TextGenPlayground } from "@/components/playground/text-gen";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
+import { fetchChannelModels } from "@/lib/cloudflare/channel-catalog";
 import { db } from "@/lib/db/d1-http";
 import { channels, modelPricing } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -42,18 +43,39 @@ export default async function TextPlaygroundPage() {
     .where(eq(channels.status, 1));
 
   const otherModels: { id: string; name: string; channel: string; contextWindow?: number }[] = [];
+
+  // 按渠道批量获取模型元数据（一次性调用避免重复请求）
   for (const ch of channelRows) {
     if (ch.type === "cloudflare") continue;
-    const pricing = await db
-      .select({ modelId: modelPricing.modelId })
+
+    // 获取该渠道的所有模型 ID
+    const pricingRows = await db
+      .select({
+        modelId: modelPricing.modelId,
+        category: modelPricing.category,
+      })
       .from(modelPricing)
       .where(eq(modelPricing.channelId, ch.id));
-    for (const p of pricing) {
+
+    // 过滤出文本/嵌入模型
+    const textModelIds = new Set(
+      pricingRows.filter((p) => p.category === "text" || p.category === "embeddings").map((p) => p.modelId)
+    );
+
+    if (textModelIds.size === 0) continue;
+
+    // 一次性获取该渠道的所有模型元数据
+    const channelModels = await fetchChannelModels(ch.id, ch.type || "", ch.name);
+
+    // 构建模型列表
+    for (const modelMeta of channelModels) {
+      if (!textModelIds.has(modelMeta.id)) continue;
+
       otherModels.push({
-        id: p.modelId,
-        name: p.modelId.split("/").pop() || p.modelId,
+        id: modelMeta.id,
+        name: modelMeta.name || modelMeta.id.split("/").pop() || modelMeta.id,
         channel: ch.name || ch.type || "other",
-        // 非 Cloudflare 模型 ctx 未知，保留 undefined 让 UI 提示
+        contextWindow: modelMeta.contextWindow,
       });
     }
   }
