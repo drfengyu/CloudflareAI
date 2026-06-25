@@ -61,7 +61,7 @@ export default async function HistoryPage({
                   return (
                     <div
                       key={log.id}
-                      className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-surface p-3 text-xs"
+                      className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-card p-3 text-xs"
                     >
                       {/* 左侧：状态 + 信息 */}
                       <div className="flex items-center gap-2 min-w-0">
@@ -87,7 +87,7 @@ export default async function HistoryPage({
                           <Badge tone="muted">历史数据</Badge>
                         ) : null}
                         {log.status === "error" && log.errorReason && (
-                          <span className="text-xs text-danger truncate max-w-[200px]" title={log.errorReason}>
+                          <span className="text-xs text-destructive truncate max-w-[200px]" title={log.errorReason}>
                             ⚠️ {log.errorReason}
                           </span>
                         )}
@@ -129,7 +129,7 @@ export default async function HistoryPage({
                 {page > 1 && (
                   <a
                     href={`/history?page=${page - 1}${params.model ? `&model=${params.model}` : ""}${params.task ? `&task=${params.task}` : ""}`}
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-2"
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-secondary"
                   >
                     上一页
                   </a>
@@ -140,7 +140,7 @@ export default async function HistoryPage({
                 {page < totalPages && (
                   <a
                     href={`/history?page=${page + 1}${params.model ? `&model=${params.model}` : ""}${params.task ? `&task=${params.task}` : ""}`}
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-surface-2"
+                    className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-secondary"
                   >
                     下一页
                   </a>

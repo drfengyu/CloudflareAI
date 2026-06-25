@@ -33,7 +33,7 @@ export default async function ConversationsPage({
             name="search"
             defaultValue={search}
             placeholder="搜索 prompt..."
-            className="h-9 flex-1 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-[color:var(--primary)]"
+            className="h-9 flex-1 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-[color:var(--primary)]"
           />
           <button
             type="submit"
@@ -76,7 +76,7 @@ export default async function ConversationsPage({
                     <div className="flex items-center gap-2">
                       <Badge tone="muted">{conv.creditsUsed} credits</Badge>
                       <button
-                        className="text-muted-foreground hover:text-danger"
+                        className="text-muted-foreground hover:text-destructive"
                         title="删除"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -85,13 +85,13 @@ export default async function ConversationsPage({
                   </div>
 
                   {/* Prompt */}
-                  <div className="rounded-lg bg-surface-2 p-3">
+                  <div className="rounded-lg bg-secondary p-3">
                     <p className="mb-1 text-xs font-medium text-muted-foreground">Prompt</p>
                     <p className="whitespace-pre-wrap text-sm">{conv.prompt}</p>
                   </div>
 
                   {/* Response */}
-                  <div className="rounded-lg bg-surface p-3">
+                  <div className="rounded-lg bg-card p-3">
                     <p className="mb-1 text-xs font-medium text-muted-foreground">Response</p>
                     <p className="whitespace-pre-wrap text-sm">{conv.response}</p>
                   </div>
@@ -107,7 +107,7 @@ export default async function ConversationsPage({
             {page > 1 && (
               <a
                 href={`?page=${page - 1}${search ? `&search=${search}` : ""}`}
-                className="rounded-lg border border-border px-3 py-1 text-sm hover:bg-surface"
+                className="rounded-lg border border-border px-3 py-1 text-sm hover:bg-card"
               >
                 上一页
               </a>
@@ -118,7 +118,7 @@ export default async function ConversationsPage({
             {page < totalPages && (
               <a
                 href={`?page=${page + 1}${search ? `&search=${search}` : ""}`}
-                className="rounded-lg border border-border px-3 py-1 text-sm hover:bg-surface"
+                className="rounded-lg border border-border px-3 py-1 text-sm hover:bg-card"
               >
                 下一页
               </a>

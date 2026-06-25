@@ -81,7 +81,7 @@ export const columns: ColumnDef<ApiKeyRow>[] = [
       return (
         <div className="min-w-[120px]">
           <p className="text-xs font-medium">{remain.toLocaleString()} / {quota?.toLocaleString() || '?'} cr</p>
-          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
+          <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-secondary">
             <div
               className="h-full bg-primary transition-all"
               style={{ width: `${usedPercent}%` }}
@@ -134,7 +134,7 @@ export const columns: ColumnDef<ApiKeyRow>[] = [
       }
       const isPast = exp < new Date();
       return (
-        <span className={`text-xs ${isPast ? "text-danger" : ""}`}>
+        <span className={`text-xs ${isPast ? "text-destructive" : ""}`}>
           {exp.toLocaleDateString("zh-CN")}
         </span>
       );

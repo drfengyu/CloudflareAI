@@ -67,7 +67,7 @@ export function ImageGenPlayground({ models }: ImageGenProps) {
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
-                className="h-9 rounded-lg border border-border bg-surface px-3 text-sm outline-none"
+                className="h-9 rounded-lg border border-border bg-card px-3 text-sm outline-none"
               >
                 {models.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -84,7 +84,7 @@ export function ImageGenPlayground({ models }: ImageGenProps) {
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="描述你想生成的图像..."
                 rows={4}
-                className="resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-[color:var(--primary)]"
+                className="resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-[color:var(--primary)]"
               />
             </label>
 
@@ -144,7 +144,7 @@ export function ImageGenPlayground({ models }: ImageGenProps) {
             </p>
           )}
           {error && (
-            <p className="text-center text-sm text-danger">❌ {error}</p>
+            <p className="text-center text-sm text-destructive">❌ {error}</p>
           )}
           {imageUrl && (
             <div className="space-y-3">

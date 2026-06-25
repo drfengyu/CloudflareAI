@@ -194,7 +194,7 @@ export default async function DashboardPage({
                   return (
                     <div
                       key={log.id}
-                      className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-surface p-3 text-xs"
+                      className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-card p-3 text-xs"
                     >
                       {/* 左侧：状态 + 渠道 */}
                       <div className="flex items-center gap-2 min-w-0">
@@ -215,7 +215,7 @@ export default async function DashboardPage({
                           {log.model}
                         </span>
                         {log.status === "error" && log.errorReason && (
-                          <span className="text-xs text-danger truncate max-w-[150px]" title={log.errorReason}>
+                          <span className="text-xs text-destructive truncate max-w-[150px]" title={log.errorReason}>
                             ⚠️ {log.errorReason}
                           </span>
                         )}
@@ -272,7 +272,7 @@ function StatCard({
   const colors = {
     primary: "text-primary",
     warning: "text-warning",
-    danger: "text-danger",
+    danger: "text-destructive",
     success: "text-success",
     muted: "text-muted-foreground",
   };

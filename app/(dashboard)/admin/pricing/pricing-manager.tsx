@@ -128,13 +128,13 @@ export function PricingManager({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="搜索模型 ID / 名称"
-            className="h-9 w-full rounded-lg border border-border bg-surface pl-9 pr-3 text-sm outline-none focus:border-[color:var(--primary)]"
+            className="h-9 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-sm outline-none focus:border-[color:var(--primary)]"
           />
         </div>
         <select
           value={categoryFilter}
           onChange={(e) => setCategoryFilter(e.target.value)}
-          className="h-9 rounded-lg border border-border bg-surface px-3 text-xs outline-none focus:border-[color:var(--primary)]"
+          className="h-9 rounded-lg border border-border bg-card px-3 text-xs outline-none focus:border-[color:var(--primary)]"
         >
           <option value="all">全部分类</option>
           {categories.map((cat) => (
@@ -233,7 +233,7 @@ function ModelPricingRow({
               max="100"
               value={multiplier}
               onChange={(e) => setMultiplier(e.target.value)}
-              className="h-8 w-20 rounded border border-border bg-surface px-2 text-xs text-right outline-none focus:border-[color:var(--primary)]"
+              className="h-8 w-20 rounded border border-border bg-card px-2 text-xs text-right outline-none focus:border-[color:var(--primary)]"
             />
             <span className="text-xs text-muted-foreground">x</span>
           </div>

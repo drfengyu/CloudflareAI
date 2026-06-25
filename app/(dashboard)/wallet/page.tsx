@@ -136,7 +136,7 @@ export default async function WalletPage() {
                 {displayTempBalances.map((tb) => (
                   <div
                     key={tb.id}
-                    className="flex items-center justify-between rounded-lg border border-border bg-surface p-3"
+                    className="flex items-center justify-between rounded-lg border border-border bg-card p-3"
                   >
                     <div className="flex-1">
                       <p className="text-sm font-medium">
@@ -177,7 +177,7 @@ export default async function WalletPage() {
                 {topupRecords.map((record) => (
                   <div
                     key={record.id}
-                    className="flex items-center justify-between rounded-lg border border-border bg-surface p-3"
+                    className="flex items-center justify-between rounded-lg border border-border bg-card p-3"
                   >
                     <div>
                       <p className="text-sm font-medium">

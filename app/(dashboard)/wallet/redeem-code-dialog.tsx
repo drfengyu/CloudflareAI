@@ -60,7 +60,7 @@ export function RedeemCodeDialog() {
               type="text"
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm font-mono"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-mono"
               placeholder="XXXX-XXXX-XXXX-XXXX"
               maxLength={20}
               required

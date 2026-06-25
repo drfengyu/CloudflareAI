@@ -184,7 +184,7 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
   return (
     <>
       <div className="fixed inset-0 z-40 bg-black/50" onClick={onClose} />
-      <div className="fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto bg-surface shadow-2xl">
+      <div className="fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto bg-card shadow-2xl">
         <div className="flex items-center justify-between border-b border-border p-4">
           <h2 className="text-lg font-semibold">编辑 API Key</h2>
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="关闭" title="关闭">
@@ -201,7 +201,7 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
-              className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+              className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary"
             />
           </div>
 
@@ -212,7 +212,7 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
               <select
                 value={formData.channelId}
                 onChange={(e) => handleChannelChange(e.target.value)}
-                className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+                className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary"
               >
                 <option value="">默认（Cloudflare）</option>
                 {channelsProp
@@ -239,14 +239,14 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
               value={formData.quotaCredits}
               onChange={(e) => setFormData({ ...formData, quotaCredits: e.target.value })}
               placeholder="留空=无限额度"
-              className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+              className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary"
             />
           </div>
 
           {/* 已使用 */}
           <div>
             <label className="mb-1.5 block text-sm font-medium">已使用 / 剩余</label>
-            <div className="rounded-lg border border-border bg-surface-2 p-3">
+            <div className="rounded-lg border border-border bg-secondary p-3">
               <div className="flex items-center justify-between text-sm">
                 <span>
                   已使用：{apiKey.quotaCredits !== null && apiKey.remainCredits !== null
@@ -257,7 +257,7 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
               </div>
               {apiKey.quotaCredits !== null && apiKey.remainCredits !== null && (
                 <div className="mt-2">
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-surface">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-card">
                     <div className="h-full bg-primary transition-all"
                       style={{ width: `${Math.min(100, ((apiKey.quotaCredits - apiKey.remainCredits) / apiKey.quotaCredits) * 100)}%` }} />
                   </div>
@@ -276,7 +276,7 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
               type="date"
               value={formData.expiresAt}
               onChange={(e) => setFormData({ ...formData, expiresAt: e.target.value })}
-              className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+              className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary"
             />
             <p className="mt-1 text-xs text-muted-foreground">留空=永不过期</p>
           </div>
@@ -289,7 +289,7 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
               onChange={(e) => setFormData({ ...formData, allowedIps: e.target.value })}
               placeholder="多个 IP 用逗号分隔，留空=不限制"
               rows={3}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-primary"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-primary"
             />
           </div>
 
@@ -306,7 +306,7 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
             <button
               type="button"
               onClick={() => setModelPanelOpen(!modelPanelOpen)}
-              className="flex h-9 w-full items-center justify-between rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+              className="flex h-9 w-full items-center justify-between rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary"
             >
               <span className="text-muted-foreground">
                 {formData.allowedModels.length === 0
@@ -317,7 +317,7 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
             </button>
 
             {modelPanelOpen && (
-              <div className="absolute left-0 right-0 z-50 mt-1 max-h-80 overflow-hidden rounded-lg border border-border bg-surface shadow-lg">
+              <div className="absolute left-0 right-0 z-50 mt-1 max-h-80 overflow-hidden rounded-lg border border-border bg-card shadow-lg">
                 {/* 搜索 */}
                 <div className="border-b border-border p-2">
                   <div className="relative">
@@ -343,7 +343,7 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
                           key={m.id}
                           type="button"
                           onClick={() => toggleModel(m.id)}
-                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-surface-2"
+                          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-secondary"
                         >
                           <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
                             selected ? "border-primary bg-primary text-white" : "border-border"

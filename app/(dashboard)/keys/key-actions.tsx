@@ -88,7 +88,7 @@ export function KeyActions({ keyId, status, onEdit }: KeyActionsProps) {
 
             {/* 菜单 - fixed 定位，渲染在 body 顶层 */}
             <div
-              className="fixed z-50 w-40 rounded-lg border border-border bg-surface shadow-lg"
+              className="fixed z-50 w-40 rounded-lg border border-border bg-card shadow-lg"
               style={{ top: coords.top, left: coords.left }}
             >
               <button
@@ -96,7 +96,7 @@ export function KeyActions({ keyId, status, onEdit }: KeyActionsProps) {
                   onEdit?.();
                   setOpen(false);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary"
               >
                 <Edit className="h-4 w-4" />
                 编辑
@@ -104,7 +104,7 @@ export function KeyActions({ keyId, status, onEdit }: KeyActionsProps) {
 
               <button
                 onClick={handleToggle}
-                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-2"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-secondary"
               >
                 {status === 1 ? (
                   <>
@@ -121,7 +121,7 @@ export function KeyActions({ keyId, status, onEdit }: KeyActionsProps) {
 
               <button
                 onClick={handleDelete}
-                className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-danger hover:bg-danger/10"
+                className="flex w-full items-center gap-2 border-t border-border px-3 py-2 text-left text-sm text-destructive hover:bg-danger/10"
               >
                 <Trash2 className="h-4 w-4" />
                 删除

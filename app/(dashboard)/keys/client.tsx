@@ -54,7 +54,7 @@ export function KeysClient() {
             ⚠️ 请立即复制并保存，密钥仅显示一次
           </p>
           <div className="flex items-center gap-2">
-            <code className="flex-1 rounded-lg bg-surface p-2 text-xs font-mono">
+            <code className="flex-1 rounded-lg bg-card p-2 text-xs font-mono">
               {newKey}
             </code>
             <Button size="sm" onClick={handleCopy}>
@@ -72,7 +72,7 @@ export function KeysClient() {
               name="name"
               placeholder="密钥名称（如：claude-code-dev）"
               required
-              className="h-9 flex-1 rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-[color:var(--primary)]"
+              className="h-9 flex-1 rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-[color:var(--primary)]"
             />
             <SubmitButton />
           </div>
@@ -84,7 +84,7 @@ export function KeysClient() {
               <select
                 name="channelId"
                 id="channelId"
-                className="h-8 flex-1 rounded-lg border border-border bg-surface px-2 text-xs outline-none focus:border-[color:var(--primary)]"
+                className="h-8 flex-1 rounded-lg border border-border bg-card px-2 text-xs outline-none focus:border-[color:var(--primary)]"
               >
                 <option value="">默认（Cloudflare）</option>
                 {channels.map((ch) => (

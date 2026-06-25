@@ -51,7 +51,7 @@ export function AuthForm({
   if (!hasAnyChannel) {
     return (
       <div className="rounded-xl border border-border bg-card p-8 shadow-sm">
-        <p className="text-center text-danger">所有登录渠道已禁用，请联系管理员。</p>
+        <p className="text-center text-destructive">所有登录渠道已禁用，请联系管理员。</p>
       </div>
     );
   }
@@ -85,7 +85,7 @@ export function AuthForm({
               <Field name="password" type="password" label="密码" />
 
               {state.error && (
-                <p className="animate-in fade-in slide-in-from-top-1 text-sm text-danger duration-200">
+                <p className="animate-in fade-in slide-in-from-top-1 text-sm text-destructive duration-200">
                   {state.error}
                 </p>
               )}

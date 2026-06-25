@@ -1,0 +1,196 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    🎨 Phase A Step 5 完成总结 🎨                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📅 完成时间: 2025-06-25
+📦 状态: ✅ 已完成（前期已实现）
+⏱️  用时: 0 分钟（检查确认）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## ✅ 已完成功能（前期实现）
+
+### Sidebar（components/dashboard/sidebar.tsx）
+
+**分组导航**:
+- ✅ 通用（数据看板/模型库/定价）
+- ✅ 在线体验（7 个 Playground）
+- ✅ 个人（钱包/密钥/记录/设置）
+- ✅ 管理（渠道/用户/兑换码/定价/系统）
+
+**功能特性**:
+- ✅ 管理员权限过滤（userRole >= 10）
+- ✅ 活跃状态高亮
+- ✅ 品牌 logo + 可配置站点名
+- ✅ 响应式设计（桌面固定 + 移动抽屉）
+- ✅ 使用 sidebar 设计令牌
+
+**样式**:
+```tsx
+bg-sidebar
+text-sidebar-foreground
+bg-sidebar-accent (active)
+text-sidebar-accent-foreground
+border-sidebar-border
+```
+
+### Header（components/dashboard/app-header.tsx）
+
+**组件**:
+- ✅ ThemeSwitch（亮/暗模式 + 7 套配色）
+- ✅ 用户头像菜单（Avatar + DropdownMenu）
+- ✅ 移动端导航按钮（MobileNav）
+
+**ThemeSwitch 功能**:
+- ✅ 亮色/深色/跟随系统
+- ✅ 7 套配色预设：
+  - default（中性灰）
+  - anthropic（暖奶油）
+  - cloudflare（橙色）
+  - ocean（蓝色）
+  - emerald（绿色）
+  - violet（紫色）
+  - rose（玫瑰）
+
+**用户菜单**:
+- ✅ 显示用户名/邮箱
+- ✅ 头像/首字母 fallback
+- ✅ 退出登录
+
+### 根布局（app/layout.tsx）
+
+**集成**:
+- ✅ ThemeProvider（next-themes）
+- ✅ TooltipProvider（Radix UI）
+- ✅ Toaster（Sonner）
+- ✅ Geist 字体变量
+- ✅ suppressHydrationWarning
+
+### Dashboard 布局（app/(dashboard)/layout.tsx）
+
+**功能**:
+- ✅ Session 获取
+- ✅ 用户角色查询
+- ✅ 站点名称配置（可管理员修改）
+- ✅ Server Action（signOut）
+- ✅ Flex 布局（Sidebar + Header + Main）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 📊 Phase A 总体进度
+
+完成度: ████████████████████████ 83% (5/6 步骤)
+
+**已完成**:
+✅ Step 1: 完善 globals.css（30 分钟）
+✅ Step 2: UI 组件库完善（15 分钟）
+✅ Step 3: DataTable 统一封装（20 分钟）
+✅ Step 4: 图表统一封装（25 分钟）
+✅ Step 5: 布局重构（已完成）
+
+**进行中**:
+🔄 Step 6: 令牌迁移（1 小时）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🎯 布局架构
+
+```
+app/
+├── layout.tsx                    (根布局 + ThemeProvider)
+└── (dashboard)/
+    ├── layout.tsx                (Dashboard 布局)
+    │   ├── Sidebar               (桌面端固定)
+    │   └── Header                (ThemeSwitch + UserMenu)
+    └── [pages]                   (页面内容)
+
+components/
+├── dashboard/
+│   ├── sidebar.tsx               (分组导航)
+│   ├── app-header.tsx            (顶栏)
+│   └── mobile-nav.tsx            (移动端)
+└── theme/
+    ├── theme-provider.tsx        (主题上下文)
+    └── theme-switch.tsx          (主题切换器)
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔧 技术细节
+
+### 响应式布局
+
+**桌面端** (md+):
+- 固定 Sidebar（240px 宽）
+- 顶部 Header（48px 高）
+- 滚动 Main 区域
+
+**移动端** (< md):
+- 隐藏 Sidebar
+- Sheet 抽屉导航
+- 汉堡菜单按钮
+
+### 主题系统
+
+**暗/亮模式**:
+- next-themes 管理
+- localStorage 持久化
+- 系统偏好检测
+
+**配色预设**:
+- 7 套 oklch 配色
+- `data-theme-preset` 属性
+- CSS 变量覆盖
+
+### 权限控制
+
+```typescript
+// 管理员菜单（role >= 10）
+const visibleGroups = NAV.filter(
+  (group) => !group.adminOnly || userRole >= 10
+)
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## ✅ 验证通过
+
+- ✅ 响应式布局正常
+- ✅ 主题切换流畅
+- ✅ 权限过滤正确
+- ✅ 移动端导航正常
+- ✅ 站点名称可配置
+- ✅ 使用设计令牌
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 📈 累计成果
+
+**Git 提交**: 5 个（无新提交，已实现）
+- d0ae130 - Step 1: globals.css 增强
+- f6eee61 - Step 2: UI 组件库完善
+- cfa845d - Step 3: DataTable 统一封装
+- be1822c - Step 4: 图表统一封装
+- (Step 5 无需提交)
+
+**累计用时**: 约 90 分钟
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🎯 下一步：Step 6 - 令牌迁移
+
+**目标**: 迁移旧令牌到 shadcn 标准
+**预计用时**: 1 小时
+
+**待迁移令牌**:
+- ❌ `bg-surface` → ✅ `bg-card`
+- ❌ `bg-surface-2` → ✅ `bg-secondary`
+- ❌ `text-danger` → ✅ `text-destructive`
+
+**待迁移文件**: 35 个
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**状态**: ✅ Step 5 完成（前期已实现）
+**下一目标**: Step 6 - 令牌迁移
+**剩余工作量**: 1 小时

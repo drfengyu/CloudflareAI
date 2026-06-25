@@ -326,7 +326,7 @@ export function CheckinCalendarCard() {
                         !dayObj.isCurrentMonth && "text-muted-foreground/40 cursor-default",
                         isToday && isCheckedIn && "bg-primary text-primary-foreground hover:bg-primary/90",
                         isToday && !isCheckedIn && "ring-2 ring-primary ring-inset",
-                        !isToday && dayObj.isCurrentMonth && "hover:bg-surface",
+                        !isToday && dayObj.isCurrentMonth && "hover:bg-card",
                         !isToday && isCheckedIn && "font-semibold"
                       )}
                     >

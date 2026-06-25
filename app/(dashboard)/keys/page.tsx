@@ -154,7 +154,7 @@ export default async function KeysPage() {
             <h3 className="text-sm font-medium">使用说明</h3>
             <div className="space-y-2 text-xs text-muted-foreground">
               <p><strong>OpenAI 兼容端点</strong></p>
-              <pre className="rounded-lg bg-surface-2 p-3 font-mono text-[11px]">
+              <pre className="rounded-lg bg-secondary p-3 font-mono text-[11px]">
 {`POST /v1/chat/completions
 Authorization: Bearer sk-cfai-xxxxx
 
@@ -162,7 +162,7 @@ POST /v1/embeddings
 GET /v1/models`}
               </pre>
               <p className="pt-2"><strong>Anthropic 兼容端点</strong></p>
-              <pre className="rounded-lg bg-surface-2 p-3 font-mono text-[11px]">
+              <pre className="rounded-lg bg-secondary p-3 font-mono text-[11px]">
 {`POST /v1/messages
 x-api-key: sk-cfai-xxxxx
 anthropic-version: 2023-06-01`}

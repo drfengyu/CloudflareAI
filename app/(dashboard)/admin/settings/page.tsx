@@ -108,7 +108,7 @@ export default async function AdminSettingsPage() {
             <CardTitle className="text-base">所有设置（JSON 编辑器）</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="rounded-lg bg-surface-2 p-4">
+            <div className="rounded-lg bg-secondary p-4">
               <pre className="text-xs">
                 {JSON.stringify(settings, null, 2)}
               </pre>

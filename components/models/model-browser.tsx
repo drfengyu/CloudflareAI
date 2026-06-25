@@ -88,7 +88,7 @@ export function ModelBrowser({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜索模型 id / 名称 / 厂商 / 描述"
-          className="h-9 w-full rounded-lg border border-border bg-surface pl-9 pr-3 text-sm outline-none focus:border-[color:var(--primary)]"
+          className="h-9 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-sm outline-none focus:border-[color:var(--primary)]"
         />
       </div>
 

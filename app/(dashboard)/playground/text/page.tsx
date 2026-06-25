@@ -79,7 +79,7 @@ export default async function TextPlaygroundPage() {
         }
       />
       {allModels.length === 0 ? (
-        <div className="m-8 rounded-lg border border-dashed border-border bg-surface p-6 text-sm text-muted-foreground">
+        <div className="m-8 rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
           无可用的文本生成模型
         </div>
       ) : (

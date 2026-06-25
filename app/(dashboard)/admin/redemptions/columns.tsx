@@ -28,7 +28,7 @@ export function createRedemptionColumns(ratio: number): ColumnDef<RedemptionRow>
       accessorKey: "code",
       header: "兑换码",
       cell: ({ row }) => (
-        <code className="rounded bg-surface-2 px-2 py-1 font-mono text-xs">
+        <code className="rounded bg-secondary px-2 py-1 font-mono text-xs">
           {row.original.code}
         </code>
       ),

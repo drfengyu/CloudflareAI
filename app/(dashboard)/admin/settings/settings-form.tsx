@@ -50,7 +50,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
           type="text"
           value={siteName}
           onChange={(e) => setSiteName(e.target.value)}
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
           placeholder="Cloudflare AI Console"
         />
         <p className="mt-1 text-xs text-muted-foreground">
@@ -67,7 +67,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
           value={defaultBalanceValidDays}
           onChange={(e) => setDefaultBalanceValidDays(e.target.value)}
           min={1}
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
           placeholder="365"
         />
         <p className="mt-1 text-xs text-muted-foreground">
@@ -85,7 +85,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
           onChange={(e) => setCreditsPerUsd(e.target.value)}
           min={0.0001}
           step={0.0001}
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
           placeholder="1"
         />
         <p className="mt-1 text-xs text-muted-foreground">
@@ -93,7 +93,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
           <span className="ml-1 opacity-70">（不影响实际扣费金额）</span>
         </p>
         {ratioValid && (
-          <div className="mt-2 rounded-lg border border-border bg-surface-2 p-3 text-xs">
+          <div className="mt-2 rounded-lg border border-border bg-secondary p-3 text-xs">
             <p className="font-medium">换算预览</p>
             <p className="mt-1 text-muted-foreground">
               1,000 credits ≈ ${(1000 / ratio).toFixed(2)} USD ·{" "}
@@ -163,7 +163,7 @@ export function PricingSettingsForm({ initialSettings }: PricingSettingsFormProp
             onChange={(e) => setBaseMultiplier(e.target.value)}
             min={1}
             step={1}
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
             placeholder="1000"
           />
           <p className="mt-1 text-xs text-muted-foreground">
@@ -171,7 +171,7 @@ export function PricingSettingsForm({ initialSettings }: PricingSettingsFormProp
           </p>
         </div>
 
-        <div className="rounded-lg border border-border bg-surface-2 p-4">
+        <div className="rounded-lg border border-border bg-secondary p-4">
           <p className="text-xs text-muted-foreground">
             <strong>当前策略：</strong>所有模型价格先 ×{baseMultiplier}（基础倍率），
             然后根据价格区间应用调整倍率
@@ -193,7 +193,7 @@ export function PricingSettingsForm({ initialSettings }: PricingSettingsFormProp
               onChange={(e) => setAdjustThreshold(e.target.value)}
               min={0}
               step={1}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
               placeholder="100"
             />
             <p className="mt-1 text-xs text-muted-foreground">
@@ -211,7 +211,7 @@ export function PricingSettingsForm({ initialSettings }: PricingSettingsFormProp
               onChange={(e) => setAdjustMultiplierLow(e.target.value)}
               min={0.01}
               step={0.1}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
               placeholder="5"
             />
             <p className="mt-1 text-xs text-muted-foreground">
@@ -230,7 +230,7 @@ export function PricingSettingsForm({ initialSettings }: PricingSettingsFormProp
             onChange={(e) => setAdjustMultiplierHigh(e.target.value)}
             min={0.01}
             step={0.1}
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
             placeholder="1"
           />
           <p className="mt-1 text-xs text-muted-foreground">
@@ -261,7 +261,7 @@ export function PricingSettingsForm({ initialSettings }: PricingSettingsFormProp
             onChange={(e) => setDefaultPricePerMillion(e.target.value)}
             min={0}
             step={1}
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
             placeholder="100"
           />
           <p className="mt-1 text-xs text-muted-foreground">
@@ -344,7 +344,7 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
             value={minQuota}
             onChange={(e) => setMinQuota(e.target.value)}
             disabled={!enabled}
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm disabled:opacity-50"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
             placeholder="0.01"
           />
           <p className="mt-1 text-xs text-muted-foreground">
@@ -363,7 +363,7 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
             value={maxQuota}
             onChange={(e) => setMaxQuota(e.target.value)}
             disabled={!enabled}
-            className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm disabled:opacity-50"
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
             placeholder="0.1"
           />
           <p className="mt-1 text-xs text-muted-foreground">
@@ -382,7 +382,7 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
           value={validDays}
           onChange={(e) => setValidDays(e.target.value)}
           disabled={!enabled}
-          className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm disabled:opacity-50"
+          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
           placeholder="7"
         />
         <p className="mt-1 text-xs text-muted-foreground">

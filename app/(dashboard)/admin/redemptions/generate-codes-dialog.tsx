@@ -70,7 +70,7 @@ export function GenerateCodesDialog({ ratio }: GenerateCodesDialogProps) {
               onChange={(e) => setCount(parseInt(e.target.value))}
               min={1}
               max={100}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
               required
             />
             <p className="mt-1 text-xs text-muted-foreground">
@@ -87,7 +87,7 @@ export function GenerateCodesDialog({ ratio }: GenerateCodesDialogProps) {
               value={quota}
               onChange={(e) => setQuota(parseInt(e.target.value))}
               min={1}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
               required
             />
             <p className="mt-1 text-xs text-muted-foreground">
@@ -104,7 +104,7 @@ export function GenerateCodesDialog({ ratio }: GenerateCodesDialogProps) {
               value={maxUses}
               onChange={(e) => setMaxUses(parseInt(e.target.value))}
               min={1}
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
               required
             />
             <p className="mt-1 text-xs text-muted-foreground">
@@ -124,7 +124,7 @@ export function GenerateCodesDialog({ ratio }: GenerateCodesDialogProps) {
               }
               min={1}
               placeholder="不限"
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
             />
             <p className="mt-1 text-xs text-muted-foreground">
               兑换码本身的有效期，留空表示永久有效
@@ -143,7 +143,7 @@ export function GenerateCodesDialog({ ratio }: GenerateCodesDialogProps) {
               }
               min={1}
               placeholder="365"
-              className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
             />
             <p className="mt-1 text-xs text-muted-foreground">
               兑换后余额的有效期，留空默认 365 天

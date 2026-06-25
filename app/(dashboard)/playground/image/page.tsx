@@ -17,7 +17,7 @@ export default async function ImagePlaygroundPage() {
         description="从文本提示词生成图像，支持步数与引导强度调节"
       />
       {imageModels.length === 0 ? (
-        <div className="m-8 rounded-lg border border-dashed border-border bg-surface p-6 text-sm text-muted-foreground">
+        <div className="m-8 rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
           无可用的文生图模型（hosted）
         </div>
       ) : (

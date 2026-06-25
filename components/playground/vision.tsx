@@ -72,7 +72,7 @@ export function VisionPlayground({ models }: VisionProps) {
               <select
                 value={selectedModel}
                 onChange={(e) => setSelectedModel(e.target.value)}
-                className="h-9 rounded-lg border border-border bg-surface px-3 text-sm outline-none"
+                className="h-9 rounded-lg border border-border bg-card px-3 text-sm outline-none"
               >
                 {models.map((m) => (
                   <option key={m.id} value={m.id}>
@@ -88,7 +88,7 @@ export function VisionPlayground({ models }: VisionProps) {
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="flex h-32 w-full items-center justify-center rounded-lg border-2 border-dashed border-border bg-surface hover:bg-surface-2"
+                  className="flex h-32 w-full items-center justify-center rounded-lg border-2 border-dashed border-border bg-card hover:bg-secondary"
                 >
                   <div className="text-center">
                     <Upload className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
@@ -109,7 +109,7 @@ export function VisionPlayground({ models }: VisionProps) {
                       setResult(null);
                       setError(null);
                     }}
-                    className="absolute right-2 top-2 rounded-md bg-surface p-1.5 shadow-lg hover:bg-surface-2"
+                    className="absolute right-2 top-2 rounded-md bg-card p-1.5 shadow-lg hover:bg-secondary"
                   >
                     <X className="h-4 w-4" />
                   </button>
@@ -131,7 +131,7 @@ export function VisionPlayground({ models }: VisionProps) {
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder="描述这张图片... / 图中有什么物体？"
                 rows={3}
-                className="resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-[color:var(--primary)]"
+                className="resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none focus:border-[color:var(--primary)]"
               />
             </label>
 
@@ -162,7 +162,7 @@ export function VisionPlayground({ models }: VisionProps) {
           {!result && !error && !loading && (
             <p className="text-sm text-muted-foreground">上传图片并提问</p>
           )}
-          {error && <p className="text-sm text-danger">❌ {error}</p>}
+          {error && <p className="text-sm text-destructive">❌ {error}</p>}
           {result && (
             <p className="whitespace-pre-wrap text-sm">{result}</p>
           )}

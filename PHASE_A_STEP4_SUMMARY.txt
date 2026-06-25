@@ -1,0 +1,237 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    🎨 Phase A Step 4 完成总结 🎨                            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📅 完成时间: 2025-06-25
+📦 Commit: be1822c
+⏱️  用时: 约 25 分钟
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## ✅ 完成内容
+
+### 新增组件（components/charts/）
+
+1. **chart-container.tsx** - 响应式容器
+   - ResponsiveContainer 封装
+   - 可配置高度（默认 250px）
+   - className 支持
+
+2. **chart-config.tsx** - 统一主题配置
+   - CHART_COLORS 令牌数组（5 个颜色）
+   - chartConfig 预设（网格/坐标轴/Tooltip）
+   - ChartEmpty 空状态组件
+
+3. **bar-chart.tsx** - 柱状图封装
+   - 泛型数据支持
+   - 多色柱状图（Cell 循环配色）
+   - 可配置圆角
+
+4. **line-chart.tsx** - 折线图封装
+   - 单色折线
+   - 可配置线宽
+   - 点 + 激活点
+
+5. **area-chart.tsx** - 面积图封装
+   - 渐变填充（20% 透明度）
+   - 可配置线宽
+   - 平滑曲线
+
+6. **index.ts** - 统一导出
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 📊 功能特性
+
+### 设计令牌集成
+
+```typescript
+// 颜色令牌
+CHART_COLORS = [
+  "var(--chart-1)",  // oklch(...) 主色
+  "var(--chart-2)",  // oklch(...) 次色
+  "var(--chart-3)",  // oklch(...) 第三色
+  "var(--chart-4)",  // oklch(...) 第四色
+  "var(--chart-5)",  // oklch(...) 第五色
+]
+
+// 样式令牌
+grid: { stroke: "var(--border)" }
+axis: { stroke: "var(--muted-foreground)" }
+tooltip: { backgroundColor: "var(--card)" }
+```
+
+### 通用 Props
+
+所有图表组件支持：
+- `data` - 泛型数据数组
+- `dataKey` - 数据键（Y 轴）
+- `xAxisKey` - X 轴键
+- `height` - 高度（默认 250px）
+- `yAxisLabel` - Y 轴标签
+- `tooltipFormatter` - Tooltip 格式化
+- `xAxisFormatter` - X 轴格式化
+- `emptyMessage` - 空数据提示
+
+### BarChart 特有
+
+- `colors` - 自定义颜色数组（默认 CHART_COLORS）
+- `barRadius` - 圆角（默认 [4,4,0,0]）
+
+### LineChart / AreaChart 特有
+
+- `color` - 线条/填充颜色（默认 var(--primary)）
+- `strokeWidth` - 线宽（默认 2）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🎯 使用示例
+
+### BarChart（柱状图）
+
+```tsx
+import { BarChart } from "@/components/charts"
+
+<BarChart
+  data={modelUsage}
+  dataKey="credits"
+  xAxisKey="model"
+  yAxisLabel="Credits"
+  tooltipFormatter={(value, name, item) => {
+    return [`${Math.round(value)} cr`, `${item.payload.model}`]
+  }}
+/>
+```
+
+### LineChart（折线图）
+
+```tsx
+import { LineChart } from "@/components/charts"
+
+<LineChart
+  data={dailyUsage}
+  dataKey="credits"
+  xAxisKey="date"
+  color="var(--primary)"
+  xAxisFormatter={(value) => value.slice(5)} // "2026-06-13" -> "06-13"
+/>
+```
+
+### AreaChart（面积图）
+
+```tsx
+import { AreaChart } from "@/components/charts"
+
+<AreaChart
+  data={trends}
+  dataKey="value"
+  xAxisKey="time"
+  color="var(--chart-2)"
+  strokeWidth={3}
+/>
+```
+
+### ChartEmpty（空状态）
+
+```tsx
+import { ChartEmpty } from "@/components/charts"
+
+{data.length === 0 && <ChartEmpty message="今日暂无数据" />}
+```
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🎯 Phase A 总体进度
+
+完成度: ████████████████████░░ 67% (4/6 步骤)
+
+**已完成**:
+✅ Step 1: 完善 globals.css（30 分钟）
+✅ Step 2: UI 组件库完善（15 分钟）
+✅ Step 3: DataTable 统一封装（20 分钟）
+✅ Step 4: 图表统一封装（25 分钟）
+
+**待完成**:
+⏳ Step 5: 布局重构（2 小时）
+⏳ Step 6: 令牌迁移（1 小时）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🔧 技术细节
+
+### 文件结构
+
+```
+components/charts/
+├── chart-container.tsx  (18 行)
+├── chart-config.tsx     (33 行)
+├── bar-chart.tsx        (81 行)
+├── line-chart.tsx       (79 行)
+├── area-chart.tsx       (79 行)
+└── index.ts            (5 行)
+```
+
+### 依赖
+
+```json
+{
+  "recharts": "^3.8.1"  // 已有
+}
+```
+
+### 对比现有组件
+
+**旧组件**（components/dashboard/）:
+- hourly-usage-chart.tsx（72 行）
+- usage-trend-chart.tsx（73 行）
+- model-distribution-chart.tsx（89 行）
+- ❌ 重复的样式配置
+- ❌ 重复的空状态处理
+- ❌ 硬编码颜色
+
+**新组件**（components/charts/）:
+- ✅ 统一主题配置
+- ✅ 复用 ChartContainer / ChartEmpty
+- ✅ 使用设计令牌
+- ✅ 泛型类型安全
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 📈 累计成果
+
+**Git 提交**: 5 个
+- d0ae130 - Step 1: globals.css 增强
+- f6eee61 - Step 2: UI 组件库完善
+- cfa845d - Step 3: DataTable 统一封装
+- be1822c - Step 4: 图表统一封装
+- (Step 5 待提交)
+
+**新增文件**: 13 个
+- components/ui/slider.tsx
+- components/data-table/* (4 个)
+- components/charts/* (6 个)
+- docs/PHASE_A_PLAN.md
+- PHASE_A_PROGRESS.txt
+
+**累计用时**: 约 90 分钟（1.5 小时）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+## 🎯 下一步：Step 5 - 布局重构
+
+**目标**: 重构 Sidebar + Header
+**预计用时**: 2 小时
+
+**任务清单**:
+1. [ ] Sidebar 分组导航（对话/通用/个人/管理）
+2. [ ] Sidebar 可折叠
+3. [ ] Header 主题切换下拉
+4. [ ] Header 用户菜单
+5. [ ] 根布局集成 ThemeProvider
+6. [ ] 响应式处理
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**状态**: ✅ Step 4 完成
+**下一目标**: Step 5 - 布局重构
+**剩余工作量**: 3 小时

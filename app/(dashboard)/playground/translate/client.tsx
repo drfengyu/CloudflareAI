@@ -60,7 +60,7 @@ export function TranslateClient({ models }: { models: Array<{ id: string; name: 
               <select
                 value={model}
                 onChange={(e) => setModel(e.target.value)}
-                className="h-9 rounded-lg border border-border bg-surface px-3 text-sm outline-none"
+                className="h-9 rounded-lg border border-border bg-card px-3 text-sm outline-none"
               >
                 {models.map((m) => (
                   <option key={m.id} value={m.id}>{m.name}</option>
@@ -72,7 +72,7 @@ export function TranslateClient({ models }: { models: Array<{ id: string; name: 
               <select
                 value={sourceLang}
                 onChange={(e) => setSourceLang(e.target.value)}
-                className="h-9 rounded-lg border border-border bg-surface px-3 text-sm outline-none"
+                className="h-9 rounded-lg border border-border bg-card px-3 text-sm outline-none"
               >
                 <option value="auto">自动检测</option>
                 {LANGS.map((l) => (
@@ -85,7 +85,7 @@ export function TranslateClient({ models }: { models: Array<{ id: string; name: 
               <select
                 value={targetLang}
                 onChange={(e) => setTargetLang(e.target.value)}
-                className="h-9 rounded-lg border border-border bg-surface px-3 text-sm outline-none"
+                className="h-9 rounded-lg border border-border bg-card px-3 text-sm outline-none"
               >
                 {LANGS.map((l) => (
                   <option key={l.code} value={l.code}>{l.label}</option>
@@ -100,7 +100,7 @@ export function TranslateClient({ models }: { models: Array<{ id: string; name: 
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={4}
-              className="resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none"
+              className="resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none"
             />
           </label>
 
@@ -110,7 +110,7 @@ export function TranslateClient({ models }: { models: Array<{ id: string; name: 
           </Button>
 
           {result && (
-            <div className="rounded-lg border border-border bg-surface-2 p-4">
+            <div className="rounded-lg border border-border bg-secondary p-4">
               <p className="mb-1 text-xs text-muted-foreground">译文</p>
               <p className="whitespace-pre-wrap text-sm">{result}</p>
             </div>

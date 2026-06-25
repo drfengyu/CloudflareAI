@@ -122,7 +122,7 @@ export function ManageUserDialog({ user, currentUserId, ratio }: ManageUserDialo
 
           <div className="space-y-6">
             {/* 用户信息 */}
-            <div className="rounded-lg border border-border bg-surface p-4">
+            <div className="rounded-lg border border-border bg-card p-4">
               <p className="text-sm font-medium">{user.name || user.email}</p>
               <p className="text-xs text-muted-foreground">{user.email}</p>
               <p className="mt-2 text-xs text-muted-foreground">
@@ -160,7 +160,7 @@ export function ManageUserDialog({ user, currentUserId, ratio }: ManageUserDialo
                   step="0.01"
                   value={amount}
                   onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
                   placeholder="正数充值，负数扣减"
                 />
                 <p className="mt-1 text-xs text-muted-foreground">
@@ -175,7 +175,7 @@ export function ManageUserDialog({ user, currentUserId, ratio }: ManageUserDialo
                   type="text"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
                   placeholder="调整原因（选填）"
                 />
               </div>
@@ -194,7 +194,7 @@ export function ManageUserDialog({ user, currentUserId, ratio }: ManageUserDialo
                   <select
                     value={selectedRole}
                     onChange={(e) => setSelectedRole(parseInt(e.target.value))}
-                    className="w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm"
+                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
                   >
                     <option value={1}>普通用户</option>
                     <option value={10}>管理员</option>

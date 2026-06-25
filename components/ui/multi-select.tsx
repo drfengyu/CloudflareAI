@@ -48,7 +48,7 @@ export function MultiSelect({ value, options, onChange, placeholder }: MultiSele
                 <button
                   type="button"
                   onClick={() => remove(v)}
-                  className="hover:text-danger"
+                  className="hover:text-destructive"
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -68,14 +68,14 @@ export function MultiSelect({ value, options, onChange, placeholder }: MultiSele
         }}
         onFocus={() => setOpen(true)}
         placeholder={placeholder || "搜索模型..."}
-        className="h-9 w-full rounded-lg border border-border bg-surface px-3 text-sm outline-none focus:border-primary"
+        className="h-9 w-full rounded-lg border border-border bg-card px-3 text-sm outline-none focus:border-primary"
       />
 
       {/* 下拉列表 */}
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute top-full z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-surface shadow-lg">
+          <div className="absolute top-full z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-border bg-card shadow-lg">
             {filtered.length === 0 ? (
               <p className="p-3 text-sm text-muted-foreground">无匹配结果</p>
             ) : (
@@ -86,7 +86,7 @@ export function MultiSelect({ value, options, onChange, placeholder }: MultiSele
                     key={opt.id}
                     type="button"
                     onClick={() => toggle(opt.id)}
-                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-surface-2 ${
+                    className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-secondary ${
                       selected ? "bg-primary/5" : ""
                     }`}
                   >

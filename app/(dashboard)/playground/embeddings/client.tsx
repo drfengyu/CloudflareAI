@@ -42,7 +42,7 @@ export function EmbeddingsClient({ models }: { models: Array<{ id: string; name:
             <select
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              className="h-9 rounded-lg border border-border bg-surface px-3 text-sm outline-none"
+              className="h-9 rounded-lg border border-border bg-card px-3 text-sm outline-none"
             >
               {models.map((m) => (
                 <option key={m.id} value={m.id}>{m.name}</option>
@@ -56,7 +56,7 @@ export function EmbeddingsClient({ models }: { models: Array<{ id: string; name:
               value={text}
               onChange={(e) => setText(e.target.value)}
               rows={3}
-              className="resize-none rounded-lg border border-border bg-surface px-3 py-2 text-sm outline-none"
+              className="resize-none rounded-lg border border-border bg-card px-3 py-2 text-sm outline-none"
             />
           </label>
 
@@ -66,7 +66,7 @@ export function EmbeddingsClient({ models }: { models: Array<{ id: string; name:
           </Button>
 
           {embeddings && (
-            <div className="rounded-lg border border-border bg-surface-2 p-4">
+            <div className="rounded-lg border border-border bg-secondary p-4">
               <p className="mb-2 text-xs text-muted-foreground">
                 {embeddings.length} 个向量，每个维度 {embeddings[0]?.length || 0}
               </p>

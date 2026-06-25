@@ -302,7 +302,7 @@ export function TextGenPlayground({ models }: TextGenProps) {
           <select
             value={selectedModel}
             onChange={(e) => setSelectedModel(e.target.value)}
-            className="h-8 min-w-[280px] rounded-lg border border-border bg-surface px-2 text-sm outline-none"
+            className="h-8 min-w-[280px] rounded-lg border border-border bg-card px-2 text-sm outline-none"
           >
             <optgroup label="Cloudflare 托管">
               {models.filter((m) => m.channel === "cloudflare" || !m.channel).map((m) => (
@@ -332,7 +332,7 @@ export function TextGenPlayground({ models }: TextGenProps) {
             min="0"
             max="2"
             step="0.1"
-            className="h-8 w-20 rounded-lg border border-border bg-surface px-2 text-sm outline-none"
+            className="h-8 w-20 rounded-lg border border-border bg-card px-2 text-sm outline-none"
           />
         </label>
 
@@ -341,7 +341,7 @@ export function TextGenPlayground({ models }: TextGenProps) {
           <span className="shrink-0 text-xs text-muted-foreground">上下文</span>
           {currentModel?.contextWindow ? (
             <>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-surface-2">
+              <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
                 <div
                   className="h-full bg-primary transition-all"
                   style={{ width: `${ctxPercent}%` }}
@@ -385,7 +385,7 @@ export function TextGenPlayground({ models }: TextGenProps) {
                   className={
                     isUser
                       ? "ml-12 rounded-lg bg-primary/10 p-3 text-sm"
-                      : "group relative mr-12 rounded-lg bg-surface-2 p-3 text-sm"
+                      : "group relative mr-12 rounded-lg bg-secondary p-3 text-sm"
                   }
                 >
                   <p className="mb-1 text-[11px] font-medium uppercase opacity-60">
@@ -397,7 +397,7 @@ export function TextGenPlayground({ models }: TextGenProps) {
                     <button
                       type="button"
                       onClick={() => copyToClipboard(msg.content, i)}
-                      className="absolute right-2 top-2 rounded-md border border-border bg-surface p-1.5 opacity-0 transition-opacity hover:bg-surface-2 group-hover:opacity-100"
+                      className="absolute right-2 top-2 rounded-md border border-border bg-card p-1.5 opacity-0 transition-opacity hover:bg-secondary group-hover:opacity-100"
                       title="复制回复"
                     >
                       {isCopied ? (
@@ -416,7 +416,7 @@ export function TextGenPlayground({ models }: TextGenProps) {
                         onClick={() =>
                           setFoldedReasoning((f) => ({ ...f, [i]: !(f[i] ?? false) }))
                         }
-                        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left hover:bg-surface-2/50"
+                        className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left hover:bg-secondary/50"
                       >
                         {folded ? (
                           <ChevronRight className="h-3 w-3" />
