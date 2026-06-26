@@ -311,15 +311,25 @@ export function TextGenPlayground({ models }: TextGenProps) {
                 </option>
               ))}
             </optgroup>
-            {models.filter((m) => m.channel && m.channel !== "cloudflare").length > 0 && (
-              <optgroup label="第三方渠道">
-                {models.filter((m) => m.channel && m.channel !== "cloudflare").map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.name} [{m.channel}]
-                  </option>
-                ))}
-              </optgroup>
-            )}
+            {(() => {
+              const channelModels = models.filter((m) => m.channel && m.channel !== "cloudflare");
+              // 按渠道名称分组
+              const groups = new Map<string, typeof channelModels>();
+              for (const m of channelModels) {
+                const ch = m.channel || "其他";
+                if (!groups.has(ch)) groups.set(ch, []);
+                groups.get(ch)!.push(m);
+              }
+              return Array.from(groups.entries()).map(([channel, ms]) => (
+                <optgroup key={channel} label={channel}>
+                  {ms.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </optgroup>
+              ));
+            })()}
           </select>
         </label>
 

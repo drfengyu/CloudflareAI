@@ -5,6 +5,19 @@ import { channels, modelPricing, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { fetchChannelModels } from "@/lib/cloudflare/channel-catalog";
 import { getCreditsPerUsd } from "@/lib/billing/credits";
+import { mapUpstreamType } from "@/lib/cloudflare/channel-catalog";
+
+/** Category-based default pricing (credits per M tokens) for channel models without upstream prices. */
+const CATEGORY_DEFAULT_PRICES: Record<string, { input: number; output: number }> = {
+  text: { input: 500, output: 1500 },
+  image: { input: 0, output: 0 },
+  vision: { input: 600, output: 1200 },
+  embeddings: { input: 100, output: 100 },
+  speech: { input: 400, output: 400 },
+  translate: { input: 300, output: 300 },
+  classify: { input: 200, output: 200 },
+  video: { input: 2000, output: 2000 },
+};
 
 async function isAdmin(): Promise<boolean> {
   const session = await auth();
@@ -109,16 +122,28 @@ export async function POST(
         outputPrice = model.upstreamPricing.output * 1_000_000 * creditsPerUsd;
       }
 
+      // 无上游定价时使用分类默认价
+      if (inputPrice === 0 && outputPrice === 0) {
+        const defaults = CATEGORY_DEFAULT_PRICES[model.category];
+        if (defaults) {
+          inputPrice = defaults.input;
+          outputPrice = defaults.output;
+        }
+      }
+
+      // 当 category 无效时，通过 modelId 重新推断
+      const category = model.category || mapUpstreamType(model.id, undefined);
+
       await db.insert(modelPricing).values({
         modelId: model.id,
-        category: model.category,
+        category,
         source: channel.type || "remote",
         channelId,
         multiplier: 1.0,
         inputPrice: Math.round(inputPrice),
         outputPrice: Math.round(outputPrice),
         unit: "M tokens",
-        isImage: model.category === "image" ? 1 : 0,
+        isImage: category === "image" ? 1 : 0,
       });
       inserted++;
     } catch (e) {

@@ -39,13 +39,7 @@ export async function fetchChannelModels(
     const author = vendor || m.owned_by || channelName || channelLabel(channelType);
 
     // 从上游 type 映射到本项目的 category
-    let category: "text" | "image" | "embeddings" | "speech" | "vision" | "translate" | "video" | "classify" = "text";
-    if (m.type === "language") category = "text";
-    else if (m.type === "embedding") category = "embeddings";
-    else if (m.type === "image") category = "image";
-    else if (m.type === "speech" || m.type === "transcription") category = "speech";
-    else if (m.type === "video") category = "video";
-    else if (m.type === "reranking") category = "classify";
+    const category = mapUpstreamType(m.id, m.type);
 
     return {
       id: m.id,
@@ -65,12 +59,42 @@ export async function fetchChannelModels(
       // 保留原始 tags
       tags: m.tags,
       // 保留上游定价（美元/token）
-      upstreamPricing: m.pricing ? {
-        input: parseFloat(m.pricing.input || "0"),
-        output: parseFloat(m.pricing.output || "0"),
-      } : undefined,
+      upstreamPricing: m.pricing
+        ? {
+            input: parseFloat(m.pricing.input || "0"),
+            output: parseFloat(m.pricing.output || "0"),
+          }
+        : undefined,
     };
   });
+}
+
+/**
+ * 从上游 type 和 model id 推断本项目的 category。
+ * 当上游未返回 type 时（如 Vercel AI Gateway），通过模型 ID 关键词推断。
+ */
+export function mapUpstreamType(
+  modelId: string,
+  upstreamType?: string,
+): NormalizedModel["category"] {
+  // 优先使用上游 type
+  if (upstreamType === "language") return "text";
+  if (upstreamType === "embedding") return "embeddings";
+  if (upstreamType === "image") return "image";
+  if (upstreamType === "speech" || upstreamType === "transcription") return "speech";
+  if (upstreamType === "video") return "video";
+  if (upstreamType === "reranking") return "classify";
+
+  // 上游无 type 时，从模型 ID 推断
+  const id = modelId.toLowerCase();
+  if (id.includes("embedding") || id.includes("embed")) return "embeddings";
+  if (id.includes("vl-") || id.includes("vision") || id.includes("vl/")) return "vision";
+  if (id.includes("flux") || id.includes("stable-diffusion") || id.includes("sd-")) return "image";
+  if (id.includes("whisper") || id.includes("tts") || id.includes("speech")) return "speech";
+  if (id.includes("translate") || id.includes("m2m100") || id.includes("seamless")) return "translate";
+
+  // 默认 text
+  return "text";
 }
 
 /**

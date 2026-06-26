@@ -115,7 +115,27 @@
 
 ### 修复
 
-- **Claude Code 工具调用失败 / 400 / 流式解析错误**（`/v1/messages`）
+- **定价页与模型库渠道标签显示修复**
+  - 渠道 Tab 标签不再显示泛泛的"第三方"，改为显示渠道自定义名称（如 Vercel/DeepSeek）
+  - `PricingTabs` 的 `ChannelBadge` 对 `openai-compatible` 渠道显示渠道名称而非"第三方"
+  - 模型浏览器 (`model-browser.tsx`) 的渠道 Badge 同样显示渠道自定义名称
+- **定价管理页面渠道筛选修复**
+  - 修复 `PricingManager` 用 `channelSource` 字符串过滤模型但 tab key 是 UUID 的问题
+  - 改为按 `channelId` 匹配，点击各渠道 tab 正确显示对应的模型列表
+- **文本生成 Playground 模型分组修复**
+  - 各渠道模型不再全部归入"第三方渠道"分组
+  - 改为按渠道名称动态分组（Vercel / DeepSeek 等各独立 optgroup）
+- **定价页渠道模型倍率应用修复**
+  - 渠道模型定价未读取 `multiplier` 字段，显示基础价而非应用倍率后的最终价
+  - 修复后显示 `basePrice * multiplier`（与 Cloudflare 模型行为一致）
+- **渠道模型分类纠正（DB 数据）**
+  - Vercel 渠道 293 个模型中 261 个被错误分类为 `"remote"`
+  - 根据模型 ID 关键词推测正确分类：text(261)、image(14)、embeddings(11)、speech(4)、vision(3)
+  - 同步设置各分类的默认定价（text: 500/1500, image: 3500, embeddings: 100, speech: 400, vision: 600/1200）
+- **渠道同步 API 增强**
+  - 新增 `mapUpstreamType()` 函数从 modelId 推断分类（适配无 type 返回的上游）
+  - 新增 `CATEGORY_DEFAULT_PRICES` 为无上游定价的模型设置分类默认定价
+  - 新同步的模型将自动获得正确的分类和定价
   - 根因：旧实现把所有 content block **展平为纯文本**，丢弃 `tools` / `tool_use` / `tool_result`，
     流式转换器只发文本 delta → Claude Code 拿不到 `tool_use`、智能体循环断裂
   - **400 被拒**：多轮回传时 assistant 消息 `content` 给了 `null`，而 Cloudflare 要求必须是字符串

@@ -27,6 +27,7 @@ type ModelWithPricing = {
   category: string;
   source: string;
   channelSource?: string;
+  channelId?: string;
   pricing?: {
     category: string | null;
     source: string | null;
@@ -76,7 +77,7 @@ export function PricingManager({
 
   const currentModels = useMemo(() => {
     if (currentChannel === "cloudflare") return models;
-    return channelModels.filter((m) => m.channelSource === currentChannel || m.source === currentChannel);
+    return channelModels.filter((m) => m.channelId === currentChannel || m.channelSource === currentChannel);
   }, [currentChannel, models, channelModels]);
 
   // 分类

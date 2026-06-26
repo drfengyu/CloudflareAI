@@ -18,6 +18,7 @@ interface ModelRow {
   name: string;
   category: string;
   channelSource: string;
+  channelName?: string;
   priceUsd: number | null;
   priceCr: number | null;
   unit: string;
@@ -127,7 +128,7 @@ export function PricingTabs({
                           </div>
                         </td>
                         <td className="py-3">
-                          <ChannelBadge channelSource={model.channelSource} />
+                          <ChannelBadge channelSource={model.channelSource} channelName={model.channelName} />
                         </td>
                         <td className="py-3 text-right">
                           {model.priceUsd !== null ? (
@@ -155,11 +156,12 @@ export function PricingTabs({
   );
 }
 
-function ChannelBadge({ channelSource }: { channelSource?: string }) {
+function ChannelBadge({ channelSource, channelName }: { channelSource?: string; channelName?: string }) {
   if (channelSource === "cloudflare") return <Badge tone="success">CF 托管</Badge>;
   if (channelSource === "deepseek") return <Badge tone="accent">DeepSeek</Badge>;
   if (channelSource === "openai") return <Badge tone="accent">OpenAI</Badge>;
   if (channelSource === "anthropic") return <Badge tone="accent">Anthropic</Badge>;
-  if (channelSource) return <Badge tone="warning">第三方</Badge>;
+  if (channelSource && channelName) return <Badge tone="info">{channelName}</Badge>;
+  if (channelSource) return <Badge tone="info">{channelSource}</Badge>;
   return <Badge tone="muted">—</Badge>;
 }

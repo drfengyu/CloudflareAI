@@ -40,7 +40,7 @@ export default async function PricingPage() {
         id: c.id,
         type: c.type!,
         name: c.name,
-        label: channelLabel(c.type!),
+        label: c.name, // 使用渠道自定义名称（如 "Vercel"、"DeepSeek"）
       })),
   ];
 
@@ -89,6 +89,7 @@ export default async function PricingPage() {
       isImage: modelPricing.isImage,
       fixedPrice: modelPricing.fixedPrice,
       unit: modelPricing.unit,
+      multiplier: modelPricing.multiplier,
     })
     .from(modelPricing);
 
@@ -109,14 +110,17 @@ export default async function PricingPage() {
     modelsByChannel[ch.id] = cp
       .map((p) => {
         const isImage = p.isImage === 1;
+        const mult = p.multiplier ?? 1.0;
         const basePrice = isImage ? (p.fixedPrice ?? 3500) : (p.inputPrice ?? 100);
+        const effectivePrice = basePrice * mult;
         return {
           id: p.modelId,
           name: friendlyName(p.modelId),
           category: isImage ? "image" as const : "text" as const,
           channelSource: ch.type,
-          priceUsd: creditsToUsd(basePrice, ratio),
-          priceCr: basePrice,
+          channelName: ch.name,
+          priceUsd: creditsToUsd(effectivePrice, ratio),
+          priceCr: effectivePrice,
           unit: isImage ? "image" : p.unit || "per M input tokens",
           isImage,
         };

@@ -27,7 +27,7 @@ export default async function AdminPricingPage() {
 
   const channelList = channelRows
     .filter((c) => c.type && c.type !== "cloudflare")
-    .map((c) => ({ id: c.id, name: c.name, type: c.type!, label: typeLabel(c.type!) }));
+    .map((c) => ({ id: c.id, name: c.name, type: c.type!, label: c.name }));
 
   // 定价数据
   const [catalog, pricingRows, ratio] = await Promise.all([
@@ -73,6 +73,7 @@ export default async function AdminPricingPage() {
     category: string;
     source: string;
     channelSource?: string;
+    channelId?: string;
     pricing?: (typeof cfModels)[0]["pricing"];
   }> = [];
 
@@ -85,6 +86,7 @@ export default async function AdminPricingPage() {
         category: row.category || "text",
         source: ch.type,
         channelSource: ch.type,
+        channelId: ch.id,
         pricing: pricingMap.get(row.modelId),
       });
     }
