@@ -41,7 +41,7 @@
 
 ---
 
-## [未发布]
+## [0.4.0] - 2026-06-26
 
 ### 新增
 
@@ -54,7 +54,10 @@
   - 非 200 响应解析上游 JSON error 并正确回传
   - 用 `after()` 异步记 usage（含 `channelId`）
   - 上游 real usage 优先用于计费（embeddings/vision fallback 估算）
-  - **思考链与正文分离**（`/playground/text`）
+- **Playground 前端渠道模型显示**（`/playground/*` 所有页面）
+  - 文生图 / 图像理解 / 嵌入向量 / 翻译页面现在也显示非 Cloudflare 渠道模型
+  - 渠道模型在模型选择器中显示 `[渠道名]` 后缀，调用时走后端渠道路由转发
+- **站内 Playground 增强**
     - DeepSeek-v4 等推理模型的 `reasoning_content` 渲染为可折叠灰色块
     - 显示「🧠 思考过程」标签 + token 估算，默认展开，点击可折叠
     - 正文内容与思考链视觉分离，移动端体验友好
@@ -391,7 +394,8 @@
 - Auth.js v5
 - Recharts 数据可视化
 
-[未发布]: https://github.com/drfengyu/CloudflareAI/compare/v0.2.2...HEAD
+[0.4.0]: https://github.com/drfengyu/CloudflareAI/compare/v0.3.1...v0.4.0
+[未发布]: https://github.com/drfengyu/CloudflareAI/compare/v0.4.0...HEAD
 [0.2.2]: https://github.com/drfengyu/CloudflareAI/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/drfengyu/CloudflareAI/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/drfengyu/CloudflareAI/compare/v0.1.0...v0.2.0
