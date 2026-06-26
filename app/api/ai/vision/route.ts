@@ -1,9 +1,12 @@
 import { NextRequest } from "next/server";
+import { after } from "next/server";
 import { z } from "zod";
 import { runModelJSON } from "@/lib/cloudflare/ai";
 import { requireUser, logUsage, verifyBalance, getDefaultApiKey } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { estimateTokens } from "@/lib/usage/tokens";
+import { lookupChannel } from "@/lib/channels/lookup";
+import { routeToChannel } from "@/lib/channels/router";
 
 const schema = z.object({
   model: z.string(),
@@ -61,6 +64,69 @@ export async function POST(req: NextRequest) {
   const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
   if (!balanceCheck.ok) {
     return Response.json({ error: balanceCheck.reason }, { status: 402 });
+  }
+
+  // 渠道路由：非 Cloudflare 模型走第三方渠道
+  const channel = await lookupChannel(model, apiKeyId);
+  if (channel) {
+    // 构建 OpenAI 兼容的 messages 格式：image 用 data URL 直接传
+    const forwardBody = JSON.stringify({
+      model,
+      messages: [{
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          { type: "image_url", image_url: { url: image } },
+        ],
+      }],
+      max_tokens: max_tokens || undefined,
+    });
+    const forwardReq = new Request(req.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: forwardBody,
+    });
+    const chResp = await routeToChannel(channel.channelId, "/v1/chat/completions", forwardReq);
+    if (chResp) {
+      if (!chResp.ok) {
+        const upstreamText = await chResp.text();
+        let upstreamJson: Record<string, unknown> | null = null;
+        try { upstreamJson = JSON.parse(upstreamText); } catch { /* ignore */ }
+        const errMsg =
+          (typeof upstreamJson?.error === "string" ? upstreamJson.error : null) ||
+          ((upstreamJson?.error as Record<string, unknown>)?.message as string) ||
+          upstreamText ||
+          `Upstream error (${chResp.status})`;
+        after(() => {
+          void logUsage({
+            userId, apiKeyId: apiKeyId!, model,
+            task: "Image Understanding", channel: "web", channelId: channel.channelId,
+            inputTokens, outputTokens: 0,
+            status: "error", errorReason: errMsg,
+            latencyMs: Date.now() - start,
+          });
+        });
+        return Response.json({ error: errMsg }, { status: chResp.status });
+      }
+
+      const data = await chResp.json();
+      const content = data.choices?.[0]?.message?.content || "";
+      const outputTokensVal = estimateTokens(content);
+      const usage = data.usage || {};
+      const realInput = usage.prompt_tokens ?? inputTokens;
+      const realOutput = usage.completion_tokens ?? outputTokensVal;
+
+      after(() => {
+        void logUsage({
+          userId, apiKeyId: apiKeyId!, model,
+          task: "Image Understanding", channel: "web", channelId: channel.channelId,
+          inputTokens: realInput, outputTokens: realOutput,
+          status: "ok",
+          latencyMs: Date.now() - start,
+        });
+      });
+      return Response.json({ text: content });
+    }
   }
 
   try {

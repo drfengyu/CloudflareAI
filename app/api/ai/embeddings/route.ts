@@ -1,9 +1,12 @@
 import { NextRequest } from "next/server";
+import { after } from "next/server";
 import { z } from "zod";
 import { runModelJSON } from "@/lib/cloudflare/ai";
 import { requireUser, logUsage, verifyBalance, getDefaultApiKey } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { estimateTokensTotal } from "@/lib/usage/tokens";
+import { lookupChannel } from "@/lib/channels/lookup";
+import { routeToChannel } from "@/lib/channels/router";
 
 const schema = z.object({
   model: z.string(),
@@ -57,6 +60,57 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: balanceCheck.reason }, { status: 402 });
   }
 
+  // 渠道路由：非 Cloudflare 模型走第三方渠道
+  const channel = await lookupChannel(model, apiKeyId);
+  if (channel) {
+    const input = Array.isArray(text) ? text : [text];
+    const forwardBody = JSON.stringify({ input, model });
+    const forwardReq = new Request(req.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: forwardBody,
+    });
+    const chResp = await routeToChannel(channel.channelId, "/v1/embeddings", forwardReq);
+    if (chResp) {
+      if (!chResp.ok) {
+        const upstreamText = await chResp.text();
+        let upstreamJson: Record<string, unknown> | null = null;
+        try { upstreamJson = JSON.parse(upstreamText); } catch { /* ignore */ }
+        const errMsg =
+          (typeof upstreamJson?.error === "string" ? upstreamJson.error : null) ||
+          ((upstreamJson?.error as Record<string, unknown>)?.message as string) ||
+          upstreamText ||
+          `Upstream error (${chResp.status})`;
+        after(() => {
+          void logUsage({
+            userId, apiKeyId: apiKeyId!, model,
+            task: "Embeddings", channel: "web", channelId: channel.channelId,
+            inputTokens: Math.floor(estimatedTokens), outputTokens: 0,
+            status: "error", errorReason: errMsg,
+            latencyMs: Date.now() - start,
+          });
+        });
+        return Response.json({ error: errMsg }, { status: chResp.status });
+      }
+
+      const data = await chResp.json();
+      // 优先用上游真实 usage，否则 fallback 估算
+      const usage = data.usage || {};
+      const realTokens = usage.prompt_tokens ?? Math.floor(estimatedTokens);
+
+      after(() => {
+        void logUsage({
+          userId, apiKeyId: apiKeyId!, model,
+          task: "Embeddings", channel: "web", channelId: channel.channelId,
+          inputTokens: realTokens, outputTokens: 0,
+          status: "ok", latencyMs: Date.now() - start,
+        });
+      });
+      return Response.json({ embeddings: data.data || [] });
+    }
+  }
+
+  // Cloudflare 原生路径
   try {
     const result = await runModelJSON<{ data: Array<{ embedding: number[] }> }>(
       model,

@@ -1,8 +1,11 @@
 import { NextRequest } from "next/server";
+import { after } from "next/server";
 import { z } from "zod";
 import { runModelBinary, runModelMultipart } from "@/lib/cloudflare/ai";
 import { requireUser, logUsage, verifyBalance, getDefaultApiKey } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
+import { lookupChannel } from "@/lib/channels/lookup";
+import { routeToChannel } from "@/lib/channels/router";
 
 const schema = z.object({
   model: z.string(),
@@ -54,6 +57,64 @@ export async function POST(req: NextRequest) {
   const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
   if (!balanceCheck.ok) {
     return Response.json({ error: balanceCheck.reason }, { status: 402 });
+  }
+
+  // 渠道路由：非 Cloudflare 模型走第三方渠道
+  const channel = await lookupChannel(model, apiKeyId);
+  if (channel) {
+    const forwardBody = JSON.stringify({ model, prompt, n: 1 });
+    const forwardReq = new Request(req.url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: forwardBody,
+    });
+    const chResp = await routeToChannel(channel.channelId, "/v1/images/generations", forwardReq);
+    if (chResp) {
+      if (!chResp.ok) {
+        const upstreamText = await chResp.text();
+        let upstreamJson: Record<string, unknown> | null = null;
+        try { upstreamJson = JSON.parse(upstreamText); } catch { /* ignore */ }
+        const errMsg =
+          (typeof upstreamJson?.error === "string" ? upstreamJson.error : null) ||
+          ((upstreamJson?.error as Record<string, unknown>)?.message as string) ||
+          upstreamText ||
+          `Upstream error (${chResp.status})`;
+        after(() => {
+          void logUsage({
+            userId, apiKeyId: apiKeyId!, model,
+            task: "Text-to-Image", channel: "web", channelId: channel.channelId,
+            inputTokens: Math.floor(prompt.length * 1.5), outputTokens: 1,
+            status: "error", errorReason: errMsg,
+            latencyMs: Date.now() - start,
+          });
+        });
+        return Response.json({ error: errMsg }, { status: chResp.status });
+      }
+
+      const data = await chResp.json();
+      const url = data.data?.[0]?.url;
+      if (!url) {
+        throw new Error("Image generation returned no URL");
+      }
+      // 下载图片并转为 base64 data URL
+      const imgRes = await fetch(url);
+      const imgBlob = await imgRes.blob();
+      const buffer = await imgBlob.arrayBuffer();
+      const base64 = Buffer.from(buffer).toString("base64");
+      const mimeType = imgBlob.type || "image/png";
+      const dataUrl = `data:${mimeType};base64,${base64}`;
+
+      after(() => {
+        void logUsage({
+          userId, apiKeyId: apiKeyId!, model,
+          task: "Text-to-Image", channel: "web", channelId: channel.channelId,
+          inputTokens: Math.floor(prompt.length * 1.5), outputTokens: 1,
+          status: "ok",
+          latencyMs: Date.now() - start,
+        });
+      });
+      return Response.json({ image: dataUrl });
+    }
   }
 
   try {

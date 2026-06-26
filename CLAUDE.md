@@ -498,8 +498,6 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 - **渠道图表增强**：
   - Dashboard 新增渠道分布饼图
   - 渠道详情页 30 日趋势图 + 错误率曲线
-- **在线体验扩展**：
-  - 文生图 / 图像理解 / 嵌入向量 / 翻译 playground 后端 API 路由目前仅文本生成支持渠道转发，其余需对接渠道路由
 - **其他体验（2026-06-26）**：
   - 渠道 Tab 标签统一显示渠道自定义名称而非泛泛的"第三方"
   - 定价管理页渠道筛选按 `channelId` 而非 `channelSource`
@@ -509,8 +507,8 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.3.2（2026-06-26）
-**下一版本**：v0.4.0（待规划）
+**当前版本**：v0.4.0（2026-06-26）
+**下一版本**：v0.5.0（待规划）
 
 所有版本变更记录见根目录 [`CHANGELOG.md`](CHANGELOG.md)，遵循 [Keep a Changelog](https://keepachangelog.com/) 规范。
 

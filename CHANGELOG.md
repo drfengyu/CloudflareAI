@@ -45,7 +45,15 @@
 
 ### 新增
 
-- **站内 Playground 增强**
+- **Playground 渠道路由扩展**（所有 4 个 playground API 路由现支持第三方渠道转发）
+  - `lib/channels/lookup.ts` — 共享渠道查询 helper（查 modelPricing.channelId → 回退 apiKeys.channelId）
+  - **嵌入向量**（`/api/ai/embeddings`）：body 转换 `{ text }` → `{ input }`，走 `/v1/embeddings`
+  - **LLM 翻译**（`/api/ai/translate` LLM 分支）：body 直接兼容，走 `/v1/chat/completions`
+  - **文生图**（`/api/ai/image`）：body 转换 `{ prompt, num_steps, guidance }` → `{ model, prompt, n:1 }`，走 `/v1/images/generations`；响应 OpenAI URL → 下载 → base64 data URL
+  - **图像理解**（`/api/ai/vision`）：body 转换 `{ prompt, image: bytes }` → OpenAI messages `[{ text }, { image_url }]`，走 `/v1/chat/completions`
+  - 非 200 响应解析上游 JSON error 并正确回传
+  - 用 `after()` 异步记 usage（含 `channelId`）
+  - 上游 real usage 优先用于计费（embeddings/vision fallback 估算）
   - **思考链与正文分离**（`/playground/text`）
     - DeepSeek-v4 等推理模型的 `reasoning_content` 渲染为可折叠灰色块
     - 显示「🧠 思考过程」标签 + token 估算，默认展开，点击可折叠

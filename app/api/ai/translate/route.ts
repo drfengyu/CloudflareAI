@@ -4,6 +4,8 @@ import { runModelJSON, openaiCompatible } from "@/lib/cloudflare/ai";
 import { requireUser, logUsage, verifyBalance, getDefaultApiKey } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { estimateTokens } from "@/lib/usage/tokens";
+import { lookupChannel } from "@/lib/channels/lookup";
+import { routeToChannel } from "@/lib/channels/router";
 
 const schema = z.object({
   model: z.string(),
@@ -71,6 +73,7 @@ export async function POST(req: NextRequest) {
 
   const { model, text, source_lang, target_lang } = parsed.data;
   const isM2m100 = model.includes("m2m100");
+  let channelIdForLog: string | null = null; // 供共享的 logUsage 使用
 
   // 余额预检（用估算；真正计费用上游真实 usage）。译文长度可能略多于原文。
   const estInput = estimateTokens(text) + 32;
@@ -108,9 +111,11 @@ export async function POST(req: NextRequest) {
         `You are a professional translation engine. Translate the user's text into ${targetName}. ` +
         `${sourceClause} Output ONLY the translated text, with no quotes, explanations, or extra content.`;
 
-      const res = await openaiCompatible(
-        "chat/completions",
-        {
+      // 渠道路由：非 Cloudflare 模型走第三方渠道
+      const channel = await lookupChannel(model, apiKeyId);
+      if (channel) {
+        channelIdForLog = channel.channelId;
+        const forwardBody = JSON.stringify({
           model,
           messages: [
             { role: "system", content: system },
@@ -118,23 +123,84 @@ export async function POST(req: NextRequest) {
           ],
           stream: false,
           temperature: 0.3,
-        },
-        req.signal,
-      );
+        });
+        const forwardReq = new Request(req.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: forwardBody,
+        });
+        const chResp = await routeToChannel(channel.channelId, "/v1/chat/completions", forwardReq);
+        if (chResp) {
+          if (!chResp.ok) {
+            const errText = await chResp.text();
+            throw new Error(errText || "Model run failed");
+          }
+          const data = await chResp.json();
+          const raw = data.choices?.[0]?.message?.content || "";
+          // 防御：个别推理模型可能把 <think> 思考块混进 content，剥离后再返回。
+          translated = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+          const usage = data.usage || {};
+          inputTokens = usage.prompt_tokens ?? estInput;
+          outputTokens = usage.completion_tokens ?? estimateTokens(translated);
+        } else {
+          // routeToChannel 返回 null（Cloudflare），回退到原生
+          const res = await openaiCompatible(
+            "chat/completions",
+            {
+              model,
+              messages: [
+                { role: "system", content: system },
+                { role: "user", content: text },
+              ],
+              stream: false,
+              temperature: 0.3,
+            },
+            req.signal,
+          );
 
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(errText || "Model run failed");
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(errText || "Model run failed");
+          }
+
+          const data = await res.json();
+          const raw = data.choices?.[0]?.message?.content || "";
+          // 防御：个别推理模型可能把 <think> 思考块混进 content，剥离后再返回。
+          translated = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+          const usage = data.usage || {};
+          inputTokens = usage.prompt_tokens ?? estInput;
+          outputTokens = usage.completion_tokens ?? estimateTokens(translated);
+        }
+      } else {
+          // 无渠道映射（Cloudflare 原生文本模型）
+          const res = await openaiCompatible(
+            "chat/completions",
+            {
+              model,
+              messages: [
+                { role: "system", content: system },
+                { role: "user", content: text },
+              ],
+              stream: false,
+              temperature: 0.3,
+            },
+            req.signal,
+          );
+
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(errText || "Model run failed");
+          }
+
+          const data = await res.json();
+          const raw = data.choices?.[0]?.message?.content || "";
+          // 防御：个别推理模型可能把 <think> 思考块混进 content，剥离后再返回。
+          translated = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+          const usage = data.usage || {};
+          inputTokens = usage.prompt_tokens ?? estInput;
+          outputTokens = usage.completion_tokens ?? estimateTokens(translated);
+        }
       }
-
-      const data = await res.json();
-      const raw = data.choices?.[0]?.message?.content || "";
-      // 防御：个别推理模型可能把 <think> 思考块混进 content，剥离后再返回。
-      translated = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-      const usage = data.usage || {};
-      inputTokens = usage.prompt_tokens ?? estInput;
-      outputTokens = usage.completion_tokens ?? estimateTokens(translated);
-    }
 
     await logUsage({
       userId,
@@ -142,6 +208,7 @@ export async function POST(req: NextRequest) {
       model,
       task: "Translation",
       channel: "web",
+      channelId: channelIdForLog || undefined,
       inputTokens,
       outputTokens,
       status: "ok",
@@ -156,6 +223,7 @@ export async function POST(req: NextRequest) {
       model,
       task: "Translation",
       channel: "web",
+      channelId: channelIdForLog || undefined,
       status: "error",
       errorReason: err instanceof Error ? err.message : "Unknown error",
       latencyMs: Date.now() - start,
