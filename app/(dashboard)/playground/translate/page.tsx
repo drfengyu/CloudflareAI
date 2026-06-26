@@ -1,5 +1,9 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
+import { fetchChannelModels } from "@/lib/cloudflare/channel-catalog";
+import { db } from "@/lib/db/d1-http";
+import { channels, modelPricing } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 import { TranslateClient } from "./client";
 
 export const dynamic = "force-dynamic";
@@ -37,15 +41,58 @@ export default async function TranslatePage() {
 
   const models = [...llmModels, ...legacyModels];
 
+  // 渠道文本模型（也可用于 LLM 翻译）
+  const channelRows = await db
+    .select({ id: channels.id, type: channels.type, name: channels.name })
+    .from(channels)
+    .where(eq(channels.status, 1));
+
+  const otherModels: { id: string; name: string; channel: string }[] = [];
+
+  for (const ch of channelRows) {
+    if (ch.type === "cloudflare") continue;
+
+    const pricingAll = await db
+      .select({ modelId: modelPricing.modelId, category: modelPricing.category })
+      .from(modelPricing)
+      .where(eq(modelPricing.channelId, ch.id));
+
+    // 文本模型 + 翻译模型都可用
+    const textIds = new Set(
+      pricingAll
+        .filter((p) => p.category === "text" || p.category === "translate")
+        .map((p) => p.modelId)
+    );
+    if (textIds.size === 0) continue;
+
+    const channelModels = await fetchChannelModels(ch.id, ch.type || "", ch.name);
+
+    for (const modelMeta of channelModels) {
+      if (!textIds.has(modelMeta.id)) continue;
+      otherModels.push({
+        id: modelMeta.id,
+        name: modelMeta.name || modelMeta.id.split("/").pop() || modelMeta.id,
+        channel: ch.name || ch.type || "other",
+      });
+    }
+  }
+
+  const seen = new Set<string>();
+  const allModels = [...models, ...otherModels].filter((m) => {
+    if (seen.has(m.id)) return false;
+    seen.add(m.id);
+    return true;
+  });
+
   return (
     <>
       <PageHeader title="翻译" description="多语言翻译服务（推荐用 LLM 模型，中日韩质量更好）" />
-      {models.length === 0 ? (
+      {allModels.length === 0 ? (
         <div className="m-8 rounded-lg border border-dashed border-border bg-card p-6 text-sm text-muted-foreground">
           无可用的翻译模型
         </div>
       ) : (
-        <TranslateClient models={models} />
+        <TranslateClient models={allModels} />
       )}
     </>
   );
