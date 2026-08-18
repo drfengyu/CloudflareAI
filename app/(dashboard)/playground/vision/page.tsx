@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function VisionPlaygroundPage() {
   const catalog = await fetchModelCatalog();
   const visionModels = catalog
-    .filter((m) => m.category === "vision" && m.source === "hosted")
+    .filter((m) => m.category === "vision" && m.source === "hosted" && !m.requireWorkersPaid)
     .map((m) => ({ id: m.id, name: m.name }));
 
   // 渠道 vision 模型（category=vision 或 modelId 含 vl/vision）

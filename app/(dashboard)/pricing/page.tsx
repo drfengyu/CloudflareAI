@@ -54,6 +54,7 @@ export default async function PricingPage() {
     priceCr: number | null;
     unit: string;
     isImage: boolean;
+    requireWorkersPaid?: boolean;
   } {
     const dp = getDisplayPrice(m, pricingMap);
     return {
@@ -65,6 +66,7 @@ export default async function PricingPage() {
       priceCr: dp.credits,
       unit: dp.unit,
       isImage: dp.isImage,
+      requireWorkersPaid: m.requireWorkersPaid,
     };
   }
 

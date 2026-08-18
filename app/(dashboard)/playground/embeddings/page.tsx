@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function EmbeddingsPage() {
   const catalog = await fetchModelCatalog();
   const models = catalog
-    .filter((m) => m.category === "embeddings" && m.source === "hosted")
+    .filter((m) => m.category === "embeddings" && m.source === "hosted" && !m.requireWorkersPaid)
     .map((m) => ({ id: m.id, name: m.name }));
 
   // 渠道 embedding 模型

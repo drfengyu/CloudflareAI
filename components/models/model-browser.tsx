@@ -224,6 +224,9 @@ function ModelCard({
           {model.beta && !model.tags?.includes("测试版") && (
             <Badge tone="muted">beta</Badge>
           )}
+          {model.requireWorkersPaid && (
+            <Badge tone="warning">需 Workers Paid</Badge>
+          )}
           {displayPrice.usd !== null && (
             <Badge tone="muted" className="font-mono">
               ${displayPrice.usd.toFixed(2)}

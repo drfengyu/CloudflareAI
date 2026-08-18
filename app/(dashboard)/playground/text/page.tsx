@@ -28,7 +28,7 @@ export default async function TextPlaygroundPage() {
   // 所有模型：Cloudflare hosted + 非 Cloudflare 渠道
   const catalog = await fetchModelCatalog();
   const cfTextModels = catalog
-    .filter((m) => m.category === "text" && m.source === "hosted")
+    .filter((m) => m.category === "text" && m.source === "hosted" && !m.requireWorkersPaid)
     .map((m) => ({
       id: m.id,
       name: m.name,

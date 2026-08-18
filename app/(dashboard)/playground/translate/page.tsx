@@ -30,7 +30,7 @@ export default async function TranslatePage() {
 
   // LLM 翻译（文本模型）：CJK 质量好，作为主要选项
   const llmModels = catalog
-    .filter((m) => m.category === "text" && m.source === "hosted")
+    .filter((m) => m.category === "text" && m.source === "hosted" && !m.requireWorkersPaid)
     .map((m) => ({ id: m.id, name: m.name }))
     .sort((a, b) => preferredRank(a.id) - preferredRank(b.id) || a.name.localeCompare(b.name));
 

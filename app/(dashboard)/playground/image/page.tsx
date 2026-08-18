@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function ImagePlaygroundPage() {
   const catalog = await fetchModelCatalog();
   const imageModels = catalog
-    .filter((m) => m.category === "image" && m.source === "hosted")
+    .filter((m) => m.category === "image" && m.source === "hosted" && !m.requireWorkersPaid)
     .map((m) => ({ id: m.id, name: m.name }));
 
   // 渠道文生图模型

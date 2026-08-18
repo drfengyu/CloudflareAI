@@ -46,6 +46,8 @@ export interface NormalizedModel {
     input: number;   // 美元 per token
     output: number;  // 美元 per token
   };
+  /** 需要 Workers Paid 计划才能调用（Free 计划不可用）。 */
+  requireWorkersPaid?: boolean;
 }
 
 // ── Raw payload shapes (defensive: Cloudflare's fields are loosely typed) ──
@@ -105,6 +107,7 @@ function parseProps(props: RawProperty[] = []) {
     contextWindow,
     functionCalling: truthy(map.get("function_calling")),
     beta: truthy(map.get("beta")),
+    requireWorkersPaid: truthy(map.get("require_workers_paid")),
     pricing,
   };
 }

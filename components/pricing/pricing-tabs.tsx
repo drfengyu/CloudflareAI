@@ -23,6 +23,7 @@ interface ModelRow {
   priceCr: number | null;
   unit: string;
   isImage: boolean;
+  requireWorkersPaid?: boolean;
 }
 
 const CATEGORY_NAMES: Record<string, string> = {
@@ -128,7 +129,10 @@ export function PricingTabs({
                           </div>
                         </td>
                         <td className="py-3">
-                          <ChannelBadge channelSource={model.channelSource} channelName={model.channelName} />
+                          <div className="flex items-center gap-1.5">
+                            <ChannelBadge channelSource={model.channelSource} channelName={model.channelName} />
+                            {model.requireWorkersPaid && <Badge tone="warning">需 Workers Paid</Badge>}
+                          </div>
                         </td>
                         <td className="py-3 text-right">
                           {model.priceUsd !== null ? (
