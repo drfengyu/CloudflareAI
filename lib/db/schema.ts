@@ -315,6 +315,31 @@ export const registrationLog = sqliteTable("registration_log", {
   userAgent: text("userAgent"),
 });
 
+/** 支付订单表：记录易支付（彩虹易支付）在线充值订单。 */
+export const paymentOrders = sqliteTable("payment_order", {
+  id: text("id").primaryKey().$defaultFn(uuid),
+  userId: text("userId")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  /** 商户订单号（易支付 out_trade_no）。 */
+  orderNo: text("orderNo").notNull().unique(),
+  /** 易支付流水号（回调后写入）。 */
+  tradeNo: text("tradeNo"),
+  /** 支付金额（元，CNY）。 */
+  amountCny: real("amountCny").notNull(),
+  /** 应发放 credits（下单时按 recharge_rate 锁定）。 */
+  credits: real("credits").notNull(),
+  /** 0=待支付 / 1=已支付待发货 / 2=已发货 / 3=已关闭 / 9=异常。 */
+  status: integer("status").notNull().default(0),
+  /** 支付渠道：alipay / wechat / qqpay。 */
+  channel: text("channel"),
+  /** 回调原文（审计用）。 */
+  notifyPayload: text("notifyPayload"),
+  /** 支付时间。 */
+  paidAt: integer("paidAt", { mode: "timestamp_ms" }),
+  createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+});
+
 export type User = typeof users.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type UsageLog = typeof usageLogs.$inferSelect;
@@ -325,3 +350,4 @@ export type ConversationHistory = typeof conversationHistory.$inferSelect;
 export type TemporaryBalance = typeof temporaryBalances.$inferSelect;
 export type ModelPricing = typeof modelPricing.$inferSelect;
 export type RegistrationLog = typeof registrationLog.$inferSelect;
+export type PaymentOrder = typeof paymentOrders.$inferSelect;

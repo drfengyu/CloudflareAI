@@ -223,3 +223,55 @@ export async function updateAuthChannels(formData: {
 
   return { success: true };
 }
+
+export async function updateEpaySettings(formData: {
+  enabled: boolean;
+  apiUrl: string;
+  pid: string;
+  key: string;
+  rate: string;
+  minCny: string;
+  maxCny: string;
+}) {
+  const currentUserId = await requireUser();
+
+  // 检查权限
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const rate = parseFloat(formData.rate);
+  if (!Number.isFinite(rate) || rate <= 0) {
+    throw new Error("充值汇率必须 > 0");
+  }
+  const minCny = parseFloat(formData.minCny);
+  const maxCny = parseFloat(formData.maxCny);
+  if (!Number.isFinite(minCny) || minCny <= 0) {
+    throw new Error("最低金额必须 > 0");
+  }
+  if (!Number.isFinite(maxCny) || maxCny < minCny) {
+    throw new Error("最高金额必须 ≥ 最低金额");
+  }
+  if (formData.enabled && (!formData.apiUrl.trim() || !formData.pid.trim() || !formData.key.trim())) {
+    throw new Error("启用在线充值需填写网关地址、商户 ID 和密钥");
+  }
+
+  await upsertOption("epay_enabled", formData.enabled ? "true" : "false");
+  await upsertOption("epay_api_url", formData.apiUrl.trim());
+  await upsertOption("epay_pid", formData.pid.trim());
+  await upsertOption("epay_key", formData.key.trim());
+  await upsertOption("recharge_rate", String(rate));
+  await upsertOption("recharge_min", String(minCny));
+  await upsertOption("recharge_max", String(maxCny));
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/wallet");
+
+  return { success: true };
+}

@@ -187,7 +187,9 @@ export default async function WalletPage() {
                             ? "管理员充值"
                             : record.type === 3
                               ? "签到奖励"
-                              : "其他充值"}
+                              : record.type === 5
+                                ? "在线充值"
+                                : "其他充值"}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {formatDistanceToNow(new Date(record.createdAt!), {

@@ -5,6 +5,9 @@ import { redemptions, topups, temporaryBalances } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
+import { getEpayConfig, buildEpayPayUrl } from "@/lib/payment/epay";
+import { createRechargeOrder } from "@/lib/payment/order";
 
 export async function redeemCode(code: string) {
   const currentUserId = await requireUser();
@@ -82,4 +85,38 @@ export async function redeemCode(code: string) {
     amount: redemption.quota,
     expiresAt: balanceExpiresAt,
   };
+}
+
+/**
+ * 创建在线充值订单并返回易支付收银台跳转 URL。
+ * 返回 { payUrl }，客户端 window.location.href 跳转；或 { error }。
+ */
+export async function createPayOrder(amountCny: number, channel: string) {
+  const cfg = await getEpayConfig();
+  if (!cfg.enabled) {
+    throw new Error("在线充值功能未开启");
+  }
+
+  const { orderNo, credits } = await createRechargeOrder(amountCny, channel);
+
+  // 用当前请求的 host 构造回调/回跳地址（支持本地与生产）
+  const host = (await headers()).get("host") || "localhost:3000";
+  const protocol = host.includes("localhost") || host.startsWith("127.") ? "http" : "https";
+  const origin = `${protocol}://${host}`;
+
+  const notifyUrl = `${origin}/api/pay/epay/notify`;
+  const returnUrl = `${origin}/wallet?paid=1`;
+
+  const built = buildEpayPayUrl(
+    cfg,
+    { orderNo, amountCny, channel },
+    notifyUrl,
+    returnUrl,
+  );
+
+  if (!built) {
+    throw new Error("支付网关配置不完整，请联系管理员");
+  }
+
+  return { payUrl: built.url, orderNo, credits };
 }

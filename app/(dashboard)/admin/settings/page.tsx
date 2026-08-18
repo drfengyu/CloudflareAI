@@ -5,7 +5,7 @@ import { users, options } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
-import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, AuthChannelsForm } from "./settings-form";
+import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, AuthChannelsForm, EpaySettingsForm } from "./settings-form";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +83,25 @@ export default async function AdminSettingsPage() {
                 minQuota: settings.checkin_min_quota || "0.01",
                 maxQuota: settings.checkin_max_quota || "0.1",
                 validDays: settings.checkin_valid_days || "7",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">在线充值（易支付）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EpaySettingsForm
+              initialSettings={{
+                enabled: settings.epay_enabled === "true",
+                apiUrl: settings.epay_api_url || "",
+                pid: settings.epay_pid || "",
+                key: settings.epay_key || "",
+                rate: settings.recharge_rate || "10",
+                minCny: settings.recharge_min || "1",
+                maxCny: settings.recharge_max || "1000",
               }}
             />
           </CardContent>

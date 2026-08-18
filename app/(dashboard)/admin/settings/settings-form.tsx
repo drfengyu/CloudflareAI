@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { updateBasicSettings, updatePricingSettings, updateCheckinSettings, updateAuthChannels } from "./actions";
+import { updateBasicSettings, updatePricingSettings, updateCheckinSettings, updateAuthChannels, updateEpaySettings } from "./actions";
 import { toast } from "sonner";
 
 interface SettingsFormProps {
@@ -497,6 +497,158 @@ export function AuthChannelsForm({ initialSettings }: AuthChannelsFormProps) {
           <strong>注意：</strong>至少需要保留一个登录渠道，否则用户将无法访问系统。
         </p>
       </div>
+
+      <Button type="submit" disabled={loading}>
+        {loading ? "保存中..." : "保存设置"}
+      </Button>
+    </form>
+  );
+}
+
+interface EpaySettingsFormProps {
+  initialSettings: {
+    enabled: boolean;
+    apiUrl: string;
+    pid: string;
+    key: string;
+    rate: string;
+    minCny: string;
+    maxCny: string;
+  };
+}
+
+export function EpaySettingsForm({ initialSettings }: EpaySettingsFormProps) {
+  const [enabled, setEnabled] = useState(initialSettings.enabled);
+  const [apiUrl, setApiUrl] = useState(initialSettings.apiUrl);
+  const [pid, setPid] = useState(initialSettings.pid);
+  const [key, setKey] = useState(initialSettings.key);
+  const [rate, setRate] = useState(initialSettings.rate);
+  const [minCny, setMinCny] = useState(initialSettings.minCny);
+  const [maxCny, setMaxCny] = useState(initialSettings.maxCny);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await updateEpaySettings({ enabled, apiUrl, pid, key, rate, minCny, maxCny });
+      toast.success("支付设置已保存");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const rateNum = parseFloat(rate);
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="epay-enabled"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+          className="h-4 w-4 rounded border-border"
+        />
+        <label htmlFor="epay-enabled" className="text-sm font-medium">
+          启用在线充值（易支付）
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className="block text-sm font-medium mb-1">网关地址</label>
+          <input
+            type="text"
+            value={apiUrl}
+            onChange={(e) => setApiUrl(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="https://pay.example.com"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">易支付站点地址（不带结尾斜杠）</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">商户 ID (PID)</label>
+          <input
+            type="text"
+            value={pid}
+            onChange={(e) => setPid(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="1000"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">商户密钥 (KEY)</label>
+        <input
+          type="password"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          disabled={!enabled}
+          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-mono disabled:opacity-50"
+          placeholder="32 位密钥"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">用于 MD5 签名，仅服务端使用</p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">汇率 (1 元 = ? cr)</label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="10"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">最低充值 (元)</label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={minCny}
+            onChange={(e) => setMinCny(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="1"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">最高充值 (元)</label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={maxCny}
+            onChange={(e) => setMaxCny(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="1000"
+          />
+        </div>
+      </div>
+
+      {enabled && Number.isFinite(rateNum) && rateNum > 0 && (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+          <p className="text-xs text-muted-foreground">
+            <strong>当前规则：</strong>¥{minCny || "1"} – ¥{maxCny || "1000"}，
+            1 元 = {rateNum} cr（如 ¥100 → {Math.floor(100 * rateNum)} cr，永久余额，无有效期）
+            <br />
+            回调地址：<code className="font-mono">https://cloudai.fuwari.fun/api/pay/epay/notify</code>
+          </p>
+        </div>
+      )}
 
       <Button type="submit" disabled={loading}>
         {loading ? "保存中..." : "保存设置"}
