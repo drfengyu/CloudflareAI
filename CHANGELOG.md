@@ -5,6 +5,45 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.5.0] - 2026-08-18
+
+### 新增
+
+- **易支付在线充值系统（真实支付接入）**
+  - 新增 `payment_order` 表（迁移 `migrations/005_payment_order.sql`）：订单、流水号、金额、credits、状态、渠道、回调原文
+  - `lib/payment/epay.ts`：易支付 MD5 签名 / 回调验签 / 收银台下单 URL（`submit.php`）
+  - `lib/payment/order.ts`：下单（金额校验 + 汇率锁定）、幂等发放（永久余额 + `topup` type 5）
+  - 异步回调 `POST /api/pay/epay/notify`：验签 → 商户 ID 校验 → 金额核对 → 幂等结算（重复回调安全跳过）→ 返回 `success`
+  - 钱包充值弹窗改为双 Tab：**在线充值**（¥10/30/68/128 档位 + 自定义金额，支付宝/微信）与**兑换码**
+  - 充值进**永久余额**（无有效期），与兑换码（临时余额）区分；流水 `topup` type 5 = 在线充值
+  - `/admin/settings` 新增支付配置区块：开关、网关地址、商户 ID、密钥、汇率（1 元 = ? cr）、单笔限额
+  - 安全设计：签名验证、金额与订单核对、`WHERE status=0` 原子抢占防重复发放、参数剔除 `sign_type` 参与验签
+- **Playground 与模型库支持 Cloudflare「需 Workers Paid」模型标记**
+  - `catalog.ts` 解析 `require_workers_paid` 属性 → `requireWorkersPaid` 字段
+  - 模型库页 / 定价页对 5 个付费模型（deepseek-v4-flash-0731、deepseek-v4-pro-0813、glm-5.2、kimi-k2.6、kimi-k2.7-code）显示「需 Workers Paid」警告徽章
+  - 5 个 Playground 页面（text/vision/image/embeddings/translate）过滤掉需付费的 CF 托管模型，避免 Free 计划调用 5035 报错
+  - 第三方渠道同名模型（`deepseek/`、`zai/`、`moonshotai/` 前缀）不受影响，正常可用
+- **Dashboard 分布图跟随时间范围切换**
+  - 模型分布 / 渠道分布饼图由固定「近 30 日」改为跟随 range 切换（today=1 天 / week=7 天 / month=30 天）
+  - 图表标题动态显示对应日期范围
+- **渠道图表 E2E 测试**
+  - `tests/e2e/channel-charts.spec.ts`：验证渠道分布饼图（3 图例）与渠道详情页图表（2 SVG）
+
+### 修复
+
+- **Dashboard 500：server component 向 client 图表组件传函数**
+  - 根因：Server Component 把 `tooltipFormatter` 函数直接传给 Client 图表组件，Next.js 运行时抛
+    `Functions cannot be passed directly to Client Components`
+  - 修复：PieChart 内置 formatter，移除 3 处调用点的函数传递
+- **计费汇率口径澄清（避免重复计费）**
+  - 澄清 `model_pricing.inputPrice/outputPrice` 单位即为 **cr/1M tokens**（同步时已按 1 USD=7.1 cr 折算）
+  - 回退一度引入的 `creditsPerUsd` 二次换算：`calculateCredits` 不再乘汇率，直接以表价 × baseMultiplier
+  - 实测复核：qwen3-30b-a3b-fp8（564 in / 171 out）→ 45.18 cr、glm-4.7-flash 预检 ~5,145 cr，均与 usage_log 及既有预期一致
+
+### 文档
+
+- **`docs/archive/METADATA_SYNC_COMPLETE.txt`**：渠道元数据同步总结归档（原根目录遗留文件）
+
 ## [0.4.0] - 2026-06-26
 
 ### 新增
@@ -393,8 +432,9 @@
 - Auth.js v5
 - Recharts 数据可视化
 
+[0.5.0]: https://github.com/drfengyu/CloudflareAI/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/drfengyu/CloudflareAI/compare/v0.3.1...v0.4.0
-[未发布]: https://github.com/drfengyu/CloudflareAI/compare/v0.4.0...HEAD
+[未发布]: https://github.com/drfengyu/CloudflareAI/compare/v0.5.0...HEAD
 [0.2.2]: https://github.com/drfengyu/CloudflareAI/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/drfengyu/CloudflareAI/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/drfengyu/CloudflareAI/compare/v0.1.0...v0.2.0

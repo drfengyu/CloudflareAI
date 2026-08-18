@@ -20,7 +20,7 @@
 
 ### 架构改造（2026-06-13 起，参考 new-api）
 
-当前版本：**v0.4.0**（2026-06-26）—— Playground 渠道路由 & 前端渠道模型显示
+当前版本：**v0.5.0**（2026-08-18）—— 易支付在线充值 & Free Plan 模型标记
 
 | 阶段 | 说明 | 状态 |
 | --- | --- | --- |
@@ -63,7 +63,15 @@
 | ├─ 模型同步 | 从上游拉取模型列表写入定价表 | ✅ |
 | └─ 渠道路由 | OpenAI/Anthropic 请求直通转发 | ✅ |
 
-**最新更新（v0.4.0）**：
+**最新更新（v0.5.0）**：
+- ✅ 易支付在线充值：钱包双 Tab（在线充值 ¥10/30/68/128 / 兑换码），支付宝+微信，回调验签幂等发放永久余额
+- ✅ 支付管理：`/admin/settings` 支付配置（网关/PID/密钥/汇率/限额），`payment_order` 订单表
+- ✅ Free Plan 模型标记：5 个需 Workers Paid 模型（deepseek-v4、glm-5.2、kimi-k2.6 等）在模型库/定价页显示徽章，Playground 自动过滤
+- ✅ Dashboard 模型/渠道分布图跟随时间范围切换（今日/本周/本月）
+- ✅ 计费口径澄清：`model_pricing` 表价即 cr（不再二次乘汇率），修复 Dashboard 500（server→client 函数传递）
+- ✅ 渠道图表 E2E 测试（`tests/e2e/channel-charts.spec.ts`）
+
+**上一版本（v0.4.0）**：
 - ✅ Playground 渠道路由：嵌入/翻译/文生图/图像理解 4 条路由支持第三方渠道转发
 - ✅ 工具调用端到端支持：Anthropic ↔ OpenAI 双向转换（`lib/relay/anthropic.ts`），适配 Claude Code 智能体循环
 - ✅ 推理模型思考链渲染：`reasoning_content` 可折叠展示 + 动态上下文窗口进度条
