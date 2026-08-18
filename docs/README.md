@@ -1,4 +1,4 @@
-# 文档目录
+﻿# 文档目录
 
 本项目的文档按照用途和时间组织。
 
@@ -21,18 +21,22 @@
 ### docs/fixes/
 每日修复记录和技术分析
 
-- `2025-06-25-keys-page-fixes.md` - API Key 功能修复
-- `2025-06-25-drizzle-leftjoin-bug.md` - Drizzle ORM Bug 分析
+- `2026-06-25-keys-page-fixes.md` - API Key 功能修复
+- `2026-06-25-drizzle-leftjoin-bug.md` - Drizzle ORM Bug 分析
 
 ### docs/features/
 功能特性文档
 
 - `checkin.md` - 签到功能文档
+- `channel-management.md` - AI 供应商渠道管理设计文档
+- `openai-compatible-gateway.md` - OpenAI 兼容网关设计文档
+- `tool-calling.md` - 工具调用（Function Calling）端到端支持文档
 
 ### docs/releases/
 版本发布说明
 
 - `RELEASE_v0.3.1.md` - v0.3.1 发布说明
+- `PHASE_A_PLAN.md` - Phase A 视觉地基实施计划（已完成存档）
 
 ### docs/testing/
 测试报告
@@ -96,8 +100,8 @@
 用于每日修复、分析和临时文档。
 
 示例：
-- `2025-06-25-keys-page-fixes.md`
-- `2025-06-25-drizzle-leftjoin-bug.md`
+- `2026-06-25-keys-page-fixes.md`
+- `2026-06-25-drizzle-leftjoin-bug.md`
 
 ### 版本发布文档
 格式：`RELEASE_vX.Y.Z.md`
@@ -158,5 +162,5 @@
 
 ---
 
-**最后更新**: 2025-06-25  
+**最后更新**: 2026-06-26  
 **文档版本**: v1.0

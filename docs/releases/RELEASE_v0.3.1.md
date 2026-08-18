@@ -1,6 +1,6 @@
-# v0.3.1 发布总结
+﻿# v0.3.1 发布总结
 
-**发布日期**: 2025-06-25  
+**发布日期**: 2026-06-25  
 **版本**: v0.3.1  
 **类型**: 补丁版本（Bug 修复）
 
@@ -55,12 +55,12 @@
 
 ### 文档
 
-1. **docs/fixes/2025-06-25-keys-page-fixes.md**
+1. **docs/fixes/2026-06-25-keys-page-fixes.md**
    - 环境变量配置详细说明
    - 数据库修复步骤
    - 部署检查清单
 
-2. **docs/fixes/2025-06-25-drizzle-leftjoin-bug.md**
+2. **docs/fixes/2026-06-25-drizzle-leftjoin-bug.md**
    - Drizzle ORM Bug 深度分析
    - 根因、解决方案和最佳实践
    - 项目中的类似案例
@@ -200,7 +200,7 @@ Vercel Dashboard → Deployments → 最新部署 → ••• → Redeploy
 
 - **快速开始**: `VERCEL_ENV_QUICKSTART.txt`
 - **完整总结**: `COMPLETE_FIX_SUMMARY.md`
-- **修复详情**: `docs/fixes/2025-06-25-*.md`
+- **修复详情**: `docs/fixes/2026-06-25-*.md`
 - **变更日志**: `CHANGELOG.md`
 - **项目文档**: `CLAUDE.md`
 
@@ -231,6 +231,6 @@ Vercel Dashboard → Deployments → 最新部署 → ••• → Redeploy
 
 ---
 
-**发布时间**: 2025-06-25  
+**发布时间**: 2026-06-25  
 **Git 标签**: v0.3.1  
 **状态**: ✅ 开发完成，待生产部署

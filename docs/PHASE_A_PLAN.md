@@ -1,5 +1,8 @@
 # Phase A — 视觉地基重构实施计划
 
+> **状态：✅ 已完成（2026-06-26）** — 本计划全部实施完毕，见 `CLAUDE.md`「Phase A — 视觉地基」章节。
+> 下列清单仅作历史存档，不再继续勾选。
+
 **目标**: 参考 new-api 实现，重构 UI 地基（不改行为）
 
 **参考源**: `D:\Download\new-api-main\web\default\src\`

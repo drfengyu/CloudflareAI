@@ -1,4 +1,4 @@
-# Vercel 环境变量配置指南
+﻿# Vercel 环境变量配置指南
 
 ## 由于网络问题无法使用 Vercel CLI
 
@@ -199,6 +199,6 @@ Error: getaddrinfo ENOENT sentry.io
 
 ---
 
-**生成时间**: 2025-06-25  
+**生成时间**: 2026-06-25  
 **生产环境密钥**: `SbOw4FM5l4z2uVc2x4/tJd/khX9QD1KBHAqbCgMiK3o=`  
 **开发环境密钥**: `8lMeDvA3c47KOO5bJNPwtnHPfcFjnARoLUgetxOdHlU=`
