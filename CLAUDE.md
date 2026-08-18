@@ -1,4 +1,4 @@
-@AGENTS.md
+﻿@AGENTS.md
 
 # 改造路线图：参考 new-api 重构本项目
 
@@ -452,7 +452,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   - `CheckinSettingsForm` 组件：开关、最小/最大奖励、有效期配置
   - Server Action：`updateCheckinSettings`
 
-### ✅ API Key 功能修复（2025-06-25）
+### ✅ API Key 功能修复（2026-06-25）
 
 **已完成**：
 - ✅ **环境变量配置**：
@@ -468,8 +468,8 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   - 移除 leftJoin，改为分别查询 + 手动映射
   - 新增 `scripts/check-keys.js` 用于数据验证
 - ✅ **文档完善**：
-  - `docs/fixes/2025-06-25-keys-page-fixes.md` - 环境变量修复记录
-  - `docs/fixes/2025-06-25-drizzle-leftjoin-bug.md` - ORM Bug 详细分析
+  - `docs/fixes/2026-06-25-keys-page-fixes.md` - 环境变量修复记录
+  - `docs/fixes/2026-06-25-drizzle-leftjoin-bug.md` - ORM Bug 详细分析
   - `docs/VERCEL_ENV_SETUP.md` - 生产环境配置指南
   - `COMPLETE_FIX_SUMMARY.md` - 完整修复总结
 
@@ -488,20 +488,34 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ---
 
+### ✅ Phase A — 视觉地基（完成，2026-06-26）
+
+**已完成**：
+- ✅ oklch 主题令牌系统（`app/globals.css`）+ 7 套主题预设（`app/theme-presets.css`：default/anthropic/cloudflare/ocean/emerald/violet/rose，含完整明暗背景色令牌）
+- ✅ shadcn/ui primitives（`components/ui/*` 24 个组件）+ `components/data-table/*` 统一封装 + `components/charts/*` recharts 封装
+- ✅ 布局重构：sidebar 分组导航 + header（主题切换 + 用户菜单）+ ThemeProvider + Toaster
+- ✅ 旧令牌迁移（`text-muted`→`text-muted-foreground` 等别名兼容）
+
+**验证通过**：typecheck 0 errors、7 套主题切换正常、深浅色模式正常
+
+### ✅ 渠道图表增强（完成，2026-08-18）
+
+**已完成**：
+- ✅ Dashboard 新增渠道分布饼图（近 30 日按 credits 分布）：
+  - `components/charts/pie-chart.tsx` — 统一 PieChart 封装（donut 样式 + Legend + tooltip）
+  - `lib/usage/queries.ts` 新增 `getUsageByChannel`（按 channelId 聚合 + leftJoin 渠道名，null 回退 web/openai/anthropic 标签）
+- ✅ 渠道详情页 30 日趋势图 + 错误率曲线（`/admin/channels/[channelId]`）：
+  - 服务端直查 `usage_log` 按日聚合（calls/credits/errors）
+  - `AreaChart` 渲染调用趋势（tooltip 含 credits + 错误数）
+  - `LineChart` 渲染每日错误率 %（`errors / calls`，destructive 色）
+
+**验证通过**：typecheck 0 errors、lint 无新增 error、`npm run build` 成功
+
 ### 🚧 待完成
 
-- **Phase A**：视觉地基（oklch 主题 + shadcn primitives + 重做布局）
 - **Phase D 剩余**：
-  - API Key 批量创建（一次生成 N 个带前缀的 key）
-  - API Key 分组管理（新增 `key_groups` 表 + 组倍率）
+  - API Key 分组管理（新增 `key_groups` 表 + 组倍率；schema 已有 `group`/`groupMultiplier` 列未使用）
   - API Key 用量导出（CSV/JSON 导出统计）
-- **渠道图表增强**：
-  - Dashboard 新增渠道分布饼图
-  - 渠道详情页 30 日趋势图 + 错误率曲线
-- **其他体验（2026-06-26）**：
-  - 渠道 Tab 标签统一显示渠道自定义名称而非泛泛的"第三方"
-  - 定价管理页渠道筛选按 `channelId` 而非 `channelSource`
-  - 文本 playground 模型分组按渠道名称动态分组
 
 ---
 
