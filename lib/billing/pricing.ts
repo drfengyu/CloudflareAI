@@ -1,4 +1,4 @@
-import { usdToCredits, getCreditsPerUsd } from "./credits";
+﻿import { usdToCredits } from "./credits";
 import { getModelPricing, DEFAULT_PRICE_PER_MILLION, getPricingConfig } from "./model-pricing";
 
 /**
@@ -7,7 +7,8 @@ import { getModelPricing, DEFAULT_PRICE_PER_MILLION, getPricingConfig } from "./
  * - 图像模型：固定价格（fixedPrice），不受基础倍率影响
  * - 文本/嵌入模型：按 token 数 × 单价（inputPrice/outputPrice）× 基础倍率
  * - 基础倍率仅对文本模型生效（由管理员在 /admin/settings 设置）
- * - 1 credit = $1 USD (1:1)
+ * - 注意：model_pricing.inputPrice/outputPrice 的单位就是 cr（已含 1 USD=7.1 cr 折算），
+ *   计算时不再乘汇率；usdToCredits 保持 1:1 仅是数值透传
  */
 export async function calculateCredits(
   modelId: string,
@@ -22,13 +23,11 @@ export async function calculateCredits(
     // 读取基础倍率（仅对文本模型生效）
     const config = await getPricingConfig();
     const baseMultiplier = config.baseMultiplier;
-    // 读取 USD→credits 汇率（1 USD = ? credits，管理员在 /admin/settings 配置）
-    const ratio = await getCreditsPerUsd();
 
     if (!pricing) {
       // 表中没有该模型，使用默认价格
       const usd = ((inputTokens + outputTokens) / 1_000_000) * DEFAULT_PRICE_PER_MILLION;
-      const credits = usdToCredits(usd, ratio) * baseMultiplier;
+      const credits = usdToCredits(usd) * baseMultiplier;
       console.log(`[calculateCredits] no pricing record, fallback: ${credits} cr (base×${baseMultiplier})`);
       return credits;
     }
@@ -41,21 +40,20 @@ export async function calculateCredits(
     }
 
     // 文本/嵌入模型：按 token 计费 × 基础倍率
-    // inputPrice / outputPrice 单位为 $/1M tokens
+    // inputPrice / outputPrice 单位为 cr/1M tokens
     const inputUsd = (inputTokens / 1_000_000) * pricing.inputPrice;
     const outputUsd = (outputTokens / 1_000_000) * pricing.outputPrice;
     const totalUsd = inputUsd + outputUsd;
 
-    const credits = usdToCredits(totalUsd, ratio) * baseMultiplier;
+    const credits = usdToCredits(totalUsd) * baseMultiplier;
     console.log(
-      `[calculateCredits] ${modelId}: ${credits} cr (in=${inputTokens}@$${pricing.inputPrice}, out=${outputTokens}@$${pricing.outputPrice}, ratio=${ratio}, base×${baseMultiplier})`,
+      `[calculateCredits] ${modelId}: ${credits} cr (in=${inputTokens}@${pricing.inputPrice}, out=${outputTokens}@${pricing.outputPrice}, base×${baseMultiplier})`,
     );
     return credits;
   } catch (error) {
     console.error("[calculateCredits] ERROR - using fallback:", error);
     const config = await getPricingConfig();
-    const ratio = await getCreditsPerUsd();
     const usd = ((inputTokens + outputTokens) / 1_000_000) * DEFAULT_PRICE_PER_MILLION;
-    return usdToCredits(usd, ratio) * config.baseMultiplier;
+    return usdToCredits(usd) * config.baseMultiplier;
   }
 }
