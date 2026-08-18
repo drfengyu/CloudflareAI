@@ -1,4 +1,4 @@
-import { usdToCredits } from "./credits";
+import { usdToCredits, getCreditsPerUsd } from "./credits";
 import { getModelPricing, DEFAULT_PRICE_PER_MILLION, getPricingConfig } from "./model-pricing";
 
 /**
@@ -22,11 +22,13 @@ export async function calculateCredits(
     // 读取基础倍率（仅对文本模型生效）
     const config = await getPricingConfig();
     const baseMultiplier = config.baseMultiplier;
+    // 读取 USD→credits 汇率（1 USD = ? credits，管理员在 /admin/settings 配置）
+    const ratio = await getCreditsPerUsd();
 
     if (!pricing) {
       // 表中没有该模型，使用默认价格
       const usd = ((inputTokens + outputTokens) / 1_000_000) * DEFAULT_PRICE_PER_MILLION;
-      const credits = usdToCredits(usd) * baseMultiplier;
+      const credits = usdToCredits(usd, ratio) * baseMultiplier;
       console.log(`[calculateCredits] no pricing record, fallback: ${credits} cr (base×${baseMultiplier})`);
       return credits;
     }
@@ -44,15 +46,16 @@ export async function calculateCredits(
     const outputUsd = (outputTokens / 1_000_000) * pricing.outputPrice;
     const totalUsd = inputUsd + outputUsd;
 
-    const credits = usdToCredits(totalUsd) * baseMultiplier;
+    const credits = usdToCredits(totalUsd, ratio) * baseMultiplier;
     console.log(
-      `[calculateCredits] ${modelId}: ${credits} cr (in=${inputTokens}@$${pricing.inputPrice}, out=${outputTokens}@$${pricing.outputPrice}, base×${baseMultiplier})`,
+      `[calculateCredits] ${modelId}: ${credits} cr (in=${inputTokens}@$${pricing.inputPrice}, out=${outputTokens}@$${pricing.outputPrice}, ratio=${ratio}, base×${baseMultiplier})`,
     );
     return credits;
   } catch (error) {
     console.error("[calculateCredits] ERROR - using fallback:", error);
     const config = await getPricingConfig();
+    const ratio = await getCreditsPerUsd();
     const usd = ((inputTokens + outputTokens) / 1_000_000) * DEFAULT_PRICE_PER_MILLION;
-    return usdToCredits(usd) * config.baseMultiplier;
+    return usdToCredits(usd, ratio) * config.baseMultiplier;
   }
 }
