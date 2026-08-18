@@ -187,10 +187,6 @@ export default async function DashboardPage({
               data={channelUsage}
               dataKey="credits"
               nameKey="name"
-              tooltipFormatter={(value, _name, item) => {
-                const p = item as { payload?: { name?: string; calls?: number } } | null;
-                return `${Math.round(Number(value))} cr（${p?.payload?.calls ?? 0} 次调用）`;
-              }}
               emptyMessage="暂无渠道数据"
             />
           </CardContent>

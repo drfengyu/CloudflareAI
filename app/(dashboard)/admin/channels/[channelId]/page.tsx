@@ -251,11 +251,6 @@ export default async function ChannelDetailPage({
             height={220}
             color="var(--chart-1)"
             yAxisLabel="调用次数"
-            tooltipFormatter={(value: unknown, _name: unknown, item: { payload: { date: string; credits: number; errors: number } }) => [
-              `${Number(value).toLocaleString()} 次 · ${Number(item?.payload?.credits ?? 0).toLocaleString()} cr · 错误 ${item?.payload?.errors ?? 0}`,
-              "调用",
-            ]}
-            xAxisFormatter={(v: string) => v}
             emptyMessage="暂无调用数据"
           />
         </CardContent>
@@ -275,11 +270,6 @@ export default async function ChannelDetailPage({
             height={200}
             color="var(--destructive)"
             yAxisLabel="错误率 %"
-            tooltipFormatter={(value: unknown, _name: unknown, item: { payload: { calls: number; errors: number } }) => [
-              `${value}%`,
-              `错误 ${item?.payload?.errors ?? 0} / 总调用 ${item?.payload?.calls ?? 0}`,
-            ]}
-            xAxisFormatter={(v: string) => v}
             emptyMessage="暂无调用数据"
           />
         </CardContent>

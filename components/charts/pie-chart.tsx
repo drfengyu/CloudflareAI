@@ -16,11 +16,6 @@ interface PieChartProps<T> {
   nameKey: string
   height?: number
   colors?: readonly string[]
-  tooltipFormatter?: (
-    value: unknown,
-    name: unknown,
-    item: unknown,
-  ) => React.ReactNode
   legend?: boolean
   emptyMessage?: string
 }
@@ -31,7 +26,6 @@ export function PieChart<T extends Record<string, unknown>>({
   nameKey,
   height = 250,
   colors = CHART_COLORS,
-  tooltipFormatter,
   legend = true,
   emptyMessage,
 }: PieChartProps<T>) {
@@ -58,7 +52,10 @@ export function PieChart<T extends Record<string, unknown>>({
         </Pie>
         <Tooltip
           {...chartConfig.tooltip}
-          formatter={tooltipFormatter}
+          formatter={(value: unknown, name: unknown) => [
+            `${Math.round(Number(value)).toLocaleString()}`,
+            String(name ?? ""),
+          ]}
         />
         {legend && (
           <Legend
