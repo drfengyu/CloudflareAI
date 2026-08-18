@@ -19,8 +19,11 @@ import {
   Key,
   BarChart3,
   Cpu,
+  Activity,
 } from "lucide-react";
 import { ChannelActions } from "./channel-actions";
+import { AreaChart } from "@/components/charts/area-chart";
+import { LineChart } from "@/components/charts/line-chart";
 
 export const dynamic = "force-dynamic";
 
@@ -124,6 +127,26 @@ export default async function ChannelDetailPage({
     .orderBy(desc(sql<number>`count(*)`))
     .limit(10);
 
+  // 30-day daily trend (calls / credits / errors / error rate)
+  const dailyTrend = await db
+    .select({
+      date: sql<string>`date(${usageLogs.createdAt} / 1000, 'unixepoch')`,
+      calls: sql<number>`count(*)`,
+      credits: sql<number>`coalesce(sum(${usageLogs.creditsUsed}), 0)`,
+      errors: sql<number>`sum(case when ${usageLogs.status} = 'error' then 1 else 0 end)`,
+    })
+    .from(usageLogs)
+    .where(eq(usageLogs.channelId, channelId))
+    .groupBy(sql`date(${usageLogs.createdAt} / 1000, 'unixepoch')`)
+    .orderBy(sql`date(${usageLogs.createdAt} / 1000, 'unixepoch') ASC`)
+    .limit(30);
+
+  const trendData = dailyTrend.map((d) => ({
+    ...d,
+    dateLabel: (d.date || "").slice(5), // MM-DD
+    errorRate: d.calls > 0 ? Number(((d.errors / d.calls) * 100).toFixed(2)) : 0,
+  }));
+
   // Channel model pricing entries
   const channelModels = await db
     .select({
@@ -211,6 +234,54 @@ export default async function ChannelDetailPage({
               </p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* 30 日趋势 */}
+      <Card>
+        <CardContent className="pt-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Activity className="h-4 w-4" />
+            <h3 className="text-sm font-medium">近 30 日调用趋势</h3>
+          </div>
+          <AreaChart
+            data={trendData}
+            dataKey="calls"
+            xAxisKey="dateLabel"
+            height={220}
+            color="var(--chart-1)"
+            yAxisLabel="调用次数"
+            tooltipFormatter={(value: unknown, _name: unknown, item: { payload: { date: string; credits: number; errors: number } }) => [
+              `${Number(value).toLocaleString()} 次 · ${Number(item?.payload?.credits ?? 0).toLocaleString()} cr · 错误 ${item?.payload?.errors ?? 0}`,
+              "调用",
+            ]}
+            xAxisFormatter={(v: string) => v}
+            emptyMessage="暂无调用数据"
+          />
+        </CardContent>
+      </Card>
+
+      {/* 错误率曲线 */}
+      <Card>
+        <CardContent className="pt-5">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 className="h-4 w-4" />
+            <h3 className="text-sm font-medium">近 30 日错误率（%）</h3>
+          </div>
+          <LineChart
+            data={trendData}
+            dataKey="errorRate"
+            xAxisKey="dateLabel"
+            height={200}
+            color="var(--destructive)"
+            yAxisLabel="错误率 %"
+            tooltipFormatter={(value: unknown, _name: unknown, item: { payload: { calls: number; errors: number } }) => [
+              `${value}%`,
+              `错误 ${item?.payload?.errors ?? 0} / 总调用 ${item?.payload?.calls ?? 0}`,
+            ]}
+            xAxisFormatter={(v: string) => v}
+            emptyMessage="暂无调用数据"
+          />
         </CardContent>
       </Card>
 

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db/d1-http";
-import { usageLogs, users, apiKeys, type UsageLog } from "@/lib/db/schema";
+import { usageLogs, users, apiKeys, channels, type UsageLog } from "@/lib/db/schema";
 import { desc, eq, gte, and, sql } from "drizzle-orm";
 
 /** 获取用户今日用量统计（Phase C: credits 模型） */
@@ -117,6 +117,51 @@ export async function getUsageByModel(userId: string, days = 30) {
     .limit(10);
 
   return rows;
+}
+
+/** 按渠道统计用量（渠道分布饼图） */
+export async function getUsageByChannel(userId: string, days = 30) {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+  startDate.setHours(0, 0, 0, 0);
+
+  const rows = await db
+    .select({
+      channelId: usageLogs.channelId,
+      channel: usageLogs.channel,
+      channelName: channels.name,
+      calls: sql<number>`COUNT(*)`,
+      credits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
+    })
+    .from(usageLogs)
+    .leftJoin(channels, eq(usageLogs.channelId, channels.id))
+    .where(
+      and(
+        eq(usageLogs.userId, userId),
+        gte(usageLogs.createdAt, startDate),
+      ),
+    )
+    .groupBy(usageLogs.channelId)
+    .orderBy(desc(sql`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`))
+    .limit(8);
+
+  return rows.map((r) => {
+    const name =
+      r.channelName ??
+      (r.channel === "web"
+        ? "站内 Playground"
+        : r.channel === "openai"
+          ? "OpenAI 客户端"
+          : r.channel === "anthropic"
+            ? "Anthropic 客户端"
+            : "未绑定渠道");
+    return {
+      channelId: r.channelId,
+      name,
+      calls: r.calls,
+      credits: r.credits,
+    };
+  });
 }
 
 /** 按日统计用量（Phase C: 用于趋势图） */

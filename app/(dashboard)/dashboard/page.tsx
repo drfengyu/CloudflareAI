@@ -8,6 +8,7 @@ import {
   getRecentUsage,
   getDailyUsage,
   getUsageByModel,
+  getUsageByChannel,
   getHourlyUsageToday,
 } from "@/lib/usage/queries";
 import { formatCredits, creditsToUsd, getCreditsPerUsd } from "@/lib/billing/credits";
@@ -16,6 +17,7 @@ import { Activity, Wallet, TrendingUp, Clock } from "lucide-react";
 import { UsageTrendChart } from "@/components/dashboard/usage-trend-chart";
 import { ModelDistributionChart } from "@/components/dashboard/model-distribution-chart";
 import { HourlyUsageChart } from "@/components/dashboard/hourly-usage-chart";
+import { PieChart } from "@/components/charts/pie-chart";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +31,7 @@ export default async function DashboardPage({
   const range = params.range || "today"; // today | week | month
 
   // 使用 try-catch 包裹每个查询，防止单个查询失败导致整个页面崩溃
-  const [today, month, balanceInfo, recent, hourlyUsage, dailyUsage, modelUsage, ratio] = await Promise.all([
+  const [today, month, balanceInfo, recent, hourlyUsage, dailyUsage, modelUsage, channelUsage, ratio] = await Promise.all([
     getTodayUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 })),
     getMonthUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 })),
     getUserTotalBalance(userId).catch(() => ({ permanent: 0, temporary: 0, total: 0 })),
@@ -37,6 +39,7 @@ export default async function DashboardPage({
     getHourlyUsageToday(userId).catch(() => []),
     getDailyUsage(userId, range === "month" ? 30 : 7).catch(() => []),
     getUsageByModel(userId, 30).catch(() => []),
+    getUsageByChannel(userId, 30).catch(() => []),
     getCreditsPerUsd().catch(() => 1),
   ]);
 
@@ -171,6 +174,25 @@ export default async function DashboardPage({
           </CardHeader>
           <CardContent>
             <ModelDistributionChart data={modelUsage} />
+          </CardContent>
+        </Card>
+
+        {/* 渠道分布 */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">近 30 日渠道分布</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PieChart
+              data={channelUsage}
+              dataKey="credits"
+              nameKey="name"
+              tooltipFormatter={(value, _name, item) => {
+                const p = item as { payload?: { name?: string; calls?: number } } | null;
+                return `${Math.round(Number(value))} cr（${p?.payload?.calls ?? 0} 次调用）`;
+              }}
+              emptyMessage="暂无渠道数据"
+            />
           </CardContent>
         </Card>
 
