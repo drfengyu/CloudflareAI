@@ -38,8 +38,8 @@ export default async function DashboardPage({
     getRecentUsage(userId, 10).catch(() => []),
     getHourlyUsageToday(userId).catch(() => []),
     getDailyUsage(userId, range === "month" ? 30 : 7).catch(() => []),
-    getUsageByModel(userId, 30).catch(() => []),
-    getUsageByChannel(userId, 30).catch(() => []),
+    getUsageByModel(userId, range === "today" ? 1 : range === "week" ? 7 : 30).catch(() => []),
+    getUsageByChannel(userId, range === "today" ? 1 : range === "week" ? 7 : 30).catch(() => []),
     getCreditsPerUsd().catch(() => 1),
   ]);
 
@@ -170,7 +170,9 @@ export default async function DashboardPage({
         {/* 模型分布 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">近 30 日模型分布（Top 10）</CardTitle>
+            <CardTitle className="text-base">
+              {range === "today" ? "今日" : range === "week" ? "近 7 日" : "近 30 日"}模型分布（Top 10）
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <ModelDistributionChart data={modelUsage} />
@@ -180,7 +182,9 @@ export default async function DashboardPage({
         {/* 渠道分布 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">近 30 日渠道分布</CardTitle>
+            <CardTitle className="text-base">
+              {range === "today" ? "今日" : range === "week" ? "近 7 日" : "近 30 日"}渠道分布
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <PieChart
