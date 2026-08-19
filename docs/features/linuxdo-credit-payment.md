@@ -18,18 +18,56 @@ LinuxDO Credit 提供两种协议：
 
 选易支付兼容接口的原因：签名算法、下单/回调/查询流程与项目里已有的 `lib/payment/epay.ts` 完全一致，可直接复用订单表、幂等结算、对账与定时任务，改动最小、风险最低。
 
-## 2. 前置条件（LinuxDO 侧）
+## 2. 前置条件（在 credit.linux.do 上操作）
 
-1. 登录 **LINUX DO**（https://linux.do）账号。
-2. 进入 **Credit 控制台**（https://credit.linux.do），开通/创建 **API Key**。
-3. 记录两项关键信息：
-   - `pid`：Client ID（商户号）
-   - `key`：Client Secret（签名密钥，**妥善保管，勿泄露**）
-4. 在应用配置里填写**应用级回调地址**（兜底）：
-   - `notify_url`：`https://cloudai.fuwari.fun/api/pay/linuxdo/notify`
-   - 或 `redirect_uri`（支付成功回跳页）。本项目下单时会传订单级 `notify_url` / `return_url`，覆盖应用配置，因此应用级可不填。
+官方集市中心：https://credit.linux.do/merchant（需要先登录 LINUX DO 账号，且账号有可用的积分）。
 
-> 若使用官方 LDC 接口（Ed25519），则需在控制台创建应用并上传商户公钥；本实现未采用。
+### 步骤 1：创建应用
+
+1. 打开 **集市中心** https://credit.linux.do/merchant
+2. 点击右上角 **「创建应用」** 按钮
+3. 填写应用信息（以本项目生产域名为例）：
+
+| 字段 | 填写内容 |
+| --- | --- |
+| 应用名称 | `浅梦AI服务平台`（可自定义） |
+| 应用主页 | `https://cloudai.fuwari.fun` |
+| 回调地址（return_url） | `https://cloudai.fuwari.fun/wallet`（支付成功回跳页） |
+| 通知地址（notify_url） | `https://cloudai.fuwari.fun/api/pay/linuxdo/notify` |
+
+> 本项目下单时会传订单级 `notify_url`/`return_url` 覆盖应用配置，因此应用级回调地址填对即可，不填也能用。
+
+### 步骤 2：获取 API 凭证
+
+1. 在集市中心**顶部右侧的选择器**中选中刚创建的应用
+2. 在 **「API 配置」** 面板中查看两项凭证：
+   - `Client ID` → 对应本系统设置的 **Client ID (PID)**
+   - `Client Secret` → 对应本系统设置的 **Client Secret (KEY)**
+
+> `Client Secret` 用于签名验证，**妥善保管，切勿泄露**，也不要提交到 git。
+
+### 步骤 3：在本系统后台填写配置
+
+路径：登录本系统管理员 → 侧边栏 **系统设置** → **在线充值（LinuxDO 积分）**
+
+| 本系统设置项 | 填写内容 |
+| --- | --- |
+| 启用 LinuxDO 积分支付 | 勾选 |
+| 网关地址 | `https://credit.linux.do/epay`（默认值即可） |
+| Client ID (PID) | 步骤 2 的 `Client ID` |
+| Client Secret (KEY) | 步骤 2 的 `Client Secret` |
+| 汇率 (1 积分 = ? cr) | 例如 `1`（1 积分到账 1 cr） |
+| 最低/最高充值（积分） | 例如 `1` / `1000` |
+
+保存后钱包充值弹窗即出现「LinuxDO 积分」按钮，用户选择后跳转 `credit.linux.do` 认证界面完成支付。
+
+> 协议说明：本实现采用 LinuxDO 的 **易支付兼容接口**（`type=epay`，MD5 签名），与官方文档「3.3 快速集成 New API」一致，只是把 New API 的 `epay/notify` 换成我们的 `/api/pay/linuxdo/notify`。
+
+### 注意事项
+
+- **收费/手续费**：积分流转手续费为**动态费率**，由**服务方（收款方）**承担——即用户支付的积分会有部分作为手续费，实际到账少于面额，请自行评估充值汇率。
+- **消费方**：付款用户需拥有 linux.do 账号且有足够积分，通过 LINUX DO Connect (OAuth) 认证后完成支付。
+- **争议处理**：平台支持服务方与消费方的双向争议处理。
 
 ## 3. 后台配置（本系统）
 
