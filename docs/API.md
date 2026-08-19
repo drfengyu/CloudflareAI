@@ -27,7 +27,6 @@ curl "$OPENAI_BASE_URL/chat/completions" \
   -H "Content-Type: application/json" \
   -d '{"model":"@cf/meta/llama-4-scout","messages":[{"role":"user","content":"你好"}]}'
 ```
-
 ## Anthropic 兼容（Claude Code）
 
 - `POST /api/v1/messages` — Anthropic Messages 协议，支持 `stream`、`tools`
