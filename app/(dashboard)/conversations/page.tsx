@@ -11,11 +11,12 @@ export const dynamic = "force-dynamic";
 export default async function ConversationsPage({
   searchParams,
 }: {
-  searchParams: { page?: string; search?: string };
+  searchParams: Promise<{ page?: string; search?: string }>;
 }) {
   const userId = await requireUser();
-  const page = parseInt(searchParams.page || "1");
-  const search = searchParams.search;
+  const params = await searchParams;
+  const page = parseInt(params.page || "1");
+  const search = params.search;
 
   const { conversations, total } = await getConversationHistory(userId, page, 20, search).catch(
     () => ({ conversations: [], total: 0 }),
