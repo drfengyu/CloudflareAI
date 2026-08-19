@@ -77,7 +77,10 @@ export function RechargeOrdersCard({ orders, highlightOrderNo, justReturned }: P
         now - new Date(o.createdAt).getTime() < AUTO_POLL_MAX_AGE_MS,
     );
     if (pending.length === 0) {
-      if (highlightOrderNo) refresh(highlightOrderNo);
+      if (highlightOrderNo) {
+        const t = setTimeout(() => refresh(highlightOrderNo), 0);
+        return () => clearTimeout(t);
+      }
       return;
     }
     const timer = setInterval(() => {
@@ -136,8 +139,9 @@ export function RechargeOrdersCard({ orders, highlightOrderNo, justReturned }: P
                   <Badge tone={meta.tone}>{meta.label}</Badge>
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {order.channel === "alipay" ? "支付宝" : order.channel === "wechat" ? "微信支付" : order.channel}
-                  {" · "}¥{order.amountCny} · {new Date(order.createdAt).toLocaleString()}
+                  {order.channel === "alipay" ? "支付宝" : order.channel === "wechat" ? "微信支付" : order.channel === "linuxdo" ? "LinuxDO 积分" : order.channel}
+                  {" · "}{order.channel === "linuxdo" ? "" : "¥"}{order.amountCny}
+                  {order.channel === "linuxdo" ? " 积分" : ""} · {new Date(order.createdAt).toLocaleString()}
                   {order.paidAt && ` · ${new Date(order.paidAt).toLocaleString()} 支付`}
                 </p>
               </div>

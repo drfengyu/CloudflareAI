@@ -3,6 +3,7 @@ import { paymentOrders, topups, users } from "@/lib/db/schema";
 import { and, desc, eq, lte, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { getEpayConfig, queryEpayOrder } from "./epay";
+import { getLinuxdoConfig, queryLinuxdoOrder } from "./linuxdo";
 
 /**
  * 支付订单：创建 / 查询 / 支付后发放余额。
@@ -24,24 +25,56 @@ export function generateOrderNo(): string {
   return `TU${ts}${rand}`;
 }
 
-/** 校验充值金额是否在合法范围（按配置）。 */
-export async function validateRechargeAmount(amountCny: number): Promise<{
+/** 支付渠道配置（按 channel 选择易支付或 LinuxDO 积分）。 */
+export async function getRechargeChannel(channel: string): Promise<{
+  enabled: boolean;
+  rate: number;
+  minCny: number;
+  maxCny: number;
+  label: string;
+  reason?: string;
+}> {
+  if (channel === "linuxdo") {
+    const cfg = await getLinuxdoConfig();
+    return {
+      enabled: cfg.enabled,
+      rate: cfg.rate,
+      minCny: cfg.minCny,
+      maxCny: cfg.maxCny,
+      label: "LinuxDO 积分",
+      reason: "LinuxDO 积分支付未开启",
+    };
+  }
+  const cfg = await getEpayConfig();
+  return {
+    enabled: cfg.enabled,
+    rate: cfg.rate,
+    minCny: cfg.minCny,
+    maxCny: cfg.maxCny,
+    label: "易支付",
+    reason: "在线充值功能未开启",
+  };
+}
+
+/** 校验充值金额是否在合法范围（按渠道配置）。 */
+export async function validateRechargeAmount(amount: number, channel: string): Promise<{
   ok: boolean;
   reason?: string;
   rate?: number;
 }> {
-  const cfg = await getEpayConfig();
-  if (!cfg.enabled) return { ok: false, reason: "在线充值功能未开启" };
-  if (!Number.isFinite(amountCny) || amountCny <= 0) {
+  const ch = await getRechargeChannel(channel);
+  if (!ch.enabled) return { ok: false, reason: ch.reason };
+  if (!Number.isFinite(amount) || amount <= 0) {
     return { ok: false, reason: "金额无效" };
   }
-  if (amountCny < cfg.minCny) {
-    return { ok: false, reason: `单笔最低充值 ¥${cfg.minCny}` };
+  const unit = channel === "linuxdo" ? " 积分" : " 元";
+  if (amount < ch.minCny) {
+    return { ok: false, reason: `单笔最低充值 ${ch.minCny}${unit}` };
   }
-  if (amountCny > cfg.maxCny) {
-    return { ok: false, reason: `单笔最高充值 ¥${cfg.maxCny}` };
+  if (amount > ch.maxCny) {
+    return { ok: false, reason: `单笔最高充值 ${ch.maxCny}${unit}` };
   }
-  return { ok: true, rate: cfg.rate };
+  return { ok: true, rate: ch.rate };
 }
 
 /** 创建充值订单（未支付）。 */
@@ -50,7 +83,7 @@ export async function createRechargeOrder(
   channel: string,
 ): Promise<{ orderId: string; orderNo: string; credits: number }> {
   const userId = await requireUser();
-  const check = await validateRechargeAmount(amountCny);
+  const check = await validateRechargeAmount(amountCny, channel);
   if (!check.ok || check.rate === undefined) {
     throw new Error(check.reason ?? "充值金额校验失败");
   }
@@ -160,12 +193,14 @@ export async function settleRechargeOrder(
     .where(eq(users.id, order.userId));
 
   // 4. 记充值流水（type=5 在线充值）
+  const amountLabel =
+    order.channel === "linuxdo" ? `${order.amountCny} 积分` : `¥${order.amountCny}`;
   await db.insert(topups).values({
     id: crypto.randomUUID(),
     userId: order.userId,
     amount: order.credits,
     type: 5,
-    description: `在线充值 ¥${order.amountCny}（订单 ${orderNo}）`,
+    description: `在线充值 ${amountLabel}（订单 ${orderNo}）`,
     createdAt: new Date(),
   });
 
@@ -200,11 +235,6 @@ export async function reconcileOrder(
   orderNo: string,
   opts: { closeMissing?: boolean } = {},
 ): Promise<{ reconciled: boolean; reason?: string; orderStatus?: number }> {
-  const cfg = await getEpayConfig();
-  if (!cfg.enabled || !cfg.apiUrl) {
-    return { reconciled: false, reason: "在线充值未开启" };
-  }
-
   const order = await getOrderByNo(orderNo);
   if (!order) return { reconciled: false, reason: "订单不存在" };
   if (order.status === PAY_STATUS.COMPLETED) {
@@ -214,9 +244,18 @@ export async function reconcileOrder(
     return { reconciled: true, orderStatus: order.status }; // 已关闭
   }
 
-  const result = await queryEpayOrder(cfg, orderNo);
+  // 按渠道选择对应的支付网关配置与查询
+  const isLinuxdo = order.channel === "linuxdo";
+  const cfg = isLinuxdo ? await getLinuxdoConfig() : await getEpayConfig();
+  if (!cfg.enabled || !cfg.apiUrl) {
+    return { reconciled: false, reason: "在线充值未开启" };
+  }
+
+  const result = isLinuxdo
+    ? await queryLinuxdoOrder(cfg, orderNo)
+    : await queryEpayOrder(cfg, orderNo);
   if (!result.ok) {
-    return { reconciled: false, reason: `查询易支付失败：${result.msg ?? `code=${result.code}`}` };
+    return { reconciled: false, reason: `查询支付网关失败：${result.msg ?? `code=${result.code}`}` };
   }
 
   if (result.tradeStatus === "TRADE_SUCCESS" && result.tradeNo) {

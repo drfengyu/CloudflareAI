@@ -17,6 +17,14 @@
   - **下单防刷/限流**：`createPayOrder` 每用户 1 分钟最多 5 笔订单 + 支付渠道白名单校验
   - **定时对账**（`/api/cron/reconcile-orders`）：Vercel Cron 每 15 分钟对账超时待支付订单，兜底到账/关闭，鉴权与既有 cron 一致（`CRON_SECRET`）
 - **侧边栏新增「订单管理」入口**（管理分组）
+- **LinuxDO Credit（积分）在线充值**
+  - **新支付渠道 `linuxdo`**：采用 LinuxDO **易支付兼容接口**（`type=epay`，MD5 签名），复用既有订单/幂等结算/对账体系，无需迁移
+  - **`lib/payment/linuxdo.ts`**：配置读取（`ldpay_*`）、下单 URL 构建（`/epay/pay/submit.php`）、订单查询（`/epay/api.php`，GET，解析 `code/status`），签名复用 `epaySign`/`epayVerify`
+  - **回调接口 `/api/pay/linuxdo/notify`**：兼容 HTTP GET（LinuxDO 通知方式）与 POST 表单，验签 + `pid`/金额校验 + 幂等发放永久余额
+  - **渠道感知**：`lib/payment/order.ts` 按 `order.channel` 选择汇率/限额（`getRechargeChannel`），`reconcileOrder` 按渠道分发查询，对账/关闭/定时任务通吃两渠道
+  - **后台配置**：`/admin/settings` 新增「在线充值（LinuxDO 积分）」卡片（`LinuxdoSettingsForm` + `updateLinuxdoSettings`），含网关地址/Client ID/密钥/汇率/限额
+  - **钱包 UI**：充值弹窗新增「LinuxDO 积分」按钮（启用时才显示），金额单位切换为「积分」；订单卡片/管理端表格新增渠道文案
+  - **文档**：`docs/features/linuxdo-credit-payment.md` 详细接入指南 + `docs/creditapi.md` 官方接口存档
 
 ### 变更
 

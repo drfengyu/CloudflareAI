@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/usage/meter";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { getEpayConfig, buildEpayPayUrl } from "@/lib/payment/epay";
+import { getLinuxdoConfig, buildLinuxdoPayUrl } from "@/lib/payment/linuxdo";
 import { createRechargeOrder, getOrderByNo, reconcileOrder } from "@/lib/payment/order";
 import { checkRateLimit } from "@/lib/rate-limit";
 
@@ -101,13 +102,8 @@ export async function createPayOrder(amountCny: number, channel: string) {
   }
 
   // 校验支付渠道白名单
-  if (channel !== "alipay" && channel !== "wechat" && channel !== "qqpay") {
+  if (channel !== "alipay" && channel !== "wechat" && channel !== "qqpay" && channel !== "linuxdo") {
     throw new Error("不支持的支付渠道");
-  }
-
-  const cfg = await getEpayConfig();
-  if (!cfg.enabled) {
-    throw new Error("在线充值功能未开启");
   }
 
   const { orderNo, credits } = await createRechargeOrder(amountCny, channel);
@@ -117,15 +113,26 @@ export async function createPayOrder(amountCny: number, channel: string) {
   const protocol = host.includes("localhost") || host.startsWith("127.") ? "http" : "https";
   const origin = `${protocol}://${host}`;
 
-  const notifyUrl = `${origin}/api/pay/epay/notify`;
+  const notifyUrl =
+    channel === "linuxdo"
+      ? `${origin}/api/pay/linuxdo/notify`
+      : `${origin}/api/pay/epay/notify`;
   const returnUrl = `${origin}/wallet?paid=1&orderNo=${orderNo}`;
 
-  const built = buildEpayPayUrl(
-    cfg,
-    { orderNo, amountCny, channel },
-    notifyUrl,
-    returnUrl,
-  );
+  let built: { url: string; params: Record<string, string> } | null;
+  if (channel === "linuxdo") {
+    const cfg = await getLinuxdoConfig();
+    if (!cfg.enabled) {
+      throw new Error("LinuxDO 积分支付未开启");
+    }
+    built = buildLinuxdoPayUrl(cfg, { orderNo, amountCny }, notifyUrl, returnUrl);
+  } else {
+    const cfg = await getEpayConfig();
+    if (!cfg.enabled) {
+      throw new Error("在线充值功能未开启");
+    }
+    built = buildEpayPayUrl(cfg, { orderNo, amountCny, channel }, notifyUrl, returnUrl);
+  }
 
   if (!built) {
     throw new Error("支付网关配置不完整，请联系管理员");
@@ -141,8 +148,6 @@ const ORDER_STATUS_TEXT: Record<number, string> = {
   3: "已关闭",
   9: "异常",
 };
-
-export const PAY_STATUS_TEXT = ORDER_STATUS_TEXT;
 
 /**
  * 查询当前用户订单状态（供钱包页轮询）。

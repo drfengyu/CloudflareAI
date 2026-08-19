@@ -69,6 +69,7 @@
 - ✅ 订单管理 `/admin/orders`：按状态筛选 + 手动对账补发/关闭
 - ✅ 服务端主动对账：`api.php?act=order` 查询真实状态（回调丢失兜底），Vercel Cron 每 15 分钟定时对账
 - ✅ 钱包订单卡片 + 回跳确认（`?paid=1&orderNo=xxx`）+ 待支付轮询
+- ✅ LinuxDO 积分充值：钱包新增「LinuxDO 积分」渠道（易支付兼容协议，MD5 签名），`/admin/settings` 独立配置（Client ID/密钥/汇率/限额），回调+对账+幂等发放与易支付共用一套订单体系（详见 `docs/features/linuxdo-credit-payment.md`）
 - ✅ Free Plan 模型标记：5 个需 Workers Paid 模型（deepseek-v4、glm-5.2、kimi-k2.6 等）在模型库/定价页显示徽章，Playground 自动过滤
 - ✅ Dashboard 模型/渠道分布图跟随时间范围切换（今日/本周/本月）
 - ✅ 计费口径澄清：`model_pricing` 表价即 cr（不再二次乘汇率），修复 Dashboard 500（server→client 函数传递）

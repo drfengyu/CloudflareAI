@@ -33,6 +33,7 @@ const CHANNEL_LABEL: Record<string, string> = {
   alipay: "支付宝",
   wechat: "微信支付",
   qqpay: "QQ 钱包",
+  linuxdo: "LinuxDO 积分",
 };
 
 export function AdminOrdersTable({ orders }: { orders: AdminOrderRow[] }) {

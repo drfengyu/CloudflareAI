@@ -36,6 +36,7 @@ Next.js 16 App Router + React 19 + Tailwind v4 + Drizzle ORM + Auth.js v5, deplo
   - `model_pricing` prices are already in credits — do NOT multiply by the exchange rate again (regression fixed in commit 1e1a599). `base_multiplier` is 100 in prod.
   - Roles: `user.role` 1=user / 10=admin / 100=root. `proxy.ts` + server-side double gate.
 - Third-party upstreams: `lib/channels/*` route by `apiKey.channelId` (openai / anthropic / deepseek adapters). The default `default-cloudflare` channel serves hosted models.
+- Payment: two online-recharge gateways share `payment_order` + `lib/payment/order.ts` (channel-aware). epay (彩虹易支付, `lib/payment/epay.ts`) and LinuxDO Credit (`lib/payment/linuxdo.ts`, epay-compatible protocol). Per-channel config/rate in the `option` table (`epay_*` / `ldpay_*`); notifies at `/api/pay/{epay,linuxdo}/notify`. See `docs/features/linuxdo-credit-payment.md`.
 - System settings live in the `option` KV table, read via `lib/settings/index.ts` (JSON-aware). `revalidatePath` is needed for immediate UI effects.
 
 ## Gotchas

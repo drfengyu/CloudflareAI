@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { updateBasicSettings, updatePricingSettings, updateCheckinSettings, updateAuthChannels, updateEpaySettings } from "./actions";
+import { updateBasicSettings, updatePricingSettings, updateCheckinSettings, updateAuthChannels, updateEpaySettings, updateLinuxdoSettings } from "./actions";
 import { toast } from "sonner";
 
 interface SettingsFormProps {
@@ -646,6 +646,165 @@ export function EpaySettingsForm({ initialSettings }: EpaySettingsFormProps) {
             1 元 = {rateNum} cr（如 ¥100 → {Math.floor(100 * rateNum)} cr，永久余额，无有效期）
             <br />
             回调地址：<code className="font-mono">https://cloudai.fuwari.fun/api/pay/epay/notify</code>
+          </p>
+        </div>
+      )}
+
+      <Button type="submit" disabled={loading}>
+        {loading ? "保存中..." : "保存设置"}
+      </Button>
+    </form>
+  );
+}
+
+interface LinuxdoSettingsFormProps {
+  initialSettings: {
+    enabled: boolean;
+    apiUrl: string;
+    pid: string;
+    key: string;
+    rate: string;
+    minCny: string;
+    maxCny: string;
+  };
+}
+
+export function LinuxdoSettingsForm({ initialSettings }: LinuxdoSettingsFormProps) {
+  const [enabled, setEnabled] = useState(initialSettings.enabled);
+  const [apiUrl, setApiUrl] = useState(initialSettings.apiUrl);
+  const [pid, setPid] = useState(initialSettings.pid);
+  const [key, setKey] = useState(initialSettings.key);
+  const [rate, setRate] = useState(initialSettings.rate);
+  const [minCny, setMinCny] = useState(initialSettings.minCny);
+  const [maxCny, setMaxCny] = useState(initialSettings.maxCny);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await updateLinuxdoSettings({ enabled, apiUrl, pid, key, rate, minCny, maxCny });
+      toast.success("LinuxDO 积分支付设置已保存");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const rateNum = parseFloat(rate);
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="ldpay-enabled"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+          className="h-4 w-4 rounded border-border"
+        />
+        <label htmlFor="ldpay-enabled" className="text-sm font-medium">
+          启用 LinuxDO 积分支付
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label className="block text-sm font-medium mb-1">网关地址</label>
+          <input
+            type="text"
+            value={apiUrl}
+            onChange={(e) => setApiUrl(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="https://credit.linux.do/epay"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            LinuxDO 网关基址（不带结尾斜杠），默认官方地址即可
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">Client ID (PID)</label>
+          <input
+            type="text"
+            value={pid}
+            onChange={(e) => setPid(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="在 credit.linux.do 控制台创建 API Key"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Client Secret (KEY)</label>
+        <input
+          type="password"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          disabled={!enabled}
+          className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-mono disabled:opacity-50"
+          placeholder="API Key 密钥，仅服务端使用"
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          用于 MD5 签名，仅服务端使用，请妥善保管
+        </p>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">汇率 (1 积分 = ? cr)</label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="1"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">最低充值 (积分)</label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={minCny}
+            onChange={(e) => setMinCny(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="1"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">最高充值 (积分)</label>
+          <input
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={maxCny}
+            onChange={(e) => setMaxCny(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="1000"
+          />
+        </div>
+      </div>
+
+      {enabled && Number.isFinite(rateNum) && rateNum > 0 && (
+        <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+          <p className="text-xs text-muted-foreground">
+            <strong>当前规则：</strong>
+            {minCny || "1"} – {maxCny || "1000"} 积分，1 积分 = {rateNum} cr
+            （如 100 积分 → {Math.floor(100 * rateNum)} cr，永久余额，无有效期）
+            <br />
+            回调地址：<code className="font-mono">https://cloudai.fuwari.fun/api/pay/linuxdo/notify</code>
+            <br />
+            文档：<code className="font-mono">https://credit.linux.do/docs/api</code>
           </p>
         </div>
       )}

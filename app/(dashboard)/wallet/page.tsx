@@ -13,6 +13,7 @@ import { CheckinCalendarCard } from "./checkin-calendar-card";
 import { RechargeOrdersCard, type SerializedPayOrder } from "./recharge-orders-card";
 import { formatCredits, creditsToUsd, getCreditsPerUsd } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
+import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
 
 export const dynamic = "force-dynamic";
 
@@ -110,6 +111,8 @@ export default async function WalletPage({
   const justReturned = params.paid === "1";
   const highlightOrderNo = params.orderNo ?? undefined;
 
+  const linuxdoConfig = await getLinuxdoConfig();
+
   return (
     <>
       <PageHeader
@@ -155,7 +158,7 @@ export default async function WalletPage({
                 </div>
               </div>
             </div>
-            <RedeemCodeDialog />
+            <RedeemCodeDialog linuxdoEnabled={linuxdoConfig.enabled} />
           </CardContent>
         </Card>
 

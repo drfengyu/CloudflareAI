@@ -275,3 +275,55 @@ export async function updateEpaySettings(formData: {
 
   return { success: true };
 }
+
+export async function updateLinuxdoSettings(formData: {
+  enabled: boolean;
+  apiUrl: string;
+  pid: string;
+  key: string;
+  rate: string;
+  minCny: string;
+  maxCny: string;
+}) {
+  const currentUserId = await requireUser();
+
+  // 检查权限
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const rate = parseFloat(formData.rate);
+  if (!Number.isFinite(rate) || rate <= 0) {
+    throw new Error("积分汇率必须 > 0");
+  }
+  const minCny = parseFloat(formData.minCny);
+  const maxCny = parseFloat(formData.maxCny);
+  if (!Number.isFinite(minCny) || minCny <= 0) {
+    throw new Error("最低积分必须 > 0");
+  }
+  if (!Number.isFinite(maxCny) || maxCny < minCny) {
+    throw new Error("最高积分必须 ≥ 最低积分");
+  }
+  if (formData.enabled && (!formData.apiUrl.trim() || !formData.pid.trim() || !formData.key.trim())) {
+    throw new Error("启用 LinuxDO 积分支付需填写网关地址、Client ID 和密钥");
+  }
+
+  await upsertOption("ldpay_enabled", formData.enabled ? "true" : "false");
+  await upsertOption("ldpay_api_url", formData.apiUrl.trim());
+  await upsertOption("ldpay_pid", formData.pid.trim());
+  await upsertOption("ldpay_key", formData.key.trim());
+  await upsertOption("ldpay_rate", String(rate));
+  await upsertOption("ldpay_min", String(minCny));
+  await upsertOption("ldpay_max", String(maxCny));
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/wallet");
+
+  return { success: true };
+}

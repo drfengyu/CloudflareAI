@@ -5,7 +5,7 @@ import { users, options } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
-import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, AuthChannelsForm, EpaySettingsForm } from "./settings-form";
+import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, AuthChannelsForm, EpaySettingsForm, LinuxdoSettingsForm } from "./settings-form";
 
 export const dynamic = "force-dynamic";
 
@@ -102,6 +102,25 @@ export default async function AdminSettingsPage() {
                 rate: settings.recharge_rate || "10",
                 minCny: settings.recharge_min || "1",
                 maxCny: settings.recharge_max || "1000",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">在线充值（LinuxDO 积分）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LinuxdoSettingsForm
+              initialSettings={{
+                enabled: settings.ldpay_enabled === "true",
+                apiUrl: settings.ldpay_api_url || "https://credit.linux.do/epay",
+                pid: settings.ldpay_pid || "",
+                key: settings.ldpay_key || "",
+                rate: settings.ldpay_rate || "1",
+                minCny: settings.ldpay_min || "1",
+                maxCny: settings.ldpay_max || "1000",
               }}
             />
           </CardContent>

@@ -9,18 +9,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, QrCode } from "lucide-react";
+import { Plus, QrCode, Coins } from "lucide-react";
 import { redeemCode, createPayOrder } from "./actions";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const PRESET_AMOUNTS = [10, 30, 68, 128];
 const CHANNELS = [
-  { id: "alipay", label: "支付宝" },
-  { id: "wechat", label: "微信支付" },
+  { id: "alipay", label: "支付宝", icon: QrCode },
+  { id: "wechat", label: "微信支付", icon: QrCode },
 ];
+const LINUXDO_CHANNEL = { id: "linuxdo", label: "LinuxDO 积分", icon: Coins };
 
-export function RedeemCodeDialog() {
+export function RedeemCodeDialog({ linuxdoEnabled = false }: { linuxdoEnabled?: boolean }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"online" | "redeem">("online");
   const [loading, setLoading] = useState(false);
@@ -29,6 +30,8 @@ export function RedeemCodeDialog() {
   const [customAmount, setCustomAmount] = useState("");
   const [channel, setChannel] = useState("alipay");
 
+  const channels = linuxdoEnabled ? [...CHANNELS, LINUXDO_CHANNEL] : CHANNELS;
+  const isLinuxdo = channel === "linuxdo";
   const finalAmount = customAmount ? Number(customAmount) : amount;
 
   const handleRedeem = async (e: React.FormEvent) => {
@@ -130,7 +133,7 @@ export function RedeemCodeDialog() {
                         : "border-border hover:border-primary/50"
                     )}
                   >
-                    ¥{amt}
+                    {isLinuxdo ? `${amt} 积分` : `¥${amt}`}
                   </button>
                 ))}
               </div>
@@ -143,18 +146,20 @@ export function RedeemCodeDialog() {
                   value={customAmount}
                   onChange={(e) => setCustomAmount(e.target.value)}
                   className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
-                  placeholder="自定义金额（1-1000 元）"
+                  placeholder={isLinuxdo ? "自定义积分（1-1000）" : "自定义金额（1-1000 元）"}
                 />
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                充值后到账为永久余额，无有效期
+                {isLinuxdo
+                  ? "使用 LinuxDO 积分充值，到账为永久余额，无有效期"
+                  : "充值后到账为永久余额，无有效期"}
               </p>
             </div>
 
             <div>
               <label className="block text-sm font-medium mb-2">支付方式</label>
-              <div className="grid grid-cols-2 gap-2">
-                {CHANNELS.map((ch) => (
+              <div className={cn("grid gap-2", channels.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
+                {channels.map((ch) => (
                   <button
                     key={ch.id}
                     type="button"
@@ -166,7 +171,7 @@ export function RedeemCodeDialog() {
                         : "border-border hover:border-primary/50"
                     )}
                   >
-                    <QrCode className="h-4 w-4" />
+                    <ch.icon className="h-4 w-4" />
                     {ch.label}
                   </button>
                 ))}
