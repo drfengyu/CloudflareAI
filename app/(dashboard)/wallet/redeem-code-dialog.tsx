@@ -21,7 +21,15 @@ const CHANNELS = [
 ];
 const LINUXDO_CHANNEL = { id: "linuxdo", label: "LinuxDO 积分", icon: Coins };
 
-export function RedeemCodeDialog({ linuxdoEnabled = false }: { linuxdoEnabled?: boolean }) {
+export function RedeemCodeDialog({
+  linuxdoEnabled = false,
+  linuxdoMin = 1,
+  linuxdoMax = 1000,
+}: {
+  linuxdoEnabled?: boolean;
+  linuxdoMin?: number;
+  linuxdoMax?: number;
+}) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"online" | "redeem">("online");
   const [loading, setLoading] = useState(false);
@@ -33,6 +41,9 @@ export function RedeemCodeDialog({ linuxdoEnabled = false }: { linuxdoEnabled?: 
   const channels = linuxdoEnabled ? [...CHANNELS, LINUXDO_CHANNEL] : CHANNELS;
   const isLinuxdo = channel === "linuxdo";
   const finalAmount = customAmount ? Number(customAmount) : amount;
+  const presetAmounts = isLinuxdo
+    ? PRESET_AMOUNTS.filter((a) => a >= linuxdoMin && a <= linuxdoMax)
+    : PRESET_AMOUNTS;
 
   const handleRedeem = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -118,7 +129,7 @@ export function RedeemCodeDialog({ linuxdoEnabled = false }: { linuxdoEnabled?: 
             <div>
               <label className="block text-sm font-medium mb-2">充值金额</label>
               <div className="grid grid-cols-4 gap-2">
-                {PRESET_AMOUNTS.map((amt) => (
+                {presetAmounts.map((amt) => (
                   <button
                     key={amt}
                     type="button"
@@ -140,13 +151,17 @@ export function RedeemCodeDialog({ linuxdoEnabled = false }: { linuxdoEnabled?: 
               <div className="mt-2">
                 <input
                   type="number"
-                  min="1"
-                  max="1000"
+                  min={isLinuxdo ? linuxdoMin : 1}
+                  max={isLinuxdo ? linuxdoMax : 1000}
                   step="0.01"
                   value={customAmount}
                   onChange={(e) => setCustomAmount(e.target.value)}
                   className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
-                  placeholder={isLinuxdo ? "自定义积分（1-1000）" : "自定义金额（1-1000 元）"}
+                  placeholder={
+                    isLinuxdo
+                      ? `自定义积分（${linuxdoMin}-${linuxdoMax}）`
+                      : "自定义金额（1-1000 元）"
+                  }
                 />
               </div>
               <p className="mt-1 text-xs text-muted-foreground">

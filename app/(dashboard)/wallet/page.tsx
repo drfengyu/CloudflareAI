@@ -158,7 +158,11 @@ export default async function WalletPage({
                 </div>
               </div>
             </div>
-            <RedeemCodeDialog linuxdoEnabled={linuxdoConfig.enabled} />
+            <RedeemCodeDialog
+              linuxdoEnabled={linuxdoConfig.enabled}
+              linuxdoMin={linuxdoConfig.minCny}
+              linuxdoMax={linuxdoConfig.maxCny}
+            />
           </CardContent>
         </Card>
 
