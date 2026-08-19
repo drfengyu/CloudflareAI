@@ -5,6 +5,23 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### 新增
+
+- **易支付订单管理 / 对账 / 回跳完善**
+  - **服务端主动查询易支付订单状态**（`lib/payment/epay.ts` `queryEpayOrder`）：调用易支付 `api.php?act=order` 接口，回调丢失时兜底对账
+  - **订单对账**（`lib/payment/order.ts` `reconcileOrder`）：已支付→幂等结算发放；已关闭/查无此单→关闭本地订单；可配置 `closeMissing` 关闭从未跳转的订单
+  - **管理端订单管理页 `/admin/orders`**：全部订单列表（用户邮箱/金额/到账/渠道/状态），按状态筛选（全部/待支付/已到账/已关闭/异常），支持**手动对账补发**与**关闭**待支付订单
+  - **钱包页回跳处理**：支付后跳回 `/wallet?paid=1&orderNo=xxx`，显示「支付成功/确认中」横幅；新增**在线充值订单卡片**（最近 10 笔），待支付订单自动轮询 + 手动「查询」按钮（`checkOrderStatus` server action，轮询时触发对账）
+  - **下单防刷/限流**：`createPayOrder` 每用户 1 分钟最多 5 笔订单 + 支付渠道白名单校验
+  - **定时对账**（`/api/cron/reconcile-orders`）：Vercel Cron 每 15 分钟对账超时待支付订单，兜底到账/关闭，鉴权与既有 cron 一致（`CRON_SECRET`）
+- **侧边栏新增「订单管理」入口**（管理分组）
+
+### 变更
+
+- `vercel.json` 新增 `/api/cron/reconcile-orders` 每 15 分钟执行
+
 ## [0.5.0] - 2026-08-18
 
 ### 新增

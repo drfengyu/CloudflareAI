@@ -1,9 +1,8 @@
 import { db } from "@/lib/db/d1-http";
 import { paymentOrders, topups, users } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
-import { sql } from "drizzle-orm";
+import { and, desc, eq, lte, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
-import { getEpayConfig, type EpayConfig } from "./epay";
+import { getEpayConfig, queryEpayOrder } from "./epay";
 
 /**
  * 支付订单：创建 / 查询 / 支付后发放余额。
@@ -85,6 +84,27 @@ export async function getOrderByNo(orderNo: string) {
   return rows[0] ?? null;
 }
 
+/** 列出当前用户最近的在线充值订单。 */
+export async function listUserOrders(userId: string, limit = 20) {
+  return db
+    .select()
+    .from(paymentOrders)
+    .where(eq(paymentOrders.userId, userId))
+    .orderBy(desc(paymentOrders.createdAt))
+    .limit(limit);
+}
+
+/** 列出所有订单（管理端，可带状态过滤）。 */
+export async function listAllOrders(status?: number, limit = 200) {
+  const where = status !== undefined && status !== null ? eq(paymentOrders.status, status) : undefined;
+  return db
+    .select()
+    .from(paymentOrders)
+    .where(where)
+    .orderBy(desc(paymentOrders.createdAt))
+    .limit(limit);
+}
+
 /** 按订单号查用户当前余额（回调发放后校验用）。 */
 export async function getUserBalanceForOrder(orderNo: string): Promise<number | null> {
   const order = await getOrderByNo(orderNo);
@@ -164,4 +184,94 @@ export async function closeOrder(orderNo: string): Promise<void> {
     .update(paymentOrders)
     .set({ status: PAY_STATUS.CLOSED })
     .where(and(eq(paymentOrders.orderNo, orderNo), eq(paymentOrders.status, PAY_STATUS.PENDING)));
+}
+
+/**
+ * 服务端主动对账：查询易支付真实状态并同步到本地订单。
+ * - 已支付（TRADE_SUCCESS）→ 结算发放（幂等）
+ * - 关闭/不存在 → 关闭本地订单
+ * - 其他（等待支付）→ 保持待支付
+ * 回调丢失时兜底；也用于管理端"手动补发"。
+ *
+ * @param opts.closeMissing 为 true 时，若易支付查询成功但查不到该订单（用户
+ *   从未完成跳转），将关闭本地订单。交互式轮询不应开启（用户可能正在支付中）。
+ */
+export async function reconcileOrder(
+  orderNo: string,
+  opts: { closeMissing?: boolean } = {},
+): Promise<{ reconciled: boolean; reason?: string; orderStatus?: number }> {
+  const cfg = await getEpayConfig();
+  if (!cfg.enabled || !cfg.apiUrl) {
+    return { reconciled: false, reason: "在线充值未开启" };
+  }
+
+  const order = await getOrderByNo(orderNo);
+  if (!order) return { reconciled: false, reason: "订单不存在" };
+  if (order.status === PAY_STATUS.COMPLETED) {
+    return { reconciled: true, orderStatus: order.status }; // 已完成，无需处理
+  }
+  if (order.status === PAY_STATUS.CLOSED) {
+    return { reconciled: true, orderStatus: order.status }; // 已关闭
+  }
+
+  const result = await queryEpayOrder(cfg, orderNo);
+  if (!result.ok) {
+    return { reconciled: false, reason: `查询易支付失败：${result.msg ?? `code=${result.code}`}` };
+  }
+
+  if (result.tradeStatus === "TRADE_SUCCESS" && result.tradeNo) {
+    const settled = await settleRechargeOrder(
+      orderNo,
+      result.tradeNo,
+      { source: "reconcile", ...result } as Record<string, unknown>,
+    );
+    if (settled.settled) {
+      return { reconciled: true, orderStatus: PAY_STATUS.COMPLETED };
+    }
+    // 已被其他回调处理或已关闭 → 读取最新状态
+    const latest = await getOrderByNo(orderNo);
+    return { reconciled: true, orderStatus: latest?.status };
+  }
+
+  // TRADE_CLOSED / 查无此订单（closeMissing） → 关闭待支付订单
+  if (
+    order.status === PAY_STATUS.PENDING &&
+    (result.tradeStatus === "TRADE_CLOSED" || (!result.tradeStatus && opts.closeMissing))
+  ) {
+    await closeOrder(orderNo);
+    return { reconciled: true, orderStatus: PAY_STATUS.CLOSED };
+  }
+
+  return { reconciled: true, orderStatus: order.status };
+}
+
+/** 定时任务：关闭超时未支付的订单（默认 30 分钟）。 */
+export async function closeExpiredPendingOrders(maxAgeMinutes = 30): Promise<number> {
+  const cutoff = new Date(Date.now() - maxAgeMinutes * 60_000);
+
+  // D1 HTTP driver 不返回 affected rows：先查数量再批量更新
+  const pending = await db
+    .select({ orderNo: paymentOrders.orderNo })
+    .from(paymentOrders)
+    .where(
+      and(
+        eq(paymentOrders.status, PAY_STATUS.PENDING),
+        lte(paymentOrders.createdAt, cutoff),
+      ),
+    );
+
+  if (pending.length === 0) return 0;
+
+  const nos = pending.map((p) => p.orderNo);
+  await db
+    .update(paymentOrders)
+    .set({ status: PAY_STATUS.CLOSED })
+    .where(
+      and(
+        eq(paymentOrders.status, PAY_STATUS.PENDING),
+        lte(paymentOrders.createdAt, cutoff),
+      ),
+    );
+
+  return nos.length;
 }

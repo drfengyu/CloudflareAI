@@ -3,20 +3,26 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
-import { users, topups, temporaryBalances } from "@/lib/db/schema";
+import { users, topups, temporaryBalances, paymentOrders } from "@/lib/db/schema";
 import { desc, eq, gt, sum } from "drizzle-orm";
 import { Wallet, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { RedeemCodeDialog } from "./redeem-code-dialog";
 import { CheckinCalendarCard } from "./checkin-calendar-card";
+import { RechargeOrdersCard, type SerializedPayOrder } from "./recharge-orders-card";
 import { formatCredits, creditsToUsd, getCreditsPerUsd } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 
 export const dynamic = "force-dynamic";
 
-export default async function WalletPage() {
+export default async function WalletPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ paid?: string; orderNo?: string }>;
+}) {
   const userId = await requireUser();
+  const params = await searchParams;
 
   // 获取用户永久余额
   const userRows = await db
@@ -83,6 +89,27 @@ export default async function WalletPage() {
     .orderBy(desc(topups.createdAt))
     .limit(20);
 
+  // 在线充值订单（含回跳订单号置顶逻辑交给客户端组件）
+  const payOrders = await db
+    .select()
+    .from(paymentOrders)
+    .where(eq(paymentOrders.userId, userId))
+    .orderBy(desc(paymentOrders.createdAt))
+    .limit(10);
+
+  const serializedOrders: SerializedPayOrder[] = payOrders.map((o) => ({
+    orderNo: o.orderNo,
+    amountCny: o.amountCny,
+    credits: o.credits,
+    status: o.status,
+    channel: o.channel ?? null,
+    paidAt: o.paidAt ? new Date(o.paidAt).toISOString() : null,
+    createdAt: new Date(o.createdAt!).toISOString(),
+  }));
+
+  const justReturned = params.paid === "1";
+  const highlightOrderNo = params.orderNo ?? undefined;
+
   return (
     <>
       <PageHeader
@@ -93,6 +120,13 @@ export default async function WalletPage() {
       <div className="space-y-6 p-8">
         {/* 签到日历 */}
         <CheckinCalendarCard />
+
+        {/* 在线充值订单（回跳确认 + 轮询） */}
+        <RechargeOrdersCard
+          orders={serializedOrders}
+          highlightOrderNo={highlightOrderNo}
+          justReturned={justReturned}
+        />
 
         {/* 余额卡片 */}
         <Card className="border-primary/20 bg-primary/5">

@@ -7,7 +7,8 @@ import { requireUser } from "@/lib/usage/meter";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { getEpayConfig, buildEpayPayUrl } from "@/lib/payment/epay";
-import { createRechargeOrder } from "@/lib/payment/order";
+import { createRechargeOrder, getOrderByNo, reconcileOrder } from "@/lib/payment/order";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function redeemCode(code: string) {
   const currentUserId = await requireUser();
@@ -92,6 +93,18 @@ export async function redeemCode(code: string) {
  * 返回 { payUrl }，客户端 window.location.href 跳转；或 { error }。
  */
 export async function createPayOrder(amountCny: number, channel: string) {
+  const currentUserId = await requireUser();
+
+  // 下单防刷：每用户 1 分钟内最多 5 笔订单（内存限流，单实例有效）
+  if (!checkRateLimit(`pay-order:${currentUserId}`, { window: 60_000, limit: 5 })) {
+    throw new Error("操作过于频繁，请 1 分钟后再试");
+  }
+
+  // 校验支付渠道白名单
+  if (channel !== "alipay" && channel !== "wechat" && channel !== "qqpay") {
+    throw new Error("不支持的支付渠道");
+  }
+
   const cfg = await getEpayConfig();
   if (!cfg.enabled) {
     throw new Error("在线充值功能未开启");
@@ -105,7 +118,7 @@ export async function createPayOrder(amountCny: number, channel: string) {
   const origin = `${protocol}://${host}`;
 
   const notifyUrl = `${origin}/api/pay/epay/notify`;
-  const returnUrl = `${origin}/wallet?paid=1`;
+  const returnUrl = `${origin}/wallet?paid=1&orderNo=${orderNo}`;
 
   const built = buildEpayPayUrl(
     cfg,
@@ -119,4 +132,46 @@ export async function createPayOrder(amountCny: number, channel: string) {
   }
 
   return { payUrl: built.url, orderNo, credits };
+}
+
+const ORDER_STATUS_TEXT: Record<number, string> = {
+  0: "待支付",
+  1: "支付确认中",
+  2: "已到账",
+  3: "已关闭",
+  9: "异常",
+};
+
+export const PAY_STATUS_TEXT = ORDER_STATUS_TEXT;
+
+/**
+ * 查询当前用户订单状态（供钱包页轮询）。
+ * 待支付订单会触发服务端对账（查询易支付真实状态），回调丢失时兜底到账。
+ */
+export async function checkOrderStatus(orderNo: string) {
+  const currentUserId = await requireUser();
+
+  const order = await getOrderByNo(orderNo);
+  if (!order || order.userId !== currentUserId) {
+    throw new Error("订单不存在");
+  }
+
+  if (order.status === 0) {
+    // 待支付 → 服务端主动对账一次（幂等）
+    await reconcileOrder(orderNo);
+  }
+
+  const latest = await getOrderByNo(orderNo);
+  if (!latest) throw new Error("订单不存在");
+
+  return {
+    orderNo: latest.orderNo,
+    status: latest.status,
+    statusText: ORDER_STATUS_TEXT[latest.status] ?? "未知",
+    amountCny: latest.amountCny,
+    credits: latest.credits,
+    channel: latest.channel ?? null,
+    createdAt: new Date(latest.createdAt!).toISOString(),
+    paidAt: latest.paidAt ? new Date(latest.paidAt).toISOString() : null,
+  };
 }

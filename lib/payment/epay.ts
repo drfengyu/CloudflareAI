@@ -87,3 +87,56 @@ export function buildEpayPayUrl(
 
   return { url: `${cfg.apiUrl.replace(/\/$/, "")}/submit.php?${query.toString()}`, params: { ...params, sign, sign_type: "MD5" } };
 }
+
+export interface EpayOrderQueryResult {
+  /** 是否查询到订单（code=1）。 */
+  ok: boolean;
+  /** 易支付返回的业务码：1=成功，0=失败。网络/解析错误时为 -1。 */
+  code: number;
+  msg?: string;
+  tradeStatus?: string;
+  tradeNo?: string;
+  money?: number;
+}
+
+/**
+ * 服务端主动查询订单真实支付状态（对账兜底，回调丢失时使用）。
+ * 彩虹易支付订单查询接口：POST {api_url}/api.php?act=order
+ * 返回 JSON：code=1 时 trade_order 内含 trade_status / trade_no / money。
+ */
+export async function queryEpayOrder(
+  cfg: EpayConfig,
+  outTradeNo: string,
+): Promise<EpayOrderQueryResult> {
+  if (!cfg.apiUrl || !cfg.pid || !cfg.key) {
+    return { ok: false, code: -1, msg: "易支付配置不完整" };
+  }
+
+  const endpoint = `${cfg.apiUrl.replace(/\/$/, "")}/api.php?act=order`;
+  const form = new URLSearchParams({
+    pid: cfg.pid,
+    key: cfg.key,
+    out_trade_no: outTradeNo,
+  });
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    });
+    const text = await res.text();
+    const data = JSON.parse(text);
+    const tradeOrder = data.trade_order ?? {};
+    return {
+      ok: Number(data.code) === 1,
+      code: Number(data.code),
+      msg: data.msg,
+      tradeStatus: tradeOrder.trade_status,
+      tradeNo: tradeOrder.trade_no,
+      money: tradeOrder.money !== undefined ? Number(tradeOrder.money) : undefined,
+    };
+  } catch (err) {
+    return { ok: false, code: -1, msg: err instanceof Error ? err.message : "查询易支付订单失败" };
+  }
+}
