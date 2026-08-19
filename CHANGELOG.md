@@ -15,7 +15,7 @@
   - **管理端订单管理页 `/admin/orders`**：全部订单列表（用户邮箱/金额/到账/渠道/状态），按状态筛选（全部/待支付/已到账/已关闭/异常），支持**手动对账补发**与**关闭**待支付订单
   - **钱包页回跳处理**：支付后跳回 `/wallet?paid=1&orderNo=xxx`，显示「支付成功/确认中」横幅；新增**在线充值订单卡片**（最近 10 笔），待支付订单自动轮询 + 手动「查询」按钮（`checkOrderStatus` server action，轮询时触发对账）
   - **下单防刷/限流**：`createPayOrder` 每用户 1 分钟最多 5 笔订单 + 支付渠道白名单校验
-  - **定时对账**（`/api/cron/reconcile-orders`）：Vercel Cron 每 15 分钟对账超时待支付订单，兜底到账/关闭，鉴权与既有 cron 一致（`CRON_SECRET`）
+  - **定时对账**（`/api/cron/reconcile-orders`）：Vercel Cron 每日 03:00 对账超时待支付订单，兜底到账/关闭，鉴权与既有 cron 一致（`CRON_SECRET`）；钱包页轮询（4s）+ 手动「查询」仍为主要兜底路径（注：Vercel Hobby 套餐限制 cron 每日一次）
 - **侧边栏新增「订单管理」入口**（管理分组）
 - **LinuxDO Credit（积分）在线充值**
   - **新支付渠道 `linuxdo`**：采用 LinuxDO **易支付兼容接口**（`type=epay`，MD5 签名），复用既有订单/幂等结算/对账体系，无需迁移
@@ -28,7 +28,7 @@
 
 ### 变更
 
-- `vercel.json` 新增 `/api/cron/reconcile-orders` 每 15 分钟执行
+- `vercel.json` 新增 `/api/cron/reconcile-orders`（Hobby 套餐限制为每日执行，`0 3 * * *`）
 
 ## [0.5.0] - 2026-08-18
 

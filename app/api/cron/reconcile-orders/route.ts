@@ -6,12 +6,12 @@ import { reconcileOrder } from "@/lib/payment/order";
 import { PAY_STATUS } from "@/lib/payment/order";
 
 /**
- * 定期对账：服务端主动查询易支付真实订单状态。
+ * 定期对账：服务端主动查询易支付/LinuxDO 真实订单状态。
  * - 超时待支付订单 → 逐笔对账（回调丢失时兜底到账）
  * - 超过 maxAge 仍未支付的 → 关闭
  *
  * 触发方式：
- * 1. Vercel Cron Job（生产环境）
+ * 1. Vercel Cron Job（生产环境，Hobby 套餐限制为每日执行，见 vercel.json）
  * 2. 手动调用：curl https://your-domain.com/api/cron/reconcile-orders?ageMinutes=30
  *
  * 配置：vercel.json

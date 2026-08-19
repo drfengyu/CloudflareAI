@@ -104,7 +104,7 @@ credit.linux.do 认证界面 → 用户确认支付
   └─ 回跳 /wallet?paid=1&orderNo=xxx
       └─ 订单卡片轮询 checkOrderStatus（4s 一次，待支付时触发服务端对账）
 
-兜底：Vercel Cron 每 15 分钟对账（/api/cron/reconcile-orders）→ reconcileOrder 按 channel 查询真实状态并补发/关闭。
+兜底：Vercel Cron 每日 03:00 对账（/api/cron/reconcile-orders，Hobby 套餐限制每日一次；钱包页 4s 轮询为实时兜底）→ reconcileOrder 按 channel 查询真实状态并补发/关闭。
 ```
 
 ### 下单（`/epay/pay/submit.php`）

@@ -67,7 +67,7 @@
 - ✅ 易支付在线充值：钱包双 Tab（在线充值 ¥10/30/68/128 / 兑换码），支付宝+微信，回调验签幂等发放永久余额
 - ✅ 支付管理：`/admin/settings` 支付配置（网关/PID/密钥/汇率/限额），`payment_order` 订单表
 - ✅ 订单管理 `/admin/orders`：按状态筛选 + 手动对账补发/关闭
-- ✅ 服务端主动对账：`api.php?act=order` 查询真实状态（回调丢失兜底），Vercel Cron 每 15 分钟定时对账
+- ✅ 服务端主动对账：`api.php?act=order` 查询真实状态（回调丢失兜底），Vercel Cron 每日定时对账（钱包页轮询为实时兜底）
 - ✅ 钱包订单卡片 + 回跳确认（`?paid=1&orderNo=xxx`）+ 待支付轮询
 - ✅ LinuxDO 积分充值：钱包新增「LinuxDO 积分」渠道（易支付兼容协议，MD5 签名），`/admin/settings` 独立配置（Client ID/密钥/汇率/限额），回调+对账+幂等发放与易支付共用一套订单体系（详见 `docs/features/linuxdo-credit-payment.md`）
 - ✅ Free Plan 模型标记：5 个需 Workers Paid 模型（deepseek-v4、glm-5.2、kimi-k2.6 等）在模型库/定价页显示徽章，Playground 自动过滤
