@@ -14,6 +14,7 @@ import { RechargeOrdersCard, type SerializedPayOrder } from "./recharge-orders-c
 import { formatCredits, creditsToUsd, getCreditsPerUsd } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
+import { formatCnDate } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -195,7 +196,7 @@ export default async function WalletPage({
                         过期时间
                       </p>
                       <p className="text-sm">
-                        {new Date(tb.expiresAt).toLocaleDateString()}
+                        {formatCnDate(tb.expiresAt)}
                       </p>
                     </div>
                   </div>

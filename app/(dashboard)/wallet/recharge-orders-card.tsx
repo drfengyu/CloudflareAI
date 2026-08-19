@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { RefreshCw, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
 import { checkOrderStatus } from "./actions";
 import { cn } from "@/lib/utils";
+import { formatCnDateTime } from "@/lib/date";
 
 export interface SerializedPayOrder {
   orderNo: string;
@@ -141,8 +142,8 @@ export function RechargeOrdersCard({ orders, highlightOrderNo, justReturned }: P
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {order.channel === "alipay" ? "支付宝" : order.channel === "wechat" ? "微信支付" : order.channel === "linuxdo" ? "LinuxDO 积分" : order.channel}
                   {" · "}{order.channel === "linuxdo" ? "" : "¥"}{order.amountCny}
-                  {order.channel === "linuxdo" ? " 积分" : ""} · {new Date(order.createdAt).toLocaleString()}
-                  {order.paidAt && ` · ${new Date(order.paidAt).toLocaleString()} 支付`}
+                  {order.channel === "linuxdo" ? " 积分" : ""} · {formatCnDateTime(order.createdAt)}
+                  {order.paidAt && ` · ${formatCnDateTime(order.paidAt)} 支付`}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-3">

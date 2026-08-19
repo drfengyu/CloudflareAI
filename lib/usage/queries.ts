@@ -1,11 +1,11 @@
 import { db } from "@/lib/db/d1-http";
 import { usageLogs, users, apiKeys, channels, type UsageLog } from "@/lib/db/schema";
 import { desc, eq, gte, and, sql } from "drizzle-orm";
+import { cnStartOfToday, cnStartOfMonth, cnDaysAgoStart } from "@/lib/date";
 
-/** 获取用户今日用量统计（Phase C: credits 模型） */
+/** 获取用户今日用量统计（Phase C: credits 模型；按中国时区日界） */
 export async function getTodayUsage(userId: string) {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  const todayStart = cnStartOfToday();
 
   const rows = await db
     .select({
@@ -25,11 +25,9 @@ export async function getTodayUsage(userId: string) {
   return rows[0] || { totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 };
 }
 
-/** 获取用户本月用量统计（Phase C: credits 模型） */
+/** 获取用户本月用量统计（Phase C: credits 模型；按中国时区月界） */
 export async function getMonthUsage(userId: string) {
-  const monthStart = new Date();
-  monthStart.setDate(1);
-  monthStart.setHours(0, 0, 0, 0);
+  const monthStart = cnStartOfMonth();
 
   const rows = await db
     .select({
@@ -93,11 +91,9 @@ export async function getRecentUsage(
     .limit(limit);
 }
 
-/** 按模型统计用量（Phase C: 用于饼图/柱状图） */
+/** 按模型统计用量（Phase C: 用于饼图/柱状图；按中国时区日界） */
 export async function getUsageByModel(userId: string, days = 30) {
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-  startDate.setHours(0, 0, 0, 0);
+  const startDate = cnDaysAgoStart(days);
 
   const rows = await db
     .select({
@@ -119,11 +115,9 @@ export async function getUsageByModel(userId: string, days = 30) {
   return rows;
 }
 
-/** 按渠道统计用量（渠道分布饼图） */
+/** 按渠道统计用量（渠道分布饼图；按中国时区日界） */
 export async function getUsageByChannel(userId: string, days = 30) {
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-  startDate.setHours(0, 0, 0, 0);
+  const startDate = cnDaysAgoStart(days);
 
   const rows = await db
     .select({
@@ -164,15 +158,13 @@ export async function getUsageByChannel(userId: string, days = 30) {
   });
 }
 
-/** 按日统计用量（Phase C: 用于趋势图） */
+/** 按日统计用量（Phase C: 用于趋势图；日期按中国时区） */
 export async function getDailyUsage(userId: string, days = 7) {
-  const startDate = new Date();
-  startDate.setDate(startDate.getDate() - days);
-  startDate.setHours(0, 0, 0, 0);
+  const startDate = cnDaysAgoStart(days);
 
   const rows = await db
     .select({
-      date: sql<string>`DATE(${usageLogs.createdAt} / 1000, 'unixepoch')`,
+      date: sql<string>`DATE(${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours')`,
       calls: sql<number>`COUNT(*)`,
       credits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
     })
@@ -183,20 +175,19 @@ export async function getDailyUsage(userId: string, days = 7) {
         gte(usageLogs.createdAt, startDate),
       ),
     )
-    .groupBy(sql`DATE(${usageLogs.createdAt} / 1000, 'unixepoch')`)
-    .orderBy(sql`DATE(${usageLogs.createdAt} / 1000, 'unixepoch') ASC`);
+    .groupBy(sql`DATE(${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours')`)
+    .orderBy(sql`DATE(${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours') ASC`);
 
   return rows;
 }
 
-/** 按小时统计今日用量（Phase C 扩展：用于当天小时趋势图） */
+/** 按小时统计今日用量（Phase C 扩展：当天小时趋势图；按中国时区） */
 export async function getHourlyUsageToday(userId: string) {
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  const todayStart = cnStartOfToday();
 
   const rows = await db
     .select({
-      hour: sql<number>`CAST(strftime('%H', ${usageLogs.createdAt} / 1000, 'unixepoch', 'localtime') AS INTEGER)`,
+      hour: sql<number>`CAST(strftime('%H', ${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours') AS INTEGER)`,
       calls: sql<number>`COUNT(*)`,
       credits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
     })
@@ -207,8 +198,8 @@ export async function getHourlyUsageToday(userId: string) {
         gte(usageLogs.createdAt, todayStart),
       ),
     )
-    .groupBy(sql`CAST(strftime('%H', ${usageLogs.createdAt} / 1000, 'unixepoch', 'localtime') AS INTEGER)`)
-    .orderBy(sql`CAST(strftime('%H', ${usageLogs.createdAt} / 1000, 'unixepoch', 'localtime') AS INTEGER) ASC`);
+    .groupBy(sql`CAST(strftime('%H', ${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours') AS INTEGER)`)
+    .orderBy(sql`CAST(strftime('%H', ${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours') AS INTEGER) ASC`);
 
   return rows;
 }

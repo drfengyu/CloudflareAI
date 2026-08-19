@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { RefreshCw, XCircle, ExternalLink } from "lucide-react";
 import { adminReconcileOrder, adminCloseOrder } from "./actions";
 import { cn } from "@/lib/utils";
+import { formatCnDateTime } from "@/lib/date";
 
 export interface AdminOrderRow {
   id: string;
@@ -92,10 +93,10 @@ export function AdminOrdersTable({ orders }: { orders: AdminOrderRow[] }) {
                   <Badge tone={meta.tone}>{meta.label}</Badge>
                 </td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">
-                  {new Date(order.createdAt).toLocaleString()}
+                  {formatCnDateTime(order.createdAt)}
                 </td>
                 <td className="px-3 py-2 text-xs text-muted-foreground">
-                  {order.paidAt ? new Date(order.paidAt).toLocaleString() : "—"}
+                  {order.paidAt ? formatCnDateTime(order.paidAt) : "—"}
                 </td>
                 <td className="px-3 py-2">
                   {canAct && (

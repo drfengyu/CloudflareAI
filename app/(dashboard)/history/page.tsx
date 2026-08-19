@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { requireUser } from "@/lib/usage/meter";
 import { queryUsage } from "@/lib/usage/queries";
+import { formatCnDateTime } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -114,7 +115,7 @@ export default async function HistoryPage({
                           <span className="w-[50px] text-right">—</span>
                         )}
                         <span className="w-[120px] text-right">
-                          {new Date(log.createdAt!).toLocaleString("zh-CN")}
+                          {formatCnDateTime(log.createdAt!)}
                         </span>
                       </div>
                     </div>

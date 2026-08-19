@@ -13,6 +13,7 @@ import {
 } from "@/lib/usage/queries";
 import { formatCredits, creditsToUsd, getCreditsPerUsd } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
+import { formatCnDateTime } from "@/lib/date";
 import { Activity, Wallet, TrendingUp, Clock } from "lucide-react";
 import { UsageTrendChart } from "@/components/dashboard/usage-trend-chart";
 import { ModelDistributionChart } from "@/components/dashboard/model-distribution-chart";
@@ -258,7 +259,7 @@ export default async function DashboardPage({
                         </span>
                         <span className="w-[50px] text-right">{log.latencyMs ? `${(log.latencyMs / 1000).toFixed(2)}s` : "—"}</span>
                         <span className="text-[11px] w-[80px] text-right">
-                          {new Date(log.createdAt!).toLocaleString("zh-CN", {
+                          {formatCnDateTime(log.createdAt!, {
                             month: "2-digit",
                             day: "2-digit",
                             hour: "2-digit",

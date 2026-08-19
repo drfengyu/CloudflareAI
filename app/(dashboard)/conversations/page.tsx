@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { requireUser } from "@/lib/usage/meter";
 import { getConversationHistory } from "@/lib/usage/conversation";
+import { formatCnDateTime } from "@/lib/date";
 import { MessageSquare, Trash2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -64,7 +65,7 @@ export default async function ConversationsPage({
                       <span className="font-mono">{conv.model}</span>
                       <span>•</span>
                       <span>
-                        {new Date(conv.createdAt!).toLocaleString("zh-CN", {
+                        {formatCnDateTime(conv.createdAt!, {
                           year: "numeric",
                           month: "2-digit",
                           day: "2-digit",

@@ -30,6 +30,10 @@
 
 - `vercel.json` 新增 `/api/cron/reconcile-orders`（Hobby 套餐限制为每日执行，`0 3 * * *`）
 
+### 修复
+
+- **时间统一为中国时区（Asia/Shanghai, UTC+8）**：新增 `lib/date.ts`（`cnStartOfToday`/`cnStartOfMonth`/`cnDaysAgoStart`/`formatCnDateTime`/`formatCnDate`），修复服务器（Vercel 默认 UTC）导致的「今日」日界错位（北京 0-8 点看板仍显示昨天数据）；数据看板/使用历史/对话历史/订单管理/钱包订单卡片与临时余额到期等时间显示统一按北京时间
+
 ## [0.5.0] - 2026-08-18
 
 ### 新增
