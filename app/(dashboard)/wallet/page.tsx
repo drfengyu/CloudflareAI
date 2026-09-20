@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
 import { users, topups, temporaryBalances, paymentOrders } from "@/lib/db/schema";
-import { desc, eq, gt, sum } from "drizzle-orm";
+import { and, desc, eq, gt, gte, sum } from "drizzle-orm";
 import { Wallet, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
@@ -14,7 +14,7 @@ import { RechargeOrdersCard, type SerializedPayOrder } from "./recharge-orders-c
 import { formatCredits, creditsToUsd, getCreditsPerUsd } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
-import { formatCnDate } from "@/lib/date";
+import { formatCnDate, cnDaysAgoStart } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -83,11 +83,16 @@ export default async function WalletPage({
   const ratio = await getCreditsPerUsd();
   const balanceUsd = creditsToUsd(totalBalance, ratio).toFixed(2);
 
+  // 只保留近三个月的流水，更早的历史不再展示。
+  const historyCutoff = cnDaysAgoStart(90);
+
   // 获取充值流水
   const topupRecords = await db
     .select()
     .from(topups)
-    .where(eq(topups.userId, userId))
+    .where(
+      and(eq(topups.userId, userId), gte(topups.createdAt, historyCutoff)),
+    )
     .orderBy(desc(topups.createdAt))
     .limit(20);
 
@@ -95,7 +100,12 @@ export default async function WalletPage({
   const payOrders = await db
     .select()
     .from(paymentOrders)
-    .where(eq(paymentOrders.userId, userId))
+    .where(
+      and(
+        eq(paymentOrders.userId, userId),
+        gte(paymentOrders.createdAt, historyCutoff),
+      ),
+    )
     .orderBy(desc(paymentOrders.createdAt))
     .limit(10);
 
@@ -122,16 +132,6 @@ export default async function WalletPage({
       />
 
       <div className="space-y-6 p-8">
-        {/* 签到日历 */}
-        <CheckinCalendarCard />
-
-        {/* 在线充值订单（回跳确认 + 轮询） */}
-        <RechargeOrdersCard
-          orders={serializedOrders}
-          highlightOrderNo={highlightOrderNo}
-          justReturned={justReturned}
-        />
-
         {/* 余额卡片 */}
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="flex items-center justify-between pt-5">
@@ -166,6 +166,16 @@ export default async function WalletPage({
             />
           </CardContent>
         </Card>
+
+        {/* 签到日历 */}
+        <CheckinCalendarCard />
+
+        {/* 在线充值订单（回跳确认 + 轮询） */}
+        <RechargeOrdersCard
+          orders={serializedOrders}
+          highlightOrderNo={highlightOrderNo}
+          justReturned={justReturned}
+        />
 
         {/* 临时余额明细 */}
         {displayTempBalances.length > 0 && (
