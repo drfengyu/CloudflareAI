@@ -13,6 +13,7 @@ import { CheckinCalendarCard } from "./checkin-calendar-card";
 import { RechargeOrdersCard, type SerializedPayOrder } from "./recharge-orders-card";
 import { formatCredits, creditsToUsd, getCreditsPerUsd } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
+import { withoutExpiredGrants } from "@/lib/billing/grant-expiry";
 import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
 import { formatCnDate, cnDaysAgoStart } from "@/lib/date";
 
@@ -35,15 +36,21 @@ export default async function WalletPage({
 
   const permanentBalance = userRows[0]?.balanceCredits || 0;
 
-  // 获取未过期的临时余额
+  // 获取未过期的临时余额（过期判定下沉到 SQL，不再把已失效的行读进内存）
   const now = new Date();
   const tempBalances = await db
     .select()
     .from(temporaryBalances)
-    .where(eq(temporaryBalances.userId, userId))
+    .where(
+      and(
+        eq(temporaryBalances.userId, userId),
+        gt(temporaryBalances.expiresAt, now),
+      ),
+    )
     .orderBy(temporaryBalances.expiresAt);
 
   // 计算总余额：包含所有未过期的临时余额（不过滤小额）
+  // JS 侧再判一次是兜底：异常值在 SQL 里可能被宽松比较放行，宁可少显示也不虚增余额。
   const allValidTempBalances = tempBalances.filter(
     (tb) => new Date(tb.expiresAt) > now
   );
@@ -83,11 +90,11 @@ export default async function WalletPage({
   const ratio = await getCreditsPerUsd();
   const balanceUsd = creditsToUsd(totalBalance, ratio).toFixed(2);
 
-  // 只保留近三个月的流水，更早的历史不再展示。
+  // 充值流水只保留近三个月，更早的历史不再展示。
   const historyCutoff = cnDaysAgoStart(90);
 
   // 获取充值流水
-  const topupRecords = await db
+  const recentTopups = await db
     .select()
     .from(topups)
     .where(
@@ -96,16 +103,16 @@ export default async function WalletPage({
     .orderBy(desc(topups.createdAt))
     .limit(20);
 
+  // 签到奖励与兑换码发的是一次性临时余额，到期之后不再作为「可用余额来源」显示。
+  const topupRecords = await withoutExpiredGrants(recentTopups, now);
+
   // 在线充值订单（含回跳订单号置顶逻辑交给客户端组件）
+  // 这里不按 historyCutoff 裁剪：待支付/支付确认中的订单可以陈旧到任意久，而这张卡是
+  // 用户唯一能自查并手动「查询」催单的地方，裁剪会把未到账订单从视野里抹掉。
   const payOrders = await db
     .select()
     .from(paymentOrders)
-    .where(
-      and(
-        eq(paymentOrders.userId, userId),
-        gte(paymentOrders.createdAt, historyCutoff),
-      ),
-    )
+    .where(eq(paymentOrders.userId, userId))
     .orderBy(desc(paymentOrders.createdAt))
     .limit(10);
 
@@ -218,8 +225,9 @@ export default async function WalletPage({
 
         {/* 充值流水 */}
         <Card>
-          <CardHeader>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">充值记录</CardTitle>
+            <span className="text-xs text-muted-foreground">仅显示最近三个月</span>
           </CardHeader>
           <CardContent>
             {topupRecords.length === 0 ? (
