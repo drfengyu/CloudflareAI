@@ -209,7 +209,11 @@ export async function POST(req: NextRequest) {
 
       // after() 让 Vercel serverless 在响应结束后保持函数运行直到 logUsage 完成。
       after(async () => {
-        const { usage } = await done;
+        const { usage, usageFinal } = await done;
+        // 同 /v1/chat/completions：input 首块即可信、截断也照计；output 只认终态块。
+        const inputTokens = usage?.promptTokens ?? 0;
+        const outputTokens = usageFinal ? (usage?.completionTokens ?? 0) : 0;
+        const metered = usage !== null;
         await logUsage({
           userId,
           apiKeyId,
@@ -217,9 +221,14 @@ export async function POST(req: NextRequest) {
           task: "Text Generation",
           channel: "anthropic",
           channelId,
-          inputTokens: usage?.promptTokens ?? Math.floor(estimatedInput),
-          outputTokens: usage?.completionTokens ?? 0,
-          status: "ok",
+          inputTokens,
+          outputTokens,
+          status: metered ? "ok" : "error",
+          errorReason: !metered
+            ? "usage_unavailable"
+            : usageFinal
+              ? undefined
+              : "stream_truncated",
           latencyMs: Date.now() - start,
         });
       });

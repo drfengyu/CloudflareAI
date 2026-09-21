@@ -136,10 +136,15 @@ export async function POST(req: NextRequest) {
 
           const { stream: tap, done } = interceptOpenAIStream(chResp.body);
           after(async () => {
-            const { usage, content } = await done;
+            const { usage, content, usageFinal } = await done;
+            // input 首块即可信（provider 自己数出来的 prompt_tokens），截断也照计；
+            // output 只认终态 usage 块，截断时记 0，绝不拿占位桩或估算凑数。
             const inputTokens = usage?.promptTokens ?? 0;
-            const outputTokens = usage?.completionTokens ?? 0;
-            const creditsUsed = await calculateCredits(model, inputTokens, outputTokens);
+            const outputTokens = usageFinal ? (usage?.completionTokens ?? 0) : 0;
+            const metered = usage !== null;
+            const creditsUsed = metered
+              ? await calculateCredits(model, inputTokens, outputTokens)
+              : 0;
 
             await logUsage({
               userId,
@@ -150,10 +155,16 @@ export async function POST(req: NextRequest) {
               channelId: chId,
               inputTokens,
               outputTokens,
-              status: "ok",
+              status: metered ? "ok" : "error",
+              errorReason: !metered
+                ? "usage_unavailable"
+                : usageFinal
+                  ? undefined
+                  : "stream_truncated",
               latencyMs: Date.now() - start,
             });
 
+            // 对话历史照旧保存：content 是用户实际收到的（部分）输出，token 用上面的计量值
             const userMessage = messages.findLast((m) => m.role === "user");
             if (userMessage && content) {
               await saveConversation({
@@ -319,10 +330,16 @@ export async function POST(req: NextRequest) {
 
       // after() 让 Vercel serverless 在响应结束后保持运行直到完成 logUsage 和 saveConversation。
       after(async () => {
-        const { usage, content } = await done;
-        const inputTokens = usage?.promptTokens ?? Math.floor(estimatedInput);
-        const outputTokens = usage?.completionTokens ?? 0;
-        const creditsUsed = await calculateCredits(model, inputTokens, outputTokens);
+        const { usage, content, usageFinal } = await done;
+        // usageFinal=false 说明流被截断、终态 usage 块从未到达（中间 chunk 的
+        // completion 恒为 0/1 占位桩）：output 记 0，但 input 仍是 provider 数清
+        // 的真实值，照计。两条都不回退 chars*1.5 估算。
+        const inputTokens = usage?.promptTokens ?? 0;
+        const outputTokens = usageFinal ? (usage?.completionTokens ?? 0) : 0;
+        const metered = usage !== null;
+        const creditsUsed = metered
+          ? await calculateCredits(model, inputTokens, outputTokens)
+          : 0;
 
         await logUsage({
           userId,
@@ -332,11 +349,16 @@ export async function POST(req: NextRequest) {
           channel: "web",
           inputTokens,
           outputTokens,
-          status: "ok",
+          status: metered ? "ok" : "error",
+          errorReason: !metered
+            ? "usage_unavailable"
+            : usageFinal
+              ? undefined
+              : "stream_truncated",
           latencyMs: Date.now() - start,
         });
 
-        // 保存对话历史：流式时也能拿到拼接后的 content
+        // 保存对话历史：流式时也能拿到拼接后的 content（截断时存部分输出）
         const userMessage = messages.findLast((m) => m.role === "user");
         if (userMessage && content) {
           await saveConversation({

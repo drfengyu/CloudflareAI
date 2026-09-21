@@ -82,6 +82,32 @@ test.describe("流式计量真实 token 验证", () => {
     expect(completionTokens).toBeGreaterThan(0);
     expect(completionTokens).toBeLessThan(500); // "Count 1 to 5" 不应超 500 tokens
 
+    // 验证：input 也必须收到钱。Cloudflare 在后续 chunk 里把 prompt_tokens 清零，
+    // 计量若取最后一个 chunk 就会记 0 —— 这里用整段 SSE 的峰值而不是末尾值。
+    const peakPrompt = Math.max(
+      ...usageMatches!.map((m) => JSON.parse(`{${m}}`).usage.prompt_tokens ?? 0),
+    );
+    const peakCompletion = Math.max(
+      ...usageMatches!.map(
+        (m) => JSON.parse(`{${m}}`).usage.completion_tokens ?? 0,
+      ),
+    );
+    console.log(`💡 峰值 usage: prompt_tokens=${peakPrompt}, completion_tokens=${peakCompletion}`);
+    // prompt 至少覆盖 system prompt + 这句 user 消息
+    expect(peakPrompt).toBeGreaterThan(10);
+    expect(peakCompletion).toBeGreaterThan(0);
+
+    // 验证：这次调用在网关侧会被判定为「拿到终态 usage」（`usageFinal`）——即流以
+    // [DONE] 收尾，且真实计数落在**最后**一个 usage 块上（Cloudflare 的真值只在
+    // finish_reason 之后的 `choices: []` 尾块，中间块全是 `{0,1}` 占位桩）。
+    // 只有满足这两条的流才按完整 usage 计费；不满足的（客户端断开 / 上游 reset /
+    // 停顿）只按 provider 已数清的 input 计费、output 记 0 并标 `stream_truncated`，
+    // 一个 usage 块都没有的记 `usage_unavailable` error 行。所以这里必须确认
+    // 「完成流 = 末尾即峰值」这条前提成立，否则真实计费会被误判成截断。
+    expect(sseBody).toContain("[DONE]");
+    expect(completionTokens).toBe(peakCompletion);
+    expect(promptTokens).toBe(peakPrompt);
+
     // ===== 6. 等 logUsage 后台写入数据库 =====
     await page.waitForTimeout(3000);
     console.log(`\n✅ SSE 解析成功，usage 真实可拿。预期 logUsage 会记 outputTokens=${completionTokens}`);

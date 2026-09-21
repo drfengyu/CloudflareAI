@@ -335,7 +335,7 @@ Output ONLY the translated text, with no quotes, explanations, or extra content.
 ┌─────────────────┐
 │ 3. 获取真实用量 │
 └────────┬────────┘
-         │ 流式：解析 SSE 末尾 usage chunk
+         │ 流式：解析 SSE 终态 usage chunk（未拿到终态 → output 记 0，input 照计）
          │ 非流式：response.usage
          ↓
 ┌─────────────────┐
@@ -460,6 +460,8 @@ await logUsage({
 | 429 | 速率限制 | ❌ | ✅ errorReason |
 | 500 | 上游服务错误 | ❌ | ✅ errorReason |
 | 504 | 超时 | ❌ | ✅ errorReason |
+| — | 流式全程无 usage 块（`usage_unavailable`） | ❌ | ✅ errorReason |
+| — | 流式截断（`stream_truncated`，`status` 仍为 `ok`） | ✅ 只计 input | ✅ errorReason |
 
 ---
 
@@ -470,47 +472,76 @@ await logUsage({
 **问题**：流式响应无法在请求完成前获取真实 token 数。
 
 **解决方案**：
-1. **TransformStream 拦截**：`lib/usage/stream-intercept.ts`
-2. **解析 SSE 末尾 usage chunk**：Cloudflare 默认发送
-3. **累积 delta.content**：供 Playground 保存对话
-4. **Next.js 15 `after()` API**：确保 serverless 响应后继续执行
+1. **拦截上游 SSE 并原样转发**：`lib/usage/stream-intercept.ts` 的 `interceptOpenAIStream()`
+2. **只信终态 usage 块**：Cloudflare 默认在 `finish_reason` **之后**再发一个 `choices: []` 的 chunk 携带真实 usage
+3. **累积 delta.content**：供 Playground 保存对话（不参与计费）
+4. **Next.js `after()` API**：确保 serverless 响应后继续执行 `logUsage`
 
-### 实现代码
+### Cloudflare usage chunk 的真实形状（实测）
+
+中间 chunk 上的 usage 是**占位桩**，不是增量计数器：
+
+| chunk | usage | 说明 |
+|-------|-------|------|
+| 首块 | `{prompt_tokens: 52, completion_tokens: 0}` | input 是真实值 |
+| 中间块 | `{prompt_tokens: 0, completion_tokens: 1}` | 恒定桩值：生成 200 个 token 仍只写 1 |
+| `finish_reason` 块 | `{prompt_tokens: 0, completion_tokens: 0}` | 计数被清零 |
+| 终态块（`choices: []`） | `{prompt_tokens: 52, completion_tokens: 200}` | 唯一可信，与非流式同 prompt 的结果完全一致 |
+| `data: [DONE]` | — | 流正常收尾的哨兵 |
+
+所以计量对每个字段取**历史峰值**（只取末块会漏计 input），并由拦截器额外返回
+`usageFinal` 表示「output 计数是否拿到了可信的终态值」：
+
+> `usageFinal = 收到 [DONE] ‖ 非零 usage 落在 choices 为空的终态尾块`
+
+两个信号都必须**非零**才算数：一个 `{prompt:0, completion:0}` 的 `choices: []` 前导块
+不能证明流已收口。上游 body「被正常读完并关闭」同样不再算证据——实测存在
+干净关闭却只收到 `{0,1}` 占位桩的流。
+
+### 两个计数不对称：截断的流只计 input
+
+客户端断开、上游 reset、上游停顿后被关闭 —— 这三类流**收不到终态 usage 块**，
+峰值里的 `completion_tokens` 就只是桩值（实测：2900 字符的输出仍记 `completion=1`）。
+但 `prompt_tokens` 在首块就被 provider 数清，截断不影响它可信。四条流式计量链路
+（`/v1/chat/completions`、`/v1/messages`、Playground `/api/ai/text` 的 Cloudflare
+与第三方渠道分支）据此收口：
 
 ```typescript
-// lib/usage/stream-intercept.ts
-export function interceptUsageStream(
-  stream: ReadableStream,
-  onUsage: (usage: { input_tokens: number; output_tokens: number }) => void
-): ReadableStream {
-  return stream.pipeThrough(
-    new TransformStream({
-      transform(chunk, controller) {
-        // 解析 SSE 流
-        const text = new TextDecoder().decode(chunk);
-        if (text.includes('"usage":{')) {
-          // 提取 usage 数据
-          const match = text.match(/"usage":\s*({[^}]+})/);
-          if (match) {
-            const usage = JSON.parse(match[1]);
-            onUsage(usage);
-          }
-        }
-        controller.enqueue(chunk);
-      }
-    })
-  );
-}
-
-// 使用 after() 确保计费完成
+// app/v1/chat/completions/route.ts
 after(async () => {
+  const { usage, usageFinal } = await done;
+  const inputTokens = usage?.promptTokens ?? 0;                    // 截断也计
+  const outputTokens = usageFinal ? (usage?.completionTokens ?? 0) : 0; // 只认终态
+  const metered = usage !== null;
   await logUsage({
-    inputTokens: realInputTokens,
-    outputTokens: realOutputTokens,
-    status: "ok"
+    userId, apiKeyId, model, task: "Text Generation", channel: "openai", channelId,
+    inputTokens,
+    outputTokens,
+    status: metered ? "ok" : "error",
+    errorReason: !metered ? "usage_unavailable" : usageFinal ? undefined : "stream_truncated",
+    latencyMs: Date.now() - start,
   });
 });
 ```
+
+原则是**宁可少计，也不虚计**，两个口径都不引入估算 token：
+
+- 截断流的 output 记 0，未知的那部分上游算力成本由平台吸收；
+- 截断但已收到 usage 的流 `status` 保持 `ok`（只带 `errorReason='stream_truncated'`
+  这个 DB 侧标记，UI 只对 error 行渲染告警），所以用户按正常习惯中止一条流
+  （点停止、SDK 收完就断、页面跳走）不会被算成渠道故障；
+- **一个 usage 块都没收到**的流记 `status='error'` + `usage_unavailable`，绝不写成
+  一条静默的 `ok/0/0`——那等于把计量失明伪装成成功。第三方渠道的流式分支目前
+  不注入 `stream_options.include_usage`，OpenAI/DeepSeek 因此可能整条流不发 usage，
+  这类调用会落到这一行；
+- 四条流式链路的 input 不再回退到 `字符数 × 1.5` 的估算值。注意仓库里仍有一条
+  **既有的、非本次改动**口径：第三方（非 Cloudflare）渠道在
+  `app/v1/chat/completions/route.ts` / `app/v1/messages/route.ts` 的分支里按估算写账单，
+  那句话只适用于上面四条流式链路。
+
+已知边界：上游静默停顿且客户端不断开时，读循环不返回、`done` 不 resolve，
+`after()` 不会写行——该调用既不记账也不计费。要闭合它需要给上游请求加超时/空闲
+中止，而不是用估算值补偿。
 
 ### 验证结果
 

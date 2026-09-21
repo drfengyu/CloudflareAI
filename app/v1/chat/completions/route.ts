@@ -178,12 +178,22 @@ export async function POST(req: NextRequest) {
 
     if (stream) {
       // Cloudflare 即使不传 stream_options 也会发 usage chunk，所以无需改请求体。
+      // 但真实 usage 只在**终态** chunk 上：中间 chunk 的 completion_tokens 恒为 0/1
+      // 占位桩，流被截断（客户端断开 / 上游 reset / 停顿）时峰值仍是桩值。
       const { stream: tap, done } = interceptOpenAIStream(res.body);
 
       // 用 next/server 的 after() 让 Vercel 在响应结束后继续运行（serverless
       // 默认在 response return 时立即终止函数，会让 done 的 .then() 丢失）。
       after(async () => {
-        const { usage } = await done;
+        const { usage, usageFinal } = await done;
+        // 两个计数不对称：prompt 在首块就被 provider 数清，截断也是真实值，照计；
+        // completion 只有终态块可信（中间 chunk 恒为 0/1 占位桩），截断时记 0。
+        // 两者都不臆造：既不用 chars*1.5，也不用桩值凑 output。
+        const inputTokens = usage?.promptTokens ?? 0;
+        const outputTokens = usageFinal ? (usage?.completionTokens ?? 0) : 0;
+        // 完全没收到 usage 块 = 计量失明，必须留一条可见的 error 行；
+        // 正常的客户端断开只标 reason、status 仍为 ok，不污染渠道健康度统计。
+        const metered = usage !== null;
         await logUsage({
           userId,
           apiKeyId,
@@ -191,9 +201,14 @@ export async function POST(req: NextRequest) {
           task: "Text Generation",
           channel: "openai",
           channelId,
-          inputTokens: usage?.promptTokens ?? Math.floor(estimatedInput),
-          outputTokens: usage?.completionTokens ?? 0,
-          status: "ok",
+          inputTokens,
+          outputTokens,
+          status: metered ? "ok" : "error",
+          errorReason: !metered
+            ? "usage_unavailable"
+            : usageFinal
+              ? undefined
+              : "stream_truncated",
           latencyMs: Date.now() - start,
         });
       });

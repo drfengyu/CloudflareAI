@@ -36,7 +36,7 @@ export function convertToAnthropicStream(
   if (!upstream) {
     return {
       stream: new ReadableStream(),
-      done: Promise.resolve({ usage: null, content: "" }),
+      done: Promise.resolve({ usage: null, content: "", usageFinal: true }),
     };
   }
 
