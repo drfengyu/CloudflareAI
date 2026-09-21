@@ -7,6 +7,14 @@ import { requireUser } from "@/lib/usage/meter";
 import { revalidatePath } from "next/cache";
 import { syncModelPricingWithSettings } from "@/lib/billing/model-pricing";
 import { invalidateCreditsPerUsdCache } from "@/lib/billing/credits";
+import { parseCnWallClock } from "@/lib/date";
+import {
+  ANNOUNCEMENT_MAX,
+  ANNOUNCEMENT_TYPES,
+  FAQ_MAX,
+  type AnnouncementInput,
+  type FaqItem,
+} from "@/lib/settings/dashboard-info";
 
 async function upsertOption(key: string, value: string) {
   const existing = await db
@@ -324,6 +332,85 @@ export async function updateLinuxdoSettings(formData: {
 
   revalidatePath("/admin/settings");
   revalidatePath("/wallet");
+
+  return { success: true };
+}
+
+/** 看板底部三张卡片（公告 / 常见问答 / 服务可用性）的保存入口 */
+export async function updateDashboardInfoSettings(formData: {
+  announcements: AnnouncementInput[];
+  faq: FaqItem[];
+  uptimeEnabled: boolean;
+  uptimeApiUrl: string;
+}) {
+  const currentUserId = await requireUser();
+
+  // 检查权限
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  if (formData.announcements.length > ANNOUNCEMENT_MAX) {
+    throw new Error(`公告最多 ${ANNOUNCEMENT_MAX} 条`);
+  }
+  if (formData.faq.length > FAQ_MAX) {
+    throw new Error(`常见问答最多 ${FAQ_MAX} 条`);
+  }
+
+  const announcements: AnnouncementInput[] = [];
+  for (const [i, item] of formData.announcements.entries()) {
+    const title = typeof item.title === "string" ? item.title.trim() : "";
+    const content = typeof item.content === "string" ? item.content.trim() : "";
+    const date = typeof item.date === "string" ? item.date.trim() : "";
+    if (!title && !content && !date) continue; // 整行留空视为删除
+    if (!title) throw new Error(`第 ${i + 1} 条公告缺少标题`);
+    if (parseCnWallClock(date) === null) {
+      throw new Error(`第 ${i + 1} 条公告的发布时间无效（应为 YYYY-MM-DD HH:mm）`);
+    }
+    if (title.length > 200) throw new Error(`第 ${i + 1} 条公告标题过长（≤200 字）`);
+    if (content.length > 2000) throw new Error(`第 ${i + 1} 条公告正文过长（≤2000 字）`);
+    announcements.push({
+      title,
+      ...(content ? { content } : {}),
+      type: ANNOUNCEMENT_TYPES.includes(item.type) ? item.type : "default",
+      date,
+    });
+  }
+
+  const faq: FaqItem[] = [];
+  for (const [i, item] of formData.faq.entries()) {
+    const question = typeof item.question === "string" ? item.question.trim() : "";
+    const answer = typeof item.answer === "string" ? item.answer.trim() : "";
+    const link = typeof item.link === "string" ? item.link.trim() : "";
+    if (!question && !answer) continue;
+    if (!question) throw new Error(`第 ${i + 1} 条问答缺少问题`);
+    if (!answer) throw new Error(`第 ${i + 1} 条问答缺少答案`);
+    if (question.length > 200) throw new Error(`第 ${i + 1} 条问答问题过长（≤200 字）`);
+    if (answer.length > 2000) throw new Error(`第 ${i + 1} 条问答答案过长（≤2000 字）`);
+    if (link && !/^https?:\/\//.test(link)) {
+      throw new Error(`第 ${i + 1} 条问答的链接需以 http(s):// 开头`);
+    }
+    faq.push({ question, answer, ...(link ? { link } : {}) });
+  }
+
+  const uptimeApiUrl = formData.uptimeApiUrl.trim();
+  if (formData.uptimeEnabled && !/^https?:\/\//.test(uptimeApiUrl)) {
+    throw new Error("启用服务可用性需填写 Uptime 接口地址（http/https）");
+  }
+
+  await upsertOption("dashboard_announcements", JSON.stringify(announcements));
+  await upsertOption("dashboard_faq", JSON.stringify(faq));
+  await upsertOption("uptime_enabled", formData.uptimeEnabled ? "true" : "false");
+  await upsertOption("uptime_api_url", uptimeApiUrl);
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/dashboard");
 
   return { success: true };
 }

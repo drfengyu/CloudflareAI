@@ -1,23 +1,28 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { requireUser, getUserTotalBalance } from "@/lib/usage/meter";
 import {
   getTodayUsage,
   getMonthUsage,
-  getRecentUsage,
   getDailyUsage,
   getUsageByModel,
   getUsageByChannel,
   getHourlyUsageToday,
 } from "@/lib/usage/queries";
+import {
+  getAnnouncements,
+  getFaq,
+  getUptimeConfig,
+} from "@/lib/settings/dashboard-info";
 import { formatCredits, creditsToUsd, getCreditsPerUsd } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
-import { formatCnDateTime } from "@/lib/date";
 import { Activity, Wallet, TrendingUp, Clock } from "lucide-react";
 import { UsageTrendChart } from "@/components/dashboard/usage-trend-chart";
 import { ModelDistributionChart } from "@/components/dashboard/model-distribution-chart";
 import { HourlyUsageChart } from "@/components/dashboard/hourly-usage-chart";
+import { AnnouncementCard } from "@/components/dashboard/announcement-card";
+import { FaqCard } from "@/components/dashboard/faq-card";
+import { UptimeCard } from "@/components/dashboard/uptime-card";
 import { PieChart } from "@/components/charts/pie-chart";
 
 export const dynamic = "force-dynamic";
@@ -32,16 +37,18 @@ export default async function DashboardPage({
   const range = params.range || "today"; // today | week | month
 
   // 使用 try-catch 包裹每个查询，防止单个查询失败导致整个页面崩溃
-  const [today, month, balanceInfo, recent, hourlyUsage, dailyUsage, modelUsage, channelUsage, ratio] = await Promise.all([
+  const [today, month, balanceInfo, hourlyUsage, dailyUsage, modelUsage, channelUsage, ratio, announcements, faq, uptimeConfig] = await Promise.all([
     getTodayUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 })),
     getMonthUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 })),
     getUserTotalBalance(userId).catch(() => ({ permanent: 0, temporary: 0, total: 0 })),
-    getRecentUsage(userId, 10).catch(() => []),
     getHourlyUsageToday(userId).catch(() => []),
     getDailyUsage(userId, range === "month" ? 30 : 7).catch(() => []),
     getUsageByModel(userId, range === "today" ? 1 : range === "week" ? 7 : 30).catch(() => []),
     getUsageByChannel(userId, range === "today" ? 1 : range === "week" ? 7 : 30).catch(() => []),
     getCreditsPerUsd().catch(() => 1),
+    getAnnouncements().catch(() => []),
+    getFaq().catch(() => []),
+    getUptimeConfig().catch(() => ({ enabled: false, apiUrl: "" })),
   ]);
 
   const balance = balanceInfo.total; // 总余额（永久+临时）
@@ -55,7 +62,7 @@ export default async function DashboardPage({
     <>
       <PageHeader
         title="数据看板"
-        description="Credits 消耗统计、余额、调用记录"
+        description="Credits 消耗统计、余额、系统公告与服务可用性"
       />
       <div className="space-y-6 p-8">
         {/* 核心指标卡片 */}
@@ -127,7 +134,7 @@ export default async function DashboardPage({
                   : "border border-border text-muted-foreground hover:text-foreground"
               }`}
             >
-              本周
+              近 7 日
             </a>
             <a
               href="?range=month"
@@ -137,7 +144,7 @@ export default async function DashboardPage({
                   : "border border-border text-muted-foreground hover:text-foreground"
               }`}
             >
-              本月
+              近 30 日
             </a>
           </div>
 
@@ -197,83 +204,12 @@ export default async function DashboardPage({
           </CardContent>
         </Card>
 
-        {/* 最近调用记录 */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">最近 10 次调用</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recent.length === 0 ? (
-              <p className="text-sm text-muted-foreground">暂无调用记录</p>
-            ) : (
-              <div className="space-y-2">
-                {recent.map((log) => {
-                  const channelLabel =
-                    log.channel === "web" ? "站内" :
-                    log.channel === "openai" ? "OpenAI" :
-                    log.channel === "anthropic" ? "Anthropic" :
-                    log.channel;
-
-                  return (
-                    <div
-                      key={log.id}
-                      className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-card p-3 text-xs"
-                    >
-                      {/* 左侧：状态 + 渠道 */}
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Badge tone={log.status === "ok" ? "success" : "danger"}>
-                          {log.status}
-                        </Badge>
-                        <Badge tone="muted">{channelLabel}</Badge>
-                      </div>
-
-                      {/* 中间：Key + 模型 + 错误 */}
-                      <div className="flex flex-wrap items-center gap-2 min-w-0">
-                        {log.apiKeyName ? (
-                          <Badge tone="muted">🔑 {log.apiKeyName}</Badge>
-                        ) : (
-                          <Badge tone="muted">历史数据</Badge>
-                        )}
-                        <span className="max-w-[200px] truncate font-mono text-[11px] text-muted-foreground" title={log.model}>
-                          {log.model}
-                        </span>
-                        {log.status === "error" && log.errorReason && (
-                          <span className="text-xs text-destructive truncate max-w-[150px]" title={log.errorReason}>
-                            ⚠️ {log.errorReason}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* 右侧：指标 */}
-                      <div className="flex items-center gap-3 text-muted-foreground whitespace-nowrap">
-                        {/* Token 数量 */}
-                        {log.inputTokens || log.outputTokens ? (
-                          <span className="w-[100px] text-right text-[11px]" title="输入 / 输出 tokens">
-                            {log.inputTokens?.toLocaleString() || 0} / {log.outputTokens?.toLocaleString() || 0}
-                          </span>
-                        ) : (
-                          <span className="w-[100px] text-right">—</span>
-                        )}
-                        <span className="font-medium w-[80px] text-right">
-                          {log.creditsUsed ? `${formatCredits(log.creditsUsed)} cr` : "—"}
-                        </span>
-                        <span className="w-[50px] text-right">{log.latencyMs ? `${(log.latencyMs / 1000).toFixed(2)}s` : "—"}</span>
-                        <span className="text-[11px] w-[80px] text-right">
-                          {formatCnDateTime(log.createdAt!, {
-                            month: "2-digit",
-                            day: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        {/* 系统公告 / 常见问答 / 服务可用性 */}
+        <div className="grid gap-4 lg:grid-cols-4">
+          <AnnouncementCard items={announcements} className="lg:col-span-2" />
+          <FaqCard items={faq} />
+          <UptimeCard configured={uptimeConfig.enabled && !!uptimeConfig.apiUrl} />
+        </div>
       </div>
     </>
   );

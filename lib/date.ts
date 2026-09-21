@@ -36,6 +36,14 @@ export function cnDaysAgoStart(days: number): Date {
   return new Date(bj.getTime() - CN_OFFSET_MS);
 }
 
+/**
+ * 北京时区「含今天在内的 N 个日历日」起始时刻：N=1 即今天 0 点，N=7 即 6 天前 0 点。
+ * 用于「今日 / 近 N 日」这类含当天的统计窗口，避免多算一个整天。
+ */
+export function cnLastNDaysStart(days: number): Date {
+  return cnDaysAgoStart(Math.max(0, days - 1));
+}
+
 /** 将时间戳格式化为中国时区日期时间（服务端/客户端均按北京时间显示）。 */
 export function formatCnDateTime(
   ms: number | Date | string,
@@ -61,4 +69,59 @@ export function formatCnDate(ms: number | Date | string): string {
     month: "2-digit",
     day: "2-digit",
   }).format(new Date(ms));
+}
+
+/**
+ * 北京墙钟「YYYY-MM-DD HH:mm」显示。手动拼字段而不是走 Intl，
+ * 因为 zh-CN 会输出 `2026/07/27`，且个别 ICU 版本零点会给出「24」时。
+ */
+export function formatCnWallClock(ms: number | Date, withTime = true): string {
+  const d = cnDate(new Date(ms));
+  const p = (n: number) => String(n).padStart(2, "0");
+  const date = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
+  return withTime ? `${date} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}` : date;
+}
+
+/**
+ * 解析北京墙钟字符串为真实毫秒，接受 `YYYY-MM-DD`、`YYYY-MM-DD HH:mm`、`YYYY-MM-DDTHH:mm`。
+ * 公告等由管理员手填的时间按北京时间口径解释，与浏览器所在时区无关。非法输入返回 null。
+ */
+export function parseCnWallClock(value: string): number | null {
+  const m = value.trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?$/);
+  if (!m) return null;
+  const [, y, mo, d, h, mi] = m;
+  const wall = Date.UTC(Number(y), Number(mo) - 1, Number(d), Number(h ?? 0), Number(mi ?? 0));
+  const check = new Date(wall);
+  if (
+    check.getUTCFullYear() !== Number(y) ||
+    check.getUTCMonth() !== Number(mo) - 1 ||
+    check.getUTCDate() !== Number(d) ||
+    check.getUTCHours() !== Number(h ?? 0) ||
+    check.getUTCMinutes() !== Number(mi ?? 0)
+  ) {
+    return null;
+  }
+  return wall - CN_OFFSET_MS;
+}
+
+/** 中文相对时间（「刚刚」「3 天前」「1 个月前」）；未来时间退回绝对时间显示。 */
+export function formatCnRelativeTime(ms: number | Date, nowMs = Date.now()): string {
+  const t = new Date(ms).getTime();
+  const diff = nowMs - t;
+  if (diff < 0) return formatCnWallClock(t);
+
+  const minutes = Math.floor(diff / 60_000);
+  if (minutes < 1) return "刚刚";
+  if (minutes < 60) return `${minutes} 分钟前`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} 小时前`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} 天前`;
+
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} 个月前`;
+
+  return `${Math.floor(months / 12)} 年前`;
 }

@@ -6,8 +6,21 @@ import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
 import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, AuthChannelsForm, EpaySettingsForm, LinuxdoSettingsForm } from "./settings-form";
+import { DashboardInfoForm } from "./dashboard-info-form";
+import type { AnnouncementInput, FaqItem } from "@/lib/settings/dashboard-info";
 
 export const dynamic = "force-dynamic";
+
+/** option 表存的是字符串，编辑器里需要还原成数组；脏数据按空数组处理。 */
+function parseArray<T>(raw: string | undefined): T[] {
+  if (!raw) return [];
+  try {
+    const value = JSON.parse(raw);
+    return Array.isArray(value) ? (value as T[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 export default async function AdminSettingsPage() {
   const currentUserId = await requireUser();
@@ -143,14 +156,17 @@ export default async function AdminSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">所有设置（JSON 编辑器）</CardTitle>
+            <CardTitle className="text-base">看板信息（公告 / 问答 / 服务可用性）</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="rounded-lg bg-secondary p-4">
-              <pre className="text-xs">
-                {JSON.stringify(settings, null, 2)}
-              </pre>
-            </div>
+            <DashboardInfoForm
+              initialSettings={{
+                announcements: parseArray<AnnouncementInput>(settings.dashboard_announcements),
+                faq: parseArray<FaqItem>(settings.dashboard_faq),
+                uptimeEnabled: settings.uptime_enabled === "true",
+                uptimeApiUrl: settings.uptime_api_url || "",
+              }}
+            />
           </CardContent>
         </Card>
       </div>

@@ -1,7 +1,7 @@
 import { db } from "@/lib/db/d1-http";
 import { usageLogs, users, apiKeys, channels, type UsageLog } from "@/lib/db/schema";
 import { desc, eq, gte, and, sql } from "drizzle-orm";
-import { cnStartOfToday, cnStartOfMonth, cnDaysAgoStart } from "@/lib/date";
+import { cnStartOfToday, cnStartOfMonth, cnLastNDaysStart } from "@/lib/date";
 
 /** 获取用户今日用量统计（Phase C: credits 模型；按中国时区日界） */
 export async function getTodayUsage(userId: string) {
@@ -58,42 +58,9 @@ export async function getUserBalance(userId: string) {
   return rows[0]?.balanceCredits ?? 0;
 }
 
-/** 获取最近 N 条用量记录 */
-export async function getRecentUsage(
-  userId: string,
-  limit = 10,
-): Promise<(UsageLog & { apiKeyName?: string | null })[]> {
-  return db
-    .select({
-      id: usageLogs.id,
-      userId: usageLogs.userId,
-      apiKeyId: usageLogs.apiKeyId,
-      model: usageLogs.model,
-      task: usageLogs.task,
-      source: usageLogs.source,
-      channel: usageLogs.channel,
-      channelId: usageLogs.channelId,
-      inputTokens: usageLogs.inputTokens,
-      outputTokens: usageLogs.outputTokens,
-      neurons: usageLogs.neurons,
-      creditsUsed: usageLogs.creditsUsed,
-      costUsd: usageLogs.costUsd,
-      status: usageLogs.status,
-      errorReason: usageLogs.errorReason,
-      latencyMs: usageLogs.latencyMs,
-      createdAt: usageLogs.createdAt,
-      apiKeyName: apiKeys.name,
-    })
-    .from(usageLogs)
-    .leftJoin(apiKeys, eq(usageLogs.apiKeyId, apiKeys.id))
-    .where(eq(usageLogs.userId, userId))
-    .orderBy(desc(usageLogs.createdAt))
-    .limit(limit);
-}
-
-/** 按模型统计用量（Phase C: 用于饼图/柱状图；按中国时区日界） */
+/** 按模型统计用量（Phase C: 用于饼图/柱状图；含今天在内的 days 个北京日历日） */
 export async function getUsageByModel(userId: string, days = 30) {
-  const startDate = cnDaysAgoStart(days);
+  const startDate = cnLastNDaysStart(days);
 
   const rows = await db
     .select({
@@ -115,9 +82,9 @@ export async function getUsageByModel(userId: string, days = 30) {
   return rows;
 }
 
-/** 按渠道统计用量（渠道分布饼图；按中国时区日界） */
+/** 按渠道统计用量（渠道分布饼图；含今天在内的 days 个北京日历日） */
 export async function getUsageByChannel(userId: string, days = 30) {
-  const startDate = cnDaysAgoStart(days);
+  const startDate = cnLastNDaysStart(days);
 
   const rows = await db
     .select({
@@ -158,9 +125,9 @@ export async function getUsageByChannel(userId: string, days = 30) {
   });
 }
 
-/** 按日统计用量（Phase C: 用于趋势图；日期按中国时区） */
+/** 按日统计用量（Phase C: 用于趋势图；日期按中国时区，含今天在内的 days 个日历日） */
 export async function getDailyUsage(userId: string, days = 7) {
-  const startDate = cnDaysAgoStart(days);
+  const startDate = cnLastNDaysStart(days);
 
   const rows = await db
     .select({

@@ -25,10 +25,18 @@
   - **后台配置**：`/admin/settings` 新增「在线充值（LinuxDO 积分）」卡片（`LinuxdoSettingsForm` + `updateLinuxdoSettings`），含网关地址/Client ID/密钥/汇率/限额
   - **钱包 UI**：充值弹窗新增「LinuxDO 积分」按钮（启用时才显示），金额单位切换为「积分」；订单卡片/管理端表格新增渠道文案
   - **文档**：`docs/features/linuxdo-credit-payment.md` 详细接入指南 + `docs/creditapi.md` 官方接口存档
+- **看板信息卡（系统公告 / 常见问答 / 服务可用性）**
+  - **数据层 `lib/settings/dashboard-info.ts`**：公告与问答存 `option` 表（`dashboard_announcements` / `dashboard_faq`，JSON 数组），服务可用性存 `uptime_enabled` + `uptime_api_url`。公告按发布时间倒序取最新 20 条，问答最多 20 条；脏数据（缺标题 / 时间不可解析）读取时丢弃而不是让页面报错。
+  - **公告时间为北京墙钟串**（`YYYY-MM-DD HH:mm`）而非时间戳：新增 `lib/date.ts` 的 `parseCnWallClock` / `formatCnWallClock` / `formatCnRelativeTime`，管理员手填的时间不受浏览器与服务器时区影响，展示为「1 个月前 · 2026-07-27 22:28」。
+  - **`GET /api/uptime`**：会话鉴权，现场抓取 Uptime Kuma 状态页接口（`api/status2/<slug>`），5 秒超时，`msg` 优先、缺失时按状态点颜色归一为 up/down/maint/pending。抓取放在客户端而非服务端渲染，慢上游只影响这张卡片。
+  - **后台配置**：`/admin/settings` 新增「看板信息」卡片（`DashboardInfoForm` + `updateDashboardInfoSettings`），公告/问答可逐条增删改，服务端做长度与格式校验后整体覆写。
 
 ### 变更
 
 - `vercel.json` 新增 `/api/cron/reconcile-orders`（Hobby 套餐限制为每日执行，`0 3 * * *`）
+- **看板底部改版**：移除「最近 10 次调用」卡片（`/history` 已有完整调用记录，看板不再重复一份），改为并排三张信息卡（公告占两列，问答与可用性各一列）；`getRecentUsage` 已无调用方，随之删除。
+- **看板时间范围按钮文案对齐实际口径**：「本周 / 本月」改为「近 7 日 / 近 30 日」，与卡片标题和滚动窗口一致（顶部「本月调用」StatCard 仍是真·日历月，未动）。
+- **`/admin/settings` 不再展示「所有设置（JSON 编辑器）」**：这张卡把 `option` 表整份 `JSON.stringify` 渲染进 `<pre>`，等于把 `epay_key` / `ldpay_key` 等支付商户密钥明文放进 DOM——页面虽有 role ≥ 10 门禁，但浏览器扩展、任意 XSS、截图和共享桌面都能直接读走。每个设置项都已有专属表单卡片，只读全量 JSON 的排障价值不值这个风险。
 - **钱包页流水与余额展示收敛**（`app/(dashboard)/wallet/page.tsx`）：「充值记录」只保留最近 90 天（`cnDaysAgoStart(90)`，按北京时区日界），并隐藏已过期的一次性发放（见下条）；总余额卡片上移到每日签到之上，签到日历与在线充值订单顺延。临时余额的过期判定下沉到 SQL（与 `lib/usage/meter.ts` 同一写法），JS 侧保留二次判断兜底。
 - **钱包充值流水隐藏已过期的一次性发放**（`lib/billing/grant-expiry.ts` + `app/(dashboard)/wallet/page.tsx`）：签到奖励（type 3）与兑换码（type 1）发放的都是会过期的临时余额，到期后不再出现在「充值记录」里。到期时间按「发放时刻 + 当时的有效天数」（`checkin_valid_days` / `redemption.balanceValidDays`，缺省 7 天）推算——不能用「对应临时余额行是否还在」判断，因为消费会删除或扣减临时余额行（`lib/usage/meter.ts`），当天就被花掉的奖励会立刻从流水里消失。管理员调整与在线充值是永久余额，不受影响；「在线充值订单」卡不按 90 天裁剪，因为待支付/确认中订单可能陈旧到任意久，而这张卡是用户自查与手动催单的唯一入口。
 
@@ -37,6 +45,7 @@
 - **流式截断不再把 usage 占位桩当真实用量计费**（`lib/usage/stream-intercept.ts` + 四条流式计量链路）：实测 Cloudflare 的 OpenAI 兼容流里，中间 chunk 的 `usage` 是恒定占位桩——首块 `{prompt:52,completion:0}`、之后每块 `{prompt:0,completion:1}`（生成 200 个 token 也只写 1）、`finish_reason` 块 `{0,0}`，真实计数只在 finish 之后 `choices: []` 的终态块上（实测 `{52,200}`，与非流式同 prompt 结果一致，故**完整结束的长生成本来就计费正确**）。问题出在被截断的流：`after()` 里硬编码 `status:"ok"`，把 `completion=1` 的桩值写进账单（实测 2900 字符的输出仅记 1 个 token），usage 整体缺失时 input 还回退到 `字符数 × 1.5` 估算——既记了 provider 从未数过的 token，也违反「失败调用 bill 0 credits」不变量。拦截器新增 `usageFinal`（收到 `[DONE]`，或**非零** usage 落在 `choices: []` 的终态尾块；「上游 body 正常读完关闭」不算证据——实测有干净关闭却只收到占位桩的流），`/v1/chat/completions`、`/v1/messages`、Playground `/api/ai/text`（Cloudflare 与第三方渠道两个分支）据此按两个计数各自的可信度收口：`prompt_tokens` 首块即被 provider 数清，截断也照计；`completion_tokens` 只认终态块，截断时记 0，`status` 保持 `ok` 并带 `errorReason:"stream_truncated"`（用户点停止/SDK 收完即断属正常中止，不该计入渠道失败率）；整条流一个 usage 块都没收到的记 `status:"error"` + `usage_unavailable`，不再伪装成静默的 `ok/0/0`。四条流式链路的估算兜底（`字符数 × 1.5`）一并移除。逐字段峰值逻辑本身不变；`docs/BILLING_GUIDE.md` 流式计量章节按实测重写。已知未闭合：上游静默停顿且客户端不断开时 `done` 永不 resolve，该调用不写任何行——需要给上游请求加超时/空闲中止才能闭合，不在本次改动内。
 - **流式调用漏计 input tokens**（`lib/usage/stream-intercept.ts`）：Cloudflare 在每个 SSE chunk 重复下发累计 `usage`，并把本次未前进的计数清零（先 `{prompt:687,completion:0}`、后续 `{prompt:0,completion:N}`）。旧实现「取最后一个非空 usage」会让所有流式请求按 **0 input tokens** 记账（`logUsage` 的 `?? estimatedInput` 兜底只在 usage 整体缺失时生效）。改为逐字段取峰值，`/v1/chat/completions`、`/v1/messages`、playground 文本三条计量链路一并修正；`tests/e2e/streaming-metering.spec.ts` 补上「峰值 prompt_tokens > 0」断言，防止回归。
 - **时间统一为中国时区（Asia/Shanghai, UTC+8）**：新增 `lib/date.ts`（`cnStartOfToday`/`cnStartOfMonth`/`cnDaysAgoStart`/`formatCnDateTime`/`formatCnDate`），修复服务器（Vercel 默认 UTC）导致的「今日」日界错位（北京 0-8 点看板仍显示昨天数据）；数据看板/使用历史/对话历史/订单管理/钱包订单卡片与临时余额到期等时间显示统一按北京时间
+- **看板「今日模型分布/渠道分布」把昨天算进今天**（`lib/usage/queries.ts` + `lib/date.ts`）：分布图的窗口下界取自 `cnDaysAgoStart(days)`，range=today 时 `days=1` 正好落在**北京昨天 0 点**，于是昨天用过的模型会一直挂在「今日」标题下；同页的「今日消耗」「今日调用」「今日每小时消耗」用 `cnStartOfToday()`，两者相差整整一天，卡片之间互相对不上。新增 `cnLastNDaysStart(days)`（含今天在内的 N 个北京日历日，N=1 即今天 0 点），`getUsageByModel`/`getUsageByChannel`/`getDailyUsage` 三个聚合一并改用：「近 7 日」由跨 8 个日历日、「近 30 日」由跨 31 个日历日收敛为字面的 7/30 天。钱包页「充值记录」的 `cnDaysAgoStart(90)` 是截止裁剪而非含今天的统计窗口，语义不变。
 
 ## [0.5.0] - 2026-08-18
 
