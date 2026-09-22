@@ -64,7 +64,7 @@ export function FaqCard({
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                         >
-                          查看文档
+                          查看详情
                           <ExternalLink className="h-3 w-3" />
                         </a>
                       ) : null}

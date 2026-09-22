@@ -25,22 +25,22 @@ const STATUS_LABEL: Record<UptimeStatus, string> = {
 };
 
 /**
- * 服务可用性：挂载后从 /api/uptime 拉取 Uptime Kuma 数据，可手动刷新。
- * 未配置时不发请求，直接展示引导空状态。
+ * 服务可用性：后台开启后从 /api/uptime 拉取（外部 Uptime Kuma 或本站端点自检），可手动刷新。
+ * 未开启时不发请求，直接展示引导空状态。
  */
 export function UptimeCard({
-  configured,
+  enabled,
   className,
 }: {
-  configured: boolean;
+  enabled: boolean;
   className?: string;
 }) {
   const [data, setData] = useState<UptimeResult | null>(null);
-  const [loading, setLoading] = useState(configured);
+  const [loading, setLoading] = useState(enabled);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    if (!configured) return;
+    if (!enabled) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -49,7 +49,7 @@ export function UptimeCard({
         if (!cancelled) setData(result);
       } catch {
         if (!cancelled) {
-          setData({ configured: true, ok: false, monitors: [], error: "无法访问监控接口" });
+          setData({ enabled: true, ok: false, monitors: [], error: "无法访问监控接口" });
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -58,7 +58,7 @@ export function UptimeCard({
     return () => {
       cancelled = true;
     };
-  }, [configured, reloadKey]);
+  }, [enabled, reloadKey]);
 
   const refresh = () => {
     setLoading(true);
@@ -66,7 +66,7 @@ export function UptimeCard({
   };
 
   const monitors = data?.monitors ?? [];
-  const showList = configured && monitors.length > 0;
+  const showList = enabled && monitors.length > 0;
 
   return (
     <Card className={className}>
@@ -74,7 +74,7 @@ export function UptimeCard({
         icon={<Activity className="h-4 w-4" />}
         title="服务可用性"
         action={
-          configured ? (
+          enabled ? (
             <button
               type="button"
               onClick={refresh}
@@ -88,11 +88,11 @@ export function UptimeCard({
         }
       />
 
-      {!configured ? (
+      {!enabled ? (
         <InfoCardEmpty
           icon={<Activity className="h-6 w-6" />}
-          title="暂无监控数据"
-          hint="请联系系统管理员在系统设置中配置Uptime"
+          title="服务可用性未开启"
+          hint="请联系系统管理员在系统设置中开启服务可用性"
         />
       ) : showList ? (
         <CardContent className={INFO_CARD_BODY_CLASS}>
@@ -110,6 +110,11 @@ export function UptimeCard({
               </li>
             ))}
           </ul>
+          {data?.source === "builtin" ? (
+            <p className="text-[11px] text-muted-foreground">
+              本站端点自检 · 右侧数值为单次请求耗时
+            </p>
+          ) : null}
           {data?.error ? (
             <p className="text-xs text-[color:var(--warning)]">{data.error}</p>
           ) : null}

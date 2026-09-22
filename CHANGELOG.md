@@ -28,8 +28,8 @@
 - **看板信息卡（系统公告 / 常见问答 / 服务可用性）**
   - **数据层 `lib/settings/dashboard-info.ts`**：公告与问答存 `option` 表（`dashboard_announcements` / `dashboard_faq`，JSON 数组），服务可用性存 `uptime_enabled` + `uptime_api_url`。公告按发布时间倒序取最新 20 条，问答最多 20 条；脏数据（缺标题 / 时间不可解析）读取时丢弃而不是让页面报错。
   - **公告时间为北京墙钟串**（`YYYY-MM-DD HH:mm`）而非时间戳：新增 `lib/date.ts` 的 `parseCnWallClock` / `formatCnWallClock` / `formatCnRelativeTime`，管理员手填的时间不受浏览器与服务器时区影响，展示为「1 个月前 · 2026-07-27 22:28」。
-  - **`GET /api/uptime`**：会话鉴权，现场抓取 Uptime Kuma 状态页接口（`api/status2/<slug>`），5 秒超时，`msg` 优先、缺失时按状态点颜色归一为 up/down/maint/pending。抓取放在客户端而非服务端渲染，慢上游只影响这张卡片。
-  - **后台配置**：`/admin/settings` 新增「看板信息」卡片（`DashboardInfoForm` + `updateDashboardInfoSettings`），公告/问答可逐条增删改，服务端做长度与格式校验后整体覆写。
+  - **`GET /api/uptime`**：会话鉴权，两种数据源。配了 `uptime_api_url` 就代理抓取 Uptime Kuma 状态页接口（`api/status2/<slug>`），5 秒超时，`msg` 优先、缺失时按状态点颜色归一为 up/down/maint/pending；**地址留空则退化为自检本站端点**（并发探 `/api/health`、`/v1/chat/completions`、`/api/session`，判定为「有响应且状态码 < 500 即正常」，右侧数值显示单次请求耗时）。刻意不探 `/v1/models`——它会扇出到所有第三方渠道拉模型列表。抓取放在客户端而非服务端渲染，慢上游只影响这张卡片。
+  - **后台配置**：`/admin/settings` 新增「看板信息」卡片（`DashboardInfoForm` + `updateDashboardInfoSettings`），公告/问答可逐条增删改，服务端做长度与格式校验后整体覆写；Uptime 地址为可选项，勾选启用即进入本站自检模式。
 
 ### 变更
 

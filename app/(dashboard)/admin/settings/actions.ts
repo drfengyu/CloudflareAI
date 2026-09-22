@@ -400,8 +400,8 @@ export async function updateDashboardInfoSettings(formData: {
   }
 
   const uptimeApiUrl = formData.uptimeApiUrl.trim();
-  if (formData.uptimeEnabled && !/^https?:\/\//.test(uptimeApiUrl)) {
-    throw new Error("启用服务可用性需填写 Uptime 接口地址（http/https）");
+  if (uptimeApiUrl && !/^https?:\/\//.test(uptimeApiUrl)) {
+    throw new Error("Uptime 接口地址需以 http(s):// 开头（留空则自检本站端点）");
   }
 
   await upsertOption("dashboard_announcements", JSON.stringify(announcements));

@@ -221,7 +221,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   - 余额/今日消耗/调用数/本月调用 StatCard
   - 时间范围切换（今日/近 7 日/近 30 日，滚动窗口），修复 Next.js 16 async searchParams
   - recharts 图表渲染（小时趋势/日趋势/模型分布）
-  - 底部三张信息卡：系统公告 / 常见问答 / 服务可用性（内容存 `option` 表，`lib/settings/dashboard-info.ts`；可用性由 `/api/uptime` 客户端按需抓取 Uptime Kuma）
+  - 底部三张信息卡：系统公告 / 常见问答 / 服务可用性（内容存 `option` 表，`lib/settings/dashboard-info.ts`；可用性由 `/api/uptime` 客户端按需拉取——配了地址走 Uptime Kuma，留空则自检本站端点）
 
 **验证通过**：
 - 图表正常渲染，切换今日/本周/本月正常

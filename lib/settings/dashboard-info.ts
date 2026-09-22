@@ -116,9 +116,10 @@ export interface UptimeMonitor {
 }
 
 export interface UptimeResult {
-  /** 后台是否配置了 Uptime 接口 */
-  configured: boolean;
-  /** 本次抓取是否成功 */
+  /** 后台是否开启了这张卡 */
+  enabled: boolean;
+  /** 数据来源：外部 Uptime Kuma 状态页，或本站端点自检；客户端拉取失败时未知 */
+  source?: "kuma" | "builtin";
   ok: boolean;
   monitors: UptimeMonitor[];
   error?: string;
@@ -128,14 +129,73 @@ export interface UptimeResult {
 const UPTIME_TIMEOUT_MS = 5000;
 
 /**
- * 抓取 Uptime Kuma 状态页接口（`/api/status2/<slug>`）。
- * 只认 `monitorList` 里的 name/msg/color/uptime24/link，其余字段忽略。
+ * 未配置外部 Kuma 时的自检目标。
+ * 判定统一为「收到响应且状态码 < 500 即正常」：/v1/chat/completions 未带密钥返回 401
+ * 恰恰说明网关在正常工作，而 /api/health 只有在 D1 / 环境变量 / Auth 全绿时才返回 200。
+ * 刻意不探 /v1/models——它会扇出到所有第三方渠道拉模型列表。
  */
-export async function getUptimeStatus(): Promise<UptimeResult> {
+export const BUILTIN_UPTIME_TARGETS: { name: string; path: string }[] = [
+  { name: "站点诊断 /api/health", path: "/api/health" },
+  { name: "推理网关 /v1/chat/completions", path: "/v1/chat/completions" },
+  { name: "站内接口 /api/session", path: "/api/session" },
+];
+
+/** 自检本站端点：并发探测，单个 5 秒超时，右侧数值展示往返耗时。 */
+export async function probeBuiltinMonitors(origin: string): Promise<UptimeMonitor[]> {
+  return Promise.all(
+    BUILTIN_UPTIME_TARGETS.map(async (target) => {
+      const started = Date.now();
+      try {
+        const res = await fetch(`${origin}${target.path}`, {
+          method: "GET",
+          redirect: "manual",
+          signal: AbortSignal.timeout(UPTIME_TIMEOUT_MS),
+          cache: "no-store",
+        });
+        const latency = Date.now() - started;
+        return {
+          name: target.name,
+          status: res.status < 500 ? "up" : "down",
+          uptime: `${latency} ms`,
+        } satisfies UptimeMonitor;
+      } catch {
+        return {
+          name: target.name,
+          status: "down",
+          uptime: "超时",
+        } satisfies UptimeMonitor;
+      }
+    }),
+  );
+}
+
+/**
+ * 服务可用性数据源：配了 `uptime_api_url` 就走 Uptime Kuma 状态页接口
+ * （`/api/status2/<slug>`），否则退化为自检本站端点。
+ * Kuma 抓取只认 monitorList 里的 name/msg/color/uptime24/link，其余字段忽略。
+ */
+export async function getUptimeStatus(origin: string): Promise<UptimeResult> {
   const { enabled, apiUrl } = await getUptimeConfig();
-  if (!enabled || !apiUrl) return { configured: false, ok: false, monitors: [] };
-  if (!/^https?:\/\//.test(apiUrl)) {
-    return { configured: true, ok: false, monitors: [], error: "Uptime 地址需以 http(s) 开头" };
+  if (!enabled) return { enabled: false, source: "builtin", ok: false, monitors: [] };
+
+  if (apiUrl && !/^https?:\/\//.test(apiUrl)) {
+    return {
+      enabled: true,
+      source: "kuma",
+      ok: false,
+      monitors: [],
+      error: "Uptime 地址需以 http(s) 开头",
+    };
+  }
+
+  if (!apiUrl) {
+    const monitors = await probeBuiltinMonitors(origin);
+    return {
+      enabled: true,
+      source: "builtin",
+      ok: monitors.every((m) => m.status === "up"),
+      monitors,
+    };
   }
 
   try {
@@ -144,7 +204,13 @@ export async function getUptimeStatus(): Promise<UptimeResult> {
       cache: "no-store",
     });
     if (!res.ok) {
-      return { configured: true, ok: false, monitors: [], error: `Uptime 接口返回 ${res.status}` };
+      return {
+        enabled: true,
+        source: "kuma",
+        ok: false,
+        monitors: [],
+        error: `Uptime 接口返回 ${res.status}`,
+      };
     }
 
     const data = (await res.json()) as { status?: unknown; monitorList?: unknown };
@@ -162,10 +228,16 @@ export async function getUptimeStatus(): Promise<UptimeResult> {
       })
       .slice(0, 20);
 
-    return { configured: true, ok: data.status === "ok", monitors };
+    return {
+      enabled: true,
+      source: "kuma",
+      ok: data.status === "ok",
+      monitors,
+    };
   } catch (err) {
     return {
-      configured: true,
+      enabled: true,
+      source: "kuma",
       ok: false,
       monitors: [],
       error: err instanceof Error ? `Uptime 抓取失败：${err.message}` : "Uptime 抓取失败",

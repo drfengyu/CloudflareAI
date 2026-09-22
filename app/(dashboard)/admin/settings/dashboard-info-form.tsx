@@ -276,7 +276,7 @@ export function DashboardInfoForm({ initialSettings }: DashboardInfoFormProps) {
 
         <div>
           <label className={`block text-sm font-medium mb-1 ${uptimeEnabled ? "" : "opacity-50"}`}>
-            Uptime 状态页接口地址
+            Uptime 状态页接口地址（可选）
           </label>
           <input
             value={uptimeApiUrl}
@@ -286,8 +286,10 @@ export function DashboardInfoForm({ initialSettings }: DashboardInfoFormProps) {
             className={`${FIELD_CLASS} disabled:opacity-50`}
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            填 Uptime Kuma 状态页的 <code>api/status2/&lt;slug&gt;</code> 地址。看板卡片在浏览器里按需拉取，
-            上游超时或不可达只影响这张卡片。
+            填 Uptime Kuma 状态页的 <code>api/status2/&lt;slug&gt;</code> 地址时按它展示；
+            <strong>留空则由服务端并发自检本站端点</strong>（<code>/api/health</code>、
+            <code>/v1/chat/completions</code>、<code>/api/session</code>，右侧显示单次耗时）。
+            看板卡片在浏览器里按需拉取，上游超时或不可达只影响这张卡片。
           </p>
         </div>
       </div>

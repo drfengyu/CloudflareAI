@@ -208,7 +208,7 @@ export default async function DashboardPage({
         <div className="grid gap-4 lg:grid-cols-4">
           <AnnouncementCard items={announcements} className="lg:col-span-2" />
           <FaqCard items={faq} />
-          <UptimeCard configured={uptimeConfig.enabled && !!uptimeConfig.apiUrl} />
+          <UptimeCard enabled={uptimeConfig.enabled} />
         </div>
       </div>
     </>
