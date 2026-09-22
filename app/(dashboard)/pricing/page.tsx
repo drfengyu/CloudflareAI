@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { PricingTabs } from "@/components/pricing/pricing-tabs";
 import { fetchModelCatalog, type NormalizedModel } from "@/lib/cloudflare/catalog";
 import { getDisplayPrice } from "@/lib/billing/display-price";
-import { getAllModelPricing } from "@/lib/billing/model-pricing";
+import { getAllModelPricing, getPricingConfig } from "@/lib/billing/model-pricing";
 import { db } from "@/lib/db/d1-http";
 import { channels, modelPricing } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -14,9 +14,10 @@ export const dynamic = "force-dynamic";
 const CATEGORY_ORDER = ["text", "image", "vision", "embeddings", "translate", "speech", "video"];
 
 export default async function PricingPage() {
-  const [cfModels, pricingMap, channelRows] = await Promise.all([
+  const [cfModels, pricingMap, baseMultiplier, channelRows] = await Promise.all([
     fetchModelCatalog(),
     getAllModelPricing(),
+    getPricingConfig().then((c) => c.baseMultiplier),
     db
       .select({ id: channels.id, name: channels.name, type: channels.type })
       .from(channels)
@@ -136,8 +137,9 @@ export default async function PricingPage() {
                 <p className="font-medium text-primary">定价说明</p>
                 <ul className="space-y-1 text-muted-foreground">
                   <li>• 全站统一以 Credits（cr）计价，不涉及其他货币</li>
-                  <li>• 文本模型：按 token 计费，价格单位为「cr / per K input token」</li>
-                  <li>• 图像模型：固定价格，价格单位为「cr / image」</li>
+                  <li>• 下列单价即<b>实际扣费价</b>：表价 × 模型倍率 × 基础倍率（当前 ×{baseMultiplier}）</li>
+                  <li>• 文本 / 嵌入等按 token 计费的模型单位为「cr / per K input token」</li>
+                  <li>• 图像模型按张固定计费（cr / image），不受基础倍率影响</li>
                 </ul>
               </div>
             </div>
@@ -147,6 +149,7 @@ export default async function PricingPage() {
         <PricingTabs
           allChannels={allChannels}
           modelsByChannel={modelsByChannel}
+          baseMultiplier={baseMultiplier}
         />
       </div>
     </>

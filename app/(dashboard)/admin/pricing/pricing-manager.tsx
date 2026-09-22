@@ -43,6 +43,8 @@ type ModelWithPricing = {
 
 interface PricingManagerProps {
   models: ModelWithPricing[];
+  /** 全局基础倍率（pricing_base_multiplier），实付单价 = 表价 × 模型倍率 × 它 */
+  baseMultiplier: number;
   /** 是否从服务端传入了渠道模型 */
   channelModels?: ModelWithPricing[];
   /** 渠道列表 */
@@ -55,6 +57,7 @@ interface PricingManagerProps {
 
 export function PricingManager({
   models = [],
+  baseMultiplier,
   channelModels = [],
   channels = [],
   activeChannel = "cloudflare",
@@ -151,7 +154,7 @@ export function PricingManager({
           <p className="py-8 text-center text-sm text-muted-foreground">没有匹配的模型</p>
         ) : (
           visible.map((model) => (
-            <ModelPricingRow key={model.id} model={model} />
+            <ModelPricingRow key={model.id} model={model} baseMultiplier={baseMultiplier} />
           ))
         )}
       </div>
@@ -161,17 +164,25 @@ export function PricingManager({
 
 function ModelPricingRow({
   model,
+  baseMultiplier,
 }: {
   model: ModelWithPricing;
+  baseMultiplier: number;
 }) {
   const [multiplier, setMultiplier] = useState(String(model.pricing?.multiplier ?? 1.0));
   const [saving, setSaving] = useState(false);
 
   const p = model.pricing;
   const storedPrice = p ? (p.isImage ? (p.fixedPrice ?? 0) : (p.inputPrice ?? 0)) : 0;
-  const displayPrice = p ? formatModelPrice(storedPrice, p.isImage) : "—";
+  // 表价：已含基础倍率，与 /pricing 上给用户看的单价同源
+  const displayPrice = p ? formatModelPrice(storedPrice, p.isImage, baseMultiplier) : "—";
+  // 实付：表价再乘这一行的模型倍率
   const finalPrice = p
-    ? formatModelPrice(storedPrice * (parseFloat(multiplier) || 1), p.isImage)
+    ? formatModelPrice(
+        storedPrice * (parseFloat(multiplier) || 1),
+        p.isImage,
+        baseMultiplier,
+      )
     : "—";
 
   async function handleSave() {
@@ -207,8 +218,8 @@ function ModelPricingRow({
         </div>
 
         <div className="hidden md:block text-right text-xs text-muted-foreground min-w-[120px]">
-          <div>基础: {displayPrice}</div>
-          <div>最终: <span className="text-foreground font-medium">{finalPrice}</span></div>
+          <div>表价: {displayPrice}</div>
+          <div>实付: <span className="text-foreground font-medium">{finalPrice}</span></div>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">

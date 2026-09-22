@@ -22,9 +22,12 @@ export function ModelBrowser({
   allChannels,
   modelsByChannel,
   pricingMap,
+  baseMultiplier,
 }: {
   allChannels: ChannelTab[];
   modelsByChannel: Record<string, NormalizedModel[]>;
+  /** 全局基础倍率：卡片上的单价按实付口径展示时乘上去 */
+  baseMultiplier: number;
   pricingMap?: Map<
     string,
     {
@@ -142,7 +145,12 @@ export function ModelBrowser({
       {/* 模型网格 */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
         {visible.map((m) => (
-          <ModelCard key={m.id} model={m} pricingMap={pricingMap} />
+          <ModelCard
+            key={m.id}
+            model={m}
+            pricingMap={pricingMap}
+            baseMultiplier={baseMultiplier}
+          />
         ))}
       </div>
 
@@ -156,8 +164,10 @@ export function ModelBrowser({
 function ModelCard({
   model,
   pricingMap,
+  baseMultiplier,
 }: {
   model: NormalizedModel;
+  baseMultiplier: number;
   pricingMap?: Map<
     string,
     {
@@ -228,7 +238,7 @@ function ModelCard({
             <Badge tone="warning">需 Workers Paid</Badge>
           )}
           <Badge tone="muted" className="font-mono">
-            {formatModelPrice(displayPrice.credits, displayPrice.isImage)}
+            {formatModelPrice(displayPrice.credits, displayPrice.isImage, baseMultiplier)}
           </Badge>
         </div>
       </CardContent>

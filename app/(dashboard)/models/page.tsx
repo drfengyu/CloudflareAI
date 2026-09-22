@@ -3,7 +3,7 @@ import { ModelBrowser } from "@/components/models/model-browser";
 import { Badge } from "@/components/ui/badge";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
 import { fetchAllChannelsModels } from "@/lib/cloudflare/channel-catalog";
-import { getAllModelPricing } from "@/lib/billing/model-pricing";
+import { getAllModelPricing, getPricingConfig } from "@/lib/billing/model-pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -16,14 +16,17 @@ export default async function ModelsPage() {
     modelsByChannel: {},
   };
 
+  let baseMultiplier = 1;
+
   try {
-    [cfModels, pricingMap, channelData] = await Promise.all([
+    [cfModels, pricingMap, channelData, baseMultiplier] = await Promise.all([
       fetchModelCatalog(),
       getAllModelPricing(),
       fetchAllChannelsModels().catch(() => ({
         channels: [],
         modelsByChannel: {},
       })),
+      getPricingConfig().then((c) => c.baseMultiplier),
     ]);
   } catch (e) {
     error = e instanceof Error ? e.message : "无法加载模型目录";
@@ -86,6 +89,7 @@ export default async function ModelsPage() {
           allChannels={allChannels}
           modelsByChannel={modelsByChannel}
           pricingMap={pricingMap}
+          baseMultiplier={baseMultiplier}
         />
       )}
     </>

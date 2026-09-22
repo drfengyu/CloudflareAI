@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PricingManager } from "./pricing-manager";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
+import { getPricingConfig } from "@/lib/billing/model-pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -29,9 +30,10 @@ export default async function AdminPricingPage() {
     .map((c) => ({ id: c.id, name: c.name, type: c.type!, label: c.name }));
 
   // 定价数据
-  const [catalog, pricingRows] = await Promise.all([
+  const [catalog, pricingRows, baseMultiplier] = await Promise.all([
     fetchModelCatalog(),
     db.select().from(modelPricing),
+    getPricingConfig().then((c) => c.baseMultiplier),
   ]);
 
   const pricingMap = new Map(
@@ -94,10 +96,11 @@ export default async function AdminPricingPage() {
     <>
       <PageHeader
         title="定价管理"
-        description="调整各渠道模型定价倍率（基础价格 × 倍率 = 最终价格）"
+        description={`调整各渠道模型定价倍率（实付 = 表价 × 模型倍率，表价已含基础倍率 ×${baseMultiplier}）`}
       />
       <PricingManager
         models={cfModels}
+        baseMultiplier={baseMultiplier}
         channelModels={channelModels}
         channels={channelList}
       />

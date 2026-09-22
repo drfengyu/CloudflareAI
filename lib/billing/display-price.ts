@@ -16,17 +16,32 @@ function trimZeros(value: number, digits: number): string {
     : fixed;
 }
 
+/**
+ * 展示「真正扣费的单价」。
+ *
+ * 入参 `crStored` 是 `model_pricing` 的口径（cr/1M tokens，已含模型倍率），
+ * 与 `calculateCredits` 对齐：文本/嵌入类还要再乘基础倍率，图像固定价不乘。
+ * 展示时再除以 1000 换成 per K。
+ */
 export function modelPriceParts(
   crStored: number,
   isImage: boolean,
+  baseMultiplier = 1,
 ): { value: string; unit: string } {
   return isImage
     ? { value: trimZeros(crStored, 2), unit: "cr / image" }
-    : { value: trimZeros(crStored / CR_PER_M_TO_PER_K, 4), unit: `cr / ${TOKEN_PRICE_UNIT}` };
+    : {
+        value: trimZeros((crStored * baseMultiplier) / CR_PER_M_TO_PER_K, 4),
+        unit: `cr / ${TOKEN_PRICE_UNIT}`,
+      };
 }
 
-export function formatModelPrice(crStored: number, isImage: boolean): string {
-  const { value, unit } = modelPriceParts(crStored, isImage);
+export function formatModelPrice(
+  crStored: number,
+  isImage: boolean,
+  baseMultiplier = 1,
+): string {
+  const { value, unit } = modelPriceParts(crStored, isImage, baseMultiplier);
   return `${value} ${unit}`;
 }
 

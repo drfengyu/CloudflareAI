@@ -105,21 +105,25 @@ pricing_base_multiplier = 100
 实扣单价 = inputPrice × baseMultiplier
 ```
 
-> ⚠️ **展示价 ≠ 实扣价（重要口径说明）**
+> ℹ️ **展示价 = 实扣价（2026-09-22 起对齐）**
 >
-> `model_pricing` 表里的 `inputPrice`（即定价页 `/pricing` 和模型库展示的数字）
-> **不包含** base_multiplier。真正扣费时 `calculateCredits` 会再乘一次 base_multiplier。
+> `model_pricing.inputPrice` 是**表价**（不含 base_multiplier）。定价页 `/pricing`、模型库与
+> 后台「实付」列展示的都是 `calculateCredits` 真正使用的口径：
 >
 > ```
-> 实际每百万 token 扣费 = 展示价(inputPrice) × base_multiplier(100) × 模型倍率
+> 实付单价 = 表价(inputPrice) × 模型倍率(multiplier) × base_multiplier
 > ```
 >
-> 例：`bge-large-en-v1.5` 定价页显示 `200 cr / M tokens`，
-> 实际扣费为 `200 × 100 = 20,000 cr / M tokens`。
+> 例：`bge-large-en-v1.5` 表价 200 cr/1M，base=100、模型倍率 1 →
+> 界面显示 `20 cr / per K input token`，扣费也是 20 cr/1K（即 20,000 cr/1M）。
 >
-> 当前为**有意保留**的设计（展示「基准价」、扣费按「基准价 × 全局倍率」）。
-> 如需让两者一致，可二选一：① 扣费侧去掉 ×base_multiplier；② 展示侧也乘 base_multiplier。
-> 目前结论：维持现状，仅在此文档说明口径。
+> 展示换算集中在 `lib/billing/display-price.ts` 的 `modelPriceParts` / `formatModelPrice`，
+> 它接收 `baseMultiplier` 并把 cr/1M 换成 per K；图像模型走 `fixedPrice`，**不乘** base，
+> 所以其展示价即实付价。改 `pricing_base_multiplier` 后界面会随之变化
+> （`updatePricingSettings` 会清掉 `getPricingConfig` 的 60s 缓存）。
+>
+> 后台 `/admin/pricing` 的两列：「表价」= 表价 × base（与公开页同源），
+> 「实付」= 再乘该行模型倍率；管理员只调倍率，不改表价（重刷价格表会覆盖表价）。
 
 **配置位置**：`/admin/settings` > 定价倍率配置
 

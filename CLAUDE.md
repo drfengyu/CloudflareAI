@@ -269,7 +269,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 **已完成**：
 - ✅ `/pricing` 页面：
   - 按类别分组展示所有模型定价（文本/图像/视觉/嵌入/翻译/语音/视频）
-  - 显示应用倍率后的 credits 单价（界面统一 cr / per K input token，不显示美元）
+  - 显示实付 credits 单价 = 表价 × 模型倍率 × 基础倍率（界面统一 cr / per K input token，不显示美元）
   - 模型来源标识（hosted/proxied）
   - 定价策略说明卡片（hosted ×1000 / proxied ×1 / 图像固定价）
   - 全站只显 credits（界面不再出现美元换算）

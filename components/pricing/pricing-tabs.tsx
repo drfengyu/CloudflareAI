@@ -20,7 +20,7 @@ interface ModelRow {
   category: string;
   channelSource: string;
   channelName?: string;
-  /** 存储口径：cr/1M tokens（图像模型为 cr/张） */
+  /** 表价 × 模型倍率，单位 cr/1M tokens（图像为 cr/张）；未含基础倍率 */
   priceCr: number;
   isImage: boolean;
   requireWorkersPaid?: boolean;
@@ -40,9 +40,12 @@ const CATEGORY_NAMES: Record<string, string> = {
 export function PricingTabs({
   allChannels,
   modelsByChannel,
+  baseMultiplier,
 }: {
   allChannels: ChannelTab[];
   modelsByChannel: Record<string, ModelRow[]>;
+  /** 全局基础倍率，展示实付单价时乘上去（与 calculateCredits 同口径） */
+  baseMultiplier: number;
 }) {
   const [activeChannel, setActiveChannel] = useState("cloudflare");
   const currentModels = useMemo(
@@ -119,7 +122,11 @@ export function PricingTabs({
                   </thead>
                   <tbody>
                     {categoryModels.map((model) => {
-                      const price = modelPriceParts(model.priceCr, model.isImage);
+                      const price = modelPriceParts(
+                        model.priceCr,
+                        model.isImage,
+                        baseMultiplier,
+                      );
                       return (
                         <tr key={model.id} className="border-b border-border/50 last:border-0">
                           <td className="py-3">
