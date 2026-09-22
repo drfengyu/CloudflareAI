@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { db } from "@/lib/db/d1-http";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
 
 /**
  * GET /api/health
- * 健康检查端点 - 用于诊断部署问题
+ * 健康检查端点 - 用于诊断部署问题。
+ * 状态码对所有调用方一致（全绿 200 / 否则 500），但**响应体只对管理员（role ≥ 10）展开**：
+ * 明细含「哪些环境变量已设置」与 D1 报错原文，匿名暴露等于给探测者一张部署结构图。
  */
 export async function GET() {
   const checks = {
@@ -28,9 +33,11 @@ export async function GET() {
     checks.env[key] = process.env[key] ? "✓ set" : "✗ missing";
   }
 
-  // 检查 Auth.js
+  // 检查 Auth.js，顺带取当前会话用于判断是否展开明细
+  let sessionUserId: string | undefined;
   try {
-    await auth();
+    const session = await auth();
+    sessionUserId = session?.user?.id;
     checks.auth.status = "ok";
   } catch (err) {
     checks.auth.status = "error";
@@ -75,7 +82,24 @@ export async function GET() {
     checks.database.status === "ok" &&
     Object.values(checks.env).every(v => v === "✓ set");
 
-  return NextResponse.json(checks, {
-    status: allOk ? 200 : 500
-  });
+  // 明细只给管理员（role ≥ 10）。D1 挂掉时这次查询也会失败，退回精简响应即可，
+  // 不该让健康检查本身抛异常。
+  let detailed = false;
+  if (sessionUserId) {
+    try {
+      const admin = await db
+        .select({ role: users.role })
+        .from(users)
+        .where(eq(users.id, sessionUserId))
+        .limit(1);
+      detailed = (admin[0]?.role ?? 0) >= 10;
+    } catch {
+      detailed = false;
+    }
+  }
+
+  return NextResponse.json(
+    detailed ? checks : { status: allOk ? "ok" : "error" },
+    { status: allOk ? 200 : 500 },
+  );
 }
