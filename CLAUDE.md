@@ -156,7 +156,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 架构决策
 
-- **积分单位**：credits（支持小数），`CREDITS_PER_USD = 1`（1 credit = $1 USD）。两套账本：`user.balanceCredits` 与 `apiKey.remainCredits`（可无限），请求时都校验、都扣减。neuron 作为技术用量指标保留。
+- **积分单位**：credits（支持小数）是唯一的账本与界面货币；`option.creditsPerUsd` 只用于把渠道上游的美元定价折算成 credits。两套账本：`user.balanceCredits` 与 `apiKey.remainCredits`（可无限），请求时都校验、都扣减。neuron 作为技术用量指标保留。
 - **角色**：`user.role` 数值制 `1=普通 / 10=管理员 / 100=超管`。引导：`ADMIN_EMAILS` 命中或首个注册用户 → 超管。`proxy.ts` + 服务端双重 gate。
 - **令牌状态**：`status` 数值制 `1=启用 / 2=禁用 / 3=过期 / 4=耗尽`（迁移 `revoked`）。
 - **系统设置**：单个 `option(key,value)` KV 表，镜像到带缓存的内存 map（`lib/settings`），复杂值存 JSON。
@@ -269,15 +269,15 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 **已完成**：
 - ✅ `/pricing` 页面：
   - 按类别分组展示所有模型定价（文本/图像/视觉/嵌入/翻译/语音/视频）
-  - 显示应用倍率后的实际美元价格和 credits
+  - 显示应用倍率后的 credits 单价（界面统一 cr / per K input token，不显示美元）
   - 模型来源标识（hosted/proxied）
   - 定价策略说明卡片（hosted ×1000 / proxied ×1 / 图像固定价）
-  - Credits 换算说明（1 credit = $1 USD）
+  - 全站只显 credits（界面不再出现美元换算）
 - ✅ 价格计算逻辑：
   - 复用 `lib/billing/display-price.ts`
   - 图像模型显示固定价格（3,000-4,000 cr/张）
-  - 文本/嵌入模型显示 per M tokens 价格
-  - 自动应用倍率并转换为美元
+  - 文本/嵌入模型显示 per K input token 价格（存储口径仍是 cr/1M，仅展示换算）
+  - 自动应用倍率，结果只以 credits 展示
 
 **验证通过**：
 - 类型检查通过

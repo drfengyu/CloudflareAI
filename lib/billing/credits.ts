@@ -4,7 +4,7 @@
  * 历史：原本写死 `1 credit = $1 USD` (1:1)。改造后由管理员在 /admin/settings
  * 通过 `option.creditsPerUsd` 配置（默认仍为 1，向后兼容）。
  *
- * Credits 仍是计费/扣减的内部单位；USD 仅用于展示与导入/导出换算。
+ * Credits 是唯一的账本与界面货币单位；USD 只在从渠道导入定价时出现。
  * Credits 支持小数（DB 中是 REAL）。
  */
 
@@ -59,7 +59,7 @@ export function invalidateCreditsPerUsdCache(): void {
 }
 
 /**
- * USD → credits。
+ * USD → credits。仅在从渠道导入美元定价时使用；界面与账本一律以 credits 计价。
  * @param usd USD 金额
  * @param ratio 1 USD = ? credits，传入运行时汇率；省略则用旧常量（向后兼容）
  */
@@ -68,18 +68,6 @@ export function usdToCredits(
   ratio: number = CREDITS_PER_USD,
 ): number {
   return usd * ratio;
-}
-
-/**
- * credits → USD。
- * @param credits credits 数量
- * @param ratio 1 USD = ? credits，传入运行时汇率；省略则用旧常量（向后兼容）
- */
-export function creditsToUsd(
-  credits: number,
-  ratio: number = CREDITS_PER_USD,
-): number {
-  return credits / ratio;
 }
 
 /**
@@ -96,16 +84,4 @@ export function formatCredits(credits: number): string {
   if (Math.abs(credits) < 1) return credits.toFixed(4);
   // 大于等于 1 显示 2 位小数
   return credits.toFixed(2);
-}
-
-/**
- * 服务端常用：把 credits 直接格式化成 "$X.XX" 字符串，自动读取汇率。
- * 客户端组件应改为接收 `ratio` prop 后用 `creditsToUsd(credits, ratio).toFixed(n)`。
- */
-export async function formatUsdFromCredits(
-  credits: number,
-  digits = 2,
-): Promise<string> {
-  const ratio = await getCreditsPerUsd();
-  return `$${creditsToUsd(credits, ratio).toFixed(digits)}`;
 }

@@ -16,7 +16,7 @@ import {
   getFaq,
   getUptimeConfig,
 } from "@/lib/settings/dashboard-info";
-import { formatCredits, creditsToUsd, getCreditsPerUsd } from "@/lib/billing/credits";
+import { formatCredits } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 import {
   cnBucketKeys,
@@ -151,7 +151,6 @@ export default async function DashboardPage({
     summary,
     lifetime,
     balanceInfo,
-    ratio,
     trend,
     modelCalls,
     channelUsage,
@@ -176,7 +175,6 @@ export default async function DashboardPage({
     })),
     getLifetimeUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0 })),
     getUserTotalBalance(userId).catch(() => ({ permanent: 0, temporary: 0, total: 0 })),
-    getCreditsPerUsd().catch(() => 1),
     getUsageTrend(userId, win, granularity).catch(() => []),
     getUsageByModel(userId, win, "calls").catch(() => []),
     getUsageByChannel(userId, win).catch(() => []),
@@ -206,11 +204,10 @@ export default async function DashboardPage({
       tone: "info",
       label: "当前余额",
       value: `${formatCredits(balance)} cr`,
-      sub: `≈ $${creditsToUsd(balance, ratio).toFixed(2)}${
+      sub:
         balanceInfo.temporary > 0 || balanceInfo.permanent < 0
-          ? ` · 永久 ${formatCredits(displayBalance.displayPermanent)} + 临时 ${formatCredits(displayBalance.displayTemporary)}`
-          : ""
-      }`,
+          ? `永久 ${formatCredits(displayBalance.displayPermanent)} + 临时 ${formatCredits(displayBalance.displayTemporary)}`
+          : undefined,
       href: "/wallet",
       actionLabel: "充值",
     },
@@ -218,7 +215,7 @@ export default async function DashboardPage({
       icon: <TrendingUp className="h-4 w-4" />,
       tone: "warning",
       label: "历史消耗",
-      value: `$${creditsToUsd(lifetime.totalCredits, ratio).toFixed(2)}`,
+      value: `${formatCredits(lifetime.totalCredits)} cr`,
       sub: `累计 ${lifetime.totalCalls.toLocaleString()} 次调用`,
     },
   ];
@@ -249,7 +246,7 @@ export default async function DashboardPage({
       tone: "warning",
       label: "统计额度",
       value: `${formatCredits(summary.totalCredits)} cr`,
-      sub: `≈ $${creditsToUsd(summary.totalCredits, ratio).toFixed(4)}`,
+      sub: "窗口内实际扣费",
     },
     {
       icon: <Zap className="h-4 w-4" />,

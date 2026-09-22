@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { updateModelMultiplier } from "./actions";
 import { toast } from "sonner";
-import { creditsToUsd } from "@/lib/billing/credits";
+import { formatModelPrice } from "@/lib/billing/display-price";
 
 const CATEGORY_LABELS: Record<string, string> = {
   text: "文本生成",
@@ -43,7 +43,6 @@ type ModelWithPricing = {
 
 interface PricingManagerProps {
   models: ModelWithPricing[];
-  ratio: number;
   /** 是否从服务端传入了渠道模型 */
   channelModels?: ModelWithPricing[];
   /** 渠道列表 */
@@ -56,7 +55,6 @@ interface PricingManagerProps {
 
 export function PricingManager({
   models = [],
-  ratio,
   channelModels = [],
   channels = [],
   activeChannel = "cloudflare",
@@ -153,11 +151,7 @@ export function PricingManager({
           <p className="py-8 text-center text-sm text-muted-foreground">没有匹配的模型</p>
         ) : (
           visible.map((model) => (
-            <ModelPricingRow
-              key={model.id}
-              model={model}
-              ratio={ratio}
-            />
+            <ModelPricingRow key={model.id} model={model} />
           ))
         )}
       </div>
@@ -167,25 +161,17 @@ export function PricingManager({
 
 function ModelPricingRow({
   model,
-  ratio,
 }: {
   model: ModelWithPricing;
-  ratio: number;
 }) {
   const [multiplier, setMultiplier] = useState(String(model.pricing?.multiplier ?? 1.0));
   const [saving, setSaving] = useState(false);
 
   const p = model.pricing;
-  const displayPrice = p
-    ? p.isImage
-      ? `$${creditsToUsd(p.fixedPrice ?? 0, ratio).toFixed(2)} / image`
-      : `$${creditsToUsd(p.inputPrice ?? 0, ratio).toFixed(4)} / ${p.unit || "M"}`
-    : "—";
-
+  const storedPrice = p ? (p.isImage ? (p.fixedPrice ?? 0) : (p.inputPrice ?? 0)) : 0;
+  const displayPrice = p ? formatModelPrice(storedPrice, p.isImage) : "—";
   const finalPrice = p
-    ? p.isImage
-      ? `$${creditsToUsd((p.fixedPrice ?? 0) * (parseFloat(multiplier) || 1), ratio).toFixed(2)} / image`
-      : `$${creditsToUsd((p.inputPrice ?? 0) * (parseFloat(multiplier) || 1), ratio).toFixed(4)} / ${p.unit || "M"}`
+    ? formatModelPrice(storedPrice * (parseFloat(multiplier) || 1), p.isImage)
     : "—";
 
   async function handleSave() {

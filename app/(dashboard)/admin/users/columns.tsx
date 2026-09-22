@@ -5,7 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { ManageUserDialog } from "./manage-user-dialog";
-import { creditsToUsd } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 
 export interface UserRow {
@@ -21,7 +20,7 @@ export interface UserRow {
   roleLabel: { label: string; tone: "success" | "warning" | "muted" };
 }
 
-export function createColumns(currentUserId: string, ratio: number): ColumnDef<UserRow>[] {
+export function createColumns(currentUserId: string): ColumnDef<UserRow>[] {
   return [
     {
       accessorKey: "email",
@@ -49,7 +48,6 @@ export function createColumns(currentUserId: string, ratio: number): ColumnDef<U
         const total = row.original.totalBalance;
         const permanent = row.original.permanentBalance;
         const temporary = row.original.temporaryBalance;
-        const usd = creditsToUsd(total, ratio).toFixed(4);
 
         // 计算显示用余额（负数补正）
         const display = calculateDisplayBalance(permanent, temporary);
@@ -57,7 +55,6 @@ export function createColumns(currentUserId: string, ratio: number): ColumnDef<U
         return (
           <div className="text-right">
             <p className="font-medium">{total.toLocaleString()} cr</p>
-            <p className="text-xs text-muted-foreground">≈ ${usd}</p>
             {(temporary > 0 || permanent < 0) && (
               <p className="text-xs text-muted-foreground">
                 (永久 {display.displayPermanent.toLocaleString()} + 临时 {display.displayTemporary.toLocaleString()})
@@ -84,7 +81,7 @@ export function createColumns(currentUserId: string, ratio: number): ColumnDef<U
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <ManageUserDialog user={row.original} currentUserId={currentUserId} ratio={ratio} />
+        <ManageUserDialog user={row.original} currentUserId={currentUserId} />
       ),
     },
   ];

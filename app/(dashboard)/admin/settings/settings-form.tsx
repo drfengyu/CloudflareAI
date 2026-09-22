@@ -39,9 +39,6 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
     }
   };
 
-  const ratio = parseFloat(creditsPerUsd);
-  const ratioValid = Number.isFinite(ratio) && ratio > 0;
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div>
@@ -89,18 +86,9 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
           placeholder="1"
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          内部账本以 credits 计价；此处定义 1 USD 兑换的 credits 数量，影响所有界面上的「≈ $X」换算显示
+          界面与账本统一以 credits 计价；此处仅在从渠道导入美元定价时用于换算
           <span className="ml-1 opacity-70">（不影响实际扣费金额）</span>
         </p>
-        {ratioValid && (
-          <div className="mt-2 rounded-lg border border-border bg-secondary p-3 text-xs">
-            <p className="font-medium">换算预览</p>
-            <p className="mt-1 text-muted-foreground">
-              1,000 credits ≈ ${(1000 / ratio).toFixed(2)} USD ·{" "}
-              $10 USD = {(10 * ratio).toLocaleString()} credits
-            </p>
-          </div>
-        )}
       </div>
 
       <Button type="submit" disabled={loading}>
@@ -185,7 +173,7 @@ export function PricingSettingsForm({ initialSettings }: PricingSettingsFormProp
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="block text-sm font-medium mb-1">
-              价格阈值 ($/1M tokens)
+              价格阈值 (cr/1M tokens)
             </label>
             <input
               type="number"
@@ -215,7 +203,7 @@ export function PricingSettingsForm({ initialSettings }: PricingSettingsFormProp
               placeholder="5"
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              基础价 &lt; ${adjustThreshold} 时的倍率
+              基础价 &lt; {adjustThreshold} cr 时的倍率
             </p>
           </div>
         </div>
@@ -234,16 +222,17 @@ export function PricingSettingsForm({ initialSettings }: PricingSettingsFormProp
             placeholder="1"
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            基础价 ≥ ${adjustThreshold} 时的倍率（通常为 1，不再加价）
+            基础价 ≥ {adjustThreshold} cr 时的倍率（通常为 1，不再加价）
           </p>
         </div>
 
         <div className="rounded-lg border border-amber-200/50 bg-amber-50/50 dark:border-amber-500/20 dark:bg-amber-950/20 p-4">
           <p className="text-xs text-amber-900 dark:text-amber-200">
-            <strong>示例：</strong>某模型官方价 $0.01/1M tokens
-            <br />→ 基础价 = $0.01 × {baseMultiplier} = ${parseFloat(baseMultiplier) * 0.01}
-            <br />→ ${parseFloat(baseMultiplier) * 0.01} &lt; ${adjustThreshold}，应用低价倍率 ×{adjustMultiplierLow}
-            <br />→ 最终价 = ${parseFloat(baseMultiplier) * 0.01} × {adjustMultiplierLow} = ${parseFloat(baseMultiplier) * 0.01 * parseFloat(adjustMultiplierLow)}/1M tokens
+            <strong>示例：</strong>某模型 catalog 基准价 0.01 cr/1M tokens
+            <br />→ 基础价 = 0.01 × {baseMultiplier} = {(parseFloat(baseMultiplier) * 0.01).toFixed(2)} cr
+            <br />→ {(parseFloat(baseMultiplier) * 0.01).toFixed(2)} cr &lt; {adjustThreshold} cr，应用低价倍率 ×{adjustMultiplierLow}
+            <br />→ 最终价 = {(parseFloat(baseMultiplier) * 0.01).toFixed(2)} × {adjustMultiplierLow} = {(parseFloat(baseMultiplier) * 0.01 * parseFloat(adjustMultiplierLow)).toFixed(2)} cr/1M tokens
+            <br />→ 界面统一按 {(parseFloat(baseMultiplier) * 0.01 * parseFloat(adjustMultiplierLow) / 1000).toFixed(4)} cr / per K input token 展示
           </p>
         </div>
       </div>
@@ -253,7 +242,7 @@ export function PricingSettingsForm({ initialSettings }: PricingSettingsFormProp
 
         <div>
           <label className="block text-sm font-medium mb-1">
-            无定价模型默认价格 ($/1M tokens)
+            无定价模型默认价格 (cr/1M tokens)
           </label>
           <input
             type="number"
@@ -348,7 +337,7 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
             placeholder="0.01"
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            用户每次签到最少获得的 credits（按当前汇率换算成 USD）
+            用户每次签到最少获得的 credits
           </p>
         </div>
 

@@ -4,7 +4,6 @@ import { type ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { creditsToUsd } from "@/lib/billing/credits";
 
 export interface RedemptionRow {
   id: string;
@@ -22,7 +21,7 @@ const statusLabels: Record<number, { label: string; tone: "success" | "muted" | 
   3: { label: "已过期", tone: "warning" },
 };
 
-export function createRedemptionColumns(ratio: number): ColumnDef<RedemptionRow>[] {
+export function createRedemptionColumns(): ColumnDef<RedemptionRow>[] {
   return [
     {
       accessorKey: "code",
@@ -38,11 +37,9 @@ export function createRedemptionColumns(ratio: number): ColumnDef<RedemptionRow>
       header: "额度",
       cell: ({ row }) => {
         const credits = row.original.creditsAmount;
-        const usd = creditsToUsd(credits, ratio).toFixed(2);
         return (
           <div>
             <p className="font-medium">{credits.toLocaleString()} cr</p>
-            <p className="text-xs text-muted-foreground">≈ ${usd}</p>
           </div>
         );
       },
@@ -89,6 +86,3 @@ export function createRedemptionColumns(ratio: number): ColumnDef<RedemptionRow>
     },
   ];
 }
-
-/** @deprecated 用 `createRedemptionColumns(ratio)`，旧导出留作兼容（按 1:1 渲染）。 */
-export const columns: ColumnDef<RedemptionRow>[] = createRedemptionColumns(1);

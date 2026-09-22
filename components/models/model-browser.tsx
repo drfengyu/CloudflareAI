@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { CATEGORIES, type CategoryId } from "@/lib/categories";
 import type { NormalizedModel } from "@/lib/cloudflare/catalog";
 import { cn, formatNumber } from "@/lib/utils";
-import { getDisplayPrice } from "@/lib/billing/display-price";
+import { formatModelPrice, getDisplayPrice } from "@/lib/billing/display-price";
 
 type Filter = CategoryId | "all";
 
@@ -227,12 +227,9 @@ function ModelCard({
           {model.requireWorkersPaid && (
             <Badge tone="warning">需 Workers Paid</Badge>
           )}
-          {displayPrice.usd !== null && (
-            <Badge tone="muted" className="font-mono">
-              ${displayPrice.usd.toFixed(2)}
-              {displayPrice.isImage ? "" : ` / ${displayPrice.unit}`}
-            </Badge>
-          )}
+          <Badge tone="muted" className="font-mono">
+            {formatModelPrice(displayPrice.credits, displayPrice.isImage)}
+          </Badge>
         </div>
       </CardContent>
     </Card>

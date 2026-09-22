@@ -5,10 +5,9 @@ import { createRedemptionColumns, type RedemptionRow } from "./columns";
 
 interface RedemptionsTableProps {
   data: RedemptionRow[];
-  ratio: number;
 }
 
-export function RedemptionsTable({ data, ratio }: RedemptionsTableProps) {
-  const columns = createRedemptionColumns(ratio);
+export function RedemptionsTable({ data }: RedemptionsTableProps) {
+  const columns = createRedemptionColumns();
   return <DataTable columns={columns} data={data} />;
 }

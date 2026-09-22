@@ -6,7 +6,6 @@ import { eq } from "drizzle-orm";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PricingManager } from "./pricing-manager";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
-import { getCreditsPerUsd } from "@/lib/billing/credits";
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +29,9 @@ export default async function AdminPricingPage() {
     .map((c) => ({ id: c.id, name: c.name, type: c.type!, label: c.name }));
 
   // 定价数据
-  const [catalog, pricingRows, ratio] = await Promise.all([
+  const [catalog, pricingRows] = await Promise.all([
     fetchModelCatalog(),
     db.select().from(modelPricing),
-    getCreditsPerUsd(),
   ]);
 
   const pricingMap = new Map(
@@ -100,7 +98,6 @@ export default async function AdminPricingPage() {
       />
       <PricingManager
         models={cfModels}
-        ratio={ratio}
         channelModels={channelModels}
         channels={channelList}
       />

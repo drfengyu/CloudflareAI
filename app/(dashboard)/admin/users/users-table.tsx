@@ -6,10 +6,9 @@ import { createColumns, type UserRow } from "./columns";
 interface UsersTableProps {
   data: UserRow[];
   currentUserId: string;
-  ratio: number;
 }
 
-export function UsersTable({ data, currentUserId, ratio }: UsersTableProps) {
-  const columns = createColumns(currentUserId, ratio);
+export function UsersTable({ data, currentUserId }: UsersTableProps) {
+  const columns = createColumns(currentUserId);
   return <DataTable columns={columns} data={data} />;
 }

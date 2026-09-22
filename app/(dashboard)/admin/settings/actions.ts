@@ -74,13 +74,6 @@ export async function updateBasicSettings(formData: {
   revalidatePath("/admin/settings");
   // Sidebar brand lives in the dashboard layout — revalidate it so the name updates.
   revalidatePath("/", "layout");
-  // 这些页面会显示 USD 换算，汇率变化时一并刷新
-  revalidatePath("/dashboard");
-  revalidatePath("/wallet");
-  revalidatePath("/pricing");
-  revalidatePath("/admin/users");
-  revalidatePath("/admin/redemptions");
-  revalidatePath("/admin/pricing");
   return { success: true };
 }
 

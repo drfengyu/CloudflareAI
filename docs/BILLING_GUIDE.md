@@ -18,19 +18,18 @@
 ## 积分单位
 
 ```
-1 credit = $1 USD (1:1 汇率)
-CREDITS_PER_USD = 1
+credits 是唯一的账本与界面货币单位（界面不再显示美元）
+option.creditsPerUsd = 7.1   # 仅用于把渠道上游的美元定价折算成 credits
 ```
 
-**示例**：
-- 用户余额 10 cr = $10.00 USD
-- 消耗 0.05 cr = $0.05 USD
-- 充值 5 cr = $5.00 USD
+**界面展示**：余额、消耗、定价一律以 `cr` 计价；模型单价按 `cr / per K input token` 展示，
+而 `model_pricing` 的存储口径仍是 `cr / 1M tokens`（展示时除以 1000，扣费逻辑不变）。
 
 **支持小数**：系统全面支持小数 credits，精度至 0.0001 cr。
 
 **相关代码**：
-- `lib/billing/credits.ts` - 汇率定义
+- `lib/billing/credits.ts` - 汇率读取（仅导入上游定价时用）与 `formatCredits`
+- `lib/billing/display-price.ts` - `formatModelPrice`：界面价格文案（cr / per K input token）
 - `lib/db/schema.ts` - 数据库字段（REAL 类型）
 
 ---

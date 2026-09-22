@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CATEGORIES } from "@/lib/categories";
+import { modelPriceParts } from "@/lib/billing/display-price";
 
 interface ChannelTab {
   id: string;
@@ -19,9 +20,8 @@ interface ModelRow {
   category: string;
   channelSource: string;
   channelName?: string;
-  priceUsd: number | null;
-  priceCr: number | null;
-  unit: string;
+  /** 存储口径：cr/1M tokens（图像模型为 cr/张） */
+  priceCr: number;
   isImage: boolean;
   requireWorkersPaid?: boolean;
 }
@@ -61,11 +61,7 @@ export function PricingTabs({
     const ordered: Record<string, ModelRow[]> = {};
     for (const c of CATEGORIES) {
       if (groups[c.id]) {
-        ordered[c.id] = [...groups[c.id]].sort((a, b) => {
-          if (a.priceUsd === null) return 1;
-          if (b.priceUsd === null) return -1;
-          return a.priceUsd - b.priceUsd;
-        });
+        ordered[c.id] = [...groups[c.id]].sort((a, b) => a.priceCr - b.priceCr);
       }
     }
     return ordered;
@@ -116,39 +112,37 @@ export function PricingTabs({
                     <tr className="border-b border-border">
                       <th className="py-2 text-left font-medium text-muted-foreground">模型</th>
                       <th className="py-2 text-left font-medium text-muted-foreground">来源</th>
-                      <th className="py-2 text-right font-medium text-muted-foreground">价格</th>
+                      <th className="py-2 text-right font-medium text-muted-foreground">
+                        价格（Credits）
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {categoryModels.map((model) => (
-                      <tr key={model.id} className="border-b border-border/50 last:border-0">
-                        <td className="py-3">
-                          <div>
-                            <p className="font-medium">{model.name}</p>
-                            <code className="text-xs text-muted-foreground">{model.id}</code>
-                          </div>
-                        </td>
-                        <td className="py-3">
-                          <div className="flex items-center gap-1.5">
-                            <ChannelBadge channelSource={model.channelSource} channelName={model.channelName} />
-                            {model.requireWorkersPaid && <Badge tone="warning">需 Workers Paid</Badge>}
-                          </div>
-                        </td>
-                        <td className="py-3 text-right">
-                          {model.priceUsd !== null ? (
+                    {categoryModels.map((model) => {
+                      const price = modelPriceParts(model.priceCr, model.isImage);
+                      return (
+                        <tr key={model.id} className="border-b border-border/50 last:border-0">
+                          <td className="py-3">
                             <div>
-                              <p className="font-medium">${model.priceUsd.toFixed(4)}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {model.priceCr?.toLocaleString()} cr
-                              </p>
-                              <p className="text-xs text-muted-foreground">/ {model.unit}</p>
+                              <p className="font-medium">{model.name}</p>
+                              <code className="text-xs text-muted-foreground">{model.id}</code>
                             </div>
-                          ) : (
-                            <span className="text-muted-foreground">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="py-3">
+                            <div className="flex items-center gap-1.5">
+                              <ChannelBadge channelSource={model.channelSource} channelName={model.channelName} />
+                              {model.requireWorkersPaid && <Badge tone="warning">需 Workers Paid</Badge>}
+                            </div>
+                          </td>
+                          <td className="py-3 text-right">
+                            <div>
+                              <p className="font-medium tabular-nums">{price.value}</p>
+                              <p className="text-xs text-muted-foreground">{price.unit}</p>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

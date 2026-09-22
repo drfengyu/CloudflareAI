@@ -223,9 +223,9 @@ test.describe('Billing Verification', () => {
       const userRows = page.locator('[class*="table"] tr, [role="row"]');
 
       if (await userRows.count() > 1) {
-        // 验证余额列存在（格式：X cr / ≈ $Y）
+        // 验证余额列存在（全站只显 credits，不再有美元换算）
         await expect(page.locator('text=/\\d+ cr/')).toBeVisible();
-        await expect(page.locator('text=/≈ \\$\\d+/')).toBeVisible();
+        await expect(page.locator('text=/≈ \\$/')).toHaveCount(0);
 
         console.log('管理后台余额显示正常');
       }

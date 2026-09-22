@@ -12,14 +12,8 @@ import {
 import { Plus } from "lucide-react";
 import { generateRedemptionCodes } from "./actions";
 import { toast } from "sonner";
-import { creditsToUsd } from "@/lib/billing/credits";
 
-interface GenerateCodesDialogProps {
-  /** 当前美元汇率（1 USD = ? credits）。由 server 传入。 */
-  ratio: number;
-}
-
-export function GenerateCodesDialog({ ratio }: GenerateCodesDialogProps) {
+export function GenerateCodesDialog() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [count, setCount] = useState(10);
@@ -90,9 +84,6 @@ export function GenerateCodesDialog({ ratio }: GenerateCodesDialogProps) {
               className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
               required
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              ≈ ${creditsToUsd(quota, ratio).toFixed(2)} USD（1 USD = {ratio.toLocaleString()} cr）
-            </p>
           </div>
 
           <div>

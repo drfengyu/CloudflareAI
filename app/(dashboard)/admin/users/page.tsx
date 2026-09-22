@@ -6,7 +6,6 @@ import { desc, eq } from "drizzle-orm";
 import { requireUser, getUserTotalBalance } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
 import { UsersTable } from "./users-table";
-import { getCreditsPerUsd } from "@/lib/billing/credits";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +57,6 @@ export default async function AdminUsersPage() {
   );
 
   const data = usersWithBalance;
-  const ratio = await getCreditsPerUsd();
 
   return (
     <>
@@ -69,7 +67,7 @@ export default async function AdminUsersPage() {
       <div className="space-y-4 p-8">
         <Card>
           <CardContent className="pt-5">
-            <UsersTable data={data} currentUserId={currentUserId} ratio={ratio} />
+            <UsersTable data={data} currentUserId={currentUserId} />
           </CardContent>
         </Card>
       </div>

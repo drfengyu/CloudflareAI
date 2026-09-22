@@ -18,7 +18,7 @@ export interface StatItem {
   tone: StatTone;
   label: string;
   value: string;
-  /** 次要说明，如 ≈ $ 换算或输入/输出明细 */
+  /** 次要说明，如 永久/临时明细 或 输入输出 token 数 */
   sub?: string;
   /** 行尾跳转（如「充值」→ /wallet） */
   href?: string;

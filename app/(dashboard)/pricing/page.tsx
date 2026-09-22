@@ -3,7 +3,6 @@ import { PricingTabs } from "@/components/pricing/pricing-tabs";
 import { fetchModelCatalog, type NormalizedModel } from "@/lib/cloudflare/catalog";
 import { getDisplayPrice } from "@/lib/billing/display-price";
 import { getAllModelPricing } from "@/lib/billing/model-pricing";
-import { getCreditsPerUsd, creditsToUsd } from "@/lib/billing/credits";
 import { db } from "@/lib/db/d1-http";
 import { channels, modelPricing } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -15,10 +14,9 @@ export const dynamic = "force-dynamic";
 const CATEGORY_ORDER = ["text", "image", "vision", "embeddings", "translate", "speech", "video"];
 
 export default async function PricingPage() {
-  const [cfModels, pricingMap, ratio, channelRows] = await Promise.all([
+  const [cfModels, pricingMap, channelRows] = await Promise.all([
     fetchModelCatalog(),
     getAllModelPricing(),
-    getCreditsPerUsd(),
     db
       .select({ id: channels.id, name: channels.name, type: channels.type })
       .from(channels)
@@ -50,9 +48,7 @@ export default async function PricingPage() {
     name: string;
     category: string;
     channelSource: string;
-    priceUsd: number | null;
-    priceCr: number | null;
-    unit: string;
+    priceCr: number;
     isImage: boolean;
     requireWorkersPaid?: boolean;
   } {
@@ -62,9 +58,7 @@ export default async function PricingPage() {
       name: m.name,
       category: m.category,
       channelSource: m.channelSource,
-      priceUsd: dp.usd !== null ? creditsToUsd(dp.usd, ratio) : null,
       priceCr: dp.credits,
-      unit: dp.unit,
       isImage: dp.isImage,
       requireWorkersPaid: m.requireWorkersPaid,
     };
@@ -76,8 +70,6 @@ export default async function PricingPage() {
     .sort((a, b) => {
       const pa = getDisplayPrice(a, pricingMap);
       const pb = getDisplayPrice(b, pricingMap);
-      if (pa.credits === null) return 1;
-      if (pb.credits === null) return -1;
       return pa.credits - pb.credits;
     })
     .map(modelToRow);
@@ -90,7 +82,6 @@ export default async function PricingPage() {
       inputPrice: modelPricing.inputPrice,
       isImage: modelPricing.isImage,
       fixedPrice: modelPricing.fixedPrice,
-      unit: modelPricing.unit,
       multiplier: modelPricing.multiplier,
     })
     .from(modelPricing);
@@ -114,24 +105,17 @@ export default async function PricingPage() {
         const isImage = p.isImage === 1;
         const mult = p.multiplier ?? 1.0;
         const basePrice = isImage ? (p.fixedPrice ?? 3500) : (p.inputPrice ?? 100);
-        const effectivePrice = basePrice * mult;
         return {
           id: p.modelId,
           name: friendlyName(p.modelId),
           category: isImage ? "image" as const : "text" as const,
           channelSource: ch.type,
           channelName: ch.name,
-          priceUsd: creditsToUsd(effectivePrice, ratio),
-          priceCr: effectivePrice,
-          unit: isImage ? "image" : p.unit || "per M input tokens",
+          priceCr: basePrice * mult,
           isImage,
         };
       })
-      .sort((a, b) => {
-        if (a.priceUsd === null) return 1;
-        if (b.priceUsd === null) return -1;
-        return a.priceUsd - b.priceUsd;
-      });
+      .sort((a, b) => a.priceCr - b.priceCr);
   }
 
   const totalCount = Object.values(modelsByChannel).reduce((s, l) => s + l.length, 0);
@@ -151,9 +135,9 @@ export default async function PricingPage() {
               <div className="space-y-2 text-sm">
                 <p className="font-medium text-primary">定价说明</p>
                 <ul className="space-y-1 text-muted-foreground">
-                  <li>• 文本模型：按 token 计费，价格单位为「每百万 token」</li>
-                  <li>• 图像模型：固定价格，价格单位为「每张图片」</li>
-                  <li>• Credits 换算：1 USD = {ratio.toLocaleString()} credits</li>
+                  <li>• 全站统一以 Credits（cr）计价，不涉及其他货币</li>
+                  <li>• 文本模型：按 token 计费，价格单位为「cr / per K input token」</li>
+                  <li>• 图像模型：固定价格，价格单位为「cr / image」</li>
                 </ul>
               </div>
             </div>

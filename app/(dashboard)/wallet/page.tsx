@@ -11,7 +11,7 @@ import { zhCN } from "date-fns/locale";
 import { RedeemCodeDialog } from "./redeem-code-dialog";
 import { CheckinCalendarCard } from "./checkin-calendar-card";
 import { RechargeOrdersCard, type SerializedPayOrder } from "./recharge-orders-card";
-import { formatCredits, creditsToUsd, getCreditsPerUsd } from "@/lib/billing/credits";
+import { formatCredits } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 import { withoutExpiredGrants } from "@/lib/billing/grant-expiry";
 import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
@@ -87,8 +87,6 @@ export default async function WalletPage({
     .filter((tb) => tb.displayAmount >= 0.01); // 只显示剩余 >= 0.01 的
 
   const totalBalance = permanentBalance + temporaryTotal;
-  const ratio = await getCreditsPerUsd();
-  const balanceUsd = creditsToUsd(totalBalance, ratio).toFixed(2);
 
   // 充值流水只保留近三个月，更早的历史不再展示。
   const historyCutoff = cnDaysAgoStart(90);
@@ -149,7 +147,6 @@ export default async function WalletPage({
               <div>
                 <p className="text-sm text-muted-foreground">总余额</p>
                 <p className="text-2xl font-semibold">{formatCredits(totalBalance)} credits</p>
-                <p className="text-xs text-muted-foreground">≈ ${balanceUsd} USD</p>
                 <div className="mt-1 flex gap-3 text-xs text-muted-foreground">
                   <span>永久: {formatCredits(displayBalance.displayPermanent)} cr</span>
                   {(temporaryTotal > 0 || permanentBalance < 0) && (
@@ -264,9 +261,6 @@ export default async function WalletPage({
                     <div className="text-right">
                       <p className="text-lg font-semibold text-success">
                         +{formatCredits(record.amount)} cr
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        ≈ ${creditsToUsd(record.amount, ratio).toFixed(2)}
                       </p>
                     </div>
                   </div>

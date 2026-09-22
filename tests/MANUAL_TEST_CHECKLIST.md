@@ -166,7 +166,7 @@ ON CONFLICT (key) DO NOTHING;
 
 **验证点**:
 - [ ] 按分类显示所有模型
-- [ ] 每个模型显示价格（$/1M tokens）
+- [ ] 每个模型显示价格（cr / per K input token）
 - [ ] 图像模型显示固定价格（cr/张）
 - [ ] 价格说明清晰
 
@@ -237,9 +237,9 @@ npx playwright show-report
 ### 文本模型（base=1000）
 | Token 数 | 模型价格 | 预期消耗 |
 |---------|---------|---------|
-| 100 in / 50 out | $200/$400 per 1M | 0.04 cr |
-| 500 in / 200 out | $200/$400 per 1M | 0.18 cr |
-| 1000 in / 500 out | $200/$400 per 1M | 0.40 cr |
+| 100 in / 50 out | 200/400 cr per 1M | 0.04 cr |
+| 500 in / 200 out | 200/400 cr per 1M | 0.18 cr |
+| 1000 in / 500 out | 200/400 cr per 1M | 0.40 cr |
 
 ### 图像模型
 | 模型 | 固定价格 |
