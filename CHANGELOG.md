@@ -37,9 +37,13 @@
 - **看板底部改版**：移除「最近 10 次调用」卡片（`/history` 已有完整调用记录，看板不再重复一份），改为并排三张信息卡（公告占两列，问答与可用性各一列）；`getRecentUsage` 已无调用方，随之删除。
 - **看板时间范围按钮文案对齐实际口径**：「本周 / 本月」改为「近 7 日 / 近 30 日」，与卡片标题和滚动窗口一致（随后的信息架构改版已把「本月调用」单指标卡并入分组卡）。
 - **看板信息架构对齐 new-api 控制台**（`app/(dashboard)/dashboard/page.tsx` + 新组件）：顶部标题改为按北京时间的问候行（早上好/中午好/下午好/晚上好/夜深了 + 用户名），时间范围切换移到同一行右侧；四张单指标 StatCard 换成四张分组卡（账户数据 = 当前余额 + 历史消耗；使用统计 = 请求次数 + 成功/失败；资源消耗 = 统计额度 + 统计 Tokens；性能指标 = 平均 RPM + 平均 TPM/延迟），每行带彩色圆形图标，余额行内嵌「充值」入口。原本独立的「每小时消耗」「N 日消耗趋势」「模型分布」「渠道分布」四张卡合并为一张「模型数据分析」，内部用 消耗分布 / 调用趋势 / 调用次数分布 / 调用次数排行 / 渠道分布 五个 tab 切换（tab 只换展示形态，数据一次算完，不重新请求）。
-  - 数据层随之调整：`getTodayUsage`/`getMonthUsage` 合并为 `getUsageSummary(userId, since)`（多给成功/失败计数与平均延迟），新增 `getLifetimeUsage`（历史消耗刻意不受时间窗口影响），`getUsageByModel` 加 `orderBy` 参数——按消耗取的前十与按次数取的前十不是同一批模型，排行 tab 用后者。
-  - 平均 RPM/TPM 的分母是**窗口已流逝的分钟数**而非整窗长度（`elapsedMinutesSince`），否则「今日」在早上会把速率摊薄成全天均值。
+  - 数据层随之调整：`getTodayUsage`/`getMonthUsage` 合并为 `getUsageSummary`（多给成功/失败计数与平均延迟），新增 `getLifetimeUsage`（历史消耗刻意不受时间窗口影响），`getUsageByModel` 加 `orderBy` 参数——按消耗取的前十与按次数取的前十不是同一批模型，排行 tab 用后者。
+  - 平均 RPM/TPM 的分母是**窗口内已流逝的分钟数**而非整窗长度，否则「今日」在早上会把速率摊成全天均值（该逻辑现落在 `elapsedMinutesInWindow`）。
   - 图例说明：柱图与饼图的动画由 `requestAnimationFrame` 驱动，自动化测试用的隐藏标签里 rAF 不触发，因此图形元素需在可见浏览器中确认；坐标轴、刻度与面积图 path 均已验证正确。
+- **看板右上角补上「搜索条件」与「刷新」**（`components/dashboard/dashboard-toolbar.tsx`）：搜索弹窗按 new-api 的样式给起始时间 / 结束时间 / 时间粒度（小时·天）三项，确定后以 `?from=&to=&gran=` 落到 URL 由服务端算窗口，自定义时段生效时出现「自定义时段 · 清除」回到今日；刷新走 `useTransition` + `router.refresh()`，图标转圈期间禁用。参数非法（缺失、起止倒置、跨度 > 92 天）静默退回今日预设。
+  - 查询层随之从「N 天」改成左闭右开的 `UsageWindow`：`getUsageSummary`/`getUsageByModel`/`getUsageByChannel` 统一收窗口，`getDailyUsage` + `getHourlyUsageToday` 合并为 `getUsageTrend(userId, win, "hour" | "day")`（桶键按北京时间，与新增的 `cnBucketKeys` 一致，页面据此补零成连续曲线）。小时桶数超过 744 自动降为天粒度。
+  - 平均 RPM/TPM 的分母改为 `elapsedMinutesInWindow`——落在过去的完整窗口按整窗算，未走完的今日窗口按已流逝分钟算。
+  - 被分析卡取代的 `hourly-usage-chart.tsx` / `usage-trend-chart.tsx` 已删除。
 - **`/admin/settings` 不再展示「所有设置（JSON 编辑器）」**：这张卡把 `option` 表整份 `JSON.stringify` 渲染进 `<pre>`，等于把 `epay_key` / `ldpay_key` 等支付商户密钥明文放进 DOM——页面虽有 role ≥ 10 门禁，但浏览器扩展、任意 XSS、截图和共享桌面都能直接读走。每个设置项都已有专属表单卡片，只读全量 JSON 的排障价值不值这个风险。
 - **钱包页流水与余额展示收敛**（`app/(dashboard)/wallet/page.tsx`）：「充值记录」只保留最近 90 天（`cnDaysAgoStart(90)`，按北京时区日界），并隐藏已过期的一次性发放（见下条）；总余额卡片上移到每日签到之上，签到日历与在线充值订单顺延。临时余额的过期判定下沉到 SQL（与 `lib/usage/meter.ts` 同一写法），JS 侧保留二次判断兜底。
 - **钱包充值流水隐藏已过期的一次性发放**（`lib/billing/grant-expiry.ts` + `app/(dashboard)/wallet/page.tsx`）：签到奖励（type 3）与兑换码（type 1）发放的都是会过期的临时余额，到期后不再出现在「充值记录」里。到期时间按「发放时刻 + 当时的有效天数」（`checkin_valid_days` / `redemption.balanceValidDays`，缺省 7 天）推算——不能用「对应临时余额行是否还在」判断，因为消费会删除或扣减临时余额行（`lib/usage/meter.ts`），当天就被花掉的奖励会立刻从流水里消失。管理员调整与在线充值是永久余额，不受影响；「在线充值订单」卡不按 90 天裁剪，因为待支付/确认中订单可能陈旧到任意久，而这张卡是用户自查与手动催单的唯一入口。

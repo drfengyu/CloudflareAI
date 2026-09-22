@@ -212,10 +212,11 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 ### ✅ Phase C — 数据看板（完成）
 
 **已完成**：
-- ✅ `lib/usage/queries.ts` 聚合：
-  - `getHourlyUsageToday`（0-23 时小时柱状图）
-  - `getDailyUsage`（近 7 日/30 日折线图）
-  - `getUsageByModel`（Top 10 模型横向条形图）
+- ✅ `lib/usage/queries.ts` 聚合（一律接受 `UsageWindow = { start, end }` 左闭右开窗口，时钟由页面算好传入）：
+  - `getUsageSummary`（次数 / 成功失败 / credits / tokens / 平均延迟）
+  - `getUsageTrend(userId, win, "hour" | "day")`（按北京时间分桶的消耗与调用趋势，桶键与 `cnBucketKeys` 一致）
+  - `getUsageByModel(userId, win, orderBy)`（Top 10，可按消耗或调用次数）
+  - `getLifetimeUsage`（不受窗口影响的全生命周期累计）
   - 所有查询含 `creditsUsed` 统计
 - ✅ `/dashboard` 重做：
   - 问候式头部（北京时间 早上好/中午好/… + 用户名），右侧时间范围切换（今日/近 7 日/近 30 日，滚动窗口）

@@ -1,7 +1,16 @@
 import { db } from "@/lib/db/d1-http";
 import { usageLogs, users, apiKeys, channels, type UsageLog } from "@/lib/db/schema";
-import { desc, eq, gte, and, sql } from "drizzle-orm";
-import { cnStartOfToday, cnLastNDaysStart } from "@/lib/date";
+import { desc, eq, gte, lt, and, sql } from "drizzle-orm";
+import type { BucketGranularity } from "@/lib/date";
+
+/**
+ * 看板统计窗口：左闭右开 [start, end)。
+ * 由调用方（页面）算好传入，查询层不碰时钟，也不再用「N 天」这种含今天的相对口径。
+ */
+export interface UsageWindow {
+  start: Date;
+  end: Date;
+}
 
 const EMPTY_SUMMARY = {
   totalCalls: 0,
@@ -14,10 +23,10 @@ const EMPTY_SUMMARY = {
 };
 
 /**
- * 时间窗口内的用量汇总（Phase C: credits 模型；下界由调用方给出，一律北京时区日界）。
+ * 窗口内的用量汇总（Phase C: credits 模型）。
  * 平均延迟只统计 >0 的记录，避免 0 值把均值拉低。
  */
-export async function getUsageSummary(userId: string, since: Date) {
+export async function getUsageSummary(userId: string, win: UsageWindow) {
   const rows = await db
     .select({
       totalCalls: sql<number>`COUNT(*)`,
@@ -32,7 +41,8 @@ export async function getUsageSummary(userId: string, since: Date) {
     .where(
       and(
         eq(usageLogs.userId, userId),
-        gte(usageLogs.createdAt, since),
+        gte(usageLogs.createdAt, win.start),
+        lt(usageLogs.createdAt, win.end),
       ),
     );
 
@@ -64,15 +74,14 @@ export async function getUserBalance(userId: string) {
 }
 
 /**
- * 按模型统计用量（Phase C: 用于饼图/柱状图；含今天在内的 days 个北京日历日）。
+ * 按模型统计用量（Phase C: 用于柱状图 / 排行表）。
  * `orderBy` 决定 Top 10 的取法——按消耗取的前十和按次数取的前十不是同一批模型。
  */
 export async function getUsageByModel(
   userId: string,
-  days = 30,
+  win: UsageWindow,
   orderBy: "credits" | "calls" = "credits",
 ) {
-  const startDate = cnLastNDaysStart(days);
   const orderExpr =
     orderBy === "calls"
       ? sql`COUNT(*)`
@@ -88,7 +97,8 @@ export async function getUsageByModel(
     .where(
       and(
         eq(usageLogs.userId, userId),
-        gte(usageLogs.createdAt, startDate),
+        gte(usageLogs.createdAt, win.start),
+        lt(usageLogs.createdAt, win.end),
       ),
     )
     .groupBy(usageLogs.model)
@@ -98,10 +108,8 @@ export async function getUsageByModel(
   return rows;
 }
 
-/** 按渠道统计用量（渠道分布饼图；含今天在内的 days 个北京日历日） */
-export async function getUsageByChannel(userId: string, days = 30) {
-  const startDate = cnLastNDaysStart(days);
-
+/** 按渠道统计用量（渠道分布饼图） */
+export async function getUsageByChannel(userId: string, win: UsageWindow) {
   const rows = await db
     .select({
       channelId: usageLogs.channelId,
@@ -115,7 +123,8 @@ export async function getUsageByChannel(userId: string, days = 30) {
     .where(
       and(
         eq(usageLogs.userId, userId),
-        gte(usageLogs.createdAt, startDate),
+        gte(usageLogs.createdAt, win.start),
+        lt(usageLogs.createdAt, win.end),
       ),
     )
     .groupBy(usageLogs.channelId)
@@ -141,13 +150,24 @@ export async function getUsageByChannel(userId: string, days = 30) {
   });
 }
 
-/** 按日统计用量（Phase C: 用于趋势图；日期按中国时区，含今天在内的 days 个日历日） */
-export async function getDailyUsage(userId: string, days = 7) {
-  const startDate = cnLastNDaysStart(days);
+/**
+ * 按小时 / 按天聚合用量趋势（「消耗分布」与「调用趋势」两条线共用一次查询）。
+ * 桶键按北京时间：按天 `YYYY-MM-DD`，按小时 `YYYY-MM-DD HH:00`，
+ * 与 `cnBucketKeys` 生成的键一致，页面据此把稀疏结果补零成连续曲线。
+ */
+export async function getUsageTrend(
+  userId: string,
+  win: UsageWindow,
+  granularity: BucketGranularity,
+) {
+  const bucket =
+    granularity === "day"
+      ? sql`DATE(${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours')`
+      : sql`strftime('%Y-%m-%d %H:00', ${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours')`;
 
-  const rows = await db
+  return db
     .select({
-      date: sql<string>`DATE(${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours')`,
+      bucket: sql<string>`${bucket}`,
       calls: sql<number>`COUNT(*)`,
       credits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
     })
@@ -155,36 +175,12 @@ export async function getDailyUsage(userId: string, days = 7) {
     .where(
       and(
         eq(usageLogs.userId, userId),
-        gte(usageLogs.createdAt, startDate),
+        gte(usageLogs.createdAt, win.start),
+        lt(usageLogs.createdAt, win.end),
       ),
     )
-    .groupBy(sql`DATE(${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours')`)
-    .orderBy(sql`DATE(${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours') ASC`);
-
-  return rows;
-}
-
-/** 按小时统计今日用量（Phase C 扩展：当天小时趋势图；按中国时区） */
-export async function getHourlyUsageToday(userId: string) {
-  const todayStart = cnStartOfToday();
-
-  const rows = await db
-    .select({
-      hour: sql<number>`CAST(strftime('%H', ${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours') AS INTEGER)`,
-      calls: sql<number>`COUNT(*)`,
-      credits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
-    })
-    .from(usageLogs)
-    .where(
-      and(
-        eq(usageLogs.userId, userId),
-        gte(usageLogs.createdAt, todayStart),
-      ),
-    )
-    .groupBy(sql`CAST(strftime('%H', ${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours') AS INTEGER)`)
-    .orderBy(sql`CAST(strftime('%H', ${usageLogs.createdAt} / 1000, 'unixepoch', '+8 hours') AS INTEGER) ASC`);
-
-  return rows;
+    .groupBy(bucket)
+    .orderBy(sql`${bucket} ASC`);
 }
 
 /** 分页查询用量记录（历史页） */

@@ -5,11 +5,11 @@ import { eq } from "drizzle-orm";
 import { requireUser, getUserTotalBalance } from "@/lib/usage/meter";
 import {
   getUsageSummary,
+  getUsageTrend,
   getLifetimeUsage,
-  getDailyUsage,
   getUsageByModel,
   getUsageByChannel,
-  getHourlyUsageToday,
+  type UsageWindow,
 } from "@/lib/usage/queries";
 import {
   getAnnouncements,
@@ -18,7 +18,16 @@ import {
 } from "@/lib/settings/dashboard-info";
 import { formatCredits, creditsToUsd, getCreditsPerUsd } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
-import { cnGreeting, cnLastNDaysStart, elapsedMinutesSince, formatCnWallClock } from "@/lib/date";
+import {
+  cnBucketKeys,
+  cnGreeting,
+  cnLastNDaysStart,
+  cnStartOfTomorrow,
+  elapsedMinutesInWindow,
+  formatCnWallClock,
+  parseCnWallClock,
+  type BucketGranularity,
+} from "@/lib/date";
 import {
   Activity,
   BarChart3,
@@ -34,6 +43,7 @@ import {
 } from "lucide-react";
 import { StatGroupCard, type StatItem } from "@/components/dashboard/stat-group-card";
 import { ModelAnalyticsCard, type AnalyticsPoint } from "@/components/dashboard/model-analytics-card";
+import { DashboardToolbar } from "@/components/dashboard/dashboard-toolbar";
 import { AnnouncementCard } from "@/components/dashboard/announcement-card";
 import { FaqCard } from "@/components/dashboard/faq-card";
 import { UptimeCard } from "@/components/dashboard/uptime-card";
@@ -55,17 +65,85 @@ const RANGE_OPTIONS: { key: RangeKey; label: string }[] = [
   { key: "month", label: "近 30 日" },
 ];
 
+/** 自定义时段最长 92 天，超过则退回预设，避免一次拉出过大的聚合。 */
+const MAX_CUSTOM_SPAN_MS = 92 * 86_400_000;
+/** 小时粒度下的桶数上限，超过自动降为天粒度。 */
+const MAX_BUCKETS = 744;
+
+interface ResolvedWindow {
+  win: UsageWindow;
+  keys: string[];
+  granularity: BucketGranularity;
+  label: string;
+  custom: boolean;
+  /** 命中的预设档位；自定义时段时为 null（三个预设按钮都不高亮） */
+  rangeKey: RangeKey | null;
+  /** 回填搜索表单用（`YYYY-MM-DDTHH:mm`） */
+  fromInput: string;
+  toInput: string;
+}
+
+/**
+ * 把 searchParams 解析成统计窗口：预设（今日/近 7 日/近 30 日）或自定义起止。
+ * 自定义参数非法（缺失、倒置、超 92 天）时静默退回今日，不让看板白屏。
+ */
+function resolveWindow(params: {
+  range?: string;
+  from?: string;
+  to?: string;
+  gran?: string;
+}): ResolvedWindow {
+  const fallbackGranularity: BucketGranularity = params.gran === "day" ? "day" : "hour";
+  const fromMs = params.from ? parseCnWallClock(params.from) : null;
+  const toMs = params.to ? parseCnWallClock(params.to) : null;
+
+  if (fromMs !== null && toMs !== null && toMs > fromMs && toMs - fromMs <= MAX_CUSTOM_SPAN_MS) {
+    const granularity: BucketGranularity =
+      cnBucketKeys(fromMs, toMs, fallbackGranularity).length > MAX_BUCKETS ? "day" : fallbackGranularity;
+    return {
+      win: { start: new Date(fromMs), end: new Date(toMs) },
+      keys: cnBucketKeys(fromMs, toMs, granularity),
+      granularity,
+      label: `${formatCnWallClock(fromMs)} ~ ${formatCnWallClock(toMs)} · 按${
+        granularity === "hour" ? "小时" : "天"
+      }`,
+      custom: true,
+      rangeKey: null,
+      fromInput: params.from!.replace(" ", "T").slice(0, 16),
+      toInput: params.to!.replace(" ", "T").slice(0, 16),
+    };
+  }
+
+  const range: RangeKey =
+    params.range === "week" || params.range === "month" ? params.range : "today";
+  const start = cnLastNDaysStart(RANGE_DAYS[range]);
+  const end = cnStartOfTomorrow();
+  const startMs = start.getTime();
+  const endMs = end.getTime();
+  const granularity: BucketGranularity = range === "today" ? "hour" : "day";
+  const now = formatCnWallClock(endMs - 1);
+
+  return {
+    win: { start, end },
+    keys: cnBucketKeys(startMs, endMs, granularity),
+    granularity,
+    label: `${RANGE_LABEL[range]} · 截至 ${now}`,
+    custom: false,
+    rangeKey: range,
+    fromInput: formatCnWallClock(startMs).replace(" ", "T"),
+    toInput: now.replace(" ", "T"),
+  };
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; from?: string; to?: string; gran?: string }>;
 }) {
   const userId = await requireUser();
-  const params = await searchParams;
-  const range: RangeKey =
-    params.range === "week" || params.range === "month" ? params.range : "today";
-  const days = RANGE_DAYS[range];
-  const windowStart = cnLastNDaysStart(days);
+  const { win, keys, granularity, label, custom, rangeKey, fromInput, toInput } = resolveWindow(
+    await searchParams,
+  );
 
   // 使用 try-catch 包裹每个查询，防止单个查询失败导致整个页面崩溃
   const [
@@ -74,8 +152,7 @@ export default async function DashboardPage({
     lifetime,
     balanceInfo,
     ratio,
-    hourly,
-    daily,
+    trend,
     modelCalls,
     channelUsage,
     announcements,
@@ -88,7 +165,7 @@ export default async function DashboardPage({
       .where(eq(users.id, userId))
       .limit(1)
       .catch(() => []),
-    getUsageSummary(userId, windowStart).catch(() => ({
+    getUsageSummary(userId, win).catch(() => ({
       totalCalls: 0,
       successCalls: 0,
       errorCalls: 0,
@@ -100,12 +177,9 @@ export default async function DashboardPage({
     getLifetimeUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0 })),
     getUserTotalBalance(userId).catch(() => ({ permanent: 0, temporary: 0, total: 0 })),
     getCreditsPerUsd().catch(() => 1),
-    range === "today"
-      ? getHourlyUsageToday(userId).catch(() => [])
-      : Promise.resolve([]),
-    range === "today" ? Promise.resolve([]) : getDailyUsage(userId, days).catch(() => []),
-    getUsageByModel(userId, days, "calls").catch(() => []),
-    getUsageByChannel(userId, days).catch(() => []),
+    getUsageTrend(userId, win, granularity).catch(() => []),
+    getUsageByModel(userId, win, "calls").catch(() => []),
+    getUsageByChannel(userId, win).catch(() => []),
     getAnnouncements().catch(() => []),
     getFaq().catch(() => []),
     getUptimeConfig().catch(() => ({ enabled: false, apiUrl: "" })),
@@ -114,28 +188,17 @@ export default async function DashboardPage({
   const balance = balanceInfo.total;
   const displayBalance = calculateDisplayBalance(balanceInfo.permanent, balanceInfo.temporary);
   const totalTokens = (summary.totalInputTokens || 0) + (summary.totalOutputTokens || 0);
-  // 窗口是「含今天在内的 N 个日历日」，尚未过完的部分不该摊薄均值，故按已流逝分钟数计。
-  const elapsedMinutes = elapsedMinutesSince(windowStart);
+  const elapsedMinutes = elapsedMinutesInWindow(win.start, win.end);
 
-  const series: AnalyticsPoint[] =
-    range === "today"
-      ? Array.from({ length: 24 }, (_, h) => {
-          const row = hourly.find((x) => x.hour === h);
-          return {
-            label: `${String(h).padStart(2, "0")}:00`,
-            credits: row?.credits ?? 0,
-            calls: row?.calls ?? 0,
-          };
-        })
-      : Array.from({ length: days }, (_, i) => {
-          const dayStart = formatCnWallClock(cnLastNDaysStart(days - i), false);
-          const row = daily.find((x) => x.date === dayStart);
-          return {
-            label: dayStart.slice(5),
-            credits: row?.credits ?? 0,
-            calls: row?.calls ?? 0,
-          };
-        });
+  const series: AnalyticsPoint[] = keys.map((key) => {
+    const row = trend.find((x) => x.bucket === key);
+    return {
+      // 轴标签省掉年份：按天留 MM-DD，按小时留 MM-DD HH:00
+      label: key.length === 10 ? key.slice(5) : key.slice(5, 16),
+      credits: row?.credits ?? 0,
+      calls: row?.calls ?? 0,
+    };
+  });
 
   const accountItems: StatItem[] = [
     {
@@ -166,7 +229,7 @@ export default async function DashboardPage({
       tone: "success",
       label: "请求次数",
       value: summary.totalCalls.toLocaleString(),
-      sub: `${RANGE_LABEL[range]}窗口内`,
+      sub: custom ? "自定义时段内" : "当前时间窗口内",
     },
     {
       icon: <CheckCircle2 className="h-4 w-4" />,
@@ -203,7 +266,7 @@ export default async function DashboardPage({
       tone: "primary",
       label: "平均 RPM",
       value: formatRate(summary.totalCalls / elapsedMinutes),
-      sub: `窗口已流逝 ${Math.round(elapsedMinutes)} 分钟`,
+      sub: `窗口已计入 ${Math.round(elapsedMinutes)} 分钟`,
     },
     {
       icon: <Gauge className="h-4 w-4" />,
@@ -219,25 +282,28 @@ export default async function DashboardPage({
 
   return (
     <>
-      {/* 问候头部 + 时间范围切换 */}
+      {/* 问候头部 + 时间范围切换 + 搜索/刷新 */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-8 py-5">
         <h1 className="text-xl font-semibold">
           👋 {cnGreeting()}，{me[0]?.name?.trim() || me[0]?.email?.split("@")[0] || "朋友"}
         </h1>
-        <div className="flex gap-2">
-          {RANGE_OPTIONS.map((opt) => (
-            <a
-              key={opt.key}
-              href={`?range=${opt.key}`}
-              className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
-                range === opt.key
-                  ? "bg-primary text-white"
-                  : "border border-border text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {opt.label}
-            </a>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex gap-2">
+            {RANGE_OPTIONS.map((opt) => (
+              <a
+                key={opt.key}
+                href={`?range=${opt.key}`}
+                className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
+                  opt.key === rangeKey
+                    ? "bg-primary text-white"
+                    : "border border-border text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {opt.label}
+              </a>
+            ))}
+          </div>
+          <DashboardToolbar custom={custom} from={fromInput} to={toInput} gran={granularity} />
         </div>
       </div>
 
@@ -263,7 +329,7 @@ export default async function DashboardPage({
 
         {/* 模型数据分析（消耗分布 / 调用趋势 / 次数分布 / 排行 / 渠道） */}
         <ModelAnalyticsCard
-          rangeLabel={`${RANGE_LABEL[range]} · 时区 Asia/Shanghai`}
+          rangeLabel={`${label} · 时区 Asia/Shanghai`}
           series={series}
           models={modelCalls}
           channels={channelUsage}

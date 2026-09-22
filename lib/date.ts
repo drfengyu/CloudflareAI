@@ -54,11 +54,66 @@ export function cnGreeting(d: Date = new Date()): string {
 }
 
 /**
- * 窗口起点到此刻已流逝的分钟数（下限 1，避免除零）。
- * 看板算平均 RPM/TPM 用：窗口尚未走完，按整窗长度摊会把速率算小。
+ * 窗口内已流逝的分钟数（下限 1 避免除零，上限为整窗长度）。
+ * 看板算平均 RPM/TPM 用：窗口还没走完时按整窗长度摊会把速率算小，
+ * 而已经过去的历史时段就该按完整长度算。
  */
-export function elapsedMinutesSince(since: Date): number {
-  return Math.max(1, (Date.now() - since.getTime()) / 60_000);
+export function elapsedMinutesInWindow(start: Date, end: Date): number {
+  const total = (end.getTime() - start.getTime()) / 60_000;
+  const elapsed = (Date.now() - start.getTime()) / 60_000;
+  return Math.min(Math.max(elapsed, 1), Math.max(total, 1));
+}
+
+/** 北京时区「明天」0 点的真实时间戳，用作「今日 / 近 N 日」窗口的开区间上界。 */
+export function cnStartOfTomorrow(): Date {
+  const bj = cnDate(new Date());
+  bj.setUTCDate(bj.getUTCDate() + 1);
+  bj.setUTCHours(0, 0, 0, 0);
+  return new Date(bj.getTime() - CN_OFFSET_MS);
+}
+
+export type BucketGranularity = "hour" | "day";
+
+/** 把真实毫秒向下取整到北京时间口径的小时 / 日历日边界。 */
+function cnFloorToBucket(ms: number, granularity: BucketGranularity): number {
+  const bj = new Date(ms + CN_OFFSET_MS);
+  if (granularity === "day") bj.setUTCHours(0, 0, 0, 0);
+  else bj.setUTCMinutes(0, 0, 0);
+  return bj.getTime() - CN_OFFSET_MS;
+}
+
+function cnAddBuckets(ms: number, granularity: BucketGranularity, n: number): number {
+  const bj = new Date(ms + CN_OFFSET_MS);
+  if (granularity === "day") bj.setUTCDate(bj.getUTCDate() + n);
+  else bj.setUTCHours(bj.getUTCHours() + n);
+  return bj.getTime() - CN_OFFSET_MS;
+}
+
+/**
+ * 枚举 [startMs, endMs) 覆盖到的北京时间桶键，用于把稀疏的聚合结果补零成连续折线。
+ * 键格式与 SQL 分桶一致：按天 `YYYY-MM-DD`，按小时 `YYYY-MM-DD HH:00`。
+ * 超过 max 个桶时截断，避免自定义超长时段把图表撑爆。
+ */
+export function cnBucketKeys(
+  startMs: number,
+  endMs: number,
+  granularity: BucketGranularity,
+  max = 744,
+): string[] {
+  const keys: string[] = [];
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return keys;
+
+  let cursor = cnFloorToBucket(startMs, granularity);
+  while (cursor < endMs && keys.length < max) {
+    keys.push(
+      granularity === "day"
+        ? formatCnWallClock(cursor, false)
+        : formatCnWallClock(cursor).slice(0, 16),
+    );
+    cursor = cnAddBuckets(cursor, granularity, 1);
+  }
+
+  return keys;
 }
 
 /** 将时间戳格式化为中国时区日期时间（服务端/客户端均按北京时间显示）。 */
