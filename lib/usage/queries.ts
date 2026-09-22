@@ -1,50 +1,55 @@
 import { db } from "@/lib/db/d1-http";
 import { usageLogs, users, apiKeys, channels, type UsageLog } from "@/lib/db/schema";
 import { desc, eq, gte, and, sql } from "drizzle-orm";
-import { cnStartOfToday, cnStartOfMonth, cnLastNDaysStart } from "@/lib/date";
+import { cnStartOfToday, cnLastNDaysStart } from "@/lib/date";
 
-/** 获取用户今日用量统计（Phase C: credits 模型；按中国时区日界） */
-export async function getTodayUsage(userId: string) {
-  const todayStart = cnStartOfToday();
+const EMPTY_SUMMARY = {
+  totalCalls: 0,
+  successCalls: 0,
+  errorCalls: 0,
+  totalCredits: 0,
+  totalInputTokens: 0,
+  totalOutputTokens: 0,
+  avgLatencyMs: null as number | null,
+};
 
+/**
+ * 时间窗口内的用量汇总（Phase C: credits 模型；下界由调用方给出，一律北京时区日界）。
+ * 平均延迟只统计 >0 的记录，避免 0 值把均值拉低。
+ */
+export async function getUsageSummary(userId: string, since: Date) {
   const rows = await db
     .select({
       totalCalls: sql<number>`COUNT(*)`,
+      successCalls: sql<number>`COALESCE(SUM(CASE WHEN ${usageLogs.status} = 'ok' THEN 1 ELSE 0 END), 0)`,
+      errorCalls: sql<number>`COALESCE(SUM(CASE WHEN ${usageLogs.status} = 'error' THEN 1 ELSE 0 END), 0)`,
       totalCredits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
       totalInputTokens: sql<number>`COALESCE(SUM(${usageLogs.inputTokens}), 0)`,
       totalOutputTokens: sql<number>`COALESCE(SUM(${usageLogs.outputTokens}), 0)`,
+      avgLatencyMs: sql<number | null>`AVG(CASE WHEN ${usageLogs.latencyMs} > 0 THEN ${usageLogs.latencyMs} END)`,
     })
     .from(usageLogs)
     .where(
       and(
         eq(usageLogs.userId, userId),
-        gte(usageLogs.createdAt, todayStart),
+        gte(usageLogs.createdAt, since),
       ),
     );
 
-  return rows[0] || { totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 };
+  return rows[0] || EMPTY_SUMMARY;
 }
 
-/** 获取用户本月用量统计（Phase C: credits 模型；按中国时区月界） */
-export async function getMonthUsage(userId: string) {
-  const monthStart = cnStartOfMonth();
-
+/** 历史累计消耗（刻意不受看板时间窗口影响——「历史消耗」就该是全生命周期）。 */
+export async function getLifetimeUsage(userId: string) {
   const rows = await db
     .select({
       totalCalls: sql<number>`COUNT(*)`,
       totalCredits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
-      totalInputTokens: sql<number>`COALESCE(SUM(${usageLogs.inputTokens}), 0)`,
-      totalOutputTokens: sql<number>`COALESCE(SUM(${usageLogs.outputTokens}), 0)`,
     })
     .from(usageLogs)
-    .where(
-      and(
-        eq(usageLogs.userId, userId),
-        gte(usageLogs.createdAt, monthStart),
-      ),
-    );
+    .where(eq(usageLogs.userId, userId));
 
-  return rows[0] || { totalCalls: 0, totalCredits: 0, totalInputTokens: 0, totalOutputTokens: 0 };
+  return rows[0] || { totalCalls: 0, totalCredits: 0 };
 }
 
 /** 获取用户余额（Phase C: credits 模型，取代旧的 quota） */
@@ -58,9 +63,20 @@ export async function getUserBalance(userId: string) {
   return rows[0]?.balanceCredits ?? 0;
 }
 
-/** 按模型统计用量（Phase C: 用于饼图/柱状图；含今天在内的 days 个北京日历日） */
-export async function getUsageByModel(userId: string, days = 30) {
+/**
+ * 按模型统计用量（Phase C: 用于饼图/柱状图；含今天在内的 days 个北京日历日）。
+ * `orderBy` 决定 Top 10 的取法——按消耗取的前十和按次数取的前十不是同一批模型。
+ */
+export async function getUsageByModel(
+  userId: string,
+  days = 30,
+  orderBy: "credits" | "calls" = "credits",
+) {
   const startDate = cnLastNDaysStart(days);
+  const orderExpr =
+    orderBy === "calls"
+      ? sql`COUNT(*)`
+      : sql`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`;
 
   const rows = await db
     .select({
@@ -76,7 +92,7 @@ export async function getUsageByModel(userId: string, days = 30) {
       ),
     )
     .groupBy(usageLogs.model)
-    .orderBy(desc(sql`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`))
+    .orderBy(desc(orderExpr))
     .limit(10);
 
   return rows;

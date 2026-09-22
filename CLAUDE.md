@@ -218,9 +218,9 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   - `getUsageByModel`（Top 10 模型横向条形图）
   - 所有查询含 `creditsUsed` 统计
 - ✅ `/dashboard` 重做：
-  - 余额/今日消耗/调用数/本月调用 StatCard
-  - 时间范围切换（今日/近 7 日/近 30 日，滚动窗口），修复 Next.js 16 async searchParams
-  - recharts 图表渲染（小时趋势/日趋势/模型分布）
+  - 问候式头部（北京时间 早上好/中午好/… + 用户名），右侧时间范围切换（今日/近 7 日/近 30 日，滚动窗口）
+  - 四组核心指标卡：账户数据（余额 + 历史消耗）/ 使用统计（请求次数 + 成功失败）/ 资源消耗（额度 + Tokens）/ 性能指标（RPM + TPM/延迟）
+  - 「模型数据分析」卡：消耗分布 / 调用趋势 / 调用次数分布 / 调用次数排行 / 渠道分布 五个 tab
   - 底部三张信息卡：系统公告 / 常见问答 / 服务可用性（内容存 `option` 表，`lib/settings/dashboard-info.ts`；可用性由 `/api/uptime` 客户端按需拉取——配了地址走 Uptime Kuma，留空则自检本站端点）
 
 **验证通过**：

@@ -36,12 +36,29 @@ export function cnDaysAgoStart(days: number): Date {
   return new Date(bj.getTime() - CN_OFFSET_MS);
 }
 
-/**
- * 北京时区「含今天在内的 N 个日历日」起始时刻：N=1 即今天 0 点，N=7 即 6 天前 0 点。
+/** 北京时区「含今天在内的 N 个日历日」起始时刻：N=1 即今天 0 点，N=7 即 6 天前 0 点。
  * 用于「今日 / 近 N 日」这类含当天的统计窗口，避免多算一个整天。
  */
 export function cnLastNDaysStart(days: number): Date {
   return cnDaysAgoStart(Math.max(0, days - 1));
+}
+
+/** 按北京时间给出的问候语（看板头部用），与访客所在时区无关。 */
+export function cnGreeting(d: Date = new Date()): string {
+  const hour = cnDate(d).getUTCHours();
+  if (hour >= 5 && hour < 11) return "早上好";
+  if (hour >= 11 && hour < 13) return "中午好";
+  if (hour >= 13 && hour < 18) return "下午好";
+  if (hour >= 18 && hour < 23) return "晚上好";
+  return "夜深了";
+}
+
+/**
+ * 窗口起点到此刻已流逝的分钟数（下限 1，避免除零）。
+ * 看板算平均 RPM/TPM 用：窗口尚未走完，按整窗长度摊会把速率算小。
+ */
+export function elapsedMinutesSince(since: Date): number {
+  return Math.max(1, (Date.now() - since.getTime()) / 60_000);
 }
 
 /** 将时间戳格式化为中国时区日期时间（服务端/客户端均按北京时间显示）。 */
