@@ -376,13 +376,20 @@ export const lotteryTickets = sqliteTable(
     priceCredits: real("priceCredits").notNull().default(0),
     /** 赠送时命中的累抽档位（当时的总抽奖次数）；非档位赠券为 null。 */
     milestoneDraws: integer("milestoneDraws"),
+    /**
+     * 同一档位内的第几张（0 起）。唯一索引必须带上它：送 3 张的档位若三行都记同一个
+     * `(userId, milestoneDraws)`，第二行就会撞索引、整批发不出去——线上正是这样导致
+     * 所有「一次送多张」的档位静默失效。
+     */
+    milestoneSeq: integer("milestoneSeq").notNull().default(0),
     /** 开奖记录 ID；非空即已消耗。 */
     usedDrawId: text("usedDrawId"),
     createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
   },
   (table) => [
-    // 同一档位只发一次。SQLite 的唯一索引把 NULL 视为互不相等，所以买券行不受影响。
-    unique("uq_lottery_ticket_milestone").on(table.userId, table.milestoneDraws),
+    // 同一档位只发一次：重复领取时第 0 张必然撞索引，整笔赠券因此被挡下。
+    // SQLite 的唯一索引把 NULL 视为互不相等，所以买券 / 抽中赠券的行不受影响。
+    unique("uq_lottery_ticket_milestone").on(table.userId, table.milestoneDraws, table.milestoneSeq),
   ],
 );
 

@@ -81,6 +81,10 @@
 
 ### 修复
 
+- **累抽送券只有「送 1 张」的档位发得出去，送多张的档位全部静默失效**（`lib/db/schema.ts` + `lib/lottery/store.ts` + `migrations/009_lottery_milestone_seq.sql`，迁移已应用到 D1）：`lottery_ticket` 上的 `unique(userId, milestoneDraws)` 本意是「同一档位只发一次」，但它同时禁止了同一档位的**多行**——第 10 档送 1 张能写进去，第 30/60/100/200/500 档分别送 2/3/5/8/11 张，第二行起就撞索引，`grantMilestoneTickets` 的 `catch` 把异常吞成 `false`，用户端只表现为"没弹赠券提示"，日志里什么都没有。线上实测：一名用户已抽 111 次（跨过 10/30/60/100 四档），券包里只有第 10 档的 1 张。
+  - 修法：券行补 `milestoneSeq`（档位内第几张，0 起），唯一索引改为 `(userId, milestoneDraws, milestoneSeq)`。重复领取仍被挡——第 0 张必然撞索引，且它在分片写入的第一批里，所以整笔赠券要么全发要么全不发。`grantTickets` 每行从 6 列变 7 列，`batchRows` 的每行列数随之改 7（每片 14 行，仍远低于 D1 的 100 参数上限）。
+  - 生产库实测：给测试账号发「送 3 张的第 30 档」得到 3 行（序号 0,1,2），同档位再发一次返回 `false` 且行数不变，买券路径（`milestoneDraws` 为 NULL）不受唯一索引影响；验证行已全部删除。
+  - **老用户漏发的档位不会自动补**：跨档判定只看当前这一批的区间，所以修复上线前错过的 30/60/100 档需要单独回填（按「历史总次数 ≥ 档位」补发，唯一索引保证不会重复）。
 - **一次买 17 张以上抽奖券必然「扣了钱拿不到券」**（`lib/lottery/store.ts` + `app/(dashboard)/lottery/actions.ts` + `lib/db/d1-http.ts`）：D1 单条语句最多绑 **100 个参数**（实测 100 通过、101 报 `too many SQL variables`），而 sqlite-proxy 的批量 `insert().values(行…)` 是「每行 × 每列」一个参数——抽奖券每行 6 列，17 行就到 102 个。买 50 张时 `spendCredits` 已经扣完（连当时在效的签到临时余额都被扣走并删行），`grantTickets` 才抛错，而流水行排在发券之后，于是**余额少了 5000 cr、券一张没发、`topup` 也查不到这笔支出**。
   - `lib/db/d1-http.ts` 新增 `D1_MAX_BINDINGS` 与 `batchRows(rows, 每行列数)`，发券改为分片写入（实测 50 / 100 张均成功，收券清理干净）；`grantTickets` 配套的 `deleteTickets()` 用于回滚。
   - `buyTickets` 补上失败补偿：发券或记流水失败时收回已发券、把扣掉的 cr 退回**永久余额**并写一条 `type=2` 退回流水（不能记 `type=6`——钱包会把正向的 6 类流水当作废奖励隐藏）。

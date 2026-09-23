@@ -97,14 +97,14 @@ export async function unlockTicket(ticketId: string): Promise<void> {
   await d1Run("UPDATE lottery_ticket SET usedDrawId = NULL WHERE id = ?", [ticketId]);
 }
 
-/** 发券；档位赠券带 `milestoneDraws`，靠唯一索引保证同档位只发一次。 */
+/** 发券；档位赠券带 `milestoneDraws` + 档位内序号，靠唯一索引保证同档位只发一次。 */
 export async function grantTickets(
   userId: string,
   count: number,
   grant: { source: "buy" | "gift" | "prize"; priceCredits?: number; milestoneDraws?: number },
 ): Promise<string[]> {
   const ids: string[] = [];
-  const values = Array.from({ length: count }, () => {
+  const values = Array.from({ length: count }, (_unused, index) => {
     const id = crypto.randomUUID();
     ids.push(id);
     return {
@@ -113,11 +113,13 @@ export async function grantTickets(
       source: grant.source,
       priceCredits: grant.priceCredits ?? 0,
       milestoneDraws: grant.milestoneDraws ?? null,
+      // 一个档位送多张时，各行靠序号区分，否则第二行会撞 (userId, milestoneDraws) 唯一索引。
+      milestoneSeq: grant.milestoneDraws === undefined ? 0 : index,
       createdAt: new Date(),
     };
   });
-  // 每行绑 6 个参数，一次买 50 张就是 300 个，会直接撞 D1 的参数墙，必须分片。
-  for (const batch of batchRows(values, 6)) {
+  // 每行绑 7 个参数，一次买 50 张就是 350 个，会直接撞 D1 的参数墙，必须分片。
+  for (const batch of batchRows(values, 7)) {
     await db.insert(lotteryTickets).values(batch);
   }
   return ids;

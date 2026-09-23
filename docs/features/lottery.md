@@ -71,11 +71,13 @@
 option.lottery_config        活动配置（JSON，见下）
 lottery_ticket               一行一券；usedDrawId 非空即已消耗
   source                     buy=花钱买 / gift=累抽档位送 / prize=外圈抽中
-  unique(userId, milestoneDraws)   档位赠券只发一次的幂等键（NULL 不参与唯一性）
+  milestoneSeq               档位内第几张（0 起）；非档位赠券恒为 0
+  unique(userId, milestoneDraws, milestoneSeq)   档位赠券只发一次的幂等键（NULL 不参与唯一性）
 lottery_draw                 逐次开奖记录；unique(batchId, seq)
   grantTickets               本注抽中的赠券张数（0 = cr 档）
   migration: migrations/007_lottery.sql
   migration: migrations/008_lottery_prize_tickets.sql（加 grantTickets 列）
+  migration: migrations/009_lottery_milestone_seq.sql（加 milestoneSeq 列并重建唯一索引）
 ```
 
 配置结构（`lib/lottery/prize-math.ts` 的 `LotteryConfig`）：
@@ -151,6 +153,11 @@ lottery_draw                 逐次开奖记录；unique(batchId, seq)
   并发双花靠这两条条件更新挡住，而不是靠先读后写。
 - **逐次撤销**：10 连抽先整批锁券，再逐次结算；某次失败只撤销那一次（删开奖行、删流水、
   删临时余额行或反向补回永久余额、退券），已成功的部分保留，剩余未开奖的券原样退回。
+- **档位赠券的幂等键带序号**：`unique(userId, milestoneDraws, milestoneSeq)`。少了 `milestoneSeq`，
+  「送 2 张及以上」的档位会在第二行撞索引，而 `grantMilestoneTickets` 把异常吞成 `false`——线上表现为
+  除了第 10 档（送 1 张）以外所有档位静默不发，日志里什么都没有。重复领取依旧由第 0 张挡住（它在分片
+  写入的第一批里，所以一笔赠券要么全发要么全不发）。**跨档判定只看当前这一批的次数区间**，
+  修复前错过的档位不会自动补发，要回填得单独跑脚本。
 - **`multiplierBase = "batch"` 的经济性**：10 连抽会按批次总花费（1000 cr）结算每一次的倍数，
   每券期望是单抽的约 10 倍——想让单抽与连抽等价就用 `ticket`。后台表单会按这个区别显示提示。
 - 默认奖池配平到**单券返还率 ≈ 91.1%**，两圈都按券价倍率计价，所以这个数与券价无关。改奖池时以后台那行

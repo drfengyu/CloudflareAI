@@ -439,7 +439,7 @@ function OuterPrizeSection({
         赠券档只往券包里加张数、不动 cr，返还率里按券价 {config.ticketPriceCredits} cr 折算。权重同时决定扇区大小与中奖概率。
       </p>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span className="w-24 shrink-0">奖品类型</span>
+        <span className="w-20 shrink-0">奖品类型</span>
         <span className="flex-1">倍数</span>
         <span className="flex-1">赠券张数</span>
         <span className="flex-1">权重</span>
@@ -458,7 +458,7 @@ function OuterPrizeSection({
               <select
                 value={row.kind}
                 onChange={(e) => patch(i, { kind: e.target.value as OuterRow["kind"] })}
-                className={`${FIELD_CLASS} w-24 shrink-0`}
+                className="w-20 shrink-0 rounded-lg border border-border bg-card px-2 py-2 text-sm"
               >
                 <option value="credits">倍数 cr</option>
                 <option value="tickets">赠券</option>
