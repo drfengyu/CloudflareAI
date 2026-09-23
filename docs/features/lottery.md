@@ -10,9 +10,12 @@
 3. 转盘是**两段式指针**（暗色霓虹风）：
    - **内圈**：奖品格（固定加 / 减 cr）+ **唯一一个「外圈入口」格**，入口占满 `outerChancePercent`（默认 12.5%）。扇区角度由 `innerSectorLayout` 与抽奖同源，格子大小就是真实概率。
    - 内圈指针停在入口上 → 该指针**变长伸进外圈环带**，外圈再独立转一次，把对应奖品转到这根指针下决定最终结果。
-   - **外圈**：按倍数结算的正负 cr，基数是单张券价或本次总花费（后台二选一）。
+   - **外圈**：两种奖型（`kind`）——**cr 档**按倍数结算正负 cr，基数是单张券价或本次总花费（后台二选一）；
+     **赠券档**直接发 N 张抽奖券，不动 cr。默认外圈 16 档里配了 4 档赠券（+1 / +2 / +3 / +5 张）。
 4. **抽 10 次**：转盘一次转停，然后按结果角度**依次弹出 10 根指针**（每根间隔 130ms）；命中入口的指针画成伸入环带的长线。多次进入时外圈只对位**最后一次**的落点，其余画虚线示意、结果看右侧明细。
 5. **累抽送券**：累计抽奖次数达到配置档位时赠送抽奖券（如满 10 次送 1 张），每人每档位只发一次。
+
+券的来源共三种：`buy`（花钱买）/ `gift`（累抽档位送）/ `prize`（外圈抽中）。后两种不花 credits 就能开奖。
 
 侧边栏入口在「通用 → 限时活动」。
 
@@ -29,6 +32,15 @@
 `multiplierBase = "ticket"` 时两档金额相同，第二行显示「10连 同上」。
 换算入口是 `outerPrizeCredits(config, multiplier, drawCount)`（`lib/lottery/prize-math.ts`）。
 
+赠券档不折算成 cr，扇区与规则表直接写「+N 张券」（`formatTicketLabel`），色调也单独用金色，
+免得被当成一个小额 cr 档。
+
+### 扇区文字放不下就不画
+
+标签是切向排的，能占到的宽度就是落点半径处的弧长。`labelSize()` 按「弧长 ÷ 标签宽度」收缩字号，
+缩到 7.5 以下就整段不渲染——外圈 1% 上下的档位只有两三度，硬画会压到邻居格子的标签上。
+这类稀有档位的完整文案与概率在右侧「奖池与规则」里全量列出，转盘上留白即可。
+
 ## 资金口径
 
 | 事件 | 处理 |
@@ -36,6 +48,7 @@
 | 买券 | 先扣临时余额（过期早的先扣），不足再扣永久余额；总额不足直接失败，不透支 |
 | 中奖（正数） | 发进**临时余额**，`prizeValidDays` 天后过期 |
 | 倒扣（负数） | 直接扣永久余额，**允许扣成负数** |
+| 抽中赠券 | 直接发 N 张 `source='prize'` 的券，**不动 cr、不写流水** |
 | 全部资金变动 | 写 `topup` 流水，`type = 6`，描述含奖品文案 |
 
 抽奖不写 `usage_log`，所以不进看板的调用统计与模型消耗。活动结束后未使用的券作废，不折算回 cr。
@@ -45,9 +58,12 @@
 ```
 option.lottery_config        活动配置（JSON，见下）
 lottery_ticket               一行一券；usedDrawId 非空即已消耗
+  source                     buy=花钱买 / gift=累抽档位送 / prize=外圈抽中
   unique(userId, milestoneDraws)   档位赠券只发一次的幂等键（NULL 不参与唯一性）
 lottery_draw                 逐次开奖记录；unique(batchId, seq)
+  grantTickets               本注抽中的赠券张数（0 = cr 档）
   migration: migrations/007_lottery.sql
+  migration: migrations/008_lottery_prize_tickets.sql（加 grantTickets 列）
 ```
 
 配置结构（`lib/lottery/prize-math.ts` 的 `LotteryConfig`）：
@@ -62,7 +78,11 @@ lottery_draw                 逐次开奖记录；unique(batchId, seq)
   "multiplierBase": "ticket",       // ticket=单张券价 / batch=本次总花费
   "prizeValidDays": 7,
   "innerPrizes": [{ "credits": 60, "weight": 25 }, ...],
-  "outerPrizes": [{ "multiplier": 1.5, "weight": 30 }, ...],
+  "outerPrizes": [
+    { "kind": "credits", "multiplier": 1.5, "weight": 14 },   // kind 缺省即 credits
+    { "kind": "tickets", "tickets": 2, "weight": 7 },
+    ...
+  ],
   "milestones": [{ "draws": 10, "tickets": 1 }, ...]
 }
 ```
@@ -94,6 +114,8 @@ lottery_draw                 逐次开奖记录；unique(batchId, seq)
 - 「中奖发放」走带过期的临时余额，过期未用的部分并不会真的付出成本，所以净收益是**偏保守（偏亏）**的估计。
 - 实际返还率 = `（发放 − 回收）/ 已开奖券面值`。`multiplierBase = "batch"` 时 10 连抽的单注金额是单抽的约 10 倍，
   这个比值会远高于配置值，所以卡片把配置那一行标成「配置单抽口径」。
+- **赠券档不进 cr 口径**：抽中赠券的那一注 cr 变动为 0，明细里标「不发 cr」，赠出的券按 `source='prize'`
+  单独计数。它的成本要等这张券被抽掉才兑现，所以当期净收益会**偏好**，页面按「兑付延后」提示。
 
 ## 关键文件
 
@@ -131,3 +153,10 @@ lottery_draw                 逐次开奖记录；unique(batchId, seq)
   实测一次 10 连抽约 7~10 秒（转盘内圈动画 2.6s，指针会在这段时间里依次落）。
   要压到 2 秒内得把这 10 次的写入批量化（一次多行 insert + 一次汇总余额更新 + 一条批量锁券语句），
   代价是回滚粒度从「单次开奖」变成「整批」，尚未做。
+- **赠券档不写 0 cr 流水**：`settleDraw` 命中 `kind='tickets'` 时只发券并回填开奖行的 `grantTickets`，
+  余额、`topup` 一行都不动；撤销那一注走同一条路径删券。期望返还里赠券按券价折算，
+  所以后台那行「返还率」把送出去的券也算成成本。
+- **改奖池要先部署再改配置**：`kind='tickets'` 在旧代码里会被读成 `multiplier` 缺失 → 0 cr 奖品，
+  真实用户会抽到一堆空档。顺序固定为「代码上线 → 写 `option.lottery_config`」。
+- **`scripts/run-migration.js`**：按行剥掉 `--` 注释后再切句（早先按整块 filter，首行是注释的迁移文件会被判成
+  0 条语句却打印成功）；0 条语句直接退出，D1 以 HTTP 200 + `success:false` 返回的报错也会抛出。

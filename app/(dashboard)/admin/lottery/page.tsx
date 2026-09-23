@@ -91,6 +91,7 @@ function Signed({ value, suffix = " cr" }: { value: number; suffix?: string }) {
 const TICKET_LABEL: Record<DrawRecord["ticketSource"], string> = {
   buy: "购买",
   gift: "赠送",
+  prize: "抽中",
   unknown: "已失效",
 };
 
@@ -171,7 +172,7 @@ export default async function AdminLotteryPage({
           <CardContent className="space-y-3">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
               <Metric label="站点净收益" value={`${formatCredits(balance.net)} cr`} tone={balance.net >= 0 ? "positive" : "negative"} hint="券面 + 回收 − 发放" />
-              <Metric label="售券收入" value={`${formatCredits(ticketTotals.boughtCredits)} cr`} hint={`${ticketTotals.boughtTickets} 张 · 赠券 ${ticketTotals.giftTickets} 张`} />
+              <Metric label="售券收入" value={`${formatCredits(ticketTotals.boughtCredits)} cr`} hint={`${ticketTotals.boughtTickets} 张 · 赠券 档位 ${ticketTotals.giftTickets} / 奖池 ${ticketTotals.prizeTickets} 张`} />
               <Metric label="中奖发放" value={`${formatCredits(balance.paidOut)} cr`} tone="negative" hint={`${balance.draws} 次开奖`} />
               <Metric label="倒扣回收" value={`${formatCredits(balance.clawedBack)} cr`} tone="positive" />
               <Metric label="参与人数" value={`${perUser.length}`} hint={`外圈命中 ${balance.outerHits} 次`} />
@@ -185,6 +186,7 @@ export default async function AdminLotteryPage({
               净收益只统计已开奖的券；窗口内还有 {ticketTotals.unusedTickets} 张未开奖（面值{" "}
               {formatCredits(ticketTotals.unusedCredits)} cr）已收讫未兑现。倒扣回收是把用户已有余额划回，
               不是新增现金流入；中奖发放走带过期的临时余额，过期未用不会真的付出。
+              赠券档不动 cr，它按「这一注的券面已收、兑付延后」落在净收益里，发出去的券要等它被抽掉才转成成本。
             </p>
           </CardContent>
         </Card>
@@ -288,7 +290,11 @@ export default async function AdminLotteryPage({
                           )}
                         </td>
                         <td className="px-3 py-2">
-                          <Signed value={r.deltaCredits} />
+                          {r.deltaCredits === 0 && r.grantTickets > 0 ? (
+                            <span className="text-xs text-muted-foreground">不发 cr（赠券档）</span>
+                          ) : (
+                            <Signed value={r.deltaCredits} />
+                          )}
                         </td>
                         <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
                           {TICKET_LABEL[r.ticketSource]}

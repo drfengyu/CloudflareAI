@@ -101,7 +101,7 @@ export async function unlockTicket(ticketId: string): Promise<void> {
 export async function grantTickets(
   userId: string,
   count: number,
-  grant: { source: "buy" | "gift"; priceCredits?: number; milestoneDraws?: number },
+  grant: { source: "buy" | "gift" | "prize"; priceCredits?: number; milestoneDraws?: number },
 ): Promise<string[]> {
   const ids: string[] = [];
   const values = Array.from({ length: count }, () => {

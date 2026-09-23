@@ -36,9 +36,11 @@ type ActionResult<T> = { success: true; data: T } | { success: false; error: str
 
 /** 一次开奖落账后的凭证，失败时按它精确撤销。 */
 interface Settlement {
-  topupId: string;
+  topupId: string | null;
   tempId: string | null;
   amount: number;
+  /** 这一注抽中的券，撤销时按 id 收回。 */
+  ticketIds: string[];
 }
 
 function round2(value: number): number {
@@ -134,13 +136,22 @@ async function compensatePurchase(userId: string, issued: string[], cost: number
   }
 }
 
-/** 中奖进带过期的临时余额，倒扣直接记在永久余额上（允许变负）。 */
+/** 中奖进带过期的临时余额，倒扣直接记在永久余额上（允许变负），赠券只加券包。 */
 async function settleDraw(
   userId: string,
   config: LotteryConfig,
   outcome: DrawResult,
 ): Promise<Settlement> {
+  // 赠券档不产生 cr 变动：不写 topup 流水（否则钱包里会躺一条「+3 张券 0 cr」的噪声行），
+  // 但它照样要能精确撤销，所以把发出去的券 id 带回结算凭证。
+  if (outcome.grantTickets > 0) {
+    const ticketIds = await grantTickets(userId, outcome.grantTickets, { source: "prize" });
+    return { topupId: null, tempId: null, amount: 0, ticketIds };
+  }
+
   const amount = round2(outcome.credits);
+  if (amount === 0) return { topupId: null, tempId: null, amount: 0, ticketIds: [] };
+
   const topupId = crypto.randomUUID();
   // 流水里也只记实际 cr 与落在哪一圈，倍数是配置的内部表达。
   const label = `${outcome.ring === "outer" ? "外圈" : "内圈"} ${formatPrizeLabel(amount)}`;
@@ -161,19 +172,20 @@ async function settleDraw(
       config.prizeValidDays,
       `限时活动抽奖奖励 ${amount} cr（有效期 ${config.prizeValidDays} 天）`,
     );
-    return { topupId, tempId, amount };
+    return { topupId, tempId, amount, ticketIds: [] };
   }
 
-  if (amount < 0) await adjustPermanentBalance(userId, amount);
-  return { topupId, tempId: null, amount };
+  await adjustPermanentBalance(userId, amount);
+  return { topupId, tempId: null, amount, ticketIds: [] };
 }
 
 async function undoSettlement(userId: string, s: Settlement): Promise<void> {
+  if (s.ticketIds.length) await deleteTickets(s.ticketIds);
   if (s.tempId) {
     await db.delete(temporaryBalances).where(eq(temporaryBalances.id, s.tempId));
   }
   if (s.amount < 0) await adjustPermanentBalance(userId, -s.amount);
-  await db.delete(topups).where(eq(topups.id, s.topupId));
+  if (s.topupId) await db.delete(topups).where(eq(topups.id, s.topupId));
 }
 
 /**
@@ -186,6 +198,7 @@ export async function drawLottery(
   ActionResult<{
     results: DrawOutcome[];
     totalCredits: number;
+    prizeTickets: number;
     ticketsLeft: number;
     totalDraws: number;
     giftedTickets: number;
@@ -241,6 +254,7 @@ export async function drawLottery(
           multiplier: outcome.multiplier,
           deltaCredits: amount,
           baseCredits: outcome.ring === "outer" ? outcome.baseCredits : 0,
+          grantTickets: outcome.grantTickets,
           ticketId: ticketIds[i],
           createdAt: new Date(),
         });
@@ -283,6 +297,8 @@ export async function drawLottery(
       data: {
         results,
         totalCredits: round2(results.reduce((sum, r) => sum + r.credits, 0)),
+        // 这一批抽中的赠券（奖池档），与累抽档位送的券分开报，前端两句话分开提示。
+        prizeTickets: results.reduce((sum, r) => sum + r.grantTickets, 0),
         ticketsLeft: await countUnusedTickets(userId),
         totalDraws,
         giftedTickets: gifted,

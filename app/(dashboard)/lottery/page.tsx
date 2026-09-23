@@ -5,6 +5,7 @@ import { getLotteryConfig } from "@/lib/lottery/config";
 import {
   activityWindow,
   formatPrizeLabel,
+  formatTicketLabel,
   innerSectorLayout,
   outerPrizeCredits,
   round2,
@@ -62,16 +63,26 @@ function buildWheelViews(config: LotteryConfig): {
   });
 
   const outerPrizes: WheelOuter[] = config.outerPrizes.map((p) => {
-    const single = outerPrizeCredits(config, p.multiplier, 1);
-    const batch = outerPrizeCredits(config, p.multiplier, 10);
     // 环带内占比只决定「进了外圈之后」抽到哪格，真实概率还要乘进入外圈的概率。
     const share = (p.weight / outerWeightSum) * 100;
+    const chanceOfSector = round2((share * chance) / 100);
+    // 赠券档没有 cr，也不随抽数变化，和倍数档分两种文案与色调。
+    if (p.kind === "tickets") {
+      return {
+        label: formatTicketLabel(p.tickets),
+        tone: "ticket" as const,
+        weight: round2(share),
+        chance: chanceOfSector,
+      };
+    }
+    const single = outerPrizeCredits(config, p.multiplier, 1);
+    const batch = outerPrizeCredits(config, p.multiplier, 10);
     return {
       label: formatPrizeLabel(single),
       ...(batch !== single ? { batchLabel: formatPrizeLabel(batch) } : {}),
       tone: toneOf(p.multiplier),
       weight: round2(share),
-      chance: round2((share * chance) / 100),
+      chance: chanceOfSector,
     };
   });
 

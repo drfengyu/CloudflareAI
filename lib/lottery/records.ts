@@ -18,7 +18,7 @@ export interface LotteryWindow {
 }
 
 /** `unknown` = 券行已被清理（用户注销级联删除），此时面值按 0 计。 */
-export type TicketSourceLabel = "buy" | "gift" | "unknown";
+export type TicketSourceLabel = "buy" | "gift" | "prize" | "unknown";
 
 /** 一注开奖的完整记录：抽奖结果 + 消耗掉的那张券的来源与面值。 */
 export interface DrawRecord {
@@ -31,6 +31,8 @@ export interface DrawRecord {
   multiplier: number | null;
   deltaCredits: number;
   baseCredits: number;
+  /** 这一注抽中的抽奖券张数（外圈赠券档）；不进 cr 账本。 */
+  grantTickets: number;
   createdAt: Date | null;
   ticketSource: TicketSourceLabel;
   ticketCredits: number;
@@ -180,6 +182,8 @@ export interface LotteryTicketTotals {
   unusedCredits: number;
   /** 窗口内累抽档位赠送的张数。 */
   giftTickets: number;
+  /** 窗口内从奖池抽中的赠券张数（未开奖时它是站点对用户的欠账）。 */
+  prizeTickets: number;
 }
 
 /**
@@ -206,6 +210,7 @@ export async function lotteryTicketTotals(
       unusedTickets: sql<number>`COALESCE(SUM(CASE WHEN ${lotteryTickets.source} = 'buy' AND ${lotteryTickets.usedDrawId} IS NULL THEN 1 ELSE 0 END), 0)`,
       unusedCredits: sql<number>`COALESCE(SUM(CASE WHEN ${lotteryTickets.source} = 'buy' AND ${lotteryTickets.usedDrawId} IS NULL THEN ${lotteryTickets.priceCredits} ELSE 0 END), 0)`,
       giftTickets: sql<number>`COALESCE(SUM(CASE WHEN ${lotteryTickets.source} = 'gift' THEN 1 ELSE 0 END), 0)`,
+      prizeTickets: sql<number>`COALESCE(SUM(CASE WHEN ${lotteryTickets.source} = 'prize' THEN 1 ELSE 0 END), 0)`,
     })
     .from(lotteryTickets)
     .where(where);
@@ -217,6 +222,7 @@ export async function lotteryTicketTotals(
     unusedTickets: Number(row?.unusedTickets ?? 0),
     unusedCredits: round2(Number(row?.unusedCredits ?? 0)),
     giftTickets: Number(row?.giftTickets ?? 0),
+    prizeTickets: Number(row?.prizeTickets ?? 0),
   };
 }
 
@@ -240,6 +246,7 @@ export async function listDrawRecords(opts: {
       multiplier: lotteryDraws.multiplier,
       deltaCredits: lotteryDraws.deltaCredits,
       baseCredits: lotteryDraws.baseCredits,
+      grantTickets: lotteryDraws.grantTickets,
       createdAt: lotteryDraws.createdAt,
       ticketId: lotteryDraws.ticketId,
     })
@@ -249,7 +256,7 @@ export async function listDrawRecords(opts: {
     .limit(opts.limit ?? 50);
 
   const ticketIds = [...new Set(rows.map((r) => r.ticketId).filter((id): id is string => !!id))];
-  const ticketRows: { id: string; source: "buy" | "gift"; priceCredits: number }[] = [];
+  const ticketRows: { id: string; source: "buy" | "gift" | "prize"; priceCredits: number }[] = [];
   for (const chunk of batchRows(ticketIds, 1)) {
     const part = await db
       .select({
@@ -275,6 +282,7 @@ export async function listDrawRecords(opts: {
       multiplier: row.multiplier,
       deltaCredits: Number(row.deltaCredits),
       baseCredits: Number(row.baseCredits),
+      grantTickets: Number(row.grantTickets ?? 0),
       createdAt: row.createdAt,
       ticketSource: ticket?.source ?? "unknown",
       ticketCredits: Number(ticket?.priceCredits ?? 0),

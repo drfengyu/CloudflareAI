@@ -19,7 +19,10 @@ interface InnerRow {
   weight: string;
 }
 interface OuterRow {
+  /** credits=按倍数结 cr；tickets=直接赠券。 */
+  kind: "credits" | "tickets";
   multiplier: string;
+  tickets: string;
   weight: string;
 }
 interface MilestoneRow {
@@ -50,7 +53,9 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
   );
   const [outerRows, setOuterRows] = useState<OuterRow[]>(() =>
     initialConfig.outerPrizes.map((p) => ({
+      kind: p.kind ?? "credits",
       multiplier: String(p.multiplier),
+      tickets: String(p.tickets || ""),
       weight: String(p.weight),
     })),
   );
@@ -72,7 +77,9 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
         prizeValidDays: Number(prizeValidDays),
         innerPrizes: innerRows.map((r) => ({ credits: Number(r.credits), weight: Number(r.weight) })),
         outerPrizes: outerRows.map((r) => ({
+          kind: r.kind,
           multiplier: Number(r.multiplier),
+          tickets: Number(r.tickets),
           weight: Number(r.weight),
         })),
         milestones: milestoneRows.map((r) => ({ draws: Number(r.draws), tickets: Number(r.tickets) })),
@@ -109,8 +116,16 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
           .filter((r) => r.credits.trim() !== "" || r.weight.trim() !== "")
           .map((r) => ({ credits: Number(r.credits), weight: Number(r.weight) })),
         outerPrizes: outerRows
-          .filter((r) => r.multiplier.trim() !== "" || r.weight.trim() !== "")
-          .map((r) => ({ multiplier: Number(r.multiplier), weight: Number(r.weight) })),
+          .filter(
+            (r) =>
+              r.multiplier.trim() !== "" || r.tickets.trim() !== "" || r.weight.trim() !== "",
+          )
+          .map((r) => ({
+            kind: r.kind,
+            multiplier: Number(r.multiplier),
+            tickets: Number(r.tickets),
+            weight: Number(r.weight),
+          })),
         milestones: milestoneRows
           .filter((r) => r.draws.trim() !== "" || r.tickets.trim() !== "")
           .map((r) => ({ draws: Number(r.draws), tickets: Number(r.tickets) })),
@@ -234,17 +249,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
         emptyRow={{ credits: "50", weight: "10" }}
       />
 
-      <PrizeSection
-        title="外圈奖品（正负倍数）"
-        hint="转盘外圈，按配置的基数结算；倍数可为负。"
-        columns={[
-          { key: "multiplier", label: "倍数" },
-          { key: "weight", label: "权重" },
-        ]}
-        rows={outerRows}
-        setRows={setOuterRows}
-        emptyRow={{ multiplier: "2", weight: "10" }}
-      />
+      <OuterPrizeSection rows={outerRows} setRows={setOuterRows} ticketPrice={preview.ticketPriceCredits} />
 
       <PrizeSection
         title="累抽送券档位"
@@ -340,6 +345,109 @@ function PrizeSection<T extends Record<string, string>>({
             </button>
           </div>
         ))
+      )}
+    </div>
+  );
+}
+
+/** 外圈两类奖品共用一套行编辑：类型决定哪一格可填，另一格禁用而不是偷偷清零。 */
+function OuterPrizeSection({
+  rows,
+  setRows,
+  ticketPrice,
+}: {
+  rows: OuterRow[];
+  setRows: React.Dispatch<React.SetStateAction<OuterRow[]>>;
+  ticketPrice: number;
+}) {
+  const patch = (i: number, next: Partial<OuterRow>) =>
+    setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...next } : r)));
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">外圈奖品（倍数 cr / 赠送抽奖券）</p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            setRows((prev) => [
+              ...prev,
+              { kind: "credits", multiplier: "2", tickets: "", weight: "10" },
+            ])
+          }
+        >
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          添加
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        只有内圈指针停在「外圈入口」上才会抽这一圈。倍数档按上面的基数结算 cr（可为负）；
+        赠券档只往券包里加张数、不动 cr，返还率里按券价 {ticketPrice} cr 折算。权重同时决定扇区大小与中奖概率。
+      </p>
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="w-24 shrink-0">奖品类型</span>
+        <span className="flex-1">倍数</span>
+        <span className="flex-1">赠券张数</span>
+        <span className="flex-1">权重</span>
+        <span className="w-10" />
+      </div>
+      {rows.length === 0 ? (
+        <p className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
+          暂无条目
+        </p>
+      ) : (
+        rows.map((row, i) => {
+          const isTickets = row.kind === "tickets";
+          return (
+            <div key={i} className="flex items-center gap-2">
+              <select
+                value={row.kind}
+                onChange={(e) => patch(i, { kind: e.target.value as OuterRow["kind"] })}
+                className={`${FIELD_CLASS} w-24 shrink-0`}
+              >
+                <option value="credits">倍数 cr</option>
+                <option value="tickets">赠券</option>
+              </select>
+              <input
+                type="number"
+                step="any"
+                value={row.multiplier}
+                disabled={isTickets}
+                onChange={(e) => patch(i, { multiplier: e.target.value })}
+                placeholder="如 2.5 或 -1"
+                className={`${FIELD_CLASS} flex-1 disabled:opacity-40`}
+              />
+              <input
+                type="number"
+                min={1}
+                step="1"
+                value={row.tickets}
+                disabled={!isTickets}
+                onChange={(e) => patch(i, { tickets: e.target.value })}
+                placeholder="张数"
+                className={`${FIELD_CLASS} flex-1 disabled:opacity-40`}
+              />
+              <input
+                type="number"
+                step="any"
+                value={row.weight}
+                onChange={(e) => patch(i, { weight: e.target.value })}
+                placeholder="权重"
+                className={`${FIELD_CLASS} flex-1`}
+              />
+              <button
+                type="button"
+                onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== i))}
+                title="删除这一行"
+                className="rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          );
+        })
       )}
     </div>
   );

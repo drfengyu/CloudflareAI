@@ -45,15 +45,24 @@ if (!fs.existsSync(sqlPath)) {
 
 const sql = fs.readFileSync(sqlPath, 'utf8');
 
-// Split by semicolons and filter out comments and empty lines
+// 先按行剥掉 `--` 注释再切句。之前是切完句后 filter 掉「以 -- 开头」的块——
+// 迁移文件首行几乎都是注释，整条语句因此被连带丢弃，0 条语句也照样打印成功。
 const statements = sql
+  .split('\n')
+  .map(line => line.replace(/--.*$/, ''))
+  .join('\n')
   .split(';')
   .map(s => s.trim())
-  .filter(s => s && !s.startsWith('--'));
+  .filter(Boolean);
 
 console.log(`📄 Migration file: ${path.basename(sqlPath)}`);
 console.log(`📊 Database: ${CF_D1_DATABASE_ID}`);
 console.log(`📝 Statements: ${statements.length}`);
+
+if (statements.length === 0) {
+  console.error('❌ 文件里没有可执行语句，检查迁移文件内容');
+  process.exit(1);
+}
 console.log('');
 
 async function executeStatement(sql) {
@@ -73,7 +82,13 @@ async function executeStatement(sql) {
     throw new Error(`HTTP ${response.status}: ${text}`);
   }
 
-  return await response.json();
+  const body = await response.json();
+  // D1 的报错走 200 + success:false，只看 response.ok 会把失败语句报成成功。
+  if (!body.success) {
+    const msg = (body.errors || []).map(e => e.message).join('; ') || 'D1 执行失败';
+    throw new Error(msg);
+  }
+  return body;
 }
 
 async function runMigration() {

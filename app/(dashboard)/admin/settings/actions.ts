@@ -434,7 +434,7 @@ export async function updateLotterySettings(formData: {
   multiplierBase: string;
   prizeValidDays: number;
   innerPrizes: { credits: number; weight: number }[];
-  outerPrizes: { multiplier: number; weight: number }[];
+  outerPrizes: { kind?: string; multiplier: number; tickets?: number; weight: number }[];
   milestones: { draws: number; tickets: number }[];
 }) {
   const currentUserId = await requireUser();
@@ -471,11 +471,27 @@ export async function updateLotterySettings(formData: {
     }))
     .filter((p) => Number.isFinite(p.credits));
   const outerPrizes = (formData.outerPrizes ?? [])
-    .map((p, i) => ({
-      multiplier: requireNumber(p?.multiplier, `外圈第 ${i + 1} 个奖品的倍数`, -1000, 1000),
-      weight: requireNumber(p?.weight, `外圈第 ${i + 1} 个奖品的权重`, 0.1, 10_000),
-    }))
-    .filter((p) => Number.isFinite(p.multiplier));
+    .map((p, i) => {
+      const weight = requireNumber(p?.weight, `外圈第 ${i + 1} 个奖品的权重`, 0.1, 10_000);
+      // 两类奖品只校验各自用得上的那个字段，否则配赠券会被迫填一个多余的倍数。
+      if (p?.kind === "tickets") {
+        return {
+          kind: "tickets" as const,
+          multiplier: 0,
+          tickets: Math.trunc(
+            requireNumber(p?.tickets, `外圈第 ${i + 1} 个奖品的赠券张数`, 1, 1000),
+          ),
+          weight,
+        };
+      }
+      return {
+        kind: "credits" as const,
+        multiplier: requireNumber(p?.multiplier, `外圈第 ${i + 1} 个奖品的倍数`, -1000, 1000),
+        tickets: 0,
+        weight,
+      };
+    })
+    .filter((p) => (p.kind === "tickets" ? p.tickets > 0 : Number.isFinite(p.multiplier)));
 
   if (innerPrizes.length === 0) throw new Error("内圈至少要配 1 个奖品");
   if (outerPrizes.length === 0) throw new Error("外圈至少要配 1 个奖品");

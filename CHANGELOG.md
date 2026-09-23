@@ -42,6 +42,12 @@
   - **用户侧「我的活动记录」**（`/lottery` 下方卡片）：逐次时间、落在哪一圈、结果文案、cr 变动、用掉的券（购买/赠送 + 面值），配一排汇总（次数、外圈命中、中奖发放、倒扣回收、已开奖券面值、本期净收益）。明细取最近 50 次、汇总按活动期全量；活动结束或未开启时卡片照常渲染，历史不会因为下线而看不见。
   - **管理侧 `/admin/lottery`**（侧边栏「管理 → 活动记录」，role ≥ 10）：今日 / 近 7 日 / 近 30 日 / 全部 四档窗口，收益概览（站点净收益、售券收入、中奖发放、倒扣回收、参与人数、实际返还率对照配置口径）+ 按用户聚合表（含邮箱与最近参与时间）+ 最近 200 注逐次明细（含单注站点净收益）。
   - **口径**：净收益 = `券面收入 + 倒扣回收 − 中奖发放`，且只算**已开奖**的券；未开奖部分单列「已收讫未兑现」提示，回收不算现金流入、发放走会过期的临时余额，所以这个数是偏保守的估计（文档里写清了）。
+- **限时活动·外圈赠券奖型**：外圈奖品从「只有 cr」扩成两种奖型（`OuterPrize.kind = "credits" | "tickets"`），抽中直接给 N 张抽奖券。
+  - 赠出的券记 `lottery_ticket.source = 'prize'`（第三种来源，与 `buy` / `gift` 并列），本注抽中几张记在 `lottery_draw.grantTickets`（迁移 `migrations/008_lottery_prize_tickets.sql`，已应用到 D1）。
+  - **不动 cr、不写流水**：`settleDraw` 命中赠券档只发券就返回，钱包里不会出现 0 cr 的噪声行；撤销那一注走同一条路径把券删掉。
+  - 转盘上赠券档单独用金色、文案「+N 张券」（`formatTicketLabel`），不折算成 cr；结果面板与「奖池与规则」区分两类奖型。
+  - 期望返还/返还率把赠券按券价折算计入成本（`expectedReturnPerTicket`），后台表单里赠券档每行可选奖型，只留一个可编辑的金额输入框。
+  - 默认外圈奖池扩到 **16 档**（12 档 cr + 4 档赠券）：内圈正档加厚、外圈倍数下调、负档收平（单券返还率 91.1%、单发亏损概率 19.6%、区间 −120 ~ +2000 cr）。**上线顺序固定为「代码先部署，再改 `option.lottery_config`」**——旧代码会把 `kind: "tickets"` 读成 `multiplier` 缺失，真实用户将抽到一片 0 cr 空档。
 
 ### 变更
 
@@ -68,6 +74,7 @@
   - `verifyBalance()` 两种返回值都带 `neededCredits`/`availableCredits`，402 文案由光秃的 `Insufficient balance` 变为 `Insufficient balance：本次预检需要 285.25 cr，当前可用 0.00 cr`，并经 `after()` 补写一条 `status="error"`、`creditsUsed=0` 的 usage_log——此前被预检拒掉的请求不留任何记录，用户和管理员都无从排查。`/v1/chat/completions`、`/v1/messages`、`/api/ai/text` 三条链路统一走这套逻辑。
   - 顺带修掉看板残留的美元文案「⚠️ 余额不足 $1」→「1 cr」（上一条全站 Credits 改造的漏网之鱼）。
   - 实测：`max_tokens=32000` 不再被预检拦截（到上游后因该模型 `max_total_tokens=24000` 返回 400，属上游参数校验，与本次改动无关）；把临时令牌额度置 0 得到上述带数字的 402 与对应 error 行；成功调用按真实 usage（46 in / 3 out）扣 4.93 cr。
+- **转盘盘面放大 + 窄扇区文字自适应**（`app/(dashboard)/lottery/lottery-wheel.tsx`）：左栏 `minmax(0,440px)` → `560px`、盘面容器 `max-w-[380px]` → `520px`，SVG 按 viewBox 等比放大，1440 / 1180 宽度下实测盘面直径从 380px 变 518px（420px 窄屏自动缩到 314px，不溢出）。顺带把 viewBox 从 380 提到 400——外沿两道发光环半径 194 此前超出画布，边缘被裁掉几像素。标签是切向排的，新增 `labelSize()` 按「落点弧长 ÷ 标签宽度」收缩字号，缩到 7.5 以下整段不画（1% 上下的格子只有两三度，硬画会压到邻居标签上），完整文案与概率仍在「奖池与规则」全量列出。
 
 ### 修复
 
@@ -80,6 +87,7 @@
 - **时间统一为中国时区（Asia/Shanghai, UTC+8）**：新增 `lib/date.ts`（`cnStartOfToday`/`cnStartOfMonth`/`cnDaysAgoStart`/`formatCnDateTime`/`formatCnDate`），修复服务器（Vercel 默认 UTC）导致的「今日」日界错位（北京 0-8 点看板仍显示昨天数据）；数据看板/使用历史/对话历史/订单管理/钱包订单卡片与临时余额到期等时间显示统一按北京时间
 - **`/api/health` 匿名暴露部署结构**（`app/api/health/route.ts`）：该端点免鉴权，此前会把「哪些环境变量已设置」（`CF_API_TOKEN` / `AUTH_SECRET` / `AUTH_GITHUB_ID`… 的清单本身就是一种情报）以及 D1 报错原文直接返回给任意调用方。改为**状态码语义不变、响应体按角色分级**：全绿 200 / 否则 500 对所有调用方一致（看板自检探针、`tests/e2e/channel-remote-verify.spec.ts`、`deployment-check.html` 都只看 `res.ok`，不受影响），明细只给 role ≥ 10 的管理员会话。角色查询失败（例如 D1 本身挂了）时退回精简响应而不是让健康检查抛异常。
 - **看板「今日模型分布/渠道分布」把昨天算进今天**（`lib/usage/queries.ts` + `lib/date.ts`）：分布图的窗口下界取自 `cnDaysAgoStart(days)`，range=today 时 `days=1` 正好落在**北京昨天 0 点**，于是昨天用过的模型会一直挂在「今日」标题下；同页的「今日消耗」「今日调用」「今日每小时消耗」用 `cnStartOfToday()`，两者相差整整一天，卡片之间互相对不上。新增 `cnLastNDaysStart(days)`（含今天在内的 N 个北京日历日，N=1 即今天 0 点），`getUsageByModel`/`getUsageByChannel`/`getDailyUsage` 三个聚合一并改用：「近 7 日」由跨 8 个日历日、「近 30 日」由跨 31 个日历日收敛为字面的 7/30 天。钱包页「充值记录」的 `cnDaysAgoStart(90)` 是截止裁剪而非含今天的统计窗口，语义不变。
+- **`scripts/run-migration.js` 会把迁移整个跳过却报成功**：切句后 `filter(s => s && !s.startsWith('--'))` 把「以注释开头的语句块」整块丢掉，而迁移文件首行几乎都是注释——于是 `Statements: 0`，循环一次不跑，照样打印 `✅ Migration completed successfully!`。改为按行剥掉 `--` 注释再切句，0 条语句直接退出报错。另外 D1 的语句报错走的是 **HTTP 200 + `success:false`**，旧代码只看 `response.ok`，失败语句也被当成功；现在解析响应体并在 `!success` 时抛出 `errors[].message`。（`migrations/008_lottery_prize_tickets.sql` 首次执行正是踩中这两条，重跑后已确认列存在。）
 
 ## [0.5.0] - 2026-08-18
 

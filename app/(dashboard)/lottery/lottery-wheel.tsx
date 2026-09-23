@@ -10,7 +10,8 @@ import { toast } from "sonner";
 import { buyTickets, drawLottery } from "./actions";
 import type { ActivityStatus, DrawOutcome } from "@/lib/lottery/prize-math";
 
-const SIZE = 380;
+/** 外沿还有两道发光环，viewBox 要比最大半径留出这点余量，否则环带会被裁掉。 */
+const SIZE = 400;
 const C = SIZE / 2;
 /** 外圈环形带、内圈盘面、中心轴三层的半径。入口指针会从内圈一直伸进外圈带。 */
 const OUTER_R = 182;
@@ -23,7 +24,7 @@ const SPIN_INNER_MS = 2600;
 const SPIN_OUTER_MS = 1500;
 const SPOKE_STEP_MS = 130;
 
-type Tone = "positive" | "negative" | "zero" | "entry";
+type Tone = "positive" | "negative" | "zero" | "entry" | "ticket";
 
 /** 内圈的一个扇区（奖品或「外圈入口」），`weight` 决定扇区角度，与实际概率同源。 */
 export interface WheelSector {
@@ -62,12 +63,13 @@ export interface LotteryWheelProps {
   endAtMs: number | null;
 }
 
-/** 霓虹配色：每个音调给深浅两档交替，相邻扇区才分得开。 */
+/** 霓虹配色：每个音调给深浅两档交替，相邻扇区才分得开。赠券档用金色与 cr 档区分。 */
 const NEON: Record<Tone, [string, string]> = {
   positive: ["#22d3ee", "#0b7285"],
   negative: ["#fb7185", "#8f1d3f"],
   zero: ["#64748b", "#3b4757"],
   entry: ["#c084fc", "#6b21a8"],
+  ticket: ["#fbbf24", "#7c4a03"],
 };
 
 const PANEL = "radial-gradient(circle at 50% 38%, #1a2445 0%, #0a0f22 55%, #05070f 100%)";
@@ -108,6 +110,20 @@ function spans(weights: number[]) {
 function sectorPaint(tone: Tone, index: number) {
   const pair = NEON[tone];
   return { fill: pair[index % 2], fillOpacity: index % 2 === 0 ? 0.95 : 0.68 };
+}
+
+/** 标签切向排布，落点半径处的弧长就是它能占到的宽度。 */
+function arcAt(r: number, span: { start: number; end: number }) {
+  return ((span.end - span.start) * Math.PI * r) / 180;
+}
+
+/**
+ * 字号按「可用弧长 ÷ 标签宽度」收缩，缩到 7.5 以下就整段不画：外圈 1% 上下的格子只有
+ * 两三度，"+1250 cr" 硬画会压到邻居格子的标签上。这类档位的文案与概率在下方「奖池与规则」全量公示。
+ */
+function labelSize(r: number, span: { start: number; end: number }, label: string, base: number) {
+  const size = Math.min(base, arcAt(r, span) / (Math.max(1, label.length) * 0.55));
+  return size >= 7.5 ? size : null;
 }
 
 /** 让目标扇区中心转到某个角度处，且始终往前转（不倒着回去）。 */
@@ -220,10 +236,16 @@ export function LotteryWheel(props: LotteryWheelProps) {
       later(() => setPhase("done"), spokesDone);
     }
 
+    if (response.data.prizeTickets > 0) {
+      later(
+        () => toast.success(`抽中 ${response.data.prizeTickets} 张抽奖券，已放进券包`),
+        spokesDone,
+      );
+    }
     if (response.data.giftedTickets > 0) {
       later(
         () => toast.success(`累抽达标，赠送 ${response.data.giftedTickets} 张抽奖券`),
-        spokesDone,
+        spokesDone + 240,
       );
     }
     later(() => router.refresh(), spokesDone);
@@ -247,7 +269,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
   const netCredits = results ? results.reduce((sum, r) => sum + r.credits, 0) : 0;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,440px)_minmax(0,1fr)]">
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
       <Card className="overflow-hidden border-white/10 bg-transparent p-0">
         <div style={{ background: PANEL }} className="px-5 pb-5 pt-4">
           <div className="flex items-center justify-between text-white/90">
@@ -264,11 +286,11 @@ export function LotteryWheel(props: LotteryWheelProps) {
             <StatusBadge status={props.status} />
           </div>
 
-          <div className="relative mx-auto mt-3 w-full max-w-[380px]">
+          <div className="relative mx-auto mt-3 w-full max-w-[520px]">
             {/* 顶部固定指针：内圈落点停在这里 */}
             <div className="absolute left-1/2 top-1 z-20 -translate-x-1/2">
               <div
-                className="h-0 w-0 border-x-[9px] border-t-[18px] border-x-transparent"
+                className="h-0 w-0 border-x-[11px] border-t-[22px] border-x-transparent"
                 style={{ borderTopColor: "#f0f9ff", filter: "drop-shadow(0 0 6px #22d3ee)" }}
               />
             </div>
@@ -303,6 +325,10 @@ export function LotteryWheel(props: LotteryWheelProps) {
                   const midR = (OUTER_R + OUTER_IN) / 2;
                   const anchor = polar(prize.batchLabel ? midR + 8 : midR, span.center);
                   const batchAnchor = polar(midR - 9, span.center);
+                  const size = labelSize(midR, span, prize.label, 11);
+                  const batchSize = prize.batchLabel
+                    ? labelSize(midR - 9, span, `10连 ${prize.batchLabel}`, 9)
+                    : null;
                   return (
                     <g key={`outer-${index}`}>
                       <path
@@ -311,19 +337,21 @@ export function LotteryWheel(props: LotteryWheelProps) {
                         stroke="#05070f"
                         strokeWidth={2}
                       />
-                      <text
-                        x={anchor.x}
-                        y={anchor.y}
-                        transform={`rotate(${span.center} ${anchor.x} ${anchor.y})`}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        fill="#f8fafc"
-                        fontSize={11}
-                        fontWeight={600}
-                      >
-                        {prize.label}
-                      </text>
-                      {prize.batchLabel && (
+                      {size !== null && (
+                        <text
+                          x={anchor.x}
+                          y={anchor.y}
+                          transform={`rotate(${span.center} ${anchor.x} ${anchor.y})`}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill="#f8fafc"
+                          fontSize={size}
+                          fontWeight={600}
+                        >
+                          {prize.label}
+                        </text>
+                      )}
+                      {prize.batchLabel && batchSize !== null && (
                         <text
                           x={batchAnchor.x}
                           y={batchAnchor.y}
@@ -332,7 +360,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
                           dominantBaseline="middle"
                           fill="#e2e8f0"
                           fillOpacity={0.65}
-                          fontSize={9}
+                          fontSize={batchSize}
                         >
                           10连 {prize.batchLabel}
                         </text>
@@ -355,7 +383,15 @@ export function LotteryWheel(props: LotteryWheelProps) {
                 {props.innerSectors.map((sector, index) => {
                   const span = innerSectorSpans[index];
                   const anchor = polar(INNER_R * 0.63, span.center);
+                  const near = polar(INNER_R * 0.32, span.center);
                   const tone: Tone = sector.tone;
+                  const size = labelSize(
+                    INNER_R * 0.63,
+                    span,
+                    sector.label,
+                    sector.kind === "entry" ? 12 : 11,
+                  );
+                  const hintSize = labelSize(INNER_R * 0.32, span, "↓ 外圈", 10);
                   return (
                     <g key={`inner-${index}`}>
                       <path
@@ -364,28 +400,30 @@ export function LotteryWheel(props: LotteryWheelProps) {
                         stroke="#05070f"
                         strokeWidth={2}
                       />
-                      <text
-                        x={anchor.x}
-                        y={anchor.y}
-                        transform={`rotate(${span.center} ${anchor.x} ${anchor.y})`}
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                        fill={sector.kind === "entry" ? "#faf5ff" : "#f8fafc"}
-                        fontSize={sector.kind === "entry" ? 12 : 11}
-                        fontWeight={700}
-                      >
-                        {sector.label}
-                      </text>
-                      {sector.kind === "entry" && (
+                      {size !== null && (
                         <text
-                          x={polar(INNER_R * 0.32, span.center).x}
-                          y={polar(INNER_R * 0.32, span.center).y}
-                          transform={`rotate(${span.center} ${polar(INNER_R * 0.32, span.center).x} ${polar(INNER_R * 0.32, span.center).y})`}
+                          x={anchor.x}
+                          y={anchor.y}
+                          transform={`rotate(${span.center} ${anchor.x} ${anchor.y})`}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill={sector.kind === "entry" ? "#faf5ff" : "#f8fafc"}
+                          fontSize={size}
+                          fontWeight={700}
+                        >
+                          {sector.label}
+                        </text>
+                      )}
+                      {sector.kind === "entry" && hintSize !== null && (
+                        <text
+                          x={near.x}
+                          y={near.y}
+                          transform={`rotate(${span.center} ${near.x} ${near.y})`}
                           textAnchor="middle"
                           dominantBaseline="middle"
                           fill="#faf5ff"
                           fillOpacity={0.8}
-                          fontSize={10}
+                          fontSize={hintSize}
                         >
                           ↓ 外圈
                         </text>

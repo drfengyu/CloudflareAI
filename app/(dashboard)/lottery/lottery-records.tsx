@@ -12,6 +12,7 @@ import type {
 const TICKET_LABEL: Record<DrawRecord["ticketSource"], string> = {
   buy: "购买",
   gift: "赠送",
+  prize: "抽中",
   unknown: "已失效",
 };
 
@@ -135,7 +136,11 @@ export function LotteryRecords({
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        <Delta value={r.deltaCredits} />
+                        {r.deltaCredits === 0 && r.grantTickets > 0 ? (
+                          <span className="text-muted-foreground">不发 cr</span>
+                        ) : (
+                          <Delta value={r.deltaCredits} />
+                        )}
                       </td>
                       <td className="px-3 py-2 text-xs text-muted-foreground">
                         {TICKET_LABEL[r.ticketSource]}

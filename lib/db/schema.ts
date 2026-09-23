@@ -370,8 +370,8 @@ export const lotteryTickets = sqliteTable(
     userId: text("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    /** buy=花 credits 买的 / gift=累抽档位赠送的。 */
-    source: text("source").$type<"buy" | "gift">().notNull(),
+    /** buy=花 credits 买的 / gift=累抽档位赠送的 / prize=转盘抽中的赠券档。 */
+    source: text("source").$type<"buy" | "gift" | "prize">().notNull(),
     /** 该券的单券价（cr）；赠券记 0，仅用于流水对账。 */
     priceCredits: real("priceCredits").notNull().default(0),
     /** 赠送时命中的累抽档位（当时的总抽奖次数）；非档位赠券为 null。 */
@@ -408,6 +408,8 @@ export const lotteryDraws = sqliteTable(
     deltaCredits: real("deltaCredits").notNull(),
     /** 本次倍数结算用的基数（cr）：单券价或批次总花费，见配置 multiplierBase。 */
     baseCredits: real("baseCredits").notNull().default(0),
+    /** 本次抽中的抽奖券张数（外圈赠券档）；0 = 不发券。券不进 cr 账本，所以不写流水。 */
+    grantTickets: integer("grantTickets").notNull().default(0),
     /** 消耗掉的券。 */
     ticketId: text("ticketId").references(() => lotteryTickets.id, {
       onDelete: "set null",

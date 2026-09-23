@@ -345,6 +345,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   - 展示：外圈倍数只存在于配置，扇区/规则/结果/流水一律实际 cr，`multiplierBase = "batch"` 时按「单抽 / 10连」两行标注
   - 后台：`/admin/settings` 新卡片配奖池与累抽档位，并显示单券期望返还/返还率（默认约 90.7%）
   - 记录：`lib/lottery/records.ts` 只读聚合（不新增表）——用户侧「我的活动记录」逐次明细 + 汇总，管理侧 `/admin/lottery` 按今日/近 7 日/近 30 日窗口出站点净收益、按用户聚合与最近 200 注明细；净收益 = 券面 + 回收 − 发放，只算已开奖的券
+  - 奖型：外圈 `kind = "credits" | "tickets"`，赠券档直接发 `source='prize'` 的券、不动 cr 也不写流水，张数记在 `lottery_draw.grantTickets`（`migrations/008_lottery_prize_tickets.sql`）；期望返还把赠券按券价折算计入成本。**改奖池的顺序固定为「代码先上线，再写 `option.lottery_config`」**，旧代码会把 `kind:'tickets'` 读成 0 cr 奖品
 - ✅ **新用户注册奖励**（2026-06-16）：
   - 新用户注册时自动获得 2000 credits
   - 奖励记录到 `topup` 表（type 4 = 其他充值）

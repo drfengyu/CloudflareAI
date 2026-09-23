@@ -19,9 +19,16 @@ export interface InnerPrize {
   weight: number;
 }
 
-/** 外圈奖品：正负倍数，基数见 `multiplierBase`。 */
+/** 外圈奖品分两类：按倍数结算 cr，或直接赠送抽奖券。 */
+export type OuterPrizeKind = "credits" | "tickets";
+
 export interface OuterPrize {
+  /** credits=`multiplier`×基数 cr；tickets=直接发 `tickets` 张券，不产生 cr 变动。 */
+  kind: OuterPrizeKind;
+  /** kind=credits 时生效，可为负（倒扣）。 */
   multiplier: number;
+  /** kind=tickets 时生效，赠送张数。 */
+  tickets: number;
   weight: number;
 }
 
@@ -54,8 +61,11 @@ export interface LotteryConfig {
 }
 
 /**
- * 默认奖池按「单券返还率 ≈ 91%」配平（券价 100 cr）。
- * 内圈权重合计 100、期望 +89 cr；外圈权重合计 100、期望 +102.5 cr，按 12.5% 概率掺入。
+ * 默认奖池按「单券返还率 ≈ 90%」配平（券价 100 cr）。
+ *
+ * 两级分工刻意拉开：内圈是「小得小失」的主战场（正档厚、负档浅），
+ * 外圈才是倍数层——但外圈正档一旦低于内圈天花板就没有"进阶感"，所以调奖池时
+ * 两边要一起看，改完以后台那行「单券期望返还 / 返还率」为准。
  */
 export const DEFAULT_LOTTERY_CONFIG: LotteryConfig = {
   enabled: false,
@@ -66,24 +76,32 @@ export const DEFAULT_LOTTERY_CONFIG: LotteryConfig = {
   multiplierBase: "ticket",
   prizeValidDays: 7,
   innerPrizes: [
-    { credits: 60, weight: 25 },
-    { credits: 130, weight: 20 },
-    { credits: 200, weight: 15 },
-    { credits: -60, weight: 20 },
-    { credits: -200, weight: 10 },
-    { credits: 400, weight: 6 },
-    { credits: 1000, weight: 3 },
-    { credits: -400, weight: 1 },
+    { credits: 200, weight: 12 },
+    { credits: 150, weight: 14 },
+    { credits: 120, weight: 14 },
+    { credits: 90, weight: 16 },
+    { credits: 60, weight: 16 },
+    { credits: 40, weight: 12 },
+    { credits: -30, weight: 12 },
+    { credits: -80, weight: 8 },
   ],
   outerPrizes: [
-    { multiplier: 1.5, weight: 30 },
-    { multiplier: 0.8, weight: 25 },
-    { multiplier: 2.5, weight: 15 },
-    { multiplier: -1, weight: 15 },
-    { multiplier: -2.5, weight: 8 },
-    { multiplier: 5, weight: 4 },
-    { multiplier: 10, weight: 2 },
-    { multiplier: -5, weight: 1 },
+    { kind: "credits", multiplier: 1.5, tickets: 0, weight: 14 },
+    { kind: "credits", multiplier: 2, tickets: 0, weight: 16 },
+    { kind: "credits", multiplier: 2.5, tickets: 0, weight: 12 },
+    { kind: "credits", multiplier: 3, tickets: 0, weight: 10 },
+    { kind: "credits", multiplier: 4, tickets: 0, weight: 7 },
+    { kind: "credits", multiplier: 5, tickets: 0, weight: 6 },
+    { kind: "credits", multiplier: 8, tickets: 0, weight: 2 },
+    { kind: "credits", multiplier: 12, tickets: 0, weight: 1 },
+    { kind: "credits", multiplier: 20, tickets: 0, weight: 0.5 },
+    { kind: "tickets", multiplier: 0, tickets: 1, weight: 12 },
+    { kind: "tickets", multiplier: 0, tickets: 2, weight: 7 },
+    { kind: "tickets", multiplier: 0, tickets: 3, weight: 3 },
+    { kind: "tickets", multiplier: 0, tickets: 5, weight: 1 },
+    { kind: "credits", multiplier: -0.8, tickets: 0, weight: 14 },
+    { kind: "credits", multiplier: -1, tickets: 0, weight: 9 },
+    { kind: "credits", multiplier: -1.2, tickets: 0, weight: 5 },
   ],
   milestones: [
     { draws: 10, tickets: 1 },
@@ -116,9 +134,20 @@ function sanitizeOuter(value: unknown): OuterPrize[] {
   return value
     .map((raw) => {
       const item = raw as Partial<OuterPrize>;
-      return { multiplier: Number(item?.multiplier), weight: Number(item?.weight) };
+      const weight = Number(item?.weight);
+      const tickets = Math.trunc(Number(item?.tickets));
+      // 旧配置里没有 kind：一律按 cr 倍数解释，线上已有的奖池原样可用。
+      if (item?.kind === "tickets") {
+        return { kind: "tickets" as const, multiplier: 0, tickets: tickets > 0 ? tickets : 1, weight };
+      }
+      return { kind: "credits" as const, multiplier: Number(item?.multiplier), tickets: 0, weight };
     })
-    .filter((p) => Number.isFinite(p.multiplier) && Number.isFinite(p.weight) && p.weight > 0);
+    .filter(
+      (p) =>
+        Number.isFinite(p.weight) &&
+        p.weight > 0 &&
+        (p.kind === "tickets" ? p.tickets > 0 : Number.isFinite(p.multiplier)),
+    );
 }
 
 function sanitizeMilestones(value: unknown): LotteryMilestone[] {
@@ -226,6 +255,8 @@ export interface DrawResult {
   multiplier: number | null;
   /** 倍数基数；内圈为 0。 */
   baseCredits: number;
+  /** 本次抽中的抽奖券张数（外圈赠券档）；0 = 不发券。 */
+  grantTickets: number;
   label: string;
 }
 
@@ -247,6 +278,11 @@ function weightedIndex(weights: number[], roll: number): number {
 export function formatPrizeLabel(value: number): string {
   const n = round2(value);
   return n === 0 ? "谢谢参与" : n > 0 ? `+${n} cr` : `${n} cr`;
+}
+
+/** 赠券档的文案：不给 cr，只给次数，所以不套 cr 的格式。 */
+export function formatTicketLabel(tickets: number): string {
+  return `+${Math.trunc(tickets)} 张券`;
 }
 
 /**
@@ -290,12 +326,28 @@ export function rollPrize(
       credits,
       multiplier: null,
       baseCredits: 0,
+      grantTickets: 0,
       label: formatPrizeLabel(credits),
     };
   }
 
   const outerIndex = weightedIndex(config.outerPrizes.map((p) => p.weight), random());
   const prize = config.outerPrizes[outerIndex];
+
+  // 赠券档：不动 cr 账，只往券包里加张数，所以没有倍数也没有基数。
+  if (prize.kind === "tickets") {
+    return {
+      ring: "outer",
+      innerIndex,
+      outerIndex,
+      credits: 0,
+      multiplier: null,
+      baseCredits: 0,
+      grantTickets: prize.tickets,
+      label: formatTicketLabel(prize.tickets),
+    };
+  }
+
   const base = config.multiplierBase === "batch" ? batchSpendCredits : config.ticketPriceCredits;
   const credits = round2(base * prize.multiplier);
   return {
@@ -305,12 +357,17 @@ export function rollPrize(
     credits,
     multiplier: prize.multiplier,
     baseCredits: base,
+    grantTickets: 0,
     label: formatPrizeLabel(credits),
   };
 }
 
 /**
  * 单券期望返还（cr）：内圈/外圈按各自权重与外圈概率加权。
+ * 赠券档按**券价**折算——它值一次开奖的机会，那机会的期望就是券价量级，
+ * 所以把它计入返还率既不是高估也不是精确值，而是可比的口径（真实成本略低于券价，
+ * 因为发出去的券本身还要再按返还率打折）。
+ *
  * 外圈一律按单券价折算，所以 `multiplierBase = "batch"` 时这个数会低估 10 连抽的真实期望
  * （那时每券期望约为它的批次数倍），后台据此提示即可。
  */
@@ -325,7 +382,8 @@ export function expectedReturnPerTicket(config: LotteryConfig): number {
   const outerEv = evOf(
     config.outerPrizes,
     (p) => p.weight,
-    (p) => config.ticketPriceCredits * p.multiplier,
+    (p) =>
+      p.kind === "tickets" ? p.tickets * config.ticketPriceCredits : config.ticketPriceCredits * p.multiplier,
   );
   const outerChance = Math.min(100, Math.max(0, config.outerChancePercent)) / 100;
   return round2((1 - outerChance) * innerEv + outerChance * outerEv);
