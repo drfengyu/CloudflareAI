@@ -30,6 +30,14 @@
   - **公告时间为北京墙钟串**（`YYYY-MM-DD HH:mm`）而非时间戳：新增 `lib/date.ts` 的 `parseCnWallClock` / `formatCnWallClock` / `formatCnRelativeTime`，管理员手填的时间不受浏览器与服务器时区影响，展示为「1 个月前 · 2026-07-27 22:28」。
   - **`GET /api/uptime`**：会话鉴权，两种数据源。配了 `uptime_api_url` 就代理抓取 Uptime Kuma 状态页接口（`api/status2/<slug>`），5 秒超时，`msg` 优先、缺失时按状态点颜色归一为 up/down/maint/pending；**地址留空则退化为自检本站端点**（并发探 `/api/health`、`/v1/chat/completions`、`/api/session`，判定为「有响应且状态码 < 500 即正常」，右侧数值显示单次请求耗时）。刻意不探 `/v1/models`——它会扇出到所有第三方渠道拉模型列表。抓取放在客户端而非服务端渲染，慢上游只影响这张卡片。
   - **后台配置**：`/admin/settings` 新增「看板信息」卡片（`DashboardInfoForm` + `updateDashboardInfoSettings`），公告/问答可逐条增删改，服务端做长度与格式校验后整体覆写；Uptime 地址为可选项，勾选启用即进入本站自检模式。
+- **限时活动·幸运转盘（`/lottery`）**：详见 `docs/features/lottery.md`。
+  - **玩法**：credits 购买抽奖券（默认 100 cr/张，可调）后「抽 1 次 / 抽 10 次」；转盘分内圈（固定加减 cr，默认 87.5%）与外圈（按倍数结算的正负 cr，默认 12.5%）；累计抽满档位赠送抽奖券（每人每档位只发一次）。侧边栏「通用」组新增「限时活动」入口。
+  - **两段式指针（暗色霓虹转盘）**：内圈只有一个「外圈入口」格，占满外圈概率那 12.5% 的扇区；指针停在入口上才**变长伸进外圈环带**，外圈再独立转一次把奖品转到这根指针下。10 连抽一次转停后按结果角度依次弹出 10 根指针（间隔 130ms），多次进入时外圈只对位最后一次、其余画虚线并以明细为准。扇区角度由 `innerSectorLayout` 与抽奖逻辑同源，格子大小即真实概率（实测 20 万次落点分布与配置权重一致）。
+  - **对外只显实际 cr**：倍数只是配置的内部表达，扇区、规则表、结果列表与流水全部换算成 cr；`multiplierBase = "batch"` 时同一格子按「单抽 / 10连」两个口径分两行标注（`outerPrizeCredits`）。
+  - **账本**：买券按「临时余额（先到期先扣）→ 永久余额」顺序扣，总额不足整笔失败不透支；中奖发进带 `prizeValidDays` 过期的临时余额；倒扣直接扣永久余额、允许扣成负数。三类变动统一写 `topup type=6` 流水（`lib/billing/grant-expiry.ts` 据有效期隐藏已过期的中奖行，负数行永久保留），不写 `usage_log`，因此不进看板调用统计。
+  - **数据层**：`lottery_ticket`（一行一券，`usedDrawId` 非空即消耗，`unique(userId, milestoneDraws)` 保证档位只发一次）+ `lottery_draw`（逐次记录，`unique(batchId, seq)`），迁移 `migrations/007_lottery.sql`（已应用到 D1）；活动配置整体存 `option.lottery_config`，脏配置经 `sanitizeLotteryConfig` 退回默认值而不是让页面报错。
+  - **原子性**：D1 经 REST 无事务，`lib/db/d1-http.ts` 新增 `d1Run()` 读取 `meta.changes`，扣款与锁券都用条件更新（`WHERE balanceCredits >= ?` / `WHERE usedDrawId IS NULL`）判定是否命中；10 连抽先整批锁券再逐次结算，某次失败只撤销那一次并退回未开的券。
+  - **后台**：`/admin/settings`「限时活动（幸运转盘）」卡片可配起止时间（北京墙钟）、券价、外圈概率、奖品有效期、倍数基数、内/外圈奖池（权重即概率）与累抽档位，并实时显示按当前配置算出的**单券期望返还与返还率**（默认奖池约 90.7%），避免把活动调成净亏的老虎机。
 
 ### 变更
 

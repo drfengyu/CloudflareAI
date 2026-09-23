@@ -7,6 +7,8 @@ import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
 import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, AuthChannelsForm, EpaySettingsForm, LinuxdoSettingsForm } from "./settings-form";
 import { DashboardInfoForm } from "./dashboard-info-form";
+import { LotteryForm } from "./lottery-form";
+import { getLotteryConfig } from "@/lib/lottery/config";
 import type { AnnouncementInput, FaqItem } from "@/lib/settings/dashboard-info";
 
 export const dynamic = "force-dynamic";
@@ -38,6 +40,7 @@ export default async function AdminSettingsPage() {
 
   // 获取所有设置
   const allSettings = await db.select().from(options);
+  const lotteryConfig = await getLotteryConfig();
 
   // 转换为 key-value 对象
   const settings: Record<string, string> = {};
@@ -167,6 +170,15 @@ export default async function AdminSettingsPage() {
                 uptimeApiUrl: settings.uptime_api_url || "",
               }}
             />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">限时活动（幸运转盘）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LotteryForm initialConfig={lotteryConfig} />
           </CardContent>
         </Card>
       </div>

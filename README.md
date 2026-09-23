@@ -54,7 +54,8 @@
 | ├─ 定价管理 | 管理员内联编辑模型倍率 | ✅ |
 | └─ 设置页面 | 简化为仅显示用户 ID | ✅ |
 | **Phase G** | 用户留存 | ✅ 完成 |
-| └─ 签到功能 | 日历签到 + 随机奖励 + 统计展示 | ✅ |
+| ├─ 签到功能 | 日历签到 + 随机奖励 + 统计展示 | ✅ |
+| └─ 限时活动·幸运转盘 | 抽奖券购买 + 抽 1 次/10 次 + 累抽送券 + 后台奖池与返还率 | ✅ |
 | **Phase H** | AI 供应商渠道管理 | ✅ 完成 |
 | ├─ 适配器框架 | OpenAI/Anthropic/Cloudflare 适配器 + 注册表 | ✅ |
 | ├─ 渠道 CRUD | 动态配置表单 + 搜索过滤 + 状态切换 | ✅ |
@@ -245,6 +246,7 @@ curl https://your-app.vercel.app/v1/messages \
 - **用户留存**：
   - 新用户注册奖励（2000 credits）
   - 签到功能（日历 UI + 每日随机奖励 10-100 cr）
+  - 限时活动·幸运转盘（`/lottery`）：credits 购券开奖，内圈固定加减 cr / 外圈倍数 cr（界面只显实际 cr，单抽与 10 连分列），累抽满档位送券；中奖进临时余额、倒扣可扣成负余额，统一 `topup type=6` 流水
 - **兑换码系统**：批量生成、状态管理、使用者追踪（显示谁兑换了哪个码）
 - **定价管理**：管理员可动态调整每个模型的倍率（0.01-100），实时生效
 - **API 网关**：OpenAI + Anthropic 双协议兼容，供编程工具直接调用
@@ -275,6 +277,7 @@ MIT
 - [`docs/API.md`](docs/API.md) — API 网关用法（OpenAI / Anthropic 兼容）
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — Vercel + Cloudflare 部署
 - [`docs/features/checkin.md`](docs/features/checkin.md) — 签到功能设计文档
+- [`docs/features/lottery.md`](docs/features/lottery.md) — 限时活动·幸运转盘（玩法、账本口径与实现注意）
 - [`docs/features/channel-management.md`](docs/features/channel-management.md) — AI 供应商渠道管理设计文档
 - [`CLAUDE.md`](CLAUDE.md) — 项目指令和改造路线图
 

@@ -21,6 +21,7 @@ import {
   Ticket,
   Radio,
   Receipt,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -43,6 +44,7 @@ const NAV: NavGroup[] = [
       { href: "/dashboard", label: "数据看板", icon: LayoutDashboard },
       { href: "/models", label: "模型库", icon: Boxes },
       { href: "/pricing", label: "定价", icon: DollarSign },
+      { href: "/lottery", label: "限时活动", icon: Sparkles },
     ],
   },
   {

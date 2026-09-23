@@ -197,7 +197,7 @@ export const topups = sqliteTable("topup", {
     .references(() => users.id, { onDelete: "cascade" }),
   /** 变动金额（credits，可正可负，支持小数）。 */
   amount: real("amount").notNull(),
-  /** 1=兑换码充值 / 2=管理员手动调整 / 3=消费扣减（暂不用，消费记 usage_log） / 4=其他。 */
+  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负）。 */
   type: integer("type").notNull(),
   /** 描述：如"兑换码 ABC123"、"管理员充值"、"后台调整"。 */
   description: text("description"),
@@ -357,3 +357,62 @@ export type TemporaryBalance = typeof temporaryBalances.$inferSelect;
 export type ModelPricing = typeof modelPricing.$inferSelect;
 export type RegistrationLog = typeof registrationLog.$inferSelect;
 export type PaymentOrder = typeof paymentOrders.$inferSelect;
+
+/**
+ * 限时活动·抽奖券。一行 = 一张券，消耗方式是回填 `usedDrawId`：
+ * 「券」是用户已经付过 cr 的凭证，条件更新（`WHERE usedDrawId IS NULL`）是这里唯一
+ * 可靠的双花防护——D1 走 REST，没有事务，读改写会在并发下重复开奖。
+ */
+export const lotteryTickets = sqliteTable(
+  "lottery_ticket",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** buy=花 credits 买的 / gift=累抽档位赠送的。 */
+    source: text("source").$type<"buy" | "gift">().notNull(),
+    /** 该券的单券价（cr）；赠券记 0，仅用于流水对账。 */
+    priceCredits: real("priceCredits").notNull().default(0),
+    /** 赠送时命中的累抽档位（当时的总抽奖次数）；非档位赠券为 null。 */
+    milestoneDraws: integer("milestoneDraws"),
+    /** 开奖记录 ID；非空即已消耗。 */
+    usedDrawId: text("usedDrawId"),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [
+    // 同一档位只发一次。SQLite 的唯一索引把 NULL 视为互不相等，所以买券行不受影响。
+    unique("uq_lottery_ticket_milestone").on(table.userId, table.milestoneDraws),
+  ],
+);
+
+/** 限时活动·逐次开奖记录，兼作用户侧明细与累抽次数来源。 */
+export const lotteryDraws = sqliteTable(
+  "lottery_draw",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 一次点击（单抽或 10 连）共用一个批次号。 */
+    batchId: text("batchId").notNull(),
+    /** 批次内序号，从 1 开始。 */
+    seq: integer("seq").notNull(),
+    /** inner=内圈固定加减 / outer=外圈倍数。 */
+    ring: text("ring").$type<"inner" | "outer">().notNull(),
+    /** 奖品文案，如 `+50 cr` / `×2`。 */
+    label: text("label").notNull(),
+    /** 外圈倍数（负数表示倒扣）；内圈为 null。 */
+    multiplier: real("multiplier"),
+    /** 本次结算的 cr 变动，可负。 */
+    deltaCredits: real("deltaCredits").notNull(),
+    /** 本次倍数结算用的基数（cr）：单券价或批次总花费，见配置 multiplierBase。 */
+    baseCredits: real("baseCredits").notNull().default(0),
+    /** 消耗掉的券。 */
+    ticketId: text("ticketId").references(() => lotteryTickets.id, {
+      onDelete: "set null",
+    }),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [unique().on(table.batchId, table.seq)],
+);

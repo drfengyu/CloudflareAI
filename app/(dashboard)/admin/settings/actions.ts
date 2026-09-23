@@ -9,6 +9,10 @@ import { syncModelPricingWithSettings } from "@/lib/billing/model-pricing";
 import { invalidateCreditsPerUsdCache } from "@/lib/billing/credits";
 import { parseCnWallClock } from "@/lib/date";
 import {
+  LOTTERY_CONFIG_KEY,
+  type LotteryConfig,
+} from "@/lib/lottery/prize-math";
+import {
   ANNOUNCEMENT_MAX,
   ANNOUNCEMENT_TYPES,
   FAQ_MAX,
@@ -404,6 +408,111 @@ export async function updateDashboardInfoSettings(formData: {
 
   revalidatePath("/admin/settings");
   revalidatePath("/dashboard");
+
+  return { success: true };
+}
+
+/** 转盘最多这么多扇区，再多扇形文字就叠在一起了。 */
+const LOTTERY_MAX_SECTORS = 16;
+const LOTTERY_MAX_MILESTONES = 12;
+
+function requireNumber(value: unknown, label: string, min: number, max: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < min || n > max) {
+    throw new Error(`${label}需在 ${min} ~ ${max} 之间`);
+  }
+  return n;
+}
+
+/** 限时活动（幸运转盘）配置的保存入口 */
+export async function updateLotterySettings(formData: {
+  enabled: boolean;
+  startAt: string;
+  endAt: string;
+  ticketPriceCredits: number;
+  outerChancePercent: number;
+  multiplierBase: string;
+  prizeValidDays: number;
+  innerPrizes: { credits: number; weight: number }[];
+  outerPrizes: { multiplier: number; weight: number }[];
+  milestones: { draws: number; tickets: number }[];
+}) {
+  const currentUserId = await requireUser();
+
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const startAt = formData.startAt.trim();
+  const endAt = formData.endAt.trim();
+  const startMs = parseCnWallClock(startAt);
+  const endMs = parseCnWallClock(endAt);
+  if (formData.enabled) {
+    if (startMs === null) throw new Error("开始时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs === null) throw new Error("结束时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs <= startMs) throw new Error("结束时间必须晚于开始时间");
+  }
+
+  if (formData.multiplierBase !== "ticket" && formData.multiplierBase !== "batch") {
+    throw new Error("倍数基数只能是单券价或本次总花费");
+  }
+  const multiplierBase = formData.multiplierBase;
+
+  const innerPrizes = (formData.innerPrizes ?? [])
+    .map((p, i) => ({
+      credits: requireNumber(p?.credits, `内圈第 ${i + 1} 个奖品的 cr`, -1_000_000, 1_000_000),
+      weight: requireNumber(p?.weight, `内圈第 ${i + 1} 个奖品的权重`, 0.1, 10_000),
+    }))
+    .filter((p) => Number.isFinite(p.credits));
+  const outerPrizes = (formData.outerPrizes ?? [])
+    .map((p, i) => ({
+      multiplier: requireNumber(p?.multiplier, `外圈第 ${i + 1} 个奖品的倍数`, -1000, 1000),
+      weight: requireNumber(p?.weight, `外圈第 ${i + 1} 个奖品的权重`, 0.1, 10_000),
+    }))
+    .filter((p) => Number.isFinite(p.multiplier));
+
+  if (innerPrizes.length === 0) throw new Error("内圈至少要配 1 个奖品");
+  if (outerPrizes.length === 0) throw new Error("外圈至少要配 1 个奖品");
+  if (innerPrizes.length > LOTTERY_MAX_SECTORS) throw new Error(`内圈最多 ${LOTTERY_MAX_SECTORS} 个扇区`);
+  if (outerPrizes.length > LOTTERY_MAX_SECTORS) throw new Error(`外圈最多 ${LOTTERY_MAX_SECTORS} 个扇区`);
+
+  const milestones = (formData.milestones ?? [])
+    .map((m, i) => ({
+      draws: Math.trunc(requireNumber(m?.draws, `累抽档位第 ${i + 1} 行的次数`, 1, 1_000_000)),
+      tickets: Math.trunc(requireNumber(m?.tickets, `累抽档位第 ${i + 1} 行的赠券数`, 1, 1000)),
+    }))
+    .filter((m, index, all) => {
+      // 同档位重复会让「只发一次」的唯一索引判断变得含混，直接去重。
+      return all.findIndex((x) => x.draws === m.draws) === index;
+    })
+    .sort((a, b) => a.draws - b.draws);
+  if (milestones.length > LOTTERY_MAX_MILESTONES) {
+    throw new Error(`累抽档位最多 ${LOTTERY_MAX_MILESTONES} 档`);
+  }
+
+  const config: LotteryConfig = {
+    enabled: formData.enabled === true,
+    startAt,
+    endAt,
+    ticketPriceCredits: requireNumber(formData.ticketPriceCredits, "单券价", 1, 1_000_000),
+    outerChancePercent: requireNumber(formData.outerChancePercent, "外圈概率", 0, 100),
+    multiplierBase,
+    prizeValidDays: Math.trunc(requireNumber(formData.prizeValidDays, "奖品有效期", 1, 3650)),
+    innerPrizes,
+    outerPrizes,
+    milestones,
+  };
+
+  await upsertOption(LOTTERY_CONFIG_KEY, JSON.stringify(config));
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/lottery");
 
   return { success: true };
 }

@@ -337,6 +337,13 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
     - Toast 反馈（成功/失败）
   - 集成：`/wallet` 页面顶部
   - 充值流水：新增 type 3（签到奖励）
+- ✅ **限时活动·幸运转盘**（2026-09-23，详见 [`docs/features/lottery.md`](docs/features/lottery.md)）：
+  - 数据库：`lottery_ticket`（一行一券，`usedDrawId` 非空即消耗）+ `lottery_draw`（逐次记录，`unique(batchId, seq)`）；活动配置整体存 `option.lottery_config`
+  - 分层：`lib/lottery/prize-math.ts`（纯计算：清洗/窗口/开奖/期望返还，**不碰数据库**，好让后台表单在浏览器里实时算返还率）→ `lib/lottery/config.ts`（读配置）→ `lib/lottery/store.ts`（账本原语）→ `app/(dashboard)/lottery/actions.ts`
+  - 原子性：D1 经 REST 无事务，新增 `d1Run()` 取 `meta.changes`，扣款/锁券一律条件更新判定命中；10 连抽先整批锁券再逐次结算，失败只撤销当次
+  - 资金：买券「临时余额→永久余额」且不透支；中奖进带过期的临时余额；倒扣直接扣永久余额、允许负数；统一 `topup` type 6，不写 `usage_log`
+  - 展示：外圈倍数只存在于配置，扇区/规则/结果/流水一律实际 cr，`multiplierBase = "batch"` 时按「单抽 / 10连」两行标注
+  - 后台：`/admin/settings` 新卡片配奖池与累抽档位，并显示单券期望返还/返还率（默认约 90.7%）
 - ✅ **新用户注册奖励**（2026-06-16）：
   - 新用户注册时自动获得 2000 credits
   - 奖励记录到 `topup` 表（type 4 = 其他充值）

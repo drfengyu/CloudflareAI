@@ -8,13 +8,15 @@
 
 import { db } from "@/lib/db/d1-http";
 import { options, redemptions } from "@/lib/db/schema";
+import { LOTTERY_CONFIG_KEY } from "@/lib/lottery/prize-math";
 import { eq, inArray } from "drizzle-orm";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** `topup.type`：1=兑换码、3=签到奖励，两者发的都是会过期的临时余额。 */
+/** `topup.type`：1=兑换码、3=签到奖励、6=限时活动抽奖中奖，发的都是会过期的临时余额。 */
 const TYPE_REDEEM_CODE = 1;
 const TYPE_CHECKIN = 3;
+const TYPE_LOTTERY = 6;
 
 /**
  * 未配置有效天数时的默认值。兑换码走 `wallet/actions.ts` 的「null → 7 天」分支
@@ -25,6 +27,8 @@ const DEFAULT_VALID_DAYS = 7;
 
 interface GrantTopupRow {
   type: number;
+  /** 抽奖的倒扣与买券都是负数流水，它们是永久账目，不参与「过期即隐藏」。 */
+  amount: number;
   createdAt: Date | null;
   redemptionId: string | null;
 }
@@ -40,19 +44,42 @@ async function readValidDaysOption(key: string): Promise<number> {
   return Number.isFinite(days) && days >= 1 ? days : DEFAULT_VALID_DAYS;
 }
 
+/**
+ * 抽奖中奖的有效天数取自 `lottery_config.prizeValidDays`。
+ * 与签到同一口径：按「发放时刻 + 当时的配置值」推算，管理员事后改配置不影响已发奖励的显示判定。
+ */
+async function readLotteryPrizeValidDays(): Promise<number> {
+  const [row] = await db
+    .select({ value: options.value })
+    .from(options)
+    .where(eq(options.key, LOTTERY_CONFIG_KEY))
+    .limit(1);
+  try {
+    const parsed = JSON.parse(String(row?.value)) as { prizeValidDays?: unknown };
+    const days = Number(parsed?.prizeValidDays);
+    return Number.isFinite(days) && days >= 1 ? Math.trunc(days) : DEFAULT_VALID_DAYS;
+  } catch {
+    return DEFAULT_VALID_DAYS;
+  }
+}
+
 /** 过滤掉发放的临时余额已过期的流水行；永久余额型发放（管理员调整、在线充值）不受影响。 */
 export async function withoutExpiredGrants<T extends GrantTopupRow>(
   rows: T[],
   now: Date = new Date(),
 ): Promise<T[]> {
   const grantableRows = rows.filter(
-    (row) => row.type === TYPE_REDEEM_CODE || row.type === TYPE_CHECKIN,
+    (row) =>
+      row.type === TYPE_REDEEM_CODE ||
+      row.type === TYPE_CHECKIN ||
+      (row.type === TYPE_LOTTERY && row.amount > 0),
   );
   if (grantableRows.length === 0) {
     return rows;
   }
 
   const checkinValidDays = await readValidDaysOption("checkin_valid_days");
+  const lotteryValidDays = await readLotteryPrizeValidDays();
 
   const redemptionIds = [
     ...new Set(
@@ -77,7 +104,11 @@ export async function withoutExpiredGrants<T extends GrantTopupRow>(
 
   const nowMs = now.getTime();
   return rows.filter((row) => {
-    if (row.type !== TYPE_REDEEM_CODE && row.type !== TYPE_CHECKIN) {
+    const isGrant =
+      row.type === TYPE_REDEEM_CODE ||
+      row.type === TYPE_CHECKIN ||
+      (row.type === TYPE_LOTTERY && row.amount > 0);
+    if (!isGrant) {
       return true;
     }
     if (!row.createdAt) {
@@ -86,7 +117,9 @@ export async function withoutExpiredGrants<T extends GrantTopupRow>(
     const validDays =
       row.type === TYPE_CHECKIN
         ? checkinValidDays
-        : validDaysByRedemption.get(row.redemptionId ?? "") ?? DEFAULT_VALID_DAYS;
+        : row.type === TYPE_LOTTERY
+          ? lotteryValidDays
+          : validDaysByRedemption.get(row.redemptionId ?? "") ?? DEFAULT_VALID_DAYS;
     return row.createdAt.getTime() + validDays * DAY_MS > nowMs;
   });
 }
