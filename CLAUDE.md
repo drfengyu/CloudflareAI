@@ -344,6 +344,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   - 资金：买券「临时余额→永久余额」且不透支；中奖进带过期的临时余额；倒扣直接扣永久余额、允许负数；统一 `topup` type 6，不写 `usage_log`
   - 展示：外圈倍数只存在于配置，扇区/规则/结果/流水一律实际 cr，`multiplierBase = "batch"` 时按「单抽 / 10连」两行标注
   - 后台：`/admin/settings` 新卡片配奖池与累抽档位，并显示单券期望返还/返还率（默认约 90.7%）
+  - 记录：`lib/lottery/records.ts` 只读聚合（不新增表）——用户侧「我的活动记录」逐次明细 + 汇总，管理侧 `/admin/lottery` 按今日/近 7 日/近 30 日窗口出站点净收益、按用户聚合与最近 200 注明细；净收益 = 券面 + 回收 − 发放，只算已开奖的券
 - ✅ **新用户注册奖励**（2026-06-16）：
   - 新用户注册时自动获得 2000 credits
   - 奖励记录到 `topup` 表（type 4 = 其他充值）

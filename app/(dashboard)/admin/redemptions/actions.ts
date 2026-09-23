@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/lib/db/d1-http";
+import { batchRows, db } from "@/lib/db/d1-http";
 import { redemptions, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
@@ -78,8 +78,11 @@ export async function generateRedemptionCodes(formData: {
     });
   }
 
-  // 插入数据库
-  await db.insert(redemptions).values(codes);
+  // 插入数据库：每行实际绑定 10 个参数（含 id / createdAt 的 $defaultFn），
+  // 一次生成 100 条会远超 D1 的 100 参数墙，必须分片。
+  for (const batch of batchRows(codes, 10)) {
+    await db.insert(redemptions).values(batch);
+  }
 
   revalidatePath("/admin/redemptions");
   return { success: true, count: formData.count };

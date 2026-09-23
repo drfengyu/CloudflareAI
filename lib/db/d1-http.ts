@@ -70,3 +70,20 @@ export const db = drizzle(
   },
   { schema },
 );
+
+/** D1 单条语句的绑定参数上限，超出直接 `too many SQL variables`（SQLITE_ERROR）。 */
+export const D1_MAX_BINDINGS = 100;
+
+/**
+ * 批量插入的分片：sqlite-proxy 会把「每行 × 每列」都绑成一个参数，
+ * 所以 `insert().values(100 行)` 一定会撞上 100 参数的墙。墙按列数折算成每次插入的行数。
+ *
+ * @param rows 待插入的行
+ * @param columnsPerRow 每行实际绑定的列数（即对象里真实存在的键数）
+ */
+export function batchRows<T>(rows: T[], columnsPerRow: number): T[][] {
+  const perBatch = Math.max(1, Math.floor(D1_MAX_BINDINGS / Math.max(1, columnsPerRow)));
+  const batches: T[][] = [];
+  for (let i = 0; i < rows.length; i += perBatch) batches.push(rows.slice(i, i + perBatch));
+  return batches;
+}

@@ -38,6 +38,10 @@
   - **数据层**：`lottery_ticket`（一行一券，`usedDrawId` 非空即消耗，`unique(userId, milestoneDraws)` 保证档位只发一次）+ `lottery_draw`（逐次记录，`unique(batchId, seq)`），迁移 `migrations/007_lottery.sql`（已应用到 D1）；活动配置整体存 `option.lottery_config`，脏配置经 `sanitizeLotteryConfig` 退回默认值而不是让页面报错。
   - **原子性**：D1 经 REST 无事务，`lib/db/d1-http.ts` 新增 `d1Run()` 读取 `meta.changes`，扣款与锁券都用条件更新（`WHERE balanceCredits >= ?` / `WHERE usedDrawId IS NULL`）判定是否命中；10 连抽先整批锁券再逐次结算，某次失败只撤销那一次并退回未开的券。
   - **后台**：`/admin/settings`「限时活动（幸运转盘）」卡片可配起止时间（北京墙钟）、券价、外圈概率、奖品有效期、倍数基数、内/外圈奖池（权重即概率）与累抽档位，并实时显示按当前配置算出的**单券期望返还与返还率**（默认奖池约 90.7%），避免把活动调成净亏的老虎机。
+- **限时活动·活动记录与站点收益**：钱本来就逐笔记在 `lottery_ticket` / `lottery_draw` 上，所以记录侧**不加新表**，只读聚合（新增 `lib/lottery/records.ts`）。
+  - **用户侧「我的活动记录」**（`/lottery` 下方卡片）：逐次时间、落在哪一圈、结果文案、cr 变动、用掉的券（购买/赠送 + 面值），配一排汇总（次数、外圈命中、中奖发放、倒扣回收、已开奖券面值、本期净收益）。明细取最近 50 次、汇总按活动期全量；活动结束或未开启时卡片照常渲染，历史不会因为下线而看不见。
+  - **管理侧 `/admin/lottery`**（侧边栏「管理 → 活动记录」，role ≥ 10）：今日 / 近 7 日 / 近 30 日 / 全部 四档窗口，收益概览（站点净收益、售券收入、中奖发放、倒扣回收、参与人数、实际返还率对照配置口径）+ 按用户聚合表（含邮箱与最近参与时间）+ 最近 200 注逐次明细（含单注站点净收益）。
+  - **口径**：净收益 = `券面收入 + 倒扣回收 − 中奖发放`，且只算**已开奖**的券；未开奖部分单列「已收讫未兑现」提示，回收不算现金流入、发放走会过期的临时余额，所以这个数是偏保守的估计（文档里写清了）。
 
 ### 变更
 
@@ -67,6 +71,10 @@
 
 ### 修复
 
+- **一次买 17 张以上抽奖券必然「扣了钱拿不到券」**（`lib/lottery/store.ts` + `app/(dashboard)/lottery/actions.ts` + `lib/db/d1-http.ts`）：D1 单条语句最多绑 **100 个参数**（实测 100 通过、101 报 `too many SQL variables`），而 sqlite-proxy 的批量 `insert().values(行…)` 是「每行 × 每列」一个参数——抽奖券每行 6 列，17 行就到 102 个。买 50 张时 `spendCredits` 已经扣完（连当时在效的签到临时余额都被扣走并删行），`grantTickets` 才抛错，而流水行排在发券之后，于是**余额少了 5000 cr、券一张没发、`topup` 也查不到这笔支出**。
+  - `lib/db/d1-http.ts` 新增 `D1_MAX_BINDINGS` 与 `batchRows(rows, 每行列数)`，发券改为分片写入（实测 50 / 100 张均成功，收券清理干净）；`grantTickets` 配套的 `deleteTickets()` 用于回滚。
+  - `buyTickets` 补上失败补偿：发券或记流水失败时收回已发券、把扣掉的 cr 退回**永久余额**并写一条 `type=2` 退回流水（不能记 `type=6`——钱包会把正向的 6 类流水当作废奖励隐藏）。
+  - 同一堵墙的其他落点一并修：批量生成兑换码（每行 10 个参数，一次生成 12 条以上即失败，表单却允许 100）改分片；`/admin/orders` 与活动记录页的 `inArray` 邮箱映射按 100 个 id 分段查（订单页一次取 200 单，用户数超 100 就会整页 500）。
 - **流式截断不再把 usage 占位桩当真实用量计费**（`lib/usage/stream-intercept.ts` + 四条流式计量链路）：实测 Cloudflare 的 OpenAI 兼容流里，中间 chunk 的 `usage` 是恒定占位桩——首块 `{prompt:52,completion:0}`、之后每块 `{prompt:0,completion:1}`（生成 200 个 token 也只写 1）、`finish_reason` 块 `{0,0}`，真实计数只在 finish 之后 `choices: []` 的终态块上（实测 `{52,200}`，与非流式同 prompt 结果一致，故**完整结束的长生成本来就计费正确**）。问题出在被截断的流：`after()` 里硬编码 `status:"ok"`，把 `completion=1` 的桩值写进账单（实测 2900 字符的输出仅记 1 个 token），usage 整体缺失时 input 还回退到 `字符数 × 1.5` 估算——既记了 provider 从未数过的 token，也违反「失败调用 bill 0 credits」不变量。拦截器新增 `usageFinal`（收到 `[DONE]`，或**非零** usage 落在 `choices: []` 的终态尾块；「上游 body 正常读完关闭」不算证据——实测有干净关闭却只收到占位桩的流），`/v1/chat/completions`、`/v1/messages`、Playground `/api/ai/text`（Cloudflare 与第三方渠道两个分支）据此按两个计数各自的可信度收口：`prompt_tokens` 首块即被 provider 数清，截断也照计；`completion_tokens` 只认终态块，截断时记 0，`status` 保持 `ok` 并带 `errorReason:"stream_truncated"`（用户点停止/SDK 收完即断属正常中止，不该计入渠道失败率）；整条流一个 usage 块都没收到的记 `status:"error"` + `usage_unavailable`，不再伪装成静默的 `ok/0/0`。四条流式链路的估算兜底（`字符数 × 1.5`）一并移除。逐字段峰值逻辑本身不变；`docs/BILLING_GUIDE.md` 流式计量章节按实测重写。已知未闭合：上游静默停顿且客户端不断开时 `done` 永不 resolve，该调用不写任何行——需要给上游请求加超时/空闲中止才能闭合，不在本次改动内。
 - **流式调用漏计 input tokens**（`lib/usage/stream-intercept.ts`）：Cloudflare 在每个 SSE chunk 重复下发累计 `usage`，并把本次未前进的计数清零（先 `{prompt:687,completion:0}`、后续 `{prompt:0,completion:N}`）。旧实现「取最后一个非空 usage」会让所有流式请求按 **0 input tokens** 记账（`logUsage` 的 `?? estimatedInput` 兜底只在 usage 整体缺失时生效）。改为逐字段取峰值，`/v1/chat/completions`、`/v1/messages`、playground 文本三条计量链路一并修正；`tests/e2e/streaming-metering.spec.ts` 补上「峰值 prompt_tokens > 0」断言，防止回归。
 - **时间统一为中国时区（Asia/Shanghai, UTC+8）**：新增 `lib/date.ts`（`cnStartOfToday`/`cnStartOfMonth`/`cnDaysAgoStart`/`formatCnDateTime`/`formatCnDate`），修复服务器（Vercel 默认 UTC）导致的「今日」日界错位（北京 0-8 点看板仍显示昨天数据）；数据看板/使用历史/对话历史/订单管理/钱包订单卡片与临时余额到期等时间显示统一按北京时间

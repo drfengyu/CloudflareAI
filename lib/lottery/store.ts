@@ -1,5 +1,5 @@
-import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
-import { d1Run, db } from "@/lib/db/d1-http";
+import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { batchRows, d1Run, db } from "@/lib/db/d1-http";
 import {
   lotteryDraws,
   lotteryTickets,
@@ -116,8 +116,18 @@ export async function grantTickets(
       createdAt: new Date(),
     };
   });
-  await db.insert(lotteryTickets).values(values);
+  // 每行绑 6 个参数，一次买 50 张就是 300 个，会直接撞 D1 的参数墙，必须分片。
+  for (const batch of batchRows(values, 6)) {
+    await db.insert(lotteryTickets).values(batch);
+  }
   return ids;
+}
+
+/** 收回刚发出的券；发券之后还有步骤失败时用它把券清干净。 */
+export async function deleteTickets(ids: string[]): Promise<void> {
+  for (const batch of batchRows(ids, 1)) {
+    await db.delete(lotteryTickets).where(inArray(lotteryTickets.id, batch));
+  }
 }
 
 /** 档位赠券；唯一索引冲突（该档位已发过）时静默跳过。 */

@@ -10,10 +10,19 @@ import {
   round2,
   type LotteryConfig,
 } from "@/lib/lottery/prize-math";
-import { countDraws, countUnusedTickets } from "@/lib/lottery/store";
+import { countUnusedTickets } from "@/lib/lottery/store";
+import {
+  listDrawRecords,
+  lotteryBalance,
+  lotteryTicketTotals,
+} from "@/lib/lottery/records";
+import { LotteryRecords } from "./lottery-records";
 import { LotteryWheel, type WheelOuter, type WheelSector } from "./lottery-wheel";
 
 export const dynamic = "force-dynamic";
+
+/** 活动记录一次拉多少条；超过这个数只在卡片尾部提示，不做分页。 */
+const RECORD_LIMIT = 50;
 
 const toneOf = (value: number): WheelSector["tone"] =>
   value > 0 ? "positive" : value < 0 ? "negative" : "zero";
@@ -85,6 +94,25 @@ export default async function LotteryPage() {
   const config = await getLotteryConfig();
   const windowInfo = activityWindow(config);
 
+  // 记录按整个活动期口径给（不加时间窗），活动结束后这段历史仍然要能翻出来看。
+  const [tickets, myStats, myTickets, records, balance] = await Promise.all([
+    countUnusedTickets(userId),
+    lotteryBalance({ userId }),
+    lotteryTicketTotals(undefined, userId),
+    listDrawRecords({ userId, limit: RECORD_LIMIT }),
+    getUserTotalBalance(userId),
+  ]);
+
+  const recordsCard = (
+    <LotteryRecords
+      balance={myStats}
+      tickets={myTickets}
+      records={records}
+      ticketsLeft={tickets}
+      recordLimit={RECORD_LIMIT}
+    />
+  );
+
   if (windowInfo.status !== "active") {
     const notice =
       windowInfo.status === "disabled"
@@ -98,24 +126,20 @@ export default async function LotteryPage() {
     return (
       <>
         <PageHeader title="限时活动" description="幸运转盘 · 抽奖券与累抽奖励" />
-        <div className="p-8">
+        <div className="space-y-6 p-8">
           <Notice title={notice.title} hint={notice.hint} />
+          {recordsCard}
         </div>
       </>
     );
   }
 
-  const [tickets, totalDraws, balance] = await Promise.all([
-    countUnusedTickets(userId),
-    countDraws(userId),
-    getUserTotalBalance(userId),
-  ]);
   const { innerSectors, outerPrizes } = buildWheelViews(config);
 
   return (
     <>
       <PageHeader title="限时活动" description="幸运转盘 · 抽奖券与累抽奖励" />
-      <div className="p-8">
+      <div className="space-y-6 p-8">
         <LotteryWheel
           innerSectors={innerSectors}
           outerPrizes={outerPrizes}
@@ -124,12 +148,13 @@ export default async function LotteryPage() {
           prizeValidDays={config.prizeValidDays}
           milestones={config.milestones}
           tickets={tickets}
-          totalDraws={totalDraws}
+          totalDraws={myStats.draws}
           totalCredits={balance.total}
           status={windowInfo.status}
           startAtMs={windowInfo.startMs}
           endAtMs={windowInfo.endMs}
         />
+        {recordsCard}
       </div>
     </>
   );

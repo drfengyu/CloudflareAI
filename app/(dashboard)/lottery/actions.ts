@@ -20,6 +20,7 @@ import {
   adjustPermanentBalance,
   countDraws,
   countUnusedTickets,
+  deleteTickets,
   grantMilestoneTickets,
   grantTemporaryBalance,
   grantTickets,
@@ -77,15 +78,27 @@ export async function buyTickets(
       return { success: false, error: `${spend.reason}：购买 ${count} 张券需要 ${cost} cr` };
     }
 
-    await grantTickets(userId, count, { source: "buy", priceCredits: config.ticketPriceCredits });
-    await db.insert(topups).values({
-      id: crypto.randomUUID(),
-      userId,
-      amount: -cost,
-      type: TOPUP_TYPE_LOTTERY,
-      description: `购买抽奖券 ${count} 张（${cost} cr）`,
-      createdAt: new Date(),
-    });
+    // D1 没有事务，钱已经扣走了；发券或记流水再失败就必须把券收回、把钱退回，
+    // 否则用户付了 cr 却拿不到券（退回走永久余额，比原路退回只多不少）。
+    let issued: string[] = [];
+    try {
+      issued = await grantTickets(userId, count, {
+        source: "buy",
+        priceCredits: config.ticketPriceCredits,
+      });
+      await db.insert(topups).values({
+        id: crypto.randomUUID(),
+        userId,
+        amount: -cost,
+        type: TOPUP_TYPE_LOTTERY,
+        description: `购买抽奖券 ${count} 张（${cost} cr）`,
+        createdAt: new Date(),
+      });
+    } catch (error) {
+      console.error("[buyTickets] 发券失败，退回扣款", error);
+      await compensatePurchase(userId, issued, cost);
+      return { success: false, error: "发券失败，扣款已退回，请稍后再试" };
+    }
 
     revalidatePath("/lottery");
     revalidatePath("/wallet");
@@ -96,6 +109,28 @@ export async function buyTickets(
   } catch (error) {
     console.error("[buyTickets] Error:", error);
     return { success: false, error: error instanceof Error ? error.message : "购买失败" };
+  }
+}
+
+/**
+ * 买券失败的资金回滚：收回已发出的券，把扣掉的 cr 退回永久余额并补一条流水。
+ * 本身再失败就只记日志——钱在用户余额里，不会凭空消失，人工按流水核对即可。
+ */
+async function compensatePurchase(userId: string, issued: string[], cost: number): Promise<void> {
+  try {
+    await deleteTickets(issued);
+    await adjustPermanentBalance(userId, cost);
+    await db.insert(topups).values({
+      id: crypto.randomUUID(),
+      userId,
+      amount: cost,
+      // 退回的是永久余额，不能记成 type=6：钱包会把正向的 6 类流水当带过期的奖励，到期即隐藏。
+      type: 2,
+      description: `购买抽奖券失败退回（${cost} cr）`,
+      createdAt: new Date(),
+    });
+  } catch (rollbackError) {
+    console.error("[buyTickets] 退回扣款失败，需人工核对", rollbackError);
   }
 }
 

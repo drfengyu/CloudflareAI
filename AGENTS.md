@@ -42,6 +42,7 @@ Next.js 16 App Router + React 19 + Tailwind v4 + Drizzle ORM + Auth.js v5, deplo
 ## Gotchas
 
 - **Drizzle `leftJoin` is broken** in drizzle-orm v0.45.2 (field misalignment). Prefer separate queries + manual mapping. See `docs/fixes/2026-06-25-drizzle-leftjoin-bug.md`.
+- **D1 binds at most 100 parameters per statement** (`too many SQL variables`; 100 passes, 101 does not). Batch `insert().values(rows)` costs rows × columns bindings and `inArray()` costs one per id, so any "bulk" write over ~10-100 rows breaks. Use `batchRows(rows, columnsPerRow)` from `lib/db/d1-http.ts` and chunk `inArray` lookups. This caused a real money bug: buying ≥17 lottery tickets deducted credits but granted no tickets.
 - Two migration tracks: `drizzle/` (drizzle-kit output) and `migrations/*.sql` (manual, applied via `scripts/run-migration.js`). Check both when changing schema; `lib/db/schema.ts` is the source of truth for drizzle-kit.
 - API keys: format `sk-cfai-{20 base64url}`, status 1=active / 2=disabled / 3=expired / 4=exhausted.
 

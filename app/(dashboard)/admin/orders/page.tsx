@@ -1,6 +1,6 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { db } from "@/lib/db/d1-http";
+import { batchRows, db } from "@/lib/db/d1-http";
 import { users } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
@@ -37,12 +37,15 @@ export default async function AdminOrdersPage({
 
   // leftJoin 有 bug：改用两次查询手动映射用户邮箱
   const userIds = [...new Set(orders.map((o) => o.userId))];
-  const userRows = userIds.length
-    ? await db
-        .select({ id: users.id, email: users.email })
-        .from(users)
-        .where(inArray(users.id, userIds))
-    : [];
+  const userRows: { id: string; email: string | null }[] = [];
+  // 一次最多 200 单，id 集合可能超过 D1 单语句 100 个绑定参数的上限，分段查。
+  for (const chunk of batchRows(userIds, 1)) {
+    const part = await db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(inArray(users.id, chunk));
+    userRows.push(...part);
+  }
   const emailMap = new Map(userRows.map((u) => [u.id, u.email]));
 
   const rows: AdminOrderRow[] = orders.map((o) => ({
