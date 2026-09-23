@@ -433,8 +433,8 @@ export async function updateLotterySettings(formData: {
   outerChancePercent: number;
   multiplierBase: string;
   prizeValidDays: number;
-  /** 内圈按「倍率 × 单券价」计价，与外圈同一口径，改券价时整池等比缩放。 */
-  innerPrizes: { multiplier: number; weight: number }[];
+  /** 内圈是绝对 cr：券价因此可以独立调节利润率，不随奖池同步缩放。 */
+  innerPrizes: { credits: number; weight: number }[];
   outerPrizes: { kind?: string; multiplier: number; tickets?: number; weight: number }[];
   milestones: { draws: number; tickets: number }[];
 }) {
@@ -467,7 +467,7 @@ export async function updateLotterySettings(formData: {
 
   const innerPrizes = (formData.innerPrizes ?? [])
     .map((p, i) => ({
-      multiplier: requireNumber(p?.multiplier, `内圈第 ${i + 1} 个奖品的倍率`, -1000, 1000),
+      credits: requireNumber(p?.credits, `内圈第 ${i + 1} 个奖品的 cr`, -1_000_000, 1_000_000),
       weight: requireNumber(p?.weight, `内圈第 ${i + 1} 个奖品的权重`, 0.1, 10_000),
     }));
   const outerPrizes = (formData.outerPrizes ?? [])

@@ -6,11 +6,10 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
   formatPrizeLabel,
-  innerPrizeCredits,
   lotteryExpectation,
   outerPrizeCredits,
+  round2,
   sanitizeLotteryConfig,
-  type InnerPrize,
   type LotteryConfig,
 } from "@/lib/lottery/prize-math";
 import { updateLotterySettings } from "./actions";
@@ -18,8 +17,8 @@ import { updateLotterySettings } from "./actions";
 const FIELD_CLASS = "w-full rounded-lg border border-border bg-card px-3 py-2 text-sm";
 
 interface InnerRow {
-  /** 实际 cr = 倍率 × 单券价，所以券价一改整圈等比缩放。 */
-  multiplier: string;
+  /** 绝对 cr：券价是独立的利润率杠杆，所以这里不跟券价自动联动。 */
+  credits: string;
   weight: string;
 }
 interface OuterRow {
@@ -42,11 +41,6 @@ function toStored(date: string) {
   return date.trim().replace("T", " ");
 }
 
-/** 行编辑的一格 → 计算层的一条内圈奖品，只用于现算预览文案。 */
-function toInnerPrize(row: InnerRow): InnerPrize {
-  return { multiplier: Number(row.multiplier), weight: Number(row.weight) };
-}
-
 export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig }) {
   const [enabled, setEnabled] = useState(initialConfig.enabled);
   const [startAt, setStartAt] = useState(toField(initialConfig.startAt));
@@ -58,10 +52,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
   );
   const [prizeValidDays, setPrizeValidDays] = useState(String(initialConfig.prizeValidDays));
   const [innerRows, setInnerRows] = useState<InnerRow[]>(() =>
-    initialConfig.innerPrizes.map((p) => ({
-      multiplier: String(p.multiplier),
-      weight: String(p.weight),
-    })),
+    initialConfig.innerPrizes.map((p) => ({ credits: String(p.credits), weight: String(p.weight) })),
   );
   const [outerRows, setOuterRows] = useState<OuterRow[]>(() =>
     initialConfig.outerPrizes.map((p) => ({
@@ -92,7 +83,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
         multiplierBase,
         prizeValidDays: Number(prizeValidDays),
         innerPrizes: innerRows.map((r) => ({
-          multiplier: Number(r.multiplier),
+          credits: Number(r.credits),
           weight: Number(r.weight),
         })),
         outerPrizes: outerRows.map((r) => ({
@@ -117,6 +108,12 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
     ],
   );
   const exp = lotteryExpectation(preview);
+  /** 券价相对「已保存的那份」变了才提示重算；比值用于把内圈按新券价等比放大/缩小。 */
+  const savedPrice = initialConfig.ticketPriceCredits;
+  const priceRatio =
+    savedPrice > 0 && preview.ticketPriceCredits !== savedPrice
+      ? preview.ticketPriceCredits / savedPrice
+      : null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -131,8 +128,8 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
         multiplierBase,
         prizeValidDays: Number(prizeValidDays),
         innerPrizes: innerRows
-          .filter((r) => r.multiplier.trim() !== "" || r.weight.trim() !== "")
-          .map((r) => ({ multiplier: Number(r.multiplier), weight: Number(r.weight) })),
+          .filter((r) => r.credits.trim() !== "" || r.weight.trim() !== "")
+          .map((r) => ({ credits: Number(r.credits), weight: Number(r.weight) })),
         outerPrizes: outerRows
           .filter(
             (r) =>
@@ -252,31 +249,50 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
           {exp.houseEdge} cr。超过 100% 表示每卖一张券站点净亏。
         </p>
         <p className="mt-1 text-muted-foreground">
-          两圈都按「倍率 × 券价」计价，改单券价只改绝对 cr 数额、不动返还率；外圈概率、任一圈的倍率或权重
-          一改，上面三行立刻重算。
+          内圈是绝对 cr、外圈是倍数 × 券价，所以单券价是独立的利润率杠杆：券价调高而奖池不动，
+          返还率就往下走。改券价、外圈概率、任一圈的数值或权重，上面两行都会立刻重算。
           {multiplierBase === "batch"
             ? "当前倍数以「本次总花费」为基数，10 连抽的每券期望约为单抽的 10 倍，这里的数字只是单抽口径。"
             : "按单券价计，10 连抽与单抽的每券期望相同。"}
         </p>
       </div>
 
+      {priceRatio !== null && (
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-dashed border-border p-3 text-xs">
+          <p className="text-muted-foreground">
+            单券价从 {initialConfig.ticketPriceCredits} cr 改成了 {preview.ticketPriceCredits} cr。
+            内圈金额默认不跟着动（这正是调利润率的方式）；想保持原来的手感，可以按新券价等比重算内圈。
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={() =>
+              setInnerRows((prev) =>
+                prev.map((r) =>
+                  r.credits.trim() === ""
+                    ? r
+                    : { ...r, credits: String(round2(Number(r.credits) * priceRatio)) },
+                ),
+              )
+            }
+          >
+            按 ×{priceRatio.toFixed(2)} 重算内圈
+          </Button>
+        </div>
+      )}
+
       <PrizeSection
-        title="内圈奖品（倍率 × 券价）"
-        hint="实际 cr = 倍率 × 单券价，所以调券价时整圈等比缩放。扇区宽度按权重分配，权重同时决定中奖概率；负数直接从永久余额扣除，可能扣成负数。"
+        title="内圈奖品（固定加/减 cr）"
+        hint="绝对 cr，不随券价自动缩放——券价因此是独立的利润率杠杆。扇区宽度按权重分配，权重同时决定中奖概率；负数直接从永久余额扣除，可能扣成负数。"
         columns={[
-          { key: "multiplier", label: "倍率（×券价）" },
+          { key: "credits", label: "cr 变动" },
           { key: "weight", label: "权重" },
         ]}
-        notes={{
-          label: "本档 cr",
-          render: (row) =>
-            row.multiplier.trim() === ""
-              ? "—"
-              : formatPrizeLabel(innerPrizeCredits(preview, toInnerPrize(row))),
-        }}
         rows={innerRows}
         setRows={setInnerRows}
-        emptyRow={{ multiplier: "0.6", weight: "10" }}
+        emptyRow={{ credits: "60", weight: "10" }}
       />
 
       <OuterPrizeSection rows={outerRows} setRows={setOuterRows} config={preview} />
@@ -312,7 +328,6 @@ function PrizeSection<T extends Record<string, string>>({
   rows,
   setRows,
   emptyRow,
-  notes,
 }: {
   title: string;
   hint: string;
@@ -320,8 +335,6 @@ function PrizeSection<T extends Record<string, string>>({
   rows: T[];
   setRows: React.Dispatch<React.SetStateAction<T[]>>;
   emptyRow: T;
-  /** 只读的一列派生值（如「倍率 × 券价」折算出的 cr），跟着当前输入实时变。 */
-  notes?: { label: string; render: (row: T) => string };
 }) {
   return (
     <div className="space-y-3">
@@ -344,7 +357,6 @@ function PrizeSection<T extends Record<string, string>>({
             {col.label}
           </span>
         ))}
-        {notes && <span className="w-24 shrink-0 text-xs text-muted-foreground">{notes.label}</span>}
         <span className="w-10" />
       </div>
       {rows.length === 0 ? (
@@ -369,11 +381,6 @@ function PrizeSection<T extends Record<string, string>>({
                 className={`${FIELD_CLASS} flex-1`}
               />
             ))}
-            {notes && (
-              <span className="w-24 shrink-0 text-xs text-muted-foreground">
-                {notes.render(row)}
-              </span>
-            )}
             <button
               type="button"
               onClick={() => setRows((prev) => prev.filter((_, idx) => idx !== i))}

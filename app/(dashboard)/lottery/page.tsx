@@ -6,7 +6,6 @@ import {
   activityWindow,
   formatPrizeLabel,
   formatTicketLabel,
-  innerPrizeCredits,
   innerSectorLayout,
   outerPrizeCredits,
   round2,
@@ -56,8 +55,8 @@ function buildWheelViews(config: LotteryConfig): {
     const prize = config.innerPrizes[sector.prizeIndex ?? 0];
     return {
       kind: "prize",
-      label: formatPrizeLabel(innerPrizeCredits(config, prize)),
-      tone: toneOf(prize.multiplier),
+      label: formatPrizeLabel(prize.credits),
+      tone: toneOf(prize.credits),
       weight: round2(sector.weight),
       chance: round2(sector.weight),
     };

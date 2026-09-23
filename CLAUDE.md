@@ -342,8 +342,8 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   - 分层：`lib/lottery/prize-math.ts`（纯计算：清洗/窗口/开奖/期望返还，**不碰数据库**，好让后台表单在浏览器里实时算返还率）→ `lib/lottery/config.ts`（读配置）→ `lib/lottery/store.ts`（账本原语）→ `app/(dashboard)/lottery/actions.ts`
   - 原子性：D1 经 REST 无事务，新增 `d1Run()` 取 `meta.changes`，扣款/锁券一律条件更新判定命中；10 连抽先整批锁券再逐次结算，失败只撤销当次
   - 资金：买券「临时余额→永久余额」且不透支；中奖进带过期的临时余额；倒扣直接扣永久余额、允许负数；统一 `topup` type 6，不写 `usage_log`
-  - 展示：两圈的倍率都只存在于配置，扇区/规则/结果/流水一律实际 cr；内圈 = 倍率 × 券价、外圈 = 倍数 × 基数（`ticket` 或 `batch`），所以改券价整池等比缩放、返还率不随定价漂移（旧配置的内圈 `credits` 读回时按当次券价折成倍率）
-  - 后台：`/admin/settings` 新卡片配奖池与累抽档位，顶部实时显示内圈期望 / 外圈期望 / 单券综合与返还率（默认池约 91.1%，与券价无关），每行还现算该档折算出的 cr
+  - 展示：扇区/规则/结果/流水一律实际 cr。**内圈存绝对 cr、外圈存倍数 × 基数（`ticket`/`batch`）**，所以券价是独立的利润率杠杆：奖池不动、调高券价，返还率就下降。想让奖池跟着券价走，用后台的「按 ×N 重算内圈」按钮（显式动作，不做默认耦合）
+  - 后台：`/admin/settings` 新卡片配奖池与累抽档位，顶部实时显示内圈期望 / 外圈期望 / 单券综合 / 返还率 / 站点每券净得（默认池按券价 100 配平到约 91.1%），外圈每行现算该档实际 cr
   - 记录：`lib/lottery/records.ts` 只读聚合（不新增表）——用户侧「我的活动记录」逐次明细 + 汇总，管理侧 `/admin/lottery` 按今日/近 7 日/近 30 日窗口出站点净收益、按用户聚合与最近 200 注明细；净收益 = 券面 + 回收 − 发放，只算已开奖的券
   - 奖型：外圈 `kind = "credits" | "tickets"`，赠券档直接发 `source='prize'` 的券、不动 cr 也不写流水，张数记在 `lottery_draw.grantTickets`（`migrations/008_lottery_prize_tickets.sql`）；期望返还把赠券按券价折算计入成本。**改奖池的顺序固定为「代码先上线，再写 `option.lottery_config`」**，旧代码会把 `kind:'tickets'` 读成 0 cr 奖品
 - ✅ **新用户注册奖励**（2026-06-16）：
