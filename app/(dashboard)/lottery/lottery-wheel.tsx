@@ -17,6 +17,8 @@ const C = SIZE / 2;
 const OUTER_R = 182;
 const OUTER_IN = 144;
 const INNER_R = 136;
+/** 内圈标签的落点半径：贴外沿一点，同样的扇区角能多分到的弧长，标签就不容易被判「放不下」。 */
+const INNER_LABEL_R = INNER_R * 0.76;
 const HUB_R = 34;
 const SPOKE_BASE = 20;
 
@@ -124,6 +126,15 @@ function arcAt(r: number, span: { start: number; end: number }) {
 function labelSize(r: number, span: { start: number; end: number }, label: string, base: number) {
   const size = Math.min(base, arcAt(r, span) / (Math.max(1, label.length) * 0.55));
   return size >= 7.5 ? size : null;
+}
+
+/**
+ * 连一个标签都放不下的格子退化成单个记号（★=cr 档，券=赠券档），至少看得出这一格有东西；
+ * 窄到连记号也塞不下的（<2°）才真的留白。
+ */
+function markerSize(r: number, span: { start: number; end: number }) {
+  const size = Math.min(10, arcAt(r, span) - 1);
+  return size >= 6 ? size : null;
 }
 
 /** 让目标扇区中心转到某个角度处，且始终往前转（不倒着回去）。 */
@@ -326,6 +337,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
                   const anchor = polar(prize.batchLabel ? midR + 8 : midR, span.center);
                   const batchAnchor = polar(midR - 9, span.center);
                   const size = labelSize(midR, span, prize.label, 11);
+                  const marker = size === null ? markerSize(midR, span) : null;
                   const batchSize = prize.batchLabel
                     ? labelSize(midR - 9, span, `10连 ${prize.batchLabel}`, 9)
                     : null;
@@ -349,6 +361,20 @@ export function LotteryWheel(props: LotteryWheelProps) {
                           fontWeight={600}
                         >
                           {prize.label}
+                        </text>
+                      )}
+                      {marker !== null && (
+                        <text
+                          x={anchor.x}
+                          y={anchor.y}
+                          transform={`rotate(${span.center} ${anchor.x} ${anchor.y})`}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill="#f8fafc"
+                          fontSize={marker}
+                          fontWeight={700}
+                        >
+                          {prize.tone === "ticket" ? "券" : "★"}
                         </text>
                       )}
                       {prize.batchLabel && batchSize !== null && (
@@ -382,16 +408,17 @@ export function LotteryWheel(props: LotteryWheelProps) {
               >
                 {props.innerSectors.map((sector, index) => {
                   const span = innerSectorSpans[index];
-                  const anchor = polar(INNER_R * 0.63, span.center);
+                  const anchor = polar(INNER_LABEL_R, span.center);
                   const near = polar(INNER_R * 0.32, span.center);
                   const tone: Tone = sector.tone;
                   const size = labelSize(
-                    INNER_R * 0.63,
+                    INNER_LABEL_R,
                     span,
                     sector.label,
                     sector.kind === "entry" ? 12 : 11,
                   );
                   const hintSize = labelSize(INNER_R * 0.32, span, "↓ 外圈", 10);
+                  const marker = size === null ? markerSize(INNER_LABEL_R, span) : null;
                   return (
                     <g key={`inner-${index}`}>
                       <path
@@ -412,6 +439,20 @@ export function LotteryWheel(props: LotteryWheelProps) {
                           fontWeight={700}
                         >
                           {sector.label}
+                        </text>
+                      )}
+                      {marker !== null && (
+                        <text
+                          x={anchor.x}
+                          y={anchor.y}
+                          transform={`rotate(${span.center} ${anchor.x} ${anchor.y})`}
+                          textAnchor="middle"
+                          dominantBaseline="middle"
+                          fill="#f8fafc"
+                          fontSize={marker}
+                          fontWeight={700}
+                        >
+                          ★
                         </text>
                       )}
                       {sector.kind === "entry" && hintSize !== null && (
