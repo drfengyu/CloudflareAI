@@ -48,6 +48,7 @@ export default async function AdminPricingPage() {
         isImage: row.isImage === 1,
         fixedPrice: row.fixedPrice,
         multiplier: row.multiplier ?? 1.0,
+        reserveOutputTokens: row.reserveOutputTokens,
         updatedAt: row.updatedAt,
       },
     ]),

@@ -1,8 +1,9 @@
 import { auth } from "@/auth";
 import { db } from "@/lib/db/d1-http";
-import { usageLogs, users, apiKeys, temporaryBalances } from "@/lib/db/schema";
+import { usageLogs, users, apiKeys, temporaryBalances, modelPricing } from "@/lib/db/schema";
 import { calculateCredits } from "@/lib/billing/pricing";
 import { eq, sql, and, gt } from "drizzle-orm";
+import { estimateTokens } from "./tokens";
 
 /**
  * 用量记账 + 扣费（Phase B 起生效）：
@@ -183,20 +184,67 @@ export async function getUserTotalBalance(userId: string): Promise<{
   };
 }
 
+/** 模型没配 reserveOutputTokens 时的默认输出预留（token）。 */
+export const DEFAULT_RESERVE_OUTPUT_TOKENS = 1024;
+
+/**
+ * 余额预检用的 credits 预估。
+ *
+ * 输入按文本实估（CJK 1 字 ≈ 1 token），输出取「客户端 max_tokens」与「该模型预留档位」
+ * 的较小值：按 max_tokens 全量预留的话，Claude Code 一类默认 32000 的请求会被算成上千
+ * credits 而直接 402，尽管真实回答只有几百 token。真实扣费仍按响应的实际 usage 结算。
+ */
+export async function estimateRequestCredits(input: {
+  model: string;
+  inputText: string;
+  requestedMaxTokens?: number;
+  task?: string;
+}): Promise<{ credits: number; inputTokens: number; outputTokens: number }> {
+  const inputTokens = estimateTokens(input.inputText);
+  const rows = await db
+    .select({ reserve: modelPricing.reserveOutputTokens })
+    .from(modelPricing)
+    .where(eq(modelPricing.modelId, input.model))
+    .limit(1);
+  const reserve = rows[0]?.reserve ?? DEFAULT_RESERVE_OUTPUT_TOKENS;
+  const outputTokens = Math.min(input.requestedMaxTokens ?? reserve, reserve);
+  const credits = await calculateCredits(
+    input.model,
+    inputTokens,
+    outputTokens,
+    undefined,
+    input.task,
+  );
+  return { credits, inputTokens, outputTokens };
+}
+
 /**
  * 校验用户余额和令牌额度是否充足（调用前置检查）。
- * 返回 { ok: true } 或 { ok: false, reason: string }。
+ * 返回 { ok: true } 或 { ok: false, reason: string }，两种情况都带上本次需要的额度与可用额度，
+ * 便于 402 把数字直接回给调用方（只给 "Insufficient balance" 无从自查）。
  */
 export async function verifyBalance(
   userId: string,
   apiKeyId: string | undefined,
   estimatedCredits: number,
-): Promise<{ ok: boolean; reason?: string }> {
+): Promise<{
+  ok: boolean;
+  reason?: string;
+  neededCredits: number;
+  availableCredits: number;
+}> {
   // 查用户总余额（永久 + 未过期临时）
   const balance = await getUserTotalBalance(userId);
+  let available = balance.total;
+  const fail = (reason: string, limit: number) => ({
+    ok: false as const,
+    reason,
+    neededCredits: estimatedCredits,
+    availableCredits: limit,
+  });
 
   if (balance.total < estimatedCredits) {
-    return { ok: false, reason: "Insufficient balance" };
+    return fail("Insufficient balance", available);
   }
 
   // 查令牌额度（如果有限制）
@@ -212,7 +260,7 @@ export async function verifyBalance(
       .limit(1);
 
     if (!keyRows[0]) {
-      return { ok: false, reason: "API key not found" };
+      return fail("API key not found", available);
     }
 
     const key = keyRows[0];
@@ -224,12 +272,12 @@ export async function verifyBalance(
         .update(apiKeys)
         .set({ status: 3 })
         .where(eq(apiKeys.id, apiKeyId));
-      return { ok: false, reason: "API key expired" };
+      return fail("API key expired", available);
     }
 
     // 检查是否已禁用
     if (key.status === 2) {
-      return { ok: false, reason: "API key disabled" };
+      return fail("API key disabled", available);
     }
 
     // 检查额度
@@ -237,6 +285,7 @@ export async function verifyBalance(
       key.remainCredits !== null &&
       key.remainCredits < estimatedCredits
     ) {
+      available = Math.min(available, key.remainCredits);
       // 更新状态为额度耗尽
       if (key.status !== 4) {
         await db
@@ -244,11 +293,11 @@ export async function verifyBalance(
           .set({ status: 4 })
           .where(eq(apiKeys.id, apiKeyId));
       }
-      return { ok: false, reason: "API key quota exhausted" };
+      return fail("API key quota exhausted", available);
     }
   }
 
-  return { ok: true };
+  return { ok: true, neededCredits: estimatedCredits, availableCredits: available };
 }
 
 /** 获取当前登录用户 ID，未登录抛错。 */

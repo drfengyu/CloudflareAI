@@ -29,7 +29,7 @@
 | ├─ 定价模块 | hosted ×1000 / proxied ×1 倍率 + 图像固定价 | ✅ |
 | ├─ 倍率管理 | 管理员动态调整每个模型的倍率（0.01-100） | ✅ |
 | ├─ 真实计量 | 按 token/neurons 计费 + 余额扣减 + error 记 0 | ✅ |
-| ├─ 余额校验 | user + apiKey 双重余额预检 + 402 拒绝 | ✅ |
+| ├─ 余额校验 | user + apiKey 双重余额预检 + 402 拒绝（预检输出按模型预留档位封顶，档位后台可调） | ✅ |
 | ├─ 图像修复 | FLUX-2 multipart 响应解析 | ✅ |
 | ├─ API Key 必需 | 所有 Playground 必须有 key，无 key 返回 403 | ✅ |
 | └─ 流式计量 | 流式结束后按**终态** usage chunk 精确计量；截断流只计 input、output 记 0 | ✅ |

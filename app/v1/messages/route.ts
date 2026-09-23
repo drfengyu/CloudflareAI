@@ -3,8 +3,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { openaiCompatible } from "@/lib/cloudflare/ai";
 import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
-import { logUsage, verifyBalance } from "@/lib/usage/meter";
-import { calculateCredits } from "@/lib/billing/pricing";
+import { logUsage, verifyBalance, estimateRequestCredits } from "@/lib/usage/meter";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { convertToAnthropicStream, anthropicMessageToSSE } from "@/lib/usage/anthropic-stream";
 import {
@@ -104,13 +103,36 @@ export async function POST(req: NextRequest) {
     return Response.json({ error: { type: "permission_error", message: "Model not allowed" } }, { status: 403 });
   }
 
-  // 余额预检（按消息文本估算输入）
-  const estimatedInput =
-    messages.reduce((sum, m) => sum + flattenAnthropicContent(m.content).length, 0) * 1.5;
-  const estimatedCredits = await calculateCredits(model, estimatedInput, max_tokens);
-  const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
+  // 余额预检：输入按消息文本实估，输出按 min(客户端 max_tokens, 该模型预留档位)。
+  const inputText = messages.map((m) => flattenAnthropicContent(m.content)).join("\n");
+  const precheck = await estimateRequestCredits({
+    model,
+    inputText,
+    requestedMaxTokens: max_tokens,
+    task: "Text Generation",
+  });
+  const balanceCheck = await verifyBalance(userId, apiKeyId, precheck.credits);
   if (!balanceCheck.ok) {
-    return Response.json({ error: { type: "insufficient_balance", message: balanceCheck.reason } }, { status: 402 });
+    const detail = `${balanceCheck.reason}：本次预检需要 ${precheck.credits.toFixed(2)} cr，当前可用 ${balanceCheck.availableCredits.toFixed(2)} cr`;
+    after(() => {
+      void logUsage({
+        userId,
+        apiKeyId,
+        model,
+        task: "Text Generation",
+        channel: "anthropic",
+        channelId,
+        inputTokens: precheck.inputTokens,
+        outputTokens: precheck.outputTokens,
+        status: "error",
+        errorReason: detail,
+        latencyMs: Date.now() - start,
+      });
+    });
+    return Response.json(
+      { error: { type: "insufficient_balance", message: detail } },
+      { status: 402 },
+    );
   }
 
   // 渠道路由：如果 API Key 绑定了非 Cloudflare 渠道，转发到对应上游
@@ -128,8 +150,8 @@ export async function POST(req: NextRequest) {
             task: "Text Generation",
             channel: "anthropic",
             channelId,
-            inputTokens: Math.floor(estimatedInput),
-            outputTokens: max_tokens,
+            inputTokens: precheck.inputTokens,
+            outputTokens: precheck.outputTokens,
             status: "ok",
             latencyMs,
           });
@@ -204,7 +226,7 @@ export async function POST(req: NextRequest) {
       const { stream: tap, done } = convertToAnthropicStream(res.body, {
         model,
         messageId,
-        inputTokens: Math.floor(estimatedInput),
+        inputTokens: precheck.inputTokens,
       });
 
       // after() 让 Vercel serverless 在响应结束后保持函数运行直到 logUsage 完成。

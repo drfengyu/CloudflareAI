@@ -191,6 +191,8 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 - ✅ `lib/usage/meter.ts` 真实计量：
   - 调用 `calculateCredits` 按真实 token/neurons 计费
   - 余额预检 `verifyBalance`（user + apiKey 双重校验）
+  - 预检额度 `estimateRequestCredits`：输入实估 + 输出按 `model_pricing.reserveOutputTokens` 封顶（默认 1024）；
+    否则 `max_tokens=32000` 的客户端会被按全量预留挡在 402。402 带 needed/available 数字并写 error 日志
   - 成功扣减 `user.balanceCredits`，失败时记 0 credits
   - 修复 FLUX-2 multipart 响应解析（`lib/cloudflare/ai.ts`）
 - ✅ **流式真实计量**（2026-06-16）：

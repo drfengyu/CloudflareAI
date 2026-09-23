@@ -255,8 +255,8 @@ outputTokens = estimateTokens(模型实际返回的 description/response 文本)
 
 ### 余额预检
 
-预检仍用 `max_tokens` 上限算保守估计（防止刚好压线时调用一半失败），
-但**实际计费**用上面的输入+真实文本输出。
+预检的输出按该模型的**预留档位**封顶（见下文「余额预检与预留档位」），
+不再直接取客户端的 `max_tokens`；**实际计费**仍用上面的输入+真实文本输出。
 
 ### 扣费示例（vision 区间 inputPrice 300-800，线上 base_multiplier=100）
 
@@ -324,7 +324,8 @@ Output ONLY the translated text, with no quotes, explanations, or extra content.
 ┌─────────────────┐
 │ 1. 请求前置检查 │
 └────────┬────────┘
-         │ verifyBalance()
+         │ estimateRequestCredits() → verifyBalance()
+         ├─ 输入实估 + 输出按模型预留档位封顶
          ├─ 检查用户余额（永久 + 临时）
          ├─ 检查 API Key 额度（如有限制）
          ├─ 检查 API Key 状态（启用/禁用/过期）
@@ -374,14 +375,33 @@ Output ONLY the translated text, with no quotes, explanations, or extra content.
          └─ 禁用 → status=2
 ```
 
+### 余额预检与预留档位（2026-09-23 起）
+
+预检只判断「这次大概要花多少 credits」，**不扣费**；真实扣费仍按响应里的 usage token。
+
+```typescript
+inputTokens  = estimateTokens(请求里的全部文本)          // CJK 1 字 ≈ 1 token
+outputTokens = min(客户端 max_tokens, 该模型预留档位)     // 档位缺失 → 1024
+estimated    = calculateCredits(model, inputTokens, outputTokens)
+```
+
+- 档位存在 `model_pricing.reserveOutputTokens`，后台「定价管理」每模型第二个输入框（`tk`）可调，范围 1~128000。
+- **为什么不能按 `max_tokens` 全量预留**：Claude Code 一类客户端默认 `max_tokens=32000`。
+  base=100 下 `@cf/zai-org/glm-4.7-flash` 按全量预留要约 5,000 cr，2,400 cr 的正常账户会被直接挡在 402，
+  而实际回答往往只有几百 token。封顶后同一次预检约 162 cr。
+- 预检失败（402）会**同时写一条 `status="error"` 的 usage_log**（`creditsUsed=0`），
+  错误体带数字便于自查：`Insufficient balance：本次预检需要 285.25 cr，当前可用 0.00 cr`。
+  `/v1/chat/completions`、`/v1/messages`、`/api/ai/text` 三条路径同一套逻辑。
+
 ### 关键函数
 
 | 函数 | 文件 | 职责 |
 |------|------|------|
-| `verifyBalance()` | `lib/usage/meter.ts:188` | 前置校验 |
-| `calculateCredits()` | `lib/billing/pricing.ts:12` | 费用计算 |
-| `deductCredits()` | `lib/usage/meter.ts:101` | 余额扣减 |
-| `logUsage()` | `lib/usage/meter.ts:15` | 用量记录 |
+| `estimateRequestCredits()` | `lib/usage/meter.ts:197` | 预检额度估算（输入实估 + 输出档位封顶） |
+| `verifyBalance()` | `lib/usage/meter.ts:226` | 前置校验，返回 needed/available |
+| `calculateCredits()` | `lib/billing/pricing.ts:13` | 费用计算 |
+| `deductCredits()` | `lib/usage/meter.ts:104` | 余额扣减 |
+| `logUsage()` | `lib/usage/meter.ts:16` | 用量记录 |
 
 ---
 
@@ -458,7 +478,7 @@ await logUsage({
 
 | 错误码 | 原因 | 是否扣费 | 日志记录 |
 |--------|------|---------|---------|
-| 402 | 余额不足 | ❌ | ✅ errorReason |
+| 402 | 余额不足 / 令牌额度耗尽 | ❌ | ✅ errorReason（带需要与可用的 cr 数字） |
 | 403 | API Key 禁用/过期 | ❌ | ✅ errorReason |
 | 429 | 速率限制 | ❌ | ✅ errorReason |
 | 500 | 上游服务错误 | ❌ | ✅ errorReason |

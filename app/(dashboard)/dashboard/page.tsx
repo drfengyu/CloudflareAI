@@ -318,7 +318,7 @@ export default async function DashboardPage({
           <Card className="border-warning bg-warning/5">
             <CardContent className="pt-5">
               <p className="text-sm text-warning">
-                ⚠️ 余额不足 $1，请及时充值以免影响使用
+                ⚠️ 余额不足 1 cr，请及时充值以免影响使用
               </p>
             </CardContent>
           </Card>

@@ -3,8 +3,7 @@ import { after } from "next/server";
 import { z } from "zod";
 import { openaiCompatible } from "@/lib/cloudflare/ai";
 import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
-import { logUsage, verifyBalance } from "@/lib/usage/meter";
-import { calculateCredits } from "@/lib/billing/pricing";
+import { logUsage, verifyBalance, estimateRequestCredits } from "@/lib/usage/meter";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { interceptOpenAIStream, openAIResponseToSSE } from "@/lib/usage/stream-intercept";
 import { routeToChannel, getChannelConfig } from "@/lib/channels/router";
@@ -79,24 +78,42 @@ export async function POST(req: NextRequest) {
   if (allowedModels && !allowedModels.includes(model)) {
     return Response.json({ error: "Model not allowed for this API key" }, { status: 403 });
   }
-  // 余额预检（粗略估算：输入按消息总长*1.5，输出按max_tokens或默认512）
-  const contentLength = (content: unknown): number => {
-    if (typeof content === "string") return content.length;
-    if (Array.isArray(content)) {
-      return content.reduce(
-        (n, b) => n + (typeof b === "string" ? b.length : typeof b?.text === "string" ? b.text.length : 0),
-        0,
-      );
-    }
-    return 0;
-  };
-  const estimatedInput = messages.reduce((sum, m) => sum + contentLength(m.content), 0) * 1.5;
-  const estimatedOutput = max_tokens || 512;
-  const estimatedCredits = await calculateCredits(model, estimatedInput, estimatedOutput);
+  // 余额预检：输入按消息文本实估，输出按 min(客户端 max_tokens, 该模型预留档位)。
+  const inputText = messages
+    .map((m) =>
+      typeof m.content === "string"
+        ? m.content
+        : Array.isArray(m.content)
+          ? m.content.map((b) => (typeof b === "string" ? b : b.text ?? "")).join("")
+          : "",
+    )
+    .join("\n");
+  const precheck = await estimateRequestCredits({
+    model,
+    inputText,
+    requestedMaxTokens: max_tokens,
+    task: "Text Generation",
+  });
 
-  const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
+  const balanceCheck = await verifyBalance(userId, apiKeyId, precheck.credits);
   if (!balanceCheck.ok) {
-    return Response.json({ error: balanceCheck.reason }, { status: 402 });
+    const detail = `${balanceCheck.reason}：本次预检需要 ${precheck.credits.toFixed(2)} cr，当前可用 ${balanceCheck.availableCredits.toFixed(2)} cr`;
+    after(() => {
+      void logUsage({
+        userId,
+        apiKeyId,
+        model,
+        task: "Text Generation",
+        channel: "openai",
+        channelId,
+        inputTokens: precheck.inputTokens,
+        outputTokens: precheck.outputTokens,
+        status: "error",
+        errorReason: detail,
+        latencyMs: Date.now() - start,
+      });
+    });
+    return Response.json({ error: detail }, { status: 402 });
   }
 
   // 渠道路由：如果 API Key 绑定了非 Cloudflare 渠道，转发到对应上游
@@ -115,8 +132,8 @@ export async function POST(req: NextRequest) {
             task: "Text Generation",
             channel: "openai",
             channelId,
-            inputTokens: Math.floor(estimatedInput),
-            outputTokens: estimatedOutput,
+            inputTokens: precheck.inputTokens,
+            outputTokens: precheck.outputTokens,
             status: "ok",
             latencyMs,
           });

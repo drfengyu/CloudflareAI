@@ -2,8 +2,9 @@ import { NextRequest } from "next/server";
 import { after } from "next/server";
 import { z } from "zod";
 import { openaiCompatible } from "@/lib/cloudflare/ai";
-import { requireUser, logUsage, verifyBalance, getDefaultApiKey } from "@/lib/usage/meter";
+import { requireUser, logUsage, verifyBalance, getDefaultApiKey, estimateRequestCredits } from "@/lib/usage/meter";
 import { calculateCredits } from "@/lib/billing/pricing";
+import { estimateTokens } from "@/lib/usage/tokens";
 import { saveConversation } from "@/lib/usage/conversation";
 import { interceptOpenAIStream } from "@/lib/usage/stream-intercept";
 import { routeToChannel, getChannelConfig } from "@/lib/channels/router";
@@ -277,8 +278,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 余额预检（粗略估算）
-  const estimatedInput = messages.reduce((sum, m) => sum + m.content.length, 0) * 1.5;
+  // 余额预检：输入按文本实估（CJK 1 字≈1 token），输出按模型预留档位封顶；
+  // 实际发给上游的仍是 effectiveMaxTokens。
+  const inputText = messages.map((m) => m.content).join("\n");
+  const estimatedInput = estimateTokens(inputText);
   // 计算实际可用的 max_tokens：
   // 1. 用户显式传入则优先使用
   // 2. 否则使用 contextWindow - estimatedInput（留 20% buffer）
@@ -288,11 +291,30 @@ export async function POST(req: NextRequest) {
       ? Math.min(32768, Math.max(512, Math.floor((contextWindow - estimatedInput) * 0.8)))
       : 4096
   );
-  const estimatedCredits = await calculateCredits(model, estimatedInput, effectiveMaxTokens);
+  const precheck = await estimateRequestCredits({
+    model,
+    inputText,
+    requestedMaxTokens: effectiveMaxTokens,
+    task: "Text Generation",
+  });
 
-  const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
+  const balanceCheck = await verifyBalance(userId, apiKeyId, precheck.credits);
   if (!balanceCheck.ok) {
-    return Response.json({ error: balanceCheck.reason }, { status: 402 });
+    const detail = `${balanceCheck.reason}：本次预检需要 ${precheck.credits.toFixed(2)} cr，当前可用 ${balanceCheck.availableCredits.toFixed(2)} cr`;
+    after(() => {
+      void logUsage({
+        userId,
+        apiKeyId,
+        model,
+        task: "Text Generation",
+        channel: "web",
+        inputTokens: precheck.inputTokens,
+        outputTokens: precheck.outputTokens,
+        status: "error",
+        errorReason: detail,
+      });
+    });
+    return Response.json({ error: detail }, { status: 402 });
   }
 
   try {

@@ -5,7 +5,7 @@ import { Search } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { updateModelMultiplier } from "./actions";
+import { updateModelMultiplier, updateModelReserve } from "./actions";
 import { toast } from "sonner";
 import { formatModelPrice } from "@/lib/billing/display-price";
 
@@ -37,6 +37,8 @@ type ModelWithPricing = {
     isImage: boolean;
     fixedPrice: number | null;
     multiplier: number;
+    /** 余额预检的输出预留档位（token 数），null = 用默认 1024 */
+    reserveOutputTokens: number | null;
     updatedAt: Date | null;
   };
 };
@@ -170,6 +172,7 @@ function ModelPricingRow({
   baseMultiplier: number;
 }) {
   const [multiplier, setMultiplier] = useState(String(model.pricing?.multiplier ?? 1.0));
+  const [reserve, setReserve] = useState(String(model.pricing?.reserveOutputTokens ?? 1024));
   const [saving, setSaving] = useState(false);
 
   const p = model.pricing;
@@ -191,11 +194,27 @@ function ModelPricingRow({
       toast.error("倍率必须在 0.01 到 100 之间");
       return;
     }
+    const reserveVal = parseInt(reserve, 10);
+    if (!Number.isInteger(reserveVal) || reserveVal < 1 || reserveVal > 128_000) {
+      toast.error("预检预留必须在 1 到 128000 token 之间");
+      return;
+    }
+
+    const jobs: Promise<{ success: boolean; error?: string }>[] = [];
+    if (val !== (model.pricing?.multiplier ?? 1)) jobs.push(updateModelMultiplier(model.id, val));
+    if (reserveVal !== (model.pricing?.reserveOutputTokens ?? 1024)) {
+      jobs.push(updateModelReserve(model.id, reserveVal));
+    }
+    if (jobs.length === 0) {
+      toast("没有改动");
+      return;
+    }
+
     setSaving(true);
     try {
-      const res = await updateModelMultiplier(model.id, val);
-      if (!res.success) throw new Error(res.error);
-      toast.success(`倍率已更新: ${multiplier}x`);
+      const failed = (await Promise.all(jobs)).find((r) => !r.success);
+      if (failed) throw new Error(failed.error);
+      toast.success(`已更新：倍率 ${val}x · 预检预留 ${reserveVal} tokens`);
     } catch (err) {
       toast.error((err as Error).message || "保存失败");
     } finally {
@@ -231,9 +250,23 @@ function ModelPricingRow({
               max="100"
               value={multiplier}
               onChange={(e) => setMultiplier(e.target.value)}
+              title="模型倍率：实付单价 = 表价 × 它"
               className="h-8 w-20 rounded border border-border bg-card px-2 text-xs text-right outline-none focus:border-[color:var(--primary)]"
             />
             <span className="text-xs text-muted-foreground">x</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              step="1"
+              min="1"
+              max="128000"
+              value={reserve}
+              onChange={(e) => setReserve(e.target.value)}
+              title="余额预检假定的输出 token 数：客户端 max_tokens 超过它时按它算，避免默认 32000 的客户端被全量预留挡在 402"
+              className="h-8 w-20 rounded border border-border bg-card px-2 text-xs text-right outline-none focus:border-[color:var(--primary)]"
+            />
+            <span className="text-xs text-muted-foreground">tk</span>
           </div>
           <button
             onClick={handleSave}

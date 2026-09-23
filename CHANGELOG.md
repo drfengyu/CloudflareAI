@@ -52,6 +52,10 @@
   - `tests/e2e/billing-verification.spec.ts` 原来断言「必须看到 `≈ $Y`」，改为断言 `X cr` 存在且页面上不再出现 `≈ $`。
 - **定价页/模型库的单价改为「实付单价」（含基础倍率）**：此前 `/pricing` 与模型库显示的是 `model_pricing` 的表价（仅乘了模型倍率），而 `calculateCredits` 扣费还要再乘一次 `pricing_base_multiplier`（生产为 100），也就是**展示价比实付低 100 倍**，而页面副标题写的是「所有模型的实际计费价格」；改基础倍率时界面还是一字不动，容易被误判成"设置没生效"。现在 `modelPriceParts`/`formatModelPrice` 多收一个 `baseMultiplier`，`/pricing`、`/models`、`/admin/pricing` 三处统一按 `表价 × 模型倍率 × 基础倍率` 显示（图像固定价不乘 base，展示即实付），扣费逻辑与库表数值依旧未动。`/pricing` 说明卡明确写出该公式与当前倍率，`updatePricingSettings` 已有的 `pricingConfigCache` 失效让改值即时反映。
   - 后台 `/admin/pricing` 两列语义随之厘清：「基础/最终」改名为「表价 / 实付」，**表价列即公开页那个数**（已含基础倍率），实付列 = 表价 × 该行模型倍率；当前所有托管模型倍率为 1，故两列相同。页头说明同步为 `实付 = 表价 × 模型倍率，表价已含基础倍率 ×N`。
+- **余额预检改为按模型「预留档位」封顶**（`lib/usage/meter.ts` + 三条网关链路）：预检原先把客户端的 `max_tokens` 全额当作一定会产出的 token 计费（`/api/ai/text` 在客户端没给 `max_tokens` 时还会按 `contextWindow - 输入` 现算一个上限，最小 512、最大 32768）。Claude Code 一类客户端默认发 `max_tokens=32000`，base=100 下 `@cf/zai-org/glm-4.7-flash` 一次预检要约 5,000 cr，2,400 cr 的正常账户会被直接挡在 402，而真实回答往往只有几百 token。新增 `estimateRequestCredits()`：输入按请求文本实估（`estimateTokens`，CJK 1 字 ≈ 1 token，替掉 `字符数 × 1.5`），输出取 `min(客户端 max_tokens, 该模型预留档位)`。档位存在新列 `model_pricing.reserveOutputTokens`（默认 1024，`migrations/006_model_reserve_output_tokens.sql`，已应用到 D1），后台 `/admin/pricing` 每模型第二个输入框（`tk`）可调 1~128000。**发给上游的 `max_tokens` 不变，真实扣费仍按响应 usage 结算**。
+  - `verifyBalance()` 两种返回值都带 `neededCredits`/`availableCredits`，402 文案由光秃的 `Insufficient balance` 变为 `Insufficient balance：本次预检需要 285.25 cr，当前可用 0.00 cr`，并经 `after()` 补写一条 `status="error"`、`creditsUsed=0` 的 usage_log——此前被预检拒掉的请求不留任何记录，用户和管理员都无从排查。`/v1/chat/completions`、`/v1/messages`、`/api/ai/text` 三条链路统一走这套逻辑。
+  - 顺带修掉看板残留的美元文案「⚠️ 余额不足 $1」→「1 cr」（上一条全站 Credits 改造的漏网之鱼）。
+  - 实测：`max_tokens=32000` 不再被预检拦截（到上游后因该模型 `max_total_tokens=24000` 返回 400，属上游参数校验，与本次改动无关）；把临时令牌额度置 0 得到上述带数字的 402 与对应 error 行；成功调用按真实 usage（46 in / 3 out）扣 4.93 cr。
 
 ### 修复
 

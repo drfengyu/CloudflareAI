@@ -285,9 +285,9 @@ export const modelPricing = sqliteTable("model_pricing", {
   modelId: text("modelId").primaryKey(),
   category: text("category"),
   source: text("source"),
-  /** 输入价格（$/1M tokens）。 */
+  /** 输入价格（cr/1M tokens，不含基础倍率与模型倍率）。 */
   inputPrice: real("inputPrice"),
-  /** 输出价格（$/1M tokens）。null 表示与输入价相同。 */
+  /** 输出价格（cr/1M tokens）。null 表示与输入价相同。 */
   outputPrice: real("outputPrice"),
   /** 计费单位描述（如 "per M input tokens" / "image"）。 */
   unit: text("unit"),
@@ -297,6 +297,12 @@ export const modelPricing = sqliteTable("model_pricing", {
   fixedPrice: real("fixedPrice"),
   /** 管理员可调整的定价倍率（默认 1.0）。最终价格 = 基础价格 × multiplier。 */
   multiplier: real("multiplier").default(1.0).notNull(),
+  /**
+   * 余额预检假定的输出 token 数（默认 1024）。客户端的 max_tokens 超过它时，
+   * 预检按它算——否则 Claude Code 一类默认 32000 会把请求全量预留后直接 402。
+   * null = 用默认值。
+   */
+  reserveOutputTokens: integer("reserveOutputTokens").default(1024),
   /** 渠道ID，关联到 channels 表 */
   channelId: text("channelId").references(() => channels.id, { onDelete: "set null" }),
   updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).$defaultFn(now),

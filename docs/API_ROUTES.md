@@ -43,7 +43,7 @@ Content-Type: application/json
 **功能**：
 - 支持流式（SSE）和非流式响应
 - 自动计量真实 token 用量
-- 余额预检 + 双重扣减（user + apiKey）
+- 余额预检 + 双重扣减（user + apiKey）；预检输出按模型预留档位封顶，不跟客户端 `max_tokens` 走
 - 错误不计费
 - **工具调用（Function Calling）**：透传 `tools` / `tool_choice`，返回标准 `tool_calls`
 
@@ -395,7 +395,7 @@ export function checkRateLimit(
 | 200 | 成功 | 正常响应 |
 | 400 | 请求错误 | 参数验证失败 |
 | 401 | 未授权 | API Key 无效或缺失 |
-| 402 | 余额不足 | Payment Required |
+| 402 | 余额不足 / 令牌额度耗尽 | 预检未通过；错误体带「需要 X cr / 当前可用 Y cr」，并写入一条 `status="error"` 的 usage_log |
 | 403 | 禁止访问 | 模型不在白名单、权限不足 |
 | 404 | 未找到 | 资源不存在 |
 | 429 | 限流 | 超过速率限制 |
