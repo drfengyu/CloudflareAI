@@ -13,9 +13,15 @@ export const LOTTERY_CONFIG_KEY = "lottery_config";
 /** `topup.type`：6=限时活动（买券与倒扣为负、中奖为正）。5 已被在线充值占用。 */
 export const TOPUP_TYPE_LOTTERY = 6;
 
-/** 内圈奖品：固定加/减 cr。 */
+/**
+ * 内圈奖品：加/减「券价 × `multiplier`」cr，倍率可为负。
+ *
+ * 刻意不存绝对 cr：券价一改，绝对值奖池会整体不变而成本翻倍，返还率直接漂移
+ * （现网把券价从 100 调到 125，旧池的返还率就从 90.7% 掉到 75.1%）。
+ * 存倍率后整圈随券价等比缩放，奖池手感与定价解耦。
+ */
 export interface InnerPrize {
-  credits: number;
+  multiplier: number;
   weight: number;
 }
 
@@ -61,7 +67,7 @@ export interface LotteryConfig {
 }
 
 /**
- * 默认奖池按「单券返还率 ≈ 90%」配平（券价 100 cr）。
+ * 默认奖池按「单券返还率 ≈ 91%」配平，且**与券价无关**（内外圈都按券价倍率计价）。
  *
  * 两级分工刻意拉开：内圈是「小得小失」的主战场（正档厚、负档浅），
  * 外圈才是倍数层——但外圈正档一旦低于内圈天花板就没有"进阶感"，所以调奖池时
@@ -76,14 +82,14 @@ export const DEFAULT_LOTTERY_CONFIG: LotteryConfig = {
   multiplierBase: "ticket",
   prizeValidDays: 7,
   innerPrizes: [
-    { credits: 200, weight: 12 },
-    { credits: 150, weight: 14 },
-    { credits: 120, weight: 14 },
-    { credits: 90, weight: 16 },
-    { credits: 60, weight: 16 },
-    { credits: 40, weight: 12 },
-    { credits: -30, weight: 12 },
-    { credits: -80, weight: 8 },
+    { multiplier: 2, weight: 12 },
+    { multiplier: 1.5, weight: 14 },
+    { multiplier: 1.2, weight: 14 },
+    { multiplier: 0.9, weight: 16 },
+    { multiplier: 0.6, weight: 16 },
+    { multiplier: 0.4, weight: 12 },
+    { multiplier: -0.3, weight: 12 },
+    { multiplier: -0.8, weight: 8 },
   ],
   outerPrizes: [
     { kind: "credits", multiplier: 1.5, tickets: 0, weight: 14 },
@@ -119,14 +125,24 @@ export function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-function sanitizeInner(value: unknown): InnerPrize[] {
+function sanitizeInner(value: unknown, ticketPrice: number): InnerPrize[] {
   if (!Array.isArray(value)) return [];
   return value
     .map((raw) => {
-      const item = raw as Partial<InnerPrize>;
-      return { credits: Number(item?.credits), weight: Number(item?.weight) };
+      const item = raw as Partial<InnerPrize> & { credits?: number };
+      const multiplier = Number(item?.multiplier);
+      const credits = Number(item?.credits);
+      return {
+        // 旧奖池存绝对 cr：按当次券价折成倍率，读回来的金额一分不变，此后调券价才会跟着缩放。
+        multiplier: Number.isFinite(multiplier)
+          ? multiplier
+          : ticketPrice > 0 && Number.isFinite(credits)
+            ? credits / ticketPrice
+            : NaN,
+        weight: Number(item?.weight),
+      };
     })
-    .filter((p) => Number.isFinite(p.credits) && Number.isFinite(p.weight) && p.weight > 0);
+    .filter((p) => Number.isFinite(p.multiplier) && Number.isFinite(p.weight) && p.weight > 0);
 }
 
 function sanitizeOuter(value: unknown): OuterPrize[] {
@@ -169,7 +185,8 @@ export function sanitizeLotteryConfig(raw: unknown): LotteryConfig {
   const d = DEFAULT_LOTTERY_CONFIG;
   if (!raw || typeof raw !== "object") return d;
   const it = raw as Partial<LotteryConfig>;
-  const inner = sanitizeInner(it.innerPrizes);
+  const price = round2(positiveNumber(it.ticketPriceCredits, d.ticketPriceCredits));
+  const inner = sanitizeInner(it.innerPrizes, price);
   const outer = sanitizeOuter(it.outerPrizes);
   const chance = Number(it.outerChancePercent);
 
@@ -177,7 +194,7 @@ export function sanitizeLotteryConfig(raw: unknown): LotteryConfig {
     enabled: it.enabled === true,
     startAt: typeof it.startAt === "string" ? it.startAt.trim() : "",
     endAt: typeof it.endAt === "string" ? it.endAt.trim() : "",
-    ticketPriceCredits: round2(positiveNumber(it.ticketPriceCredits, d.ticketPriceCredits)),
+    ticketPriceCredits: price,
     outerChancePercent: Number.isFinite(chance)
       ? Math.min(100, Math.max(0, chance))
       : d.outerChancePercent,
@@ -286,6 +303,14 @@ export function formatTicketLabel(tickets: number): string {
 }
 
 /**
+ * 内圈奖品的**实际 cr**：倍率 × 券价。扇区文案、开奖结算与期望返还统一走这里，
+ * 所以改了券价之后整圈金额等比缩放，返还率不受定价影响。
+ */
+export function innerPrizeCredits(config: LotteryConfig, prize: InnerPrize): number {
+  return round2(prize.multiplier * config.ticketPriceCredits);
+}
+
+/**
  * 外圈奖品对外的**实际 cr**（活动页与流水都不给倍数，倍数只是配置里的内部表达）。
  *
  * `drawCount` 是这一次点击抽几回：`multiplierBase = "batch"` 时基数随抽数放大，
@@ -318,7 +343,7 @@ export function rollPrize(
 
   if (sector?.kind === "prize") {
     const prize = config.innerPrizes[sector.prizeIndex ?? 0];
-    const credits = round2(prize.credits);
+    const credits = innerPrizeCredits(config, prize);
     return {
       ring: "inner",
       innerIndex,
@@ -362,6 +387,66 @@ export function rollPrize(
   };
 }
 
+function weightedAverage<T>(
+  items: T[],
+  weight: (item: T) => number,
+  value: (item: T) => number,
+): number {
+  const total = items.reduce((sum, item) => sum + weight(item), 0);
+  if (total <= 0) return 0;
+  return items.reduce((sum, item) => sum + weight(item) * value(item), 0) / total;
+}
+
+/** 一档外圈奖品对返还率的记账价值（cr）：赠券按券价折算，cr 档按倍数 × 券价。 */
+function outerPrizeValue(config: LotteryConfig, prize: OuterPrize): number {
+  return prize.kind === "tickets"
+    ? prize.tickets * config.ticketPriceCredits
+    : config.ticketPriceCredits * prize.multiplier;
+}
+
+/** 只看内圈的期望（cr/次），不含外圈。 */
+export function innerExpectation(config: LotteryConfig): number {
+  return round2(weightedAverage(config.innerPrizes, (p) => p.weight, (p) => innerPrizeCredits(config, p)));
+}
+
+/** 只看外圈的期望（cr/次），赠券档按券价折算成 cr。 */
+export function outerExpectation(config: LotteryConfig): number {
+  return round2(weightedAverage(config.outerPrizes, (p) => p.weight, (p) => outerPrizeValue(config, p)));
+}
+
+/** 期望返还的完整拆解，后台表单按当前输入实时重算。 */
+export interface LotteryExpectation {
+  /** 内圈期望（cr/次）。 */
+  innerCredits: number;
+  /** 外圈期望（cr/次），只有从入口进来才兑现。 */
+  outerCredits: number;
+  /** 单券综合期望（cr）。 */
+  perTicket: number;
+  /** 返还率（%），> 100 即每卖一张券站点净亏。 */
+  returnRate: number;
+  /** 站点每券净收益（cr），= 券价 − 期望返还。 */
+  houseEdge: number;
+}
+
+/**
+ * 把两圈的期望与综合返还率一次算齐。两圈都按券价倍率计价，所以这个结果**与券价无关**：
+ * 改券价只改绝对 cr 数额，返还率、亏损概率这些手感指标保持不变。
+ */
+export function lotteryExpectation(config: LotteryConfig): LotteryExpectation {
+  const outerChance = Math.min(100, Math.max(0, config.outerChancePercent)) / 100;
+  const perTicket = round2(
+    (1 - outerChance) * innerExpectation(config) + outerChance * outerExpectation(config),
+  );
+  const price = config.ticketPriceCredits;
+  return {
+    innerCredits: innerExpectation(config),
+    outerCredits: outerExpectation(config),
+    perTicket,
+    returnRate: price > 0 ? round2((perTicket / price) * 100) : 0,
+    houseEdge: round2(price - perTicket),
+  };
+}
+
 /**
  * 单券期望返还（cr）：内圈/外圈按各自权重与外圈概率加权。
  * 赠券档按**券价**折算——它值一次开奖的机会，那机会的期望就是券价量级，
@@ -372,25 +457,10 @@ export function rollPrize(
  * （那时每券期望约为它的批次数倍），后台据此提示即可。
  */
 export function expectedReturnPerTicket(config: LotteryConfig): number {
-  const evOf = <T>(items: T[], weight: (item: T) => number, value: (item: T) => number) => {
-    const total = items.reduce((sum, item) => sum + weight(item), 0);
-    if (total <= 0) return 0;
-    return items.reduce((sum, item) => sum + weight(item) * value(item), 0) / total;
-  };
-
-  const innerEv = evOf(config.innerPrizes, (p) => p.weight, (p) => p.credits);
-  const outerEv = evOf(
-    config.outerPrizes,
-    (p) => p.weight,
-    (p) =>
-      p.kind === "tickets" ? p.tickets * config.ticketPriceCredits : config.ticketPriceCredits * p.multiplier,
-  );
-  const outerChance = Math.min(100, Math.max(0, config.outerChancePercent)) / 100;
-  return round2((1 - outerChance) * innerEv + outerChance * outerEv);
+  return lotteryExpectation(config).perTicket;
 }
 
 /** 返还率（%）：期望返还 / 券价，> 100 表示每卖一张券站点净亏。 */
 export function returnRatePercent(config: LotteryConfig): number {
-  if (config.ticketPriceCredits <= 0) return 0;
-  return round2((expectedReturnPerTicket(config) / config.ticketPriceCredits) * 100);
+  return lotteryExpectation(config).returnRate;
 }
