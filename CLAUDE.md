@@ -340,7 +340,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 - ✅ **限时活动·幸运转盘**（2026-09-23，详见 [`docs/features/lottery.md`](docs/features/lottery.md)）：
   - 数据库：`lottery_ticket`（一行一券，`usedDrawId` 非空即消耗）+ `lottery_draw`（逐次记录，`unique(batchId, seq)`）；活动配置整体存 `option.lottery_config`
   - 分层：`lib/lottery/prize-math.ts`（纯计算：清洗/窗口/开奖/期望返还，**不碰数据库**，好让后台表单在浏览器里实时算返还率）→ `lib/lottery/config.ts`（读配置）→ `lib/lottery/store.ts`（账本原语）→ `app/(dashboard)/lottery/actions.ts`
-  - 原子性：D1 经 REST 无事务，新增 `d1Run()` 取 `meta.changes`，扣款/锁券一律条件更新判定命中；10 连抽先整批锁券再逐次结算，失败只撤销当次
+  - 原子性：D1 经 REST 无事务，新增 `d1Run()` 取 `meta.changes`，扣款/锁券一律条件更新判定命中。一次 10 连抽原先要打约 40 次串行 D1 往返（实测 7~10 秒），现在整批结果先在内存 `planDrawBatch` 算完，写入按表合并（一条 `CASE` 锁整批、每表一条多行 INSERT、倒扣合并成一次净额 UPDATE）并并发发出 → 9 次往返、约 2.4 秒；代价是回滚粒度从「单次开奖」变成「整批撤销」
   - 资金：买券「临时余额→永久余额」且不透支；中奖进带过期的临时余额；倒扣直接扣永久余额、允许负数；统一 `topup` type 6，不写 `usage_log`
   - 展示：扇区/规则/结果/流水一律实际 cr。**内圈存绝对 cr、外圈存倍数 × 基数（`ticket`/`batch`）**，所以券价是独立的利润率杠杆：奖池不动、调高券价，返还率就下降。想让奖池跟着券价走，用后台的「按 ×N 重算内圈」按钮（显式动作，不做默认耦合）
   - 后台：`/admin/settings` 新卡片配奖池与累抽档位，顶部实时显示内圈期望 / 外圈期望 / 单券综合 / 返还率 / 站点每券净得（默认池按券价 100 配平到约 91.1%），外圈每行现算该档实际 cr

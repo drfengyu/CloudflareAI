@@ -1,9 +1,10 @@
 import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
-import { batchRows, d1Run, db } from "@/lib/db/d1-http";
+import { batchRows, d1Run, db, D1_MAX_BINDINGS } from "@/lib/db/d1-http";
 import {
   lotteryDraws,
   lotteryTickets,
   temporaryBalances,
+  topups,
   users,
 } from "@/lib/db/schema";
 
@@ -13,6 +14,10 @@ import {
  * D1 经 REST 访问、没有事务，所以「扣了钱又开奖失败」这类半截状态只能靠条件更新 +
  * 显式回滚收口：每条 UPDATE 都自带前提（余额够 / 券还没被用过），用 `d1Run` 返回的
  * `changes` 判断有没有真的命中。
+ *
+ * 这里的写入一律**按整批设计**：一次 10 连抽原先要打约 40 次串行 HTTP 往返（单程
+ * 实测 0.4~0.9 秒），所以锁券合成一条 CASE 更新、每一张表的行合成一条多行 INSERT、
+ * 倒扣合成一次净额 UPDATE，剩下几个互不相关的语句并发发出。
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -84,17 +89,40 @@ export async function pickUnusedTicketIds(userId: string, n: number): Promise<st
   return rows.map((r) => r.id);
 }
 
-/** 把券锁给某次开奖；false 表示这张券已被并发请求用掉。 */
-export async function lockTicket(ticketId: string, drawId: string): Promise<boolean> {
+/**
+ * 把整批券一次锁给对应的开奖 id；false 表示其中至少一张已被并发请求用掉。
+ *
+ * 「有券被占用就一张都不锁」必须写进这条语句本身（末尾那个 COUNT 条件），不能靠调用方
+ * 比较命中数再回滚：回滚是第二条语句，中间那一瞬并发请求能把刚锁上的券再偷走，
+ * 用户白掉券。逐张锁还会多打 10 次 HTTP 往返。
+ */
+export async function lockTickets(ticketIds: string[], drawIds: string[]): Promise<boolean> {
+  // 每张券绑 4 个参数（CASE 的 id 与目标 drawId、两处 IN 列表各一次），别超 D1 的参数墙。
+  if (ticketIds.length * 4 + 1 > D1_MAX_BINDINGS) throw new Error("一次锁定的券过多");
+  const cases = ticketIds.map(() => "WHEN ? THEN ?").join(" ");
+  const placeholders = ticketIds.map(() => "?").join(", ");
+  const idList = ticketIds.map(() => "?").join(", ");
+  const params: unknown[] = [];
+  ticketIds.forEach((ticketId, index) => params.push(ticketId, drawIds[index]));
+  params.push(...ticketIds);
+  params.push(...ticketIds);
   const { changes } = await d1Run(
-    "UPDATE lottery_ticket SET usedDrawId = ? WHERE id = ? AND usedDrawId IS NULL",
-    [drawId, ticketId],
+    `UPDATE lottery_ticket SET usedDrawId = CASE id ${cases} END ` +
+      `WHERE usedDrawId IS NULL AND id IN (${placeholders}) ` +
+      `AND (SELECT COUNT(*) FROM lottery_ticket WHERE id IN (${idList}) AND usedDrawId IS NULL) = ?`,
+    [...params, ticketIds.length],
   );
-  return changes === 1;
+  return changes === ticketIds.length;
 }
 
-export async function unlockTicket(ticketId: string): Promise<void> {
-  await d1Run("UPDATE lottery_ticket SET usedDrawId = NULL WHERE id = ?", [ticketId]);
+/** 整批退回券包（开奖失败或提前退出时把锁定释放掉）。 */
+export async function unlockTickets(ticketIds: string[]): Promise<void> {
+  for (const batch of batchRows(ticketIds, 1)) {
+    await d1Run(
+      `UPDATE lottery_ticket SET usedDrawId = NULL WHERE id IN (${batch.map(() => "?").join(",")})`,
+      batch,
+    );
+  }
 }
 
 /** 发券；档位赠券带 `milestoneDraws` + 档位内序号，靠唯一索引保证同档位只发一次。 */
@@ -129,20 +157,6 @@ export async function grantTickets(
 export async function deleteTickets(ids: string[]): Promise<void> {
   for (const batch of batchRows(ids, 1)) {
     await db.delete(lotteryTickets).where(inArray(lotteryTickets.id, batch));
-  }
-}
-
-/** 档位赠券；唯一索引冲突（该档位已发过）时静默跳过。 */
-export async function grantMilestoneTickets(
-  userId: string,
-  milestoneDraws: number,
-  tickets: number,
-): Promise<boolean> {
-  try {
-    await grantTickets(userId, tickets, { source: "gift", milestoneDraws });
-    return true;
-  } catch {
-    return false;
   }
 }
 
@@ -208,7 +222,7 @@ export async function spendCredits(
   return { ok: true };
 }
 
-/** 结算倒扣：把负数加到永久余额上（允许余额变负，与消费扣费口径一致）。 */
+/** 结算倒扣：把整批的净负数一次加到永久余额上（允许余额变负，与消费扣费口径一致）。 */
 export async function adjustPermanentBalance(userId: string, delta: number): Promise<void> {
   await db
     .update(users)
@@ -216,21 +230,66 @@ export async function adjustPermanentBalance(userId: string, delta: number): Pro
     .where(eq(users.id, userId));
 }
 
-/** 发一笔带过期时间的中奖临时余额；返回行 id 以便失败时精确撤销。 */
-export async function grantTemporaryBalance(
+/** 造一笔带过期的中奖临时余额行；发奖走批量插入，所以这里只造行。 */
+export function buildTemporaryPrizeRow(
   userId: string,
   amount: number,
   validDays: number,
   description: string,
-): Promise<string> {
-  const id = crypto.randomUUID();
-  await db.insert(temporaryBalances).values({
-    id,
+): typeof temporaryBalances.$inferInsert {
+  return {
+    id: crypto.randomUUID(),
     userId,
     amount,
     expiresAt: new Date(Date.now() + Math.max(1, validDays) * DAY_MS),
     description,
     createdAt: new Date(),
-  });
-  return id;
+  };
+}
+
+/**
+ * 下面三个整批发奖各自一次往返，而不是逐注一写：一次 10 连抽原先要打 20~30 次串行
+ * HTTP，D1 的延迟全摊在这里。
+ */
+export async function insertDrawRows(rows: (typeof lotteryDraws.$inferInsert)[]): Promise<void> {
+  if (!rows.length) return;
+  for (const batch of batchRows(rows, Object.keys(rows[0]).length)) {
+    await db.insert(lotteryDraws).values(batch);
+  }
+}
+
+export async function insertTopupRows(rows: (typeof topups.$inferInsert)[]): Promise<void> {
+  if (!rows.length) return;
+  for (const batch of batchRows(rows, Object.keys(rows[0]).length)) {
+    await db.insert(topups).values(batch);
+  }
+}
+
+/** 批量发中奖临时余额；每行的过期时间独立，所以不合并成一笔。 */
+export async function insertTemporaryBalanceRows(
+  rows: (typeof temporaryBalances.$inferInsert)[],
+): Promise<void> {
+  if (!rows.length) return;
+  for (const batch of batchRows(rows, Object.keys(rows[0]).length)) {
+    await db.insert(temporaryBalances).values(batch);
+  }
+}
+
+/** 下面三个是整批撤销用的：回滚按 id 列表删，不依赖「哪一注成功过」。 */
+export async function deleteDrawsByIds(ids: string[]): Promise<void> {
+  for (const batch of batchRows(ids, 1)) {
+    await db.delete(lotteryDraws).where(inArray(lotteryDraws.id, batch));
+  }
+}
+
+export async function deleteTopupsByIds(ids: string[]): Promise<void> {
+  for (const batch of batchRows(ids, 1)) {
+    await db.delete(topups).where(inArray(topups.id, batch));
+  }
+}
+
+export async function deleteTemporaryBalancesByIds(ids: string[]): Promise<void> {
+  for (const batch of batchRows(ids, 1)) {
+    await db.delete(temporaryBalances).where(inArray(temporaryBalances.id, batch));
+  }
 }
