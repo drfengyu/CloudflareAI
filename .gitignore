@@ -50,3 +50,6 @@ dashboard-hourly.png
 /test-results/
 /playwright-report/
 /playwright/.cache/
+
+# Qoder workspace metadata
+.qoder/

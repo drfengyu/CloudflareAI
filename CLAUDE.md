@@ -526,6 +526,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 ### 🚧 待完成
 
 - **Phase D 剩余**：
+  - API Key 批量创建（一次生成 N 个带前缀的 key）
   - API Key 分组管理（新增 `key_groups` 表 + 组倍率；schema 已有 `group`/`groupMultiplier` 列未使用）
   - API Key 用量导出（CSV/JSON 导出统计）
 
@@ -533,8 +534,8 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.4.0（2026-06-26）
-**下一版本**：v0.5.0（待规划）
+**当前版本**：v0.6.0（2026-10-08）
+**下一版本**：v0.7.0（待规划）
 
 所有版本变更记录见根目录 [`CHANGELOG.md`](CHANGELOG.md)，遵循 [Keep a Changelog](https://keepachangelog.com/) 规范。
 

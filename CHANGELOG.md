@@ -7,6 +7,8 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-08
+
 ### 新增
 
 - **易支付订单管理 / 对账 / 回跳完善**
@@ -317,17 +319,6 @@
   - 新增「Token 估算」「图像理解（Vision）计费」「翻译计费」三个章节，含公式、扣费示例与实测对账
   - 修正图像固定价笔误（`4.00 cr/张` → `4000 cr/张`）
 
-### 规划中
-
-- **Phase A**：视觉地基（oklch 主题 + shadcn primitives + 布局重做）
-- **Phase D 剩余**：
-  - API Key 批量创建（一次生成 N 个带前缀的 key）
-  - API Key 分组管理（新增 `key_groups` 表 + 组倍率）
-  - API Key 用量导出（CSV/JSON 导出统计）
-- **渠道图表增强**：
-  - Dashboard 新增渠道分布饼图
-  - 渠道详情页 30 日趋势图 + 错误率曲线
-
 ## [0.3.1] - 2026-06-25
 
 ### 修复
@@ -532,9 +523,10 @@
 - Auth.js v5
 - Recharts 数据可视化
 
+[0.6.0]: https://github.com/drfengyu/CloudflareAI/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/drfengyu/CloudflareAI/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/drfengyu/CloudflareAI/compare/v0.3.1...v0.4.0
-[未发布]: https://github.com/drfengyu/CloudflareAI/compare/v0.5.0...HEAD
+[未发布]: https://github.com/drfengyu/CloudflareAI/compare/v0.6.0...HEAD
 [0.2.2]: https://github.com/drfengyu/CloudflareAI/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/drfengyu/CloudflareAI/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/drfengyu/CloudflareAI/compare/v0.1.0...v0.2.0
