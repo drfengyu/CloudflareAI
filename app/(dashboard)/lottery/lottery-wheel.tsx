@@ -114,8 +114,11 @@ function sectorPaint(tone: Tone, index: number) {
   return { fill: pair[index % 2], fillOpacity: index % 2 === 0 ? 0.95 : 0.68 };
 }
 
+/** `spans()` 的一个扇区角度区间，单位为「12 点方向为 0、顺时针」的度。 */
+type Span = { start: number; end: number; center: number };
+
 /** 标签切向排布，落点半径处的弧长就是它能占到的宽度。 */
-function arcAt(r: number, span: { start: number; end: number }) {
+function arcAt(r: number, span: Span) {
   return ((span.end - span.start) * Math.PI * r) / 180;
 }
 
@@ -123,18 +126,96 @@ function arcAt(r: number, span: { start: number; end: number }) {
  * 字号按「可用弧长 ÷ 标签宽度」收缩，缩到 7.5 以下就整段不画：外圈 1% 上下的格子只有
  * 两三度，"+1250 cr" 硬画会压到邻居格子的标签上。这类档位的文案与概率在下方「奖池与规则」全量公示。
  */
-function labelSize(r: number, span: { start: number; end: number }, label: string, base: number) {
+function labelSize(r: number, span: Span, label: string, base: number) {
   const size = Math.min(base, arcAt(r, span) / (Math.max(1, label.length) * 0.55));
   return size >= 7.5 ? size : null;
 }
 
 /**
  * 连一个标签都放不下的格子退化成单个记号（★=cr 档，券=赠券档），至少看得出这一格有东西；
- * 窄到连记号也塞不下的（<2°）才真的留白。
+ * 记号也塞不下的（<2°）再由调用方退化成亮点，见 `Glyph`。
  */
-function markerSize(r: number, span: { start: number; end: number }) {
+function markerSize(r: number, span: Span) {
   const size = Math.min(10, arcAt(r, span) - 1);
   return size >= 6 ? size : null;
+}
+
+/**
+ * 一格在盘面上的文字表达，三级退化：标签 → 记号（★/券）→ 亮点。
+ * 走到亮点这一档的都是概率不到 0.2% 的极窄扇区，不画点什么看起来就是「这一格里没有奖品」，
+ * 而头奖恰恰在这些格子里；具体文案与概率由扇区上的 `<title>` 与下方「奖池与规则」给出。
+ */
+function Glyph(props: {
+  span: Span;
+  anchor: { x: number; y: number };
+  label: string;
+  marker: string;
+  tone: Tone;
+  labelR: number;
+  labelBase: number;
+  bold?: boolean;
+}) {
+  const { span, anchor, label, marker, tone, labelR, labelBase, bold } = props;
+  const size = labelSize(labelR, span, label, labelBase);
+  if (size !== null) {
+    return (
+      <text
+        x={anchor.x}
+        y={anchor.y}
+        transform={`rotate(${span.center} ${anchor.x} ${anchor.y})`}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill="#f8fafc"
+        fontSize={size}
+        fontWeight={bold ? 700 : 600}
+      >
+        {label}
+      </text>
+    );
+  }
+  const mSize = markerSize(labelR, span);
+  if (mSize !== null) {
+    return (
+      <text
+        x={anchor.x}
+        y={anchor.y}
+        transform={`rotate(${span.center} ${anchor.x} ${anchor.y})`}
+        textAnchor="middle"
+        dominantBaseline="middle"
+        fill="#f8fafc"
+        fontSize={mSize}
+        fontWeight={700}
+      >
+        {marker}
+      </text>
+    );
+  }
+  return (
+    <circle
+      cx={anchor.x}
+      cy={anchor.y}
+      r={2.4}
+      fill={NEON[tone][0]}
+      stroke="#05070f"
+      strokeWidth={0.6}
+      filter="url(#neon-glow)"
+    />
+  );
+}
+
+/**
+ * 概率文案：稀有档真实概率不到 0.1%，按一位小数显示会变成「0.0%」，看着像根本抽不中。
+ * `chance` 在视图层按两位小数取整过，所以低于 0.01% 的档只剩「<0.01%」这种诚实写法。
+ */
+function formatChance(percent: number) {
+  if (percent >= 1) return `${percent.toFixed(1)}%`;
+  if (percent >= 0.01) return `${percent.toFixed(2)}%`;
+  return percent > 0 ? "<0.01%" : "0%";
+}
+
+/** 悬停（触摸为长按）时浏览器原样显示的说明，把盘面上被缩成记号/亮点的完整信息补回来。 */
+function sectorTitle(label: string, batchLabel: string | undefined, chance: number) {
+  return `${label}${batchLabel ? `（10 连 ${batchLabel}）` : ""} · 概率 ${formatChance(chance)}`;
 }
 
 /** 让目标扇区中心转到某个角度处，且始终往前转（不倒着回去）。 */
@@ -336,47 +417,27 @@ export function LotteryWheel(props: LotteryWheelProps) {
                   const midR = (OUTER_R + OUTER_IN) / 2;
                   const anchor = polar(prize.batchLabel ? midR + 8 : midR, span.center);
                   const batchAnchor = polar(midR - 9, span.center);
-                  const size = labelSize(midR, span, prize.label, 11);
-                  const marker = size === null ? markerSize(midR, span) : null;
                   const batchSize = prize.batchLabel
                     ? labelSize(midR - 9, span, `10连 ${prize.batchLabel}`, 9)
                     : null;
                   return (
                     <g key={`outer-${index}`}>
+                      <title>{sectorTitle(prize.label, prize.batchLabel, prize.chance)}</title>
                       <path
                         d={annulusSector(OUTER_R, OUTER_IN, span.start, span.end)}
                         {...sectorPaint(prize.tone, index)}
                         stroke="#05070f"
                         strokeWidth={2}
                       />
-                      {size !== null && (
-                        <text
-                          x={anchor.x}
-                          y={anchor.y}
-                          transform={`rotate(${span.center} ${anchor.x} ${anchor.y})`}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fill="#f8fafc"
-                          fontSize={size}
-                          fontWeight={600}
-                        >
-                          {prize.label}
-                        </text>
-                      )}
-                      {marker !== null && (
-                        <text
-                          x={anchor.x}
-                          y={anchor.y}
-                          transform={`rotate(${span.center} ${anchor.x} ${anchor.y})`}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fill="#f8fafc"
-                          fontSize={marker}
-                          fontWeight={700}
-                        >
-                          {prize.tone === "ticket" ? "券" : "★"}
-                        </text>
-                      )}
+                      <Glyph
+                        span={span}
+                        anchor={anchor}
+                        label={prize.label}
+                        marker={prize.tone === "ticket" ? "券" : "★"}
+                        tone={prize.tone}
+                        labelR={midR}
+                        labelBase={11}
+                      />
                       {prize.batchLabel && batchSize !== null && (
                         <text
                           x={batchAnchor.x}
@@ -411,50 +472,26 @@ export function LotteryWheel(props: LotteryWheelProps) {
                   const anchor = polar(INNER_LABEL_R, span.center);
                   const near = polar(INNER_R * 0.32, span.center);
                   const tone: Tone = sector.tone;
-                  const size = labelSize(
-                    INNER_LABEL_R,
-                    span,
-                    sector.label,
-                    sector.kind === "entry" ? 12 : 11,
-                  );
                   const hintSize = labelSize(INNER_R * 0.32, span, "↓ 外圈", 10);
-                  const marker = size === null ? markerSize(INNER_LABEL_R, span) : null;
                   return (
                     <g key={`inner-${index}`}>
+                      <title>{sectorTitle(sector.label, undefined, sector.chance)}</title>
                       <path
                         d={discSector(INNER_R, span.start, span.end)}
                         {...sectorPaint(tone, index)}
                         stroke="#05070f"
                         strokeWidth={2}
                       />
-                      {size !== null && (
-                        <text
-                          x={anchor.x}
-                          y={anchor.y}
-                          transform={`rotate(${span.center} ${anchor.x} ${anchor.y})`}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fill={sector.kind === "entry" ? "#faf5ff" : "#f8fafc"}
-                          fontSize={size}
-                          fontWeight={700}
-                        >
-                          {sector.label}
-                        </text>
-                      )}
-                      {marker !== null && (
-                        <text
-                          x={anchor.x}
-                          y={anchor.y}
-                          transform={`rotate(${span.center} ${anchor.x} ${anchor.y})`}
-                          textAnchor="middle"
-                          dominantBaseline="middle"
-                          fill="#f8fafc"
-                          fontSize={marker}
-                          fontWeight={700}
-                        >
-                          ★
-                        </text>
-                      )}
+                      <Glyph
+                        span={span}
+                        anchor={anchor}
+                        label={sector.label}
+                        marker="★"
+                        tone={tone}
+                        labelR={INNER_LABEL_R}
+                        labelBase={sector.kind === "entry" ? 12 : 11}
+                        bold
+                      />
                       {sector.kind === "entry" && hintSize !== null && (
                         <text
                           x={near.x}
@@ -515,6 +552,12 @@ export function LotteryWheel(props: LotteryWheelProps) {
               </text>
             </svg>
           </div>
+
+          <p className="mt-2 text-center text-[11px] leading-relaxed text-white/40">
+            格子太窄时文案会先缩成 <span className="text-white/75">★</span>（cr 档）或{" "}
+            <span className="text-white/75">券</span>（赠券档），窄到连记号都放不下的只留一个亮点——
+            那正是概率最低的几档。鼠标悬停在格子上可看完整奖品与概率，全部档位也在下方「奖池与规则」公示。
+          </p>
 
           <div className="mt-4 grid grid-cols-2 gap-3">
             <button
@@ -651,7 +694,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
                     )}
                   >
                     {s.label}
-                    <span className="block text-[10px]">{s.chance.toFixed(1)}%</span>
+                    <span className="block text-[10px]">{formatChance(s.chance)}</span>
                   </li>
                 ))}
               </ul>
@@ -663,7 +706,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
                   <li key={`ro-${i}`} className="rounded bg-muted/40 px-2 py-1 text-center">
                     <span className="block">单抽 {p.label}</span>
                     <span className="block">{p.batchLabel ? `10连 ${p.batchLabel}` : "10连 同上"}</span>
-                    <span className="block text-[10px]">{p.chance.toFixed(1)}%</span>
+                    <span className="block text-[10px]">{formatChance(p.chance)}</span>
                   </li>
                 ))}
               </ul>
