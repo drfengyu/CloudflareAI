@@ -65,6 +65,10 @@ export interface LotteryWheelProps {
   endAtMs: number | null;
   /** 今日是否还有免费抽 1 次的额度（服务端查 ticketId IS NULL 的今日记录）。 */
   freeDrawAvailable: boolean;
+  /** 当前连续未中大奖次数，用于保底进度条展示。 */
+  consecutiveMisses: number;
+  /** 保底触发阈值（连续未中达此次数后外圈概率翻倍）。 */
+  luckyThreshold: number;
 }
 
 /** 霓虹配色：每个音调给深浅两档交替，相邻扇区才分得开。赠券档用金色与 cr 档区分。 */
@@ -258,6 +262,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
   const busy = phase === "inner" || phase === "outer";
   /** 免费抽可用：服务端说有额度 + 本次会话还没用。 */
   const canFreeDraw = props.freeDrawAvailable && !freeDrawUsed;
+  const consecutiveMisses = props.consecutiveMisses;
   const innerSectorSpans = useMemo(
     () => spans(props.innerSectors.map((s) => s.weight)),
     [props.innerSectors],
@@ -355,6 +360,9 @@ export function LotteryWheel(props: LotteryWheelProps) {
     }
     if (response.data.freeDrawUsed) {
       later(() => toast.info("今日免费抽已使用，明天再来"), spokesDone + 480);
+    }
+    if (response.data.luckyBoosted) {
+      later(() => toast.info("保底已触发：本次外圈概率翻倍"), spokesDone + 600);
     }
     later(() => router.refresh(), spokesDone);
   }
@@ -590,6 +598,32 @@ export function LotteryWheel(props: LotteryWheelProps) {
             >
               {busy ? "开奖中…" : "抽 10 次"}
             </button>
+          </div>
+
+          {/* 保底进度条：连续未中大奖达阈值后，下一次外圈概率翻倍 */}
+          <div className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-white/50">保底进度（连续未中大奖）</span>
+              <span className={consecutiveMisses >= props.luckyThreshold ? "text-amber-300 font-medium" : "text-white/60"}>
+                {consecutiveMisses >= props.luckyThreshold
+                  ? "已触发 · 外圈概率翻倍"
+                  : `${consecutiveMisses} / ${props.luckyThreshold}`}
+              </span>
+            </div>
+            <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10">
+              <div
+                className={cn(
+                  "h-full rounded-full transition-all duration-500",
+                  consecutiveMisses >= props.luckyThreshold
+                    ? "bg-gradient-to-r from-amber-400 to-orange-400"
+                    : "bg-gradient-to-r from-cyan-400 to-fuchsia-400",
+                )}
+                style={{ width: `${Math.min(100, (consecutiveMisses / props.luckyThreshold) * 100)}%` }}
+              />
+            </div>
+            <p className="mt-1.5 text-[10px] leading-relaxed text-white/35">
+              连续 {props.luckyThreshold} 次未中外圈正档（正数 cr 或赠券）后，下一次外圈入口概率临时翻倍；中一次大奖后计数清零。
+            </p>
           </div>
 
           <div className="mt-3 flex items-end gap-2 rounded-lg border border-white/10 bg-white/5 p-3">

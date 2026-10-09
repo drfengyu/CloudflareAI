@@ -13,6 +13,9 @@ export const LOTTERY_CONFIG_KEY = "lottery_config";
 /** `topup.type`：6=限时活动（买券与倒扣为负、中奖为正）。5 已被在线充值占用。 */
 export const TOPUP_TYPE_LOTTERY = 6;
 
+/** 保底机制：连续未中大奖达到此次数后，下一次外圈概率临时提升（翻倍）。 */
+export const LUCKY_MISS_THRESHOLD = 8;
+
 /**
  * 内圈奖品：固定加/减 cr（绝对值，可为负）。
  *

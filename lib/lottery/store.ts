@@ -49,6 +49,34 @@ export async function countDraws(userId: string): Promise<number> {
   return Number(rows[0]?.c ?? 0);
 }
 
+/**
+ * 连续未中大奖次数：从最近一条开奖记录往前数，直到遇到一条「外圈正档」为止。
+ *
+ * 「中大奖」= ring=outer 且（deltaCredits > 0 或 grantTickets > 0），即外圈的正数 cr 档或赠券档。
+ * 内圈全算未中，外圈倒扣（deltaCredits < 0）也算未中。
+ * 用于保底机制：连续未中达到阈值后，下一次外圈概率临时提升。
+ */
+export async function countConsecutiveMisses(userId: string, lookback = 30): Promise<number> {
+  const rows = await db
+    .select({
+      ring: lotteryDraws.ring,
+      deltaCredits: lotteryDraws.deltaCredits,
+      grantTickets: lotteryDraws.grantTickets,
+    })
+    .from(lotteryDraws)
+    .where(eq(lotteryDraws.userId, userId))
+    .orderBy(sql`${lotteryDraws.createdAt} DESC`, sql`${lotteryDraws.seq} DESC`)
+    .limit(lookback);
+
+  let misses = 0;
+  for (const row of rows) {
+    const isBigWin = row.ring === "outer" && (Number(row.deltaCredits) > 0 || Number(row.grantTickets ?? 0) > 0);
+    if (isBigWin) break;
+    misses += 1;
+  }
+  return misses;
+}
+
 /** 最近的开奖明细。 */
 export async function listRecentDraws(userId: string, limit = 20): Promise<DrawRow[]> {
   return db

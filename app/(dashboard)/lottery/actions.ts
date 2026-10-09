@@ -7,6 +7,7 @@ import { getLotteryConfig } from "@/lib/lottery/config";
 import {
   activityWindow,
   formatPrizeLabel,
+  LUCKY_MISS_THRESHOLD,
   rollPrize,
   TOPUP_TYPE_LOTTERY,
   type DrawOutcome,
@@ -15,6 +16,7 @@ import {
 import {
   adjustPermanentBalance,
   buildTemporaryPrizeRow,
+  countConsecutiveMisses,
   countDraws,
   countUnusedTickets,
   deleteDrawsByIds,
@@ -34,6 +36,9 @@ import {
 import { lotteryDraws, temporaryBalances, topups } from "@/lib/db/schema";
 
 const MAX_TICKETS_PER_PURCHASE = 100;
+
+/** 保底触发时外圈概率的倍率（2 = 翻倍，12.5% → 25%）。阈值在 prize-math.ts 与前端共用。 */
+const LUCKY_OUTER_BOOST = 2;
 
 type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
 
@@ -274,6 +279,8 @@ export async function drawLottery(
     totalDraws: number;
     giftedTickets: number;
     freeDrawUsed: boolean;
+    /** 本次是否触发了保底（外圈概率临时提升）。 */
+    luckyBoosted: boolean;
   }>
 > {
   try {
@@ -286,13 +293,14 @@ export async function drawLottery(
     // 免费抽只对单抽生效，且服务端自己验证今日是否已用过。
     const freeDrawEligible = useFreeDraw && count === 1 && !(await hasUsedFreeDrawToday(userId));
 
-    // 一波并发读：活动窗口、可用券、券包余量与本批之前的累计次数。
+    // 一波并发读：活动窗口、可用券、券包余量、本批之前的累计次数、连续未中大奖次数（保底用）。
     // 免费抽不需要取券 id，但 ticketsBefore / drawsBefore 仍然要算（返回值与档位判定用）。
-    const [config, pickedIds, ticketsBefore, drawsBefore] = await Promise.all([
+    const [config, pickedIds, ticketsBefore, drawsBefore, consecutiveMisses] = await Promise.all([
       getLotteryConfig(),
       freeDrawEligible ? Promise.resolve<string[]>([]) : pickUnusedTicketIds(userId, count),
       countUnusedTickets(userId),
       countDraws(userId),
+      countConsecutiveMisses(userId),
     ]);
 
     const closed = windowError(config);
@@ -304,11 +312,18 @@ export async function drawLottery(
       };
     }
 
+    // 保底：连续未中大奖达阈值后，本次外圈概率临时提升（翻倍）。
+    // 只覆盖 outerChancePercent，奖品金额与券价不动；中一次大奖后计数自然清零。
+    const luckyBoosted = consecutiveMisses >= LUCKY_MISS_THRESHOLD;
+    const effectiveConfig: LotteryConfig = luckyBoosted
+      ? { ...config, outerChancePercent: Math.min(100, config.outerChancePercent * LUCKY_OUTER_BOOST) }
+      : config;
+
     // 免费抽时 ticketIds 是 [null]，开奖行的 ticketId 留空，标记这是一次免费抽。
     const ticketIds: (string | null)[] = freeDrawEligible ? [null] : pickedIds;
 
     const batchId = crypto.randomUUID();
-    const plan = planDrawBatch(userId, config, count, batchId, ticketIds);
+    const plan = planDrawBatch(userId, effectiveConfig, count, batchId, ticketIds);
 
     if (!freeDrawEligible) {
       if (!(await lockTickets(pickedIds, rowIds(plan.drawRows)))) {
@@ -384,6 +399,7 @@ export async function drawLottery(
         totalDraws,
         giftedTickets,
         freeDrawUsed: freeDrawEligible,
+        luckyBoosted,
       },
     };
   } catch (error) {
