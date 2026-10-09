@@ -7,6 +7,23 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **后台返还率计算未计入累抽送券**（`lib/lottery/prize-math.ts` + `app/(dashboard)/admin/settings/lottery-form.tsx`）：
+  - `lotteryExpectation()` 此前只算内圈+外圈开奖返还，完全忽略 `milestones`（累抽达标送券），导致后台改送券档位时返还率提示纹丝不动。
+  - 新增 `milestoneCostPerTicket()`：总送券价值按最高档位 draws 均摊到每抽（保守估计，用户抽得越少实际占比越高），计入 `perTicket` 与 `returnRate`。
+  - 后台预览 UI 新增「累抽送券均摊 X cr/次」一行，说明文字补充送券档位改动会影响返还率。
+
+### 变更
+
+- **保底机制重做：固定翻倍 → 渐进式概率提升**（`lib/lottery/prize-math.ts` + `app/(dashboard)/lottery/actions.ts` + `lottery-wheel.tsx`）：
+  - 阈值从 8 次提高到 **16 次**（`LUCKY_MISS_THRESHOLD`）。
+  - 去掉固定翻倍（`LUCKY_OUTER_BOOST=2`），改为每多连续未中 1 次，外圈概率 **+0.1%**（`LUCKY_CHANCE_STEP_PERCENT`），上限 **20%**（`LUCKY_CHANCE_CAP_PERCENT`）。
+  - 新增 `calculateLuckyChance(consecutiveMisses, baseChance)` 统一计算当前外圈概率，服务端开奖与前端展示共用。
+  - 前端进度条分两段：前 16 次显示距离阈值进度，达到阈值后显示距离 20% 上限的进度，并实时显示当前外圈概率百分比。
+  - 中一次外圈正档（正数 cr 或赠券）后连续未中计数清零，重新开始累积。
+  - 服务端返回值新增 `luckyChancePercent`，toast 提示从「外圈概率翻倍」改为显示实际概率。
+
 ## [0.7.0] - 2026-10-09
 
 ### 新增
