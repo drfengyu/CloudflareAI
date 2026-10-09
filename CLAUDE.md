@@ -534,8 +534,8 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.6.0（2026-10-08）
-**下一版本**：v0.7.0（待规划）
+**当前版本**：v0.7.0（2026-10-09）
+**下一版本**：v0.8.0（待规划）
 
 所有版本变更记录见根目录 [`CHANGELOG.md`](CHANGELOG.md)，遵循 [Keep a Changelog](https://keepachangelog.com/) 规范。
 
