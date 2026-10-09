@@ -9,7 +9,6 @@ import {
   calculateLuckyChance,
   currentActivityKey,
   formatPrizeLabel,
-  LUCKY_MISS_THRESHOLD,
   rollPrize,
   TOPUP_TYPE_LOTTERY,
   type DrawOutcome,

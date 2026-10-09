@@ -123,24 +123,30 @@ export default async function LotteryPage() {
 
   // 记录按整个活动期口径给（不加时间窗），活动结束后这段历史仍然要能翻出来看。
   // countConsecutiveMisses 按当前活动轮次过滤，新活动保底重置。
-  const [tickets, myStats, myTickets, records, balance, freeDrawUsed, consecutiveMisses, bigWins] = await Promise.all([
-    countUnusedTickets(userId),
-    lotteryBalance({ userId }),
-    lotteryTicketTotals(undefined, userId),
-    listDrawRecords({ userId, limit: RECORD_LIMIT }),
-    getUserTotalBalance(userId),
-    hasUsedFreeDrawToday(userId),
-    countConsecutiveMisses(userId, 30, activityKey),
-    listRecentBigWins({ thresholdCredits: 500, thresholdTickets: 3, hours: 24, limit: 20 }),
-  ]);
+  // currentStats = 当前活动战绩（新活动重计），myStats = 全部活动累计战绩。
+  const [tickets, myStats, currentStats, myTickets, records, balance, freeDrawUsed, consecutiveMisses, bigWins] =
+    await Promise.all([
+      countUnusedTickets(userId),
+      lotteryBalance({ userId }),
+      activityKey ? lotteryBalance({ userId, activityKey }) : Promise.resolve(null),
+      lotteryTicketTotals(undefined, userId),
+      listDrawRecords({ userId, limit: RECORD_LIMIT }),
+      getUserTotalBalance(userId),
+      hasUsedFreeDrawToday(userId),
+      countConsecutiveMisses(userId, 30, activityKey),
+      listRecentBigWins({ thresholdCredits: 500, thresholdTickets: 3, hours: 24, limit: 20 }),
+    ]);
 
   const recordsCard = (
     <LotteryRecords
       balance={myStats}
+      currentBalance={currentStats}
       tickets={myTickets}
       records={records}
       ticketsLeft={tickets}
       recordLimit={RECORD_LIMIT}
+      currentActivityKey={activityKey}
+      currentActivityLabel={config.startAt || "历史活动"}
     />
   );
 

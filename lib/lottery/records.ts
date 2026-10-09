@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { batchRows, db } from "@/lib/db/d1-http";
 import { lotteryDraws, lotteryTickets, users } from "@/lib/db/schema";
 import { round2 } from "./prize-math";
@@ -36,6 +36,8 @@ export interface DrawRecord {
   createdAt: Date | null;
   ticketSource: TicketSourceLabel;
   ticketCredits: number;
+  /** 活动轮次标识（startAt 字符串）；历史数据为 null。 */
+  activityKey: string | null;
 }
 
 /** 站点在这一注上的净收益：收下的券面 + 倒扣回收 − 发放的中奖。 */
@@ -98,12 +100,20 @@ function toBalance(row: BalanceRow | undefined): LotteryBalance {
   };
 }
 
-/** 窗口内（可限定单个用户）的开奖收益汇总。 */
+/** 窗口内（可限定单个用户、活动轮次）的开奖收益汇总。 */
 export async function lotteryBalance(
-  opts: { win?: LotteryWindow; userId?: string } = {},
+  opts: { win?: LotteryWindow; userId?: string; activityKey?: string | null } = {},
 ): Promise<LotteryBalance> {
   const win = drawWindowCondition(opts.win);
-  const where = opts.userId ? and(win, eq(lotteryDraws.userId, opts.userId)) : win;
+  const activityCond =
+    opts.activityKey !== undefined
+      ? opts.activityKey === null
+        ? isNull(lotteryDraws.activityKey)
+        : eq(lotteryDraws.activityKey, opts.activityKey)
+      : undefined;
+  const where = opts.userId
+    ? and(win, activityCond, eq(lotteryDraws.userId, opts.userId))
+    : and(win, activityCond);
 
   const rows = await db
     .select({
@@ -249,6 +259,7 @@ export async function listDrawRecords(opts: {
       grantTickets: lotteryDraws.grantTickets,
       createdAt: lotteryDraws.createdAt,
       ticketId: lotteryDraws.ticketId,
+      activityKey: lotteryDraws.activityKey,
     })
     .from(lotteryDraws)
     .where(where)
@@ -288,6 +299,7 @@ export async function listDrawRecords(opts: {
       createdAt: row.createdAt,
       ticketSource: source,
       ticketCredits: Number(ticket?.priceCredits ?? 0),
+      activityKey: row.activityKey,
     };
   });
 }
