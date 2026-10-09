@@ -4,6 +4,7 @@ import { getUserTotalBalance, requireUser } from "@/lib/usage/meter";
 import { getLotteryConfig } from "@/lib/lottery/config";
 import {
   activityWindow,
+  currentActivityKey,
   formatPrizeLabel,
   formatTicketLabel,
   innerSectorLayout,
@@ -12,7 +13,12 @@ import {
   round2,
   type LotteryConfig,
 } from "@/lib/lottery/prize-math";
-import { countUnusedTickets, countConsecutiveMisses, hasUsedFreeDrawToday } from "@/lib/lottery/store";
+import {
+  countUnusedTickets,
+  countConsecutiveMisses,
+  expireTicketsForActivity,
+  hasUsedFreeDrawToday,
+} from "@/lib/lottery/store";
 import {
   listDrawRecords,
   listRecentBigWins,
@@ -108,8 +114,15 @@ export default async function LotteryPage() {
   const userId = await requireUser();
   const config = await getLotteryConfig();
   const windowInfo = activityWindow(config);
+  const activityKey = currentActivityKey(config);
+
+  // 活动结束且配置允许券过期时，用户访问页面即自动作废该轮未使用的券。
+  if (windowInfo.status === "ended" && config.ticketsExpireOnActivityEnd && activityKey) {
+    await expireTicketsForActivity(userId, activityKey);
+  }
 
   // 记录按整个活动期口径给（不加时间窗），活动结束后这段历史仍然要能翻出来看。
+  // countConsecutiveMisses 按当前活动轮次过滤，新活动保底重置。
   const [tickets, myStats, myTickets, records, balance, freeDrawUsed, consecutiveMisses, bigWins] = await Promise.all([
     countUnusedTickets(userId),
     lotteryBalance({ userId }),
@@ -117,7 +130,7 @@ export default async function LotteryPage() {
     listDrawRecords({ userId, limit: RECORD_LIMIT }),
     getUserTotalBalance(userId),
     hasUsedFreeDrawToday(userId),
-    countConsecutiveMisses(userId),
+    countConsecutiveMisses(userId, 30, activityKey),
     listRecentBigWins({ thresholdCredits: 500, thresholdTickets: 3, hours: 24, limit: 20 }),
   ]);
 
@@ -139,7 +152,9 @@ export default async function LotteryPage() {
           ? { title: "活动尚未开始", hint: `开始时间（北京时间）：${config.startAt || "未设置"}。` }
           : {
               title: "活动已结束",
-              hint: `结束时间（北京时间）：${config.endAt || "未设置"}。未使用的抽奖券已随活动作废。`,
+              hint: config.ticketsExpireOnActivityEnd
+                ? `结束时间（北京时间）：${config.endAt || "未设置"}。未使用的抽奖券已随活动作废。`
+                : `结束时间（北京时间）：${config.endAt || "未设置"}。未使用的抽奖券继续有效，可用于下一轮活动。`,
             };
     return (
       <>

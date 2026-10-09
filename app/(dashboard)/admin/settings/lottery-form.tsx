@@ -51,6 +51,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
     initialConfig.multiplierBase,
   );
   const [prizeValidDays, setPrizeValidDays] = useState(String(initialConfig.prizeValidDays));
+  const [ticketsExpire, setTicketsExpire] = useState(initialConfig.ticketsExpireOnActivityEnd);
   const [innerRows, setInnerRows] = useState<InnerRow[]>(() =>
     initialConfig.innerPrizes.map((p) => ({ credits: String(p.credits), weight: String(p.weight) })),
   );
@@ -82,6 +83,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
         outerChancePercent: Number(outerChance),
         multiplierBase,
         prizeValidDays: Number(prizeValidDays),
+        ticketsExpireOnActivityEnd: ticketsExpire,
         innerPrizes: innerRows.map((r) => ({
           credits: Number(r.credits),
           weight: Number(r.weight),
@@ -102,6 +104,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
       outerChance,
       multiplierBase,
       prizeValidDays,
+      ticketsExpire,
       innerRows,
       outerRows,
       milestoneRows,
@@ -127,6 +130,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
         outerChancePercent: Number(outerChance),
         multiplierBase,
         prizeValidDays: Number(prizeValidDays),
+        ticketsExpireOnActivityEnd: ticketsExpire,
         innerPrizes: innerRows
           .filter((r) => r.credits.trim() !== "" || r.weight.trim() !== "")
           .map((r) => ({ credits: Number(r.credits), weight: Number(r.weight) })),
@@ -226,6 +230,21 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
             onChange={(e) => setPrizeValidDays(e.target.value)}
             className={FIELD_CLASS}
           />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">券过期策略</label>
+          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm">
+            <input
+              type="checkbox"
+              checked={ticketsExpire}
+              onChange={(e) => setTicketsExpire(e.target.checked)}
+              className="h-4 w-4"
+            />
+            <span>活动结束时未使用的券自动作废</span>
+          </label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            开启后，每轮活动结束时该轮未用完的券标记过期，不可用于下一轮；关闭则券跨活动持续有效。
+          </p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">倍数基数</label>

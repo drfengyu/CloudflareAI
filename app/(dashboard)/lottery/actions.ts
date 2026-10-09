@@ -7,6 +7,7 @@ import { getLotteryConfig } from "@/lib/lottery/config";
 import {
   activityWindow,
   calculateLuckyChance,
+  currentActivityKey,
   formatPrizeLabel,
   LUCKY_MISS_THRESHOLD,
   rollPrize,
@@ -24,6 +25,7 @@ import {
   deleteTemporaryBalancesByIds,
   deleteTickets,
   deleteTopupsByIds,
+  expireTicketsForActivity,
   grantTickets,
   hasUsedFreeDrawToday,
   insertDrawRows,
@@ -92,6 +94,7 @@ export async function buyTickets(
       issued = await grantTickets(userId, count, {
         source: "buy",
         priceCredits: config.ticketPriceCredits,
+        activityKey: currentActivityKey(config),
       });
       await insertTopupRows([
         {
@@ -167,6 +170,7 @@ function planDrawBatch(
   count: number,
   batchId: string,
   ticketIds: (string | null)[],
+  activityKey: string | null,
 ): DrawBatchPlan {
   const batchSpend = round2(config.ticketPriceCredits * count);
   const results: DrawOutcome[] = [];
@@ -194,6 +198,7 @@ function planDrawBatch(
       baseCredits: outcome.ring === "outer" ? outcome.baseCredits : 0,
       grantTickets: outcome.grantTickets,
       ticketId: ticketIds[i],
+      activityKey,
       createdAt,
     });
     results.push({ ...outcome, seq: i + 1 });
@@ -302,13 +307,22 @@ export async function drawLottery(
 
     // 一波并发读：活动窗口、可用券、券包余量、本批之前的累计次数、连续未中大奖次数（保底用）。
     // 免费抽不需要取券 id，但 ticketsBefore / drawsBefore 仍然要算（返回值与档位判定用）。
-    const [config, pickedIds, ticketsBefore, drawsBefore, consecutiveMisses] = await Promise.all([
-      getLotteryConfig(),
+    // countDraws / countConsecutiveMisses 按当前活动轮次过滤，新活动战绩重计、保底重置。
+    const config = await getLotteryConfig();
+    const activityKey = currentActivityKey(config);
+    const [pickedIds, ticketsBefore, drawsBefore, consecutiveMisses] = await Promise.all([
       freeDrawEligible ? Promise.resolve<string[]>([]) : pickUnusedTicketIds(userId, count),
       countUnusedTickets(userId),
-      countDraws(userId),
-      countConsecutiveMisses(userId),
+      countDraws(userId, activityKey),
+      countConsecutiveMisses(userId, 30, activityKey),
     ]);
+
+    // 活动结束且配置允许券过期时，自动作废该用户本轮未使用的券。
+    // 用户在活动结束后首次尝试抽奖时触发，标记 expired=1 后不再计入可用券。
+    const { status: activityStatus } = activityWindow(config);
+    if (activityStatus === "ended" && config.ticketsExpireOnActivityEnd && activityKey) {
+      await expireTicketsForActivity(userId, activityKey);
+    }
 
     const closed = windowError(config);
     if (closed) return { success: false, error: closed };
@@ -331,7 +345,7 @@ export async function drawLottery(
     const ticketIds: (string | null)[] = freeDrawEligible ? [null] : pickedIds;
 
     const batchId = crypto.randomUUID();
-    const plan = planDrawBatch(userId, effectiveConfig, count, batchId, ticketIds);
+    const plan = planDrawBatch(userId, effectiveConfig, count, batchId, ticketIds, activityKey);
 
     if (!freeDrawEligible) {
       if (!(await lockTickets(pickedIds, rowIds(plan.drawRows)))) {
@@ -353,6 +367,7 @@ export async function drawLottery(
           const ids = await grantTickets(userId, milestone.tickets, {
             source: "gift",
             milestoneDraws: milestone.draws,
+            activityKey,
           });
           giftedTickets += ids.length;
           issuedTicketIds.push(...ids);
@@ -363,7 +378,7 @@ export async function drawLottery(
 
     const prizeGrant =
       plan.prizeTickets > 0
-        ? grantTickets(userId, plan.prizeTickets, { source: "prize" }).then((ids) => {
+        ? grantTickets(userId, plan.prizeTickets, { source: "prize", activityKey }).then((ids) => {
             issuedTicketIds.push(...ids);
             return ids;
           })

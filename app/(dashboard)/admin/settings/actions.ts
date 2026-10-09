@@ -435,6 +435,8 @@ export async function updateLotterySettings(formData: {
   outerChancePercent: number;
   multiplierBase: string;
   prizeValidDays: number;
+  /** 活动结束时未使用的券是否过期作废。 */
+  ticketsExpireOnActivityEnd: boolean;
   /** 内圈是绝对 cr：券价因此可以独立调节利润率，不随奖池同步缩放。 */
   innerPrizes: { credits: number; weight: number }[];
   outerPrizes: { kind?: string; multiplier: number; tickets?: number; weight: number }[];
@@ -530,6 +532,7 @@ export async function updateLotterySettings(formData: {
     outerChancePercent: requireNumber(formData.outerChancePercent, "外圈概率", 0, 100),
     multiplierBase,
     prizeValidDays: Math.trunc(requireNumber(formData.prizeValidDays, "奖品有效期", 1, 3650)),
+    ticketsExpireOnActivityEnd: formData.ticketsExpireOnActivityEnd === true,
     innerPrizes,
     outerPrizes,
     milestones,

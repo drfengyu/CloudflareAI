@@ -384,6 +384,10 @@ export const lotteryTickets = sqliteTable(
     milestoneSeq: integer("milestoneSeq").notNull().default(0),
     /** 开奖记录 ID；非空即已消耗。 */
     usedDrawId: text("usedDrawId"),
+    /** 活动轮次标识（活动 startAt 字符串，如 "2026-10-09 00:00"）；历史数据为 null。 */
+    activityKey: text("activityKey"),
+    /** 是否过期作废（活动结束且配置允许过期时标记为 1）；0=有效，1=已过期。 */
+    expired: integer("expired").notNull().default(0),
     createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
   },
   (table) => [
@@ -421,6 +425,8 @@ export const lotteryDraws = sqliteTable(
     ticketId: text("ticketId").references(() => lotteryTickets.id, {
       onDelete: "set null",
     }),
+    /** 活动轮次标识（活动 startAt 字符串）；历史数据为 null。 */
+    activityKey: text("activityKey"),
     createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
   },
   (table) => [unique().on(table.batchId, table.seq)],

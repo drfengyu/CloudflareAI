@@ -82,6 +82,8 @@ export interface LotteryConfig {
   multiplierBase: "ticket" | "batch";
   /** 中奖 cr 作为临时余额的有效天数。 */
   prizeValidDays: number;
+  /** 活动结束时未使用的券是否过期作废：true=活动结束自动作废，false=券继续有效（跨活动）。 */
+  ticketsExpireOnActivityEnd: boolean;
   innerPrizes: InnerPrize[];
   outerPrizes: OuterPrize[];
   milestones: LotteryMilestone[];
@@ -103,6 +105,7 @@ export const DEFAULT_LOTTERY_CONFIG: LotteryConfig = {
   outerChancePercent: 12.5,
   multiplierBase: "ticket",
   prizeValidDays: 7,
+  ticketsExpireOnActivityEnd: false,
   innerPrizes: [
     { credits: 200, weight: 12 },
     { credits: 150, weight: 14 },
@@ -225,6 +228,7 @@ export function sanitizeLotteryConfig(raw: unknown): LotteryConfig {
       : d.outerChancePercent,
     multiplierBase: it.multiplierBase === "batch" ? "batch" : "ticket",
     prizeValidDays: Math.trunc(positiveNumber(it.prizeValidDays, d.prizeValidDays)),
+    ticketsExpireOnActivityEnd: it.ticketsExpireOnActivityEnd === true,
     // 奖池被清空会让转盘无法开奖，退回默认池子而不是留空数组。
     innerPrizes: inner.length > 0 ? inner : d.innerPrizes,
     outerPrizes: outer.length > 0 ? outer : d.outerPrizes,
@@ -251,6 +255,16 @@ export function activityWindow(config: LotteryConfig, now = Date.now()): Activit
   if (now < startMs) return { status: "pending", startMs, endMs };
   if (now >= endMs) return { status: "ended", startMs, endMs };
   return { status: "active", startMs, endMs };
+}
+
+/**
+ * 当前活动轮次的唯一标识，用 startAt 字符串（如 "2026-10-09 00:00"）。
+ * 管理员修改 startAt 即开启新一轮，旧轮次的券/记录通过此字段区分。
+ * 活动未启用或 startAt 为空时返回 null（历史数据也为 null）。
+ */
+export function currentActivityKey(config: LotteryConfig): string | null {
+  if (!config.enabled || !config.startAt?.trim()) return null;
+  return config.startAt.trim();
 }
 
 /**

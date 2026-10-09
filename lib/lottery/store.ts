@@ -31,21 +31,28 @@ export interface DrawRow {
   createdAt: Date | null;
 }
 
-/** 可用券数量。 */
+/** 可用券数量（未消耗且未过期）。 */
 export async function countUnusedTickets(userId: string): Promise<number> {
   const rows = await db
     .select({ c: sql<number>`COUNT(*)` })
     .from(lotteryTickets)
-    .where(and(eq(lotteryTickets.userId, userId), isNull(lotteryTickets.usedDrawId)));
+    .where(
+      and(eq(lotteryTickets.userId, userId), isNull(lotteryTickets.usedDrawId), eq(lotteryTickets.expired, 0)),
+    );
   return Number(rows[0]?.c ?? 0);
 }
 
-/** 累计抽奖次数，累抽档位的判定依据。 */
-export async function countDraws(userId: string): Promise<number> {
+/** 累计抽奖次数，累抽档位的判定依据。按活动轮次过滤，新活动战绩重计。 */
+export async function countDraws(userId: string, activityKey?: string | null): Promise<number> {
   const rows = await db
     .select({ c: sql<number>`COUNT(*)` })
     .from(lotteryDraws)
-    .where(eq(lotteryDraws.userId, userId));
+    .where(
+      and(
+        eq(lotteryDraws.userId, userId),
+        activityKey ? eq(lotteryDraws.activityKey, activityKey) : undefined,
+      ),
+    );
   return Number(rows[0]?.c ?? 0);
 }
 
@@ -56,7 +63,11 @@ export async function countDraws(userId: string): Promise<number> {
  * 内圈全算未中，外圈倒扣（deltaCredits < 0）也算未中。
  * 用于保底机制：连续未中达到阈值后，下一次外圈概率临时提升。
  */
-export async function countConsecutiveMisses(userId: string, lookback = 30): Promise<number> {
+export async function countConsecutiveMisses(
+  userId: string,
+  lookback = 30,
+  activityKey?: string | null,
+): Promise<number> {
   const rows = await db
     .select({
       ring: lotteryDraws.ring,
@@ -64,7 +75,12 @@ export async function countConsecutiveMisses(userId: string, lookback = 30): Pro
       grantTickets: lotteryDraws.grantTickets,
     })
     .from(lotteryDraws)
-    .where(eq(lotteryDraws.userId, userId))
+    .where(
+      and(
+        eq(lotteryDraws.userId, userId),
+        activityKey ? eq(lotteryDraws.activityKey, activityKey) : undefined,
+      ),
+    )
     .orderBy(sql`${lotteryDraws.createdAt} DESC`, sql`${lotteryDraws.seq} DESC`)
     .limit(lookback);
 
@@ -134,7 +150,13 @@ export async function pickUnusedTicketIds(userId: string, n: number): Promise<st
   const rows = await db
     .select({ id: lotteryTickets.id })
     .from(lotteryTickets)
-    .where(and(eq(lotteryTickets.userId, userId), isNull(lotteryTickets.usedDrawId)))
+    .where(
+      and(
+        eq(lotteryTickets.userId, userId),
+        isNull(lotteryTickets.usedDrawId),
+        eq(lotteryTickets.expired, 0),
+      ),
+    )
     .orderBy(asc(lotteryTickets.createdAt))
     .limit(n);
   return rows.map((r) => r.id);
@@ -180,7 +202,13 @@ export async function unlockTickets(ticketIds: string[]): Promise<void> {
 export async function grantTickets(
   userId: string,
   count: number,
-  grant: { source: "buy" | "gift" | "prize"; priceCredits?: number; milestoneDraws?: number },
+  grant: {
+    source: "buy" | "gift" | "prize";
+    priceCredits?: number;
+    milestoneDraws?: number;
+    /** 活动轮次标识；null 表示历史数据或活动未启用。 */
+    activityKey?: string | null;
+  },
 ): Promise<string[]> {
   const ids: string[] = [];
   const values = Array.from({ length: count }, (_unused, index) => {
@@ -192,13 +220,14 @@ export async function grantTickets(
       source: grant.source,
       priceCredits: grant.priceCredits ?? 0,
       milestoneDraws: grant.milestoneDraws ?? null,
+      activityKey: grant.activityKey ?? null,
       // 一个档位送多张时，各行靠序号区分，否则第二行会撞 (userId, milestoneDraws) 唯一索引。
       milestoneSeq: grant.milestoneDraws === undefined ? 0 : index,
       createdAt: new Date(),
     };
   });
-  // 每行绑 7 个参数，一次买 50 张就是 350 个，会直接撞 D1 的参数墙，必须分片。
-  for (const batch of batchRows(values, 7)) {
+  // 每行绑 8 个参数，一次买 50 张就是 400 个，会直接撞 D1 的参数墙，必须分片。
+  for (const batch of batchRows(values, 8)) {
     await db.insert(lotteryTickets).values(batch);
   }
   return ids;
@@ -343,4 +372,17 @@ export async function deleteTemporaryBalancesByIds(ids: string[]): Promise<void>
   for (const batch of batchRows(ids, 1)) {
     await db.delete(temporaryBalances).where(inArray(temporaryBalances.id, batch));
   }
+}
+
+/**
+ * 活动结束时作废该轮未使用的券（ticketsExpireOnActivityEnd 开启时调用）。
+ * 只标记 expired=1，不物理删除，便于管理端对账和用户查看历史。
+ * 返回作废的券数量。
+ */
+export async function expireTicketsForActivity(userId: string, activityKey: string): Promise<number> {
+  const { changes } = await d1Run(
+    "UPDATE lottery_ticket SET expired = 1 WHERE userId = ? AND activityKey = ? AND usedDrawId IS NULL AND expired = 0",
+    [userId, activityKey],
+  );
+  return changes;
 }
