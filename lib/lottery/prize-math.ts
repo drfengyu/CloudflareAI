@@ -379,6 +379,7 @@ export function rollPrize(
 
   const base = config.multiplierBase === "batch" ? batchSpendCredits : config.ticketPriceCredits;
   const credits = round2(base * prize.multiplier);
+  const isPermanent = prize.kind === "permanentCredits" && credits > 0;
   return {
     ring: "outer",
     innerIndex,
@@ -388,8 +389,9 @@ export function rollPrize(
     baseCredits: base,
     grantTickets: 0,
     // permanentCredits 正数发永久余额（不过期）；credits 正数发临时余额；倒扣走永久余额。
-    balanceType: credits > 0 ? (prize.kind === "permanentCredits" ? "permanent" : "temporary") : null,
-    label: formatPrizeLabel(credits),
+    balanceType: credits > 0 ? (isPermanent ? "permanent" : "temporary") : null,
+    // label 带「永久」标记存库，记录页据此区分临时余额与永久余额；倒扣不标。
+    label: isPermanent ? `${formatPrizeLabel(credits)} 永久` : formatPrizeLabel(credits),
   };
 }
 

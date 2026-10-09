@@ -154,7 +154,7 @@ export function LotteryRecords({
             </div>
             <p className="text-[11px] text-muted-foreground">
               券包中尚有 {ticketsLeft} 张未开奖（其中购得面值 {formatCredits(tickets.unusedCredits)}{" "}
-              cr），这部分不计入净收益；中奖 cr 以临时余额发放，过期未用自动作废。
+              cr），这部分不计入净收益；普通中奖以临时余额发放（过期未用自动作废），标注「永久」的奖品直接进永久余额、不过期。
             </p>
           </>
         )}
