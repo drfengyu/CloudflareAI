@@ -2,8 +2,23 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 import { AppHeader } from "@/components/dashboard/app-header";
 import { auth, signOut } from "@/auth";
 import { db } from "@/lib/db/d1-http";
-import { users, options } from "@/lib/db/schema";
+import { options } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
+
+/** 站点名缓存 1 小时，避免每次导航都查 option 表。 */
+const getCachedSiteName = unstable_cache(
+  async () => {
+    const siteRows = await db
+      .select({ value: options.value })
+      .from(options)
+      .where(eq(options.key, "siteName"))
+      .limit(1);
+    return siteRows[0]?.value?.trim() || "Cloudflare AI";
+  },
+  ["site-name"],
+  { revalidate: 3600 },
+);
 
 export default async function DashboardLayout({
   children,
@@ -12,24 +27,11 @@ export default async function DashboardLayout({
 }) {
   const session = await auth();
 
-  // Fetch user role to filter sidebar nav
-  let userRole = 1;
-  if (session?.user?.id) {
-    const userRows = await db
-      .select({ role: users.role })
-      .from(users)
-      .where(eq(users.id, session.user.id))
-      .limit(1);
-    userRole = userRows[0]?.role ?? 1;
-  }
+  // role 已存在 JWT 中（auth.ts 的 jwt callback 首次登录时写入），直接从 session 读取，
+  // 避免每次导航都查用户表。旧 token 可能没有 role，回退到 1（普通用户）。
+  const userRole = session?.user?.role ?? 1;
 
-  // Site name from options (admin-configurable), fall back to brand default
-  const siteRows = await db
-    .select({ value: options.value })
-    .from(options)
-    .where(eq(options.key, "siteName"))
-    .limit(1);
-  const siteName = siteRows[0]?.value?.trim() || "Cloudflare AI";
+  const siteName = await getCachedSiteName();
 
   async function signOutAction() {
     "use server";

@@ -163,17 +163,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.email = userEmail ? String(userEmail) : null;
         token.name = userName ? String(userName) : null;
         token.image = userImage ? String(userImage) : null;
+
+        // 首次登录时把 role 存进 token，避免后续每次导航查用户表
+        if (userId) {
+          try {
+            const dbUser = await db.query.users.findFirst({
+              where: (users, { eq }) => eq(users.id, String(userId)),
+              columns: { role: true },
+            });
+            token.role = dbUser?.role ?? 1;
+          } catch (err) {
+            console.error("[JWT] role query failed:", err);
+            token.role = 1;
+          }
+        }
       }
-      // 如果 token 中没有 email 但有 sub，从数据库查询
-      else if (token.sub && token.email === undefined) {
+      // 如果 token 中没有 email 但有 sub，从数据库查询补全（同时补 role）
+      else if (token.sub && (token.email === undefined || token.role === undefined)) {
         try {
           const dbUser = await db.query.users.findFirst({
             where: (users, { eq }) => eq(users.id, token.sub as string),
           });
           if (dbUser) {
-            token.email = dbUser.email;
-            token.name = dbUser.name;
-            token.image = dbUser.image;
+            if (token.email === undefined) {
+              token.email = dbUser.email;
+              token.name = dbUser.name;
+              token.image = dbUser.image;
+            }
+            if (token.role === undefined) {
+              token.role = dbUser.role;
+            }
           }
         } catch (err) {
           console.error("[JWT] DB query failed:", err);
@@ -204,6 +223,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.email = (token.email as string) || "";
         session.user.name = (token.name as string | null) || null;
         session.user.image = (token.image as string | null) || null;
+        session.user.role = (token.role as number | undefined) ?? 1;
       }
       return session;
     },

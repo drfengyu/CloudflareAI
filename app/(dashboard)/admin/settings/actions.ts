@@ -4,7 +4,7 @@ import { db } from "@/lib/db/d1-http";
 import { options, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { syncModelPricingWithSettings } from "@/lib/billing/model-pricing";
 import { invalidateCreditsPerUsdCache } from "@/lib/billing/credits";
 import { parseCnWallClock } from "@/lib/date";
@@ -78,6 +78,8 @@ export async function updateBasicSettings(formData: {
   revalidatePath("/admin/settings");
   // Sidebar brand lives in the dashboard layout — revalidate it so the name updates.
   revalidatePath("/", "layout");
+  // 让 dashboard layout 中 unstable_cache 包装的 siteName 缓存失效（Next 16 需要第二个 profile 参数）
+  revalidateTag("site-name", { expire: 0 });
   return { success: true };
 }
 
