@@ -473,7 +473,7 @@ export async function updateLotterySettings(formData: {
   const outerPrizes = (formData.outerPrizes ?? [])
     .map((p, i) => {
       const weight = requireNumber(p?.weight, `外圈第 ${i + 1} 个奖品的权重`, 0.1, 10_000);
-      // 两类奖品只校验各自用得上的那个字段，否则配赠券会被迫填一个多余的倍数。
+      // 三类奖品只校验各自用得上的那个字段，否则配赠券会被迫填一个多余的倍数。
       if (p?.kind === "tickets") {
         return {
           kind: "tickets" as const,
@@ -481,6 +481,14 @@ export async function updateLotterySettings(formData: {
           tickets: Math.trunc(
             requireNumber(p?.tickets, `外圈第 ${i + 1} 个奖品的赠券张数`, 1, 1000),
           ),
+          weight,
+        };
+      }
+      if (p?.kind === "permanentCredits") {
+        return {
+          kind: "permanentCredits" as const,
+          multiplier: requireNumber(p?.multiplier, `外圈第 ${i + 1} 个奖品的倍数`, -1000, 1000),
+          tickets: 0,
           weight,
         };
       }
