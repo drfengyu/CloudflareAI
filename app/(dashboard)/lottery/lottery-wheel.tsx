@@ -9,6 +9,7 @@ import { formatCredits } from "@/lib/billing/credits";
 import { toast } from "sonner";
 import { buyTickets, drawLottery } from "./actions";
 import type { ActivityStatus, DrawOutcome } from "@/lib/lottery/prize-math";
+import { calculateLuckyChance, LUCKY_CHANCE_CAP_PERCENT } from "@/lib/lottery/prize-math";
 import type { BigWinRecord } from "@/lib/lottery/records";
 
 /** 外沿还有两道发光环，viewBox 要比最大半径留出这点余量，否则环带会被裁掉。 */
@@ -68,7 +69,7 @@ export interface LotteryWheelProps {
   freeDrawAvailable: boolean;
   /** 当前连续未中大奖次数，用于保底进度条展示。 */
   consecutiveMisses: number;
-  /** 保底触发阈值（连续未中达此次数后外圈概率翻倍）。 */
+  /** 保底触发阈值（连续未中达此次数后外圈概率开始线性提升）。 */
   luckyThreshold: number;
   /** 最近 24 小时大奖记录，用于中奖墙展示。 */
   bigWins: BigWinRecord[];
@@ -378,7 +379,10 @@ export function LotteryWheel(props: LotteryWheelProps) {
       later(() => toast.info("今日免费抽已使用，明天再来"), spokesDone + 480);
     }
     if (response.data.luckyBoosted) {
-      later(() => toast.info("保底已触发：本次外圈概率翻倍"), spokesDone + 600);
+      later(
+        () => toast.info(`保底已触发：本次外圈概率 ${response.data.luckyChancePercent}%`),
+        spokesDone + 600,
+      );
     }
     later(() => router.refresh(), spokesDone);
   }
@@ -616,13 +620,17 @@ export function LotteryWheel(props: LotteryWheelProps) {
             </button>
           </div>
 
-          {/* 保底进度条：连续未中大奖达阈值后，下一次外圈概率翻倍 */}
+          {/* 保底进度条：连续未中达阈值后外圈概率线性提升（每多1次+0.1%，上限20%） */}
           <div className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3">
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-white/50">保底进度（连续未中大奖）</span>
-              <span className={consecutiveMisses >= props.luckyThreshold ? "text-amber-300 font-medium" : "text-white/60"}>
+              <span
+                className={
+                  consecutiveMisses >= props.luckyThreshold ? "text-amber-300 font-medium" : "text-white/60"
+                }
+              >
                 {consecutiveMisses >= props.luckyThreshold
-                  ? "已触发 · 外圈概率翻倍"
+                  ? `外圈概率 ${calculateLuckyChance(consecutiveMisses, props.outerChancePercent)}%（上限 ${LUCKY_CHANCE_CAP_PERCENT}%）`
                   : `${consecutiveMisses} / ${props.luckyThreshold}`}
               </span>
             </div>
@@ -634,11 +642,24 @@ export function LotteryWheel(props: LotteryWheelProps) {
                     ? "bg-gradient-to-r from-amber-400 to-orange-400"
                     : "bg-gradient-to-r from-cyan-400 to-fuchsia-400",
                 )}
-                style={{ width: `${Math.min(100, (consecutiveMisses / props.luckyThreshold) * 100)}%` }}
+                style={{
+                  width: `${
+                    consecutiveMisses >= props.luckyThreshold
+                      ? Math.min(
+                          100,
+                          ((calculateLuckyChance(consecutiveMisses, props.outerChancePercent) -
+                            props.outerChancePercent) /
+                            (LUCKY_CHANCE_CAP_PERCENT - props.outerChancePercent)) *
+                            100,
+                        )
+                      : Math.min(100, (consecutiveMisses / props.luckyThreshold) * 100)
+                  }%`,
+                }}
               />
             </div>
             <p className="mt-1.5 text-[10px] leading-relaxed text-white/35">
-              连续 {props.luckyThreshold} 次未中外圈正档（正数 cr 或赠券）后，下一次外圈入口概率临时翻倍；中一次大奖后计数清零。
+              连续 {props.luckyThreshold} 次未中外圈正档（正数 cr 或赠券）后，每多 1 次未中外圈概率 +0.1%，
+              上限 {LUCKY_CHANCE_CAP_PERCENT}%；中一次大奖后计数清零重新累积。
             </p>
           </div>
 

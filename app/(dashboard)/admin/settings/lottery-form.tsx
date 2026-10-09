@@ -242,7 +242,8 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
 
       <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
         <p className="font-medium">
-          内圈期望 {exp.innerCredits} cr/次 · 外圈期望 {exp.outerCredits} cr/次 · 单券综合 {exp.perTicket} cr
+          内圈期望 {exp.innerCredits} cr/次 · 外圈期望 {exp.outerCredits} cr/次 · 累抽送券均摊{" "}
+          {exp.milestoneCredits} cr/次 · 单券综合 {exp.perTicket} cr
         </p>
         <p className="mt-1">
           返还率 {exp.returnRate}%（期望返还 ÷ 单券价 {preview.ticketPriceCredits} cr），站点每券净得{" "}
@@ -250,7 +251,8 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
         </p>
         <p className="mt-1 text-muted-foreground">
           内圈是绝对 cr、外圈是倍数 × 券价，所以单券价是独立的利润率杠杆：券价调高而奖池不动，
-          返还率就往下走。改券价、外圈概率、任一圈的数值或权重，上面两行都会立刻重算。
+          返还率就往下走。改券价、外圈概率、任一圈的数值或权重、累抽送券档位，上面两行都会立刻重算。
+          累抽送券按最高档位均摊（保守估计），用户抽得越少实际送券成本占比越高。
           {multiplierBase === "batch"
             ? "当前倍数以「本次总花费」为基数，10 连抽的每券期望约为单抽的 10 倍，这里的数字只是单抽口径。"
             : "按单券价计，10 连抽与单抽的每券期望相同。"}

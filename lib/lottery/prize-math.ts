@@ -13,8 +13,26 @@ export const LOTTERY_CONFIG_KEY = "lottery_config";
 /** `topup.type`：6=限时活动（买券与倒扣为负、中奖为正）。5 已被在线充值占用。 */
 export const TOPUP_TYPE_LOTTERY = 6;
 
-/** 保底机制：连续未中大奖达到此次数后，下一次外圈概率临时提升（翻倍）。 */
-export const LUCKY_MISS_THRESHOLD = 8;
+/** 保底机制：连续未中大奖达到此次数后，外圈概率开始线性提升。 */
+export const LUCKY_MISS_THRESHOLD = 16;
+
+/** 保底：每多连续未中 1 次，外圈概率增加多少个百分点。 */
+export const LUCKY_CHANCE_STEP_PERCENT = 0.1;
+
+/** 保底：外圈概率上限（%），超过后不再提升。 */
+export const LUCKY_CHANCE_CAP_PERCENT = 20;
+
+/**
+ * 根据连续未中大奖次数计算当前外圈概率（%）。
+ *
+ * 前 LUCKY_MISS_THRESHOLD 次保持基础概率；之后每多 1 次未中，外圈概率 +0.1%，
+ * 直到 LUCKY_CHANCE_CAP_PERCENT 上限。中一次外圈正档后计数清零，重新开始累积。
+ */
+export function calculateLuckyChance(consecutiveMisses: number, baseChancePercent: number): number {
+  if (consecutiveMisses < LUCKY_MISS_THRESHOLD) return baseChancePercent;
+  const extra = (consecutiveMisses - LUCKY_MISS_THRESHOLD) * LUCKY_CHANCE_STEP_PERCENT;
+  return Math.min(LUCKY_CHANCE_CAP_PERCENT, baseChancePercent + extra);
+}
 
 /**
  * 内圈奖品：固定加/减 cr（绝对值，可为负）。
@@ -428,7 +446,9 @@ export interface LotteryExpectation {
   innerCredits: number;
   /** 外圈期望（cr/次），只有从入口进来才兑现。 */
   outerCredits: number;
-  /** 单券综合期望（cr）。 */
+  /** 累抽送券的每抽均摊成本（cr/次），按最高档位均摊（保守估计）。 */
+  milestoneCredits: number;
+  /** 单券综合期望（cr），含开奖返还 + 累抽送券。 */
   perTicket: number;
   /** 返还率（%），> 100 即每卖一张券站点净亏。 */
   returnRate: number;
@@ -437,21 +457,43 @@ export interface LotteryExpectation {
 }
 
 /**
+ * 累抽送券的每抽均摊成本（cr/次）。
+ *
+ * milestones 是一次性累计奖励（抽满 N 次送 M 券），不是循环奖励。
+ * 返还率按"每抽一次"计算，所以把总送券价值按最高档位的 draws 均摊，
+ * 得到用户参与到最深档位时的平均送券成本——这是保守（偏低）估计，
+ * 用户抽得越少，实际送券成本占比越高。
+ */
+export function milestoneCostPerTicket(config: LotteryConfig): number {
+  const milestones = config.milestones ?? [];
+  if (milestones.length === 0) return 0;
+  const totalTickets = milestones.reduce((sum, m) => sum + (m.tickets ?? 0), 0);
+  const maxDraws = Math.max(...milestones.map((m) => m.draws ?? 0));
+  if (maxDraws <= 0 || totalTickets <= 0) return 0;
+  return round2((totalTickets * config.ticketPriceCredits) / maxDraws);
+}
+
+/**
  * 把两圈的期望与综合返还率一次算齐。
  *
  * 内圈是绝对 cr、外圈是倍率 × 券价，所以**券价是独立的利润率杠杆**：券价调高，
  * 外圈那 12.5% 分支同步放大，但内圈不动，综合返还率就往下走。后台表单按当前输入
  * 实时重算这几行，改券价 / 改外圈概率 / 改任一圈的数值或权重都会立刻反映出来。
+ *
+ * 综合期望 = 开奖返还（内圈+外圈加权）+ 累抽送券均摊成本。
  */
 export function lotteryExpectation(config: LotteryConfig): LotteryExpectation {
   const outerChance = Math.min(100, Math.max(0, config.outerChancePercent)) / 100;
-  const perTicket = round2(
+  const drawReturn = round2(
     (1 - outerChance) * innerExpectation(config) + outerChance * outerExpectation(config),
   );
+  const milestoneCredits = milestoneCostPerTicket(config);
+  const perTicket = round2(drawReturn + milestoneCredits);
   const price = config.ticketPriceCredits;
   return {
     innerCredits: innerExpectation(config),
     outerCredits: outerExpectation(config),
+    milestoneCredits,
     perTicket,
     returnRate: price > 0 ? round2((perTicket / price) * 100) : 0,
     houseEdge: round2(price - perTicket),

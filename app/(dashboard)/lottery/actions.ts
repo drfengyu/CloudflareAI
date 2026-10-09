@@ -6,6 +6,7 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getLotteryConfig } from "@/lib/lottery/config";
 import {
   activityWindow,
+  calculateLuckyChance,
   formatPrizeLabel,
   LUCKY_MISS_THRESHOLD,
   rollPrize,
@@ -36,9 +37,6 @@ import {
 import { lotteryDraws, temporaryBalances, topups } from "@/lib/db/schema";
 
 const MAX_TICKETS_PER_PURCHASE = 100;
-
-/** 保底触发时外圈概率的倍率（2 = 翻倍，12.5% → 25%）。阈值在 prize-math.ts 与前端共用。 */
-const LUCKY_OUTER_BOOST = 2;
 
 type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
 
@@ -288,6 +286,8 @@ export async function drawLottery(
     freeDrawUsed: boolean;
     /** 本次是否触发了保底（外圈概率临时提升）。 */
     luckyBoosted: boolean;
+    /** 本次实际使用的外圈概率（%），含保底提升。 */
+    luckyChancePercent: number;
   }>
 > {
   try {
@@ -319,11 +319,12 @@ export async function drawLottery(
       };
     }
 
-    // 保底：连续未中大奖达阈值后，本次外圈概率临时提升（翻倍）。
-    // 只覆盖 outerChancePercent，奖品金额与券价不动；中一次大奖后计数自然清零。
-    const luckyBoosted = consecutiveMisses >= LUCKY_MISS_THRESHOLD;
+    // 保底：连续未中大奖达阈值后，外圈概率线性提升（每多 1 次未中 +0.1%，上限 20%）。
+    // 只覆盖 outerChancePercent，奖品金额与券价不动；中一次外圈正档后计数自然清零。
+    const luckyChancePercent = calculateLuckyChance(consecutiveMisses, config.outerChancePercent);
+    const luckyBoosted = luckyChancePercent > config.outerChancePercent;
     const effectiveConfig: LotteryConfig = luckyBoosted
-      ? { ...config, outerChancePercent: Math.min(100, config.outerChancePercent * LUCKY_OUTER_BOOST) }
+      ? { ...config, outerChancePercent: luckyChancePercent }
       : config;
 
     // 免费抽时 ticketIds 是 [null]，开奖行的 ticketId 留空，标记这是一次免费抽。
@@ -407,6 +408,7 @@ export async function drawLottery(
         giftedTickets,
         freeDrawUsed: freeDrawEligible,
         luckyBoosted,
+        luckyChancePercent,
       },
     };
   } catch (error) {
