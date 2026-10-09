@@ -291,3 +291,92 @@ export async function listDrawRecords(opts: {
     };
   });
 }
+
+/** 一条大奖播报记录。 */
+export interface BigWinRecord {
+  id: string;
+  /** 脱敏后的用户标识（邮箱前缀首字符 + *** + 域名，或用户 ID 前 8 位）。 */
+  userLabel: string;
+  /** 奖品文案，如 `+1200 cr` 或 `+3 张券`。 */
+  label: string;
+  /** 中奖 cr 金额（赠券档为 0）。 */
+  credits: number;
+  /** 抽中的赠券张数。 */
+  grantTickets: number;
+  createdAt: Date | null;
+}
+
+/**
+ * 最近 N 小时内的大奖播报：deltaCredits >= threshold 或 grantTickets >= ticketThreshold。
+ * 用于活动页底部的中奖墙，社会化证明「真的能中大奖」。
+ * 用户邮箱脱敏：保留首字符 + *** + @域名；无邮箱时用用户 ID 前 8 位。
+ */
+export async function listRecentBigWins(opts: {
+  thresholdCredits?: number;
+  thresholdTickets?: number;
+  hours?: number;
+  limit?: number;
+}): Promise<BigWinRecord[]> {
+  const thresholdCredits = opts.thresholdCredits ?? 500;
+  const thresholdTickets = opts.thresholdTickets ?? 3;
+  const hours = opts.hours ?? 24;
+  const limit = opts.limit ?? 30;
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+  const rows = await db
+    .select({
+      id: lotteryDraws.id,
+      userId: lotteryDraws.userId,
+      label: lotteryDraws.label,
+      deltaCredits: lotteryDraws.deltaCredits,
+      grantTickets: lotteryDraws.grantTickets,
+      createdAt: lotteryDraws.createdAt,
+    })
+    .from(lotteryDraws)
+    .where(
+      and(
+        gte(lotteryDraws.createdAt, since),
+        sql`(${lotteryDraws.deltaCredits} >= ${thresholdCredits} OR ${lotteryDraws.grantTickets} >= ${thresholdTickets})`,
+      ),
+    )
+    .orderBy(desc(lotteryDraws.createdAt), desc(lotteryDraws.seq))
+    .limit(limit);
+
+  // 不用 leftJoin（drizzle-orm v0.45.2 字段错位 bug），单独查用户再手动映射。
+  const userIds = [...new Set(rows.map((r) => r.userId))];
+  const userRows: { id: string; email: string | null; name: string | null }[] = [];
+  for (const chunk of batchRows(userIds, 1)) {
+    const part = await db
+      .select({ id: users.id, email: users.email, name: users.name })
+      .from(users)
+      .where(inArray(users.id, chunk));
+    userRows.push(...part);
+  }
+  const userMap = new Map(userRows.map((u) => [u.id, u]));
+
+  return rows.map((row) => {
+    const user = userMap.get(row.userId);
+    return {
+      id: row.id,
+      userLabel: maskUserLabel(user?.email ?? null, user?.name ?? null, row.userId),
+      label: row.label,
+      credits: Number(row.deltaCredits),
+      grantTickets: Number(row.grantTickets ?? 0),
+      createdAt: row.createdAt,
+    };
+  });
+}
+
+/** 脱敏用户标识：邮箱首字符 + *** + 域名；无邮箱用昵称；都没有用用户 ID 前 8 位。 */
+function maskUserLabel(email: string | null, name: string | null, userId: string): string {
+  if (email) {
+    const [local, domain] = email.split("@");
+    if (local && domain) {
+      return `${local.charAt(0)}***@${domain}`;
+    }
+  }
+  if (name && name.trim()) {
+    return name.trim().slice(0, 1) + "***";
+  }
+  return `用户${userId.slice(0, 8)}`;
+}

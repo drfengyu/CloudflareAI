@@ -15,6 +15,7 @@ import {
 import { countUnusedTickets, countConsecutiveMisses, hasUsedFreeDrawToday } from "@/lib/lottery/store";
 import {
   listDrawRecords,
+  listRecentBigWins,
   lotteryBalance,
   lotteryTicketTotals,
 } from "@/lib/lottery/records";
@@ -109,7 +110,7 @@ export default async function LotteryPage() {
   const windowInfo = activityWindow(config);
 
   // 记录按整个活动期口径给（不加时间窗），活动结束后这段历史仍然要能翻出来看。
-  const [tickets, myStats, myTickets, records, balance, freeDrawUsed, consecutiveMisses] = await Promise.all([
+  const [tickets, myStats, myTickets, records, balance, freeDrawUsed, consecutiveMisses, bigWins] = await Promise.all([
     countUnusedTickets(userId),
     lotteryBalance({ userId }),
     lotteryTicketTotals(undefined, userId),
@@ -117,6 +118,7 @@ export default async function LotteryPage() {
     getUserTotalBalance(userId),
     hasUsedFreeDrawToday(userId),
     countConsecutiveMisses(userId),
+    listRecentBigWins({ thresholdCredits: 500, thresholdTickets: 3, hours: 24, limit: 20 }),
   ]);
 
   const recordsCard = (
@@ -172,6 +174,7 @@ export default async function LotteryPage() {
           freeDrawAvailable={!freeDrawUsed}
           consecutiveMisses={consecutiveMisses}
           luckyThreshold={LUCKY_MISS_THRESHOLD}
+          bigWins={bigWins}
         />
         {recordsCard}
       </div>

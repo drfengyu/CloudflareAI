@@ -9,6 +9,7 @@ import { formatCredits } from "@/lib/billing/credits";
 import { toast } from "sonner";
 import { buyTickets, drawLottery } from "./actions";
 import type { ActivityStatus, DrawOutcome } from "@/lib/lottery/prize-math";
+import type { BigWinRecord } from "@/lib/lottery/records";
 
 /** 外沿还有两道发光环，viewBox 要比最大半径留出这点余量，否则环带会被裁掉。 */
 const SIZE = 400;
@@ -69,6 +70,8 @@ export interface LotteryWheelProps {
   consecutiveMisses: number;
   /** 保底触发阈值（连续未中达此次数后外圈概率翻倍）。 */
   luckyThreshold: number;
+  /** 最近 24 小时大奖记录，用于中奖墙展示。 */
+  bigWins: BigWinRecord[];
 }
 
 /** 霓虹配色：每个音调给深浅两档交替，相邻扇区才分得开。赠券档用金色与 cr 档区分。 */
@@ -86,6 +89,18 @@ const PANEL = "radial-gradient(circle at 50% 38%, #1a2445 0%, #0a0f22 55%, #0507
 function polar(r: number, deg: number) {
   const rad = ((deg - 90) * Math.PI) / 180;
   return { x: C + r * Math.cos(rad), y: C + r * Math.sin(rad) };
+}
+
+/** 相对时间：刚刚 / N 分钟前 / N 小时前 / N 天前。 */
+function relativeTime(date: Date | null): string {
+  if (!date) return "";
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "刚刚";
+  if (mins < 60) return `${mins} 分钟前`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} 小时前`;
+  return `${Math.floor(hours / 24)} 天前`;
 }
 
 function annulusSector(rOut: number, rIn: number, start: number, end: number) {
@@ -720,6 +735,36 @@ export function LotteryWheel(props: LotteryWheelProps) {
                     </li>
                   ))}
                 </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 中奖墙：最近 24 小时大奖播报，社会化证明「真的能中」 */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">最近大奖 <span className="text-xs font-normal text-muted-foreground">（24 小时）</span></CardTitle>
+          </CardHeader>
+          <CardContent>
+            {props.bigWins.length === 0 ? (
+              <p className="py-4 text-center text-xs text-muted-foreground">暂无大奖记录，来做第一个幸运儿！</p>
+            ) : (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {props.bigWins.map((win) => (
+                  <div
+                    key={win.id}
+                    className="flex shrink-0 items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2"
+                  >
+                    <span className="text-base">🎉</span>
+                    <div className="leading-tight">
+                      <p className="text-xs font-medium text-amber-200">{win.userLabel}</p>
+                      <p className="text-[11px] text-white/60">
+                        {win.label}
+                        <span className="ml-1.5 text-white/30">{relativeTime(win.createdAt)}</span>
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
