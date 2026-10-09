@@ -26,7 +26,7 @@ const SPIN_INNER_MS = 2600;
 const SPIN_OUTER_MS = 1500;
 const SPOKE_STEP_MS = 130;
 
-type Tone = "positive" | "negative" | "zero" | "entry" | "ticket";
+type Tone = "positive" | "negative" | "zero" | "entry" | "ticket" | "permanent";
 
 /** 内圈的一个扇区（奖品或「外圈入口」），`weight` 决定扇区角度，与实际概率同源。 */
 export interface WheelSector {
@@ -78,6 +78,7 @@ const NEON: Record<Tone, [string, string]> = {
   zero: ["#64748b", "#3b4757"],
   entry: ["#c084fc", "#6b21a8"],
   ticket: ["#fbbf24", "#7c4a03"],
+  permanent: ["#4ade80", "#166534"],
 };
 
 const PANEL = "radial-gradient(circle at 50% 38%, #1a2445 0%, #0a0f22 55%, #05070f 100%)";

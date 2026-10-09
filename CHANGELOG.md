@@ -24,6 +24,12 @@
   - 「未中」含全部内圈结果与外圈倒扣；从最近一条开奖记录往前数直到遇到大奖，最多回看 30 条。
   - 实现方式是开奖前查 `countConsecutiveMisses()`，达阈值后创建 config 副本覆盖 `outerChancePercent`，奖品金额与券价不动；阈值常量 `LUCKY_MISS_THRESHOLD` 在 `prize-math.ts` 与前端共用。
   - 前端按钮区下方加保底进度条（连续未中 X / 8，渐变进度条，触发后变金色并显示「已触发 · 外圈概率翻倍」）；开奖时若触发保底会 toast 提示。
+- **外圈奖品新增「永久余额」类型**（`lib/lottery/prize-math.ts` + `app/(dashboard)/lottery/actions.ts`）：
+  - `OuterPrize.kind` 新增 `permanentCredits`：按倍数结算后直接发进**永久余额**（不过期），与现有 `credits`（发临时余额，带 `prizeValidDays` 过期）和 `tickets`（赠券）并列。
+  - `DrawResult` 新增 `balanceType` 字段（`temporary` / `permanent` / `null`），`planDrawBatch` 据此决定正数 cr 写临时余额表还是并进永久余额净额 UPDATE；倒扣仍走永久余额。
+  - 流水 description 对永久余额档标注「（永久）」，钱包流水可区分。
+  - 前端转盘扇区用绿色调（`permanent` tone），label 加「永久」后缀；后台配置表单外圈类型下拉新增「倍数·永久」选项，实时折算 note 也带永久标记。
+  - 默认外圈奖池把 ×12 档（weight=1）改为永久余额，低概率大奖感知更强；线上已有配置不受影响（`sanitizeOuter` 兼容旧配置）。
 
 ## [0.6.0] - 2026-10-08
 

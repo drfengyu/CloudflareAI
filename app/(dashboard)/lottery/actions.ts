@@ -204,8 +204,10 @@ function planDrawBatch(
     // 赠券档不产生 cr 变动，也就不写流水（否则钱包里会躺一条「+3 张券 0 cr」的噪声行）。
     if (amount === 0) continue;
 
-    // 流水里也只记实际 cr 与落在哪一圈，倍数是配置的内部表达。
-    const label = `${outcome.ring === "outer" ? "外圈" : "内圈"} ${formatPrizeLabel(amount)}`;
+    // 流水里也只记实际 cr 与落在哪一圈，倍数是配置的内部表达；永久余额标注「永久」。
+    const ringLabel = outcome.ring === "outer" ? "外圈" : "内圈";
+    const permanentTag = outcome.balanceType === "permanent" ? "（永久）" : "";
+    const label = `${ringLabel} ${formatPrizeLabel(amount)}${permanentTag}`;
     topupRows.push({
       id: crypto.randomUUID(),
       userId,
@@ -215,7 +217,11 @@ function planDrawBatch(
       createdAt,
     });
 
-    if (amount > 0) {
+    if (amount > 0 && outcome.balanceType === "permanent") {
+      // 永久余额奖品：直接进永久余额，不过期。
+      permanentDelta = round2(permanentDelta + amount);
+    } else if (amount > 0) {
+      // 普通正数奖品：发带过期的临时余额。
       tempRows.push(
         buildTemporaryPrizeRow(
           userId,
@@ -225,6 +231,7 @@ function planDrawBatch(
         ),
       );
     } else {
+      // 倒扣：直接扣永久余额，允许扣成负数。
       permanentDelta = round2(permanentDelta + amount);
     }
   }

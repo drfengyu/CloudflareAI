@@ -28,13 +28,13 @@ export interface InnerPrize {
   weight: number;
 }
 
-/** 外圈奖品分两类：按倍数结算 cr，或直接赠送抽奖券。 */
-export type OuterPrizeKind = "credits" | "tickets";
+/** 外圈奖品分三类：按倍数结算临时余额 cr，直接发永久余额 cr，或赠送抽奖券。 */
+export type OuterPrizeKind = "credits" | "permanentCredits" | "tickets";
 
 export interface OuterPrize {
-  /** credits=`multiplier`×基数 cr；tickets=直接发 `tickets` 张券，不产生 cr 变动。 */
+  /** credits=倍数×基数 → 临时余额（带过期）；permanentCredits=倍数×基数 → 永久余额（不过期）；tickets=直接发券。 */
   kind: OuterPrizeKind;
-  /** kind=credits 时生效，可为负（倒扣）。 */
+  /** kind=credits/permanentCredits 时生效，可为负（倒扣）。 */
   multiplier: number;
   /** kind=tickets 时生效，赠送张数。 */
   tickets: number;
@@ -103,7 +103,7 @@ export const DEFAULT_LOTTERY_CONFIG: LotteryConfig = {
     { kind: "credits", multiplier: 4, tickets: 0, weight: 7 },
     { kind: "credits", multiplier: 5, tickets: 0, weight: 6 },
     { kind: "credits", multiplier: 8, tickets: 0, weight: 2 },
-    { kind: "credits", multiplier: 12, tickets: 0, weight: 1 },
+    { kind: "permanentCredits", multiplier: 12, tickets: 0, weight: 1 },
     { kind: "credits", multiplier: 20, tickets: 0, weight: 0.5 },
     { kind: "tickets", multiplier: 0, tickets: 1, weight: 12 },
     { kind: "tickets", multiplier: 0, tickets: 2, weight: 7 },
@@ -159,6 +159,9 @@ function sanitizeOuter(value: unknown): OuterPrize[] {
       // 旧配置里没有 kind：一律按 cr 倍数解释，线上已有的奖池原样可用。
       if (item?.kind === "tickets") {
         return { kind: "tickets" as const, multiplier: 0, tickets: tickets > 0 ? tickets : 1, weight };
+      }
+      if (item?.kind === "permanentCredits") {
+        return { kind: "permanentCredits" as const, multiplier: Number(item?.multiplier), tickets: 0, weight };
       }
       return { kind: "credits" as const, multiplier: Number(item?.multiplier), tickets: 0, weight };
     })
@@ -278,6 +281,8 @@ export interface DrawResult {
   baseCredits: number;
   /** 本次抽中的抽奖券张数（外圈赠券档）；0 = 不发券。 */
   grantTickets: number;
+  /** 正数 cr 发去哪类余额：temporary=带过期的临时余额，permanent=永久余额，null=无 cr 变动或倒扣。 */
+  balanceType: "temporary" | "permanent" | null;
   label: string;
 }
 
@@ -348,6 +353,8 @@ export function rollPrize(
       multiplier: null,
       baseCredits: 0,
       grantTickets: 0,
+      // 内圈正数发临时余额，倒扣（负数）走永久余额。
+      balanceType: credits > 0 ? "temporary" : null,
       label: formatPrizeLabel(credits),
     };
   }
@@ -365,6 +372,7 @@ export function rollPrize(
       multiplier: null,
       baseCredits: 0,
       grantTickets: prize.tickets,
+      balanceType: null,
       label: formatTicketLabel(prize.tickets),
     };
   }
@@ -379,6 +387,8 @@ export function rollPrize(
     multiplier: prize.multiplier,
     baseCredits: base,
     grantTickets: 0,
+    // permanentCredits 正数发永久余额（不过期）；credits 正数发临时余额；倒扣走永久余额。
+    balanceType: credits > 0 ? (prize.kind === "permanentCredits" ? "permanent" : "temporary") : null,
     label: formatPrizeLabel(credits),
   };
 }

@@ -22,8 +22,8 @@ interface InnerRow {
   weight: string;
 }
 interface OuterRow {
-  /** credits=按倍数结 cr；tickets=直接赠券。 */
-  kind: "credits" | "tickets";
+  /** credits=倍数→临时余额（带过期）；permanentCredits=倍数→永久余额（不过期）；tickets=直接赠券。 */
+  kind: "credits" | "permanentCredits" | "tickets";
   multiplier: string;
   tickets: string;
   weight: string;
@@ -419,13 +419,14 @@ function OuterPrizeSection({
     if (!Number.isFinite(m) || row.multiplier.trim() === "") return "—";
     const single = formatPrizeLabel(outerPrizeCredits(config, m, 1));
     const batch = formatPrizeLabel(outerPrizeCredits(config, m, 10));
-    return batch === single ? single : `${single} / 10连 ${batch}`;
+    const tag = row.kind === "permanentCredits" ? " 永久" : "";
+    return batch === single ? `${single}${tag}` : `${single}${tag} / 10连 ${batch}${tag}`;
   }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">外圈奖品（倍数 cr / 赠送抽奖券）</p>
+        <p className="text-sm font-medium">外圈奖品（倍数·临时余额 / 倍数·永久余额 / 赠送抽奖券）</p>
         <Button
           type="button"
           variant="outline"
@@ -465,9 +466,10 @@ function OuterPrizeSection({
               <select
                 value={row.kind}
                 onChange={(e) => patch(i, { kind: e.target.value as OuterRow["kind"] })}
-                className="w-20 shrink-0 rounded-lg border border-border bg-card px-2 py-2 text-sm"
+                className="w-24 shrink-0 rounded-lg border border-border bg-card px-2 py-2 text-sm"
               >
-                <option value="credits">倍数 cr</option>
+                <option value="credits">倍数·临时</option>
+                <option value="permanentCredits">倍数·永久</option>
                 <option value="tickets">赠券</option>
               </select>
               <input

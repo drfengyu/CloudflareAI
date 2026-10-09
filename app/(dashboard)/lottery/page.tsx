@@ -78,10 +78,12 @@ function buildWheelViews(config: LotteryConfig): {
     }
     const single = outerPrizeCredits(config, p.multiplier, 1);
     const batch = outerPrizeCredits(config, p.multiplier, 10);
+    // 永久余额档用绿色调，label 加「永久」标记，与临时余额奖品区分。
+    const isPermanent = p.kind === "permanentCredits";
     return {
-      label: formatPrizeLabel(single),
-      ...(batch !== single ? { batchLabel: formatPrizeLabel(batch) } : {}),
-      tone: toneOf(p.multiplier),
+      label: isPermanent ? `${formatPrizeLabel(single)} 永久` : formatPrizeLabel(single),
+      ...(batch !== single ? { batchLabel: isPermanent ? `${formatPrizeLabel(batch)} 永久` : formatPrizeLabel(batch) } : {}),
+      tone: (isPermanent ? "permanent" : toneOf(p.multiplier)) as WheelOuter["tone"],
       weight: round2(share),
       chance: chanceOfSector,
     };
