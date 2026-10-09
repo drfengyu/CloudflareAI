@@ -92,6 +92,7 @@ const TICKET_LABEL: Record<DrawRecord["ticketSource"], string> = {
   buy: "购买",
   gift: "赠送",
   prize: "抽中",
+  free: "免费",
   unknown: "已失效",
 };
 

@@ -63,6 +63,8 @@ export interface LotteryWheelProps {
   status: ActivityStatus;
   startAtMs: number | null;
   endAtMs: number | null;
+  /** 今日是否还有免费抽 1 次的额度（服务端查 ticketId IS NULL 的今日记录）。 */
+  freeDrawAvailable: boolean;
 }
 
 /** 霓虹配色：每个音调给深浅两档交替，相邻扇区才分得开。赠券档用金色与 cr 档区分。 */
@@ -248,10 +250,14 @@ export function LotteryWheel(props: LotteryWheelProps) {
   const [buyCount, setBuyCount] = useState(10);
   const [buying, setBuying] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  /** 本次会话内免费抽是否已用掉；服务端 revalidate 后 props 会更新，但动画期间靠本地状态挡重复点击。 */
+  const [freeDrawUsed, setFreeDrawUsed] = useState(false);
   const timers = useRef<number[]>([]);
 
   const active = props.status === "active";
   const busy = phase === "inner" || phase === "outer";
+  /** 免费抽可用：服务端说有额度 + 本次会话还没用。 */
+  const canFreeDraw = props.freeDrawAvailable && !freeDrawUsed;
   const innerSectorSpans = useMemo(
     () => spans(props.innerSectors.map((s) => s.weight)),
     [props.innerSectors],
@@ -277,7 +283,9 @@ export function LotteryWheel(props: LotteryWheelProps) {
 
   async function handleDraw(count: 1 | 10) {
     if (busy) return;
-    if (tickets < count) {
+    // 免费抽只对单抽生效；10 连抽和免费抽之后的单抽都需要券。
+    const useFree = count === 1 && canFreeDraw;
+    if (!useFree && tickets < count) {
       toast.error(`抽奖券不足，本次需要 ${count} 张`);
       return;
     }
@@ -287,12 +295,17 @@ export function LotteryWheel(props: LotteryWheelProps) {
     setResults(null);
     setSpokes([]);
 
-    const response = await drawLottery(count);
+    const response = await drawLottery(count, useFree);
     if (!response.success) {
       setPhase("idle");
       toast.error(response.error);
       router.refresh();
       return;
+    }
+
+    // 免费抽成功后标记本地已用，按钮立刻变回收费状态（不需要等 revalidate）。
+    if (response.data.freeDrawUsed) {
+      setFreeDrawUsed(true);
     }
 
     const drawn = response.data.results;
@@ -339,6 +352,9 @@ export function LotteryWheel(props: LotteryWheelProps) {
         () => toast.success(`累抽达标，赠送 ${response.data.giftedTickets} 张抽奖券`),
         spokesDone + 240,
       );
+    }
+    if (response.data.freeDrawUsed) {
+      later(() => toast.info("今日免费抽已使用，明天再来"), spokesDone + 480);
     }
     later(() => router.refresh(), spokesDone);
   }
@@ -562,10 +578,10 @@ export function LotteryWheel(props: LotteryWheelProps) {
           <div className="mt-4 grid grid-cols-2 gap-3">
             <button
               onClick={() => handleDraw(1)}
-              disabled={!active || busy || tickets < 1}
+              disabled={!active || busy || (!canFreeDraw && tickets < 1)}
               className="h-11 rounded-lg bg-cyan-400 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {busy ? "开奖中…" : `抽 1 次（${tickets} 券）`}
+              {busy ? "开奖中…" : canFreeDraw ? "免费抽 1 次" : `抽 1 次（${tickets} 券）`}
             </button>
             <button
               onClick={() => handleDraw(10)}

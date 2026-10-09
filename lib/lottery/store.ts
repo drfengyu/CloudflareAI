@@ -66,6 +66,29 @@ export async function listRecentDraws(userId: string, limit = 20): Promise<DrawR
     .limit(limit);
 }
 
+/**
+ * 今日是否已用过免费抽：查今天第一条 `ticketId IS NULL` 的开奖记录。
+ * 免费抽不消耗券，所以行上的 ticketId 为空；买券抽的行都绑了券 id。
+ * `createdAt` 是毫秒整数，按北京时间日历日切（00:00 起算）。
+ */
+export async function hasUsedFreeDrawToday(userId: string, now = Date.now()): Promise<boolean> {
+  // 北京时间 = UTC + 8h；先挪到 UTC+8 再取当天 0 点，最后挪回 UTC 毫秒。
+  const cnNow = now + 8 * 60 * 60 * 1000;
+  const cnDayStart = cnNow - (cnNow % (24 * 60 * 60 * 1000));
+  const todayStartMs = cnDayStart - 8 * 60 * 60 * 1000;
+  const rows = await db
+    .select({ c: sql<number>`COUNT(*)` })
+    .from(lotteryDraws)
+    .where(
+      and(
+        eq(lotteryDraws.userId, userId),
+        isNull(lotteryDraws.ticketId),
+        sql`${lotteryDraws.createdAt} >= ${todayStartMs}`,
+      ),
+    );
+  return Number(rows[0]?.c ?? 0) > 0;
+}
+
 /** 参与人数与总抽奖次数（活动页统计）。 */
 export async function globalLotteryStats(): Promise<{ totalDraws: number; players: number }> {
   const [draws, players] = await Promise.all([

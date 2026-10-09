@@ -22,6 +22,7 @@ import {
   deleteTickets,
   deleteTopupsByIds,
   grantTickets,
+  hasUsedFreeDrawToday,
   insertDrawRows,
   insertTemporaryBalanceRows,
   insertTopupRows,
@@ -162,7 +163,7 @@ function planDrawBatch(
   config: LotteryConfig,
   count: number,
   batchId: string,
-  ticketIds: string[],
+  ticketIds: (string | null)[],
 ): DrawBatchPlan {
   const batchSpend = round2(config.ticketPriceCredits * count);
   const results: DrawOutcome[] = [];
@@ -257,9 +258,13 @@ async function compensateDrawBatch(
  *
  * 券整批锁定挡住并发双花；写库失败就整批撤销、券原样退回，所以这一批要么全落账
  * 要么全不落（回滚粒度是整批，不是逐注——逐注保留需要每注一次往返，正是慢的根源）。
+ *
+ * `useFreeDraw=true` 且 count=1 且今日未用过免费抽时，本次不消耗券（行上 ticketId 留 null）。
+ * 服务端自己查 `hasUsedFreeDrawToday` 验证，前端无法通过重复传参作弊。
  */
 export async function drawLottery(
   count: 1 | 10,
+  useFreeDraw = false,
 ): Promise<
   ActionResult<{
     results: DrawOutcome[];
@@ -268,6 +273,7 @@ export async function drawLottery(
     ticketsLeft: number;
     totalDraws: number;
     giftedTickets: number;
+    freeDrawUsed: boolean;
   }>
 > {
   try {
@@ -277,29 +283,38 @@ export async function drawLottery(
       return { success: false, error: "操作过于频繁，请稍后再试" };
     }
 
+    // 免费抽只对单抽生效，且服务端自己验证今日是否已用过。
+    const freeDrawEligible = useFreeDraw && count === 1 && !(await hasUsedFreeDrawToday(userId));
+
     // 一波并发读：活动窗口、可用券、券包余量与本批之前的累计次数。
-    const [config, ticketIds, ticketsBefore, drawsBefore] = await Promise.all([
+    // 免费抽不需要取券 id，但 ticketsBefore / drawsBefore 仍然要算（返回值与档位判定用）。
+    const [config, pickedIds, ticketsBefore, drawsBefore] = await Promise.all([
       getLotteryConfig(),
-      pickUnusedTicketIds(userId, count),
+      freeDrawEligible ? Promise.resolve<string[]>([]) : pickUnusedTicketIds(userId, count),
       countUnusedTickets(userId),
       countDraws(userId),
     ]);
 
     const closed = windowError(config);
     if (closed) return { success: false, error: closed };
-    if (ticketIds.length < count) {
+    if (!freeDrawEligible && pickedIds.length < count) {
       return {
         success: false,
-        error: `抽奖券不足：本次需要 ${count} 张，当前可用 ${ticketIds.length} 张`,
+        error: `抽奖券不足：本次需要 ${count} 张，当前可用 ${pickedIds.length} 张`,
       };
     }
+
+    // 免费抽时 ticketIds 是 [null]，开奖行的 ticketId 留空，标记这是一次免费抽。
+    const ticketIds: (string | null)[] = freeDrawEligible ? [null] : pickedIds;
 
     const batchId = crypto.randomUUID();
     const plan = planDrawBatch(userId, config, count, batchId, ticketIds);
 
-    if (!(await lockTickets(ticketIds, rowIds(plan.drawRows)))) {
-      await unlockTickets(ticketIds);
-      return { success: false, error: "抽奖券正在被使用，请稍后重试" };
+    if (!freeDrawEligible) {
+      if (!(await lockTickets(pickedIds, rowIds(plan.drawRows)))) {
+        await unlockTickets(pickedIds);
+        return { success: false, error: "抽奖券正在被使用，请稍后重试" };
+      }
     }
 
     // 本批发出去的券（抽中的赠券档 + 档位赠送），撤销时按 id 收回。
@@ -347,7 +362,8 @@ export async function drawLottery(
     );
     if (failure) {
       console.error("[drawLottery] 整批开奖写入失败，整批撤销", failure.reason);
-      await compensateDrawBatch(userId, plan, issuedTicketIds, ticketIds);
+      // 免费抽没有锁定任何券，locked 传空数组即可。
+      await compensateDrawBatch(userId, plan, issuedTicketIds, freeDrawEligible ? [] : pickedIds);
       return { success: false, error: "开奖失败，本次未消耗抽奖券，请稍后再试" };
     }
 
@@ -361,9 +377,13 @@ export async function drawLottery(
         // 这一批抽中的赠券（奖池档），与累抽档位送的券分开报，前端两句话分开提示。
         prizeTickets: plan.prizeTickets,
         // 券包余量按本批收支算出来，省掉写入后的一次往返。
-        ticketsLeft: ticketsBefore - count + plan.prizeTickets + giftedTickets,
+        // 免费抽不消耗券，所以不减 count。
+        ticketsLeft: freeDrawEligible
+          ? ticketsBefore + plan.prizeTickets + giftedTickets
+          : ticketsBefore - count + plan.prizeTickets + giftedTickets,
         totalDraws,
         giftedTickets,
+        freeDrawUsed: freeDrawEligible,
       },
     };
   } catch (error) {

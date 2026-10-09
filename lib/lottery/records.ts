@@ -17,8 +17,8 @@ export interface LotteryWindow {
   end: Date;
 }
 
-/** `unknown` = 券行已被清理（用户注销级联删除），此时面值按 0 计。 */
-export type TicketSourceLabel = "buy" | "gift" | "prize" | "unknown";
+/** `unknown` = 券行已被清理（用户注销级联删除），此时面值按 0 计；`free` = 每日免费抽（ticketId 为 null）。 */
+export type TicketSourceLabel = "buy" | "gift" | "prize" | "free" | "unknown";
 
 /** 一注开奖的完整记录：抽奖结果 + 消耗掉的那张券的来源与面值。 */
 export interface DrawRecord {
@@ -272,6 +272,8 @@ export async function listDrawRecords(opts: {
 
   return rows.map((row) => {
     const ticket = row.ticketId ? ticketMap.get(row.ticketId) : undefined;
+    // ticketId 为 null 是每日免费抽；有 id 但查不到券行是用户注销级联删除。
+    const source: TicketSourceLabel = !row.ticketId ? "free" : ticket?.source ?? "unknown";
     return {
       id: row.id,
       userId: row.userId,
@@ -284,7 +286,7 @@ export async function listDrawRecords(opts: {
       baseCredits: Number(row.baseCredits),
       grantTickets: Number(row.grantTickets ?? 0),
       createdAt: row.createdAt,
-      ticketSource: ticket?.source ?? "unknown",
+      ticketSource: source,
       ticketCredits: Number(ticket?.priceCredits ?? 0),
     };
   });
