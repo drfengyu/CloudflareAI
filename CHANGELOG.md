@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **活动轮次支持**（`lib/db/schema.ts` + `migrations/010_lottery_activity_round.sql` + `lib/lottery/*` + `app/(dashboard)/lottery/*` + `app/(dashboard)/admin/settings/*`）：
+  - `lottery_ticket` 和 `lottery_draw` 表新增 `activityKey` 字段（text，可空，用活动 `startAt` 字符串作为轮次唯一标识），`lottery_ticket` 新增 `expired` 字段（integer，默认 0）。迁移 `010_lottery_activity_round.sql` 已执行到线上 D1，加了 `idx_lottery_ticket_activity` 和 `idx_lottery_draw_activity` 索引。
+  - 管理端「限时活动」配置新增 **「活动结束时未使用券作废」** 开关（`ticketsExpireOnActivityEnd`）。开启后，新一轮活动开始时上一期未使用的券自动标记 `expired=1`，不再计入可用券；关闭则券继续有效、可跨轮使用。
+  - 券过期触发时机：用户访问抽奖页或尝试抽奖时，若活动已结束且开关开启，自动作废该用户本轮未使用的券。只标记不物理删除，便于管理端对账。
+  - **保底按活动轮次重置**：`countConsecutiveMisses` 和 `countDraws` 支持按 `activityKey` 过滤，新一轮活动开始后连续未中计数和累抽次数从零开始，旧活动的保底不继承到新活动。
+  - **记录页按活动轮次分组**：`listDrawRecords` 返回 `activityKey`，`lotteryBalance` 支持按 `activityKey` 过滤。前端记录页分两组汇总：当前活动战绩（新活动重计）+ 全部活动累计战绩；明细按轮次分组，当前活动展开、旧活动折叠可点击展开，历史数据（`activityKey` 为 null）归为「历史活动」。
+  - 购券、赠券（累抽档位+中奖赠券档）、开奖记录均写入当前 `activityKey`，确保每轮活动的数据可独立追溯。
+
 ### 修复
 
 - **后台返还率计算未计入累抽送券**（`lib/lottery/prize-math.ts` + `app/(dashboard)/admin/settings/lottery-form.tsx`）：
