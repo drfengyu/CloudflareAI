@@ -106,9 +106,10 @@ export async function buyTickets(
         },
       ]);
     } catch (error) {
-      console.error("[buyTickets] 发券失败，退回扣款", error);
+      const detail = error instanceof Error ? error.message : String(error);
+      console.error("[buyTickets] 发券失败，退回扣款", detail, error);
       await compensatePurchase(userId, issued, cost);
-      return { success: false, error: "发券失败，扣款已退回，请稍后再试" };
+      return { success: false, error: `发券失败：${detail}，扣款已退回` };
     }
 
     revalidatePath("/lottery");
