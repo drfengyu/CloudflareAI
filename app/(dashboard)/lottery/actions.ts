@@ -383,25 +383,33 @@ export async function drawLottery(
           })
         : Promise.resolve();
 
-    const settled = await Promise.allSettled([
-      insertDrawRows(plan.drawRows),
-      insertTopupRows(plan.topupRows),
-      insertTemporaryBalanceRows(plan.tempRows),
-      plan.permanentDelta !== 0
-        ? adjustPermanentBalance(userId, plan.permanentDelta)
-        : Promise.resolve(),
-      prizeGrant,
-      ...milestoneGrants,
-    ]);
+    // 每个写入操作打标签，失败时能精准定位是哪一步炸了
+    const writeTasks: Array<{ label: string; promise: Promise<unknown> }> = [
+      { label: "insertDrawRows", promise: insertDrawRows(plan.drawRows) },
+      { label: "insertTopupRows", promise: insertTopupRows(plan.topupRows) },
+      { label: "insertTemporaryBalanceRows", promise: insertTemporaryBalanceRows(plan.tempRows) },
+      {
+        label: "adjustPermanentBalance",
+        promise: plan.permanentDelta !== 0 ? adjustPermanentBalance(userId, plan.permanentDelta) : Promise.resolve(),
+      },
+      { label: "prizeGrant", promise: prizeGrant },
+      ...milestoneGrants.map((p, i) => ({ label: `milestoneGrant_${i}`, promise: p })),
+    ];
 
-    const failure = settled.find((result): result is PromiseRejectedResult =>
-      result.status === "rejected",
-    );
-    if (failure) {
-      console.error("[drawLottery] 整批开奖写入失败，整批撤销", failure.reason);
+    const settled = await Promise.allSettled(writeTasks.map((t) => t.promise));
+
+    const failureIndex = settled.findIndex((r) => r.status === "rejected");
+    if (failureIndex >= 0) {
+      const failedTask = writeTasks[failureIndex];
+      const reason = (settled[failureIndex] as PromiseRejectedResult).reason;
+      console.error(
+        `[drawLottery] 写入失败 step=${failedTask.label}`,
+        reason instanceof Error ? { message: reason.message, stack: reason.stack } : reason,
+      );
       // 免费抽没有锁定任何券，locked 传空数组即可。
       await compensateDrawBatch(userId, plan, issuedTicketIds, freeDrawEligible ? [] : pickedIds);
-      return { success: false, error: "开奖失败，本次未消耗抽奖券，请稍后再试" };
+      const detail = reason instanceof Error ? reason.message : String(reason);
+      return { success: false, error: `开奖失败（${failedTask.label}）：${detail}` };
     }
 
     revalidatePath("/lottery");
