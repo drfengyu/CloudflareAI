@@ -178,7 +178,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         }
       }
-      // 如果 token 中没有 email 但有 sub，从数据库查询补全（同时补 role）
+      // 如果 token 中没有 email 但有 sub，从数据库查询补全（同时补 role）。
+      // 注意：只有首次缺失时才查库，查到后立刻写进 token，后续请求不再查库。
+      // catch 时必须设默认值，否则 role 永远是 undefined → 每次请求都重试查库 → 全站卡顿。
       else if (token.sub && (token.email === undefined || token.role === undefined)) {
         try {
           const dbUser = await db.query.users.findFirst({
@@ -191,11 +193,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               token.image = dbUser.image;
             }
             if (token.role === undefined) {
-              token.role = dbUser.role;
+              token.role = dbUser.role ?? 1;
             }
+          } else {
+            // 用户不存在，设默认值避免无限重试
+            if (token.role === undefined) token.role = 1;
           }
         } catch (err) {
           console.error("[JWT] DB query failed:", err);
+          // 查询失败也必须设默认值，否则下次请求又会重试查库
+          if (token.role === undefined) token.role = 1;
         }
       }
       return token;

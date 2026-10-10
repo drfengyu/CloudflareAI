@@ -64,11 +64,14 @@ export async function setSetting(key: string, value: string | number | boolean |
 
 /**
  * 获取认证渠道配置
+ * 3 个 setting 并行查询，避免串行 3 次 D1 往返。
  */
 export async function getAuthChannels() {
-  const emailEnabled = await getSetting("auth_email_enabled", true);
-  const githubEnabled = await getSetting("auth_github_enabled", true);
-  const linuxdoEnabled = await getSetting("auth_linuxdo_enabled", true);
+  const [emailEnabled, githubEnabled, linuxdoEnabled] = await Promise.all([
+    getSetting("auth_email_enabled", true),
+    getSetting("auth_github_enabled", true),
+    getSetting("auth_linuxdo_enabled", true),
+  ]);
 
   return {
     email: emailEnabled,
