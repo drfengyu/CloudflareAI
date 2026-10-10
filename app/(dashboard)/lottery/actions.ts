@@ -441,5 +441,14 @@ export async function drawLottery(
 
 /** 档位赠券的唯一索引冲突是「这一档早领过了」，不是故障，不该拖垮整批。 */
 function isUniqueConflict(error: unknown): boolean {
-  return error instanceof Error && /UNIQUE constraint failed/i.test(error.message);
+  if (!(error instanceof Error)) return false;
+  // Drizzle 包装后的错误：message 可能是 "Failed query: ..."，
+  // 原始 SQLite 错误可能在 cause.message 里，或者整个对象 toString 里。
+  const parts = [
+    error.message,
+    error.cause instanceof Error ? error.cause.message : "",
+    typeof error.cause === "object" && error.cause !== null ? String((error.cause as Record<string, unknown>).message ?? "") : "",
+  ];
+  const combined = parts.join(" ");
+  return /UNIQUE constraint failed/i.test(combined) || /unique/i.test(combined) && /constraint/i.test(combined);
 }

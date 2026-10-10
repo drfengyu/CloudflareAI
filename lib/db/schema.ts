@@ -391,9 +391,10 @@ export const lotteryTickets = sqliteTable(
     createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
   },
   (table) => [
-    // 同一档位只发一次：重复领取时第 0 张必然撞索引，整笔赠券因此被挡下。
-    // SQLite 的唯一索引把 NULL 视为互不相等，所以买券 / 抽中赠券的行不受影响。
-    unique("uq_lottery_ticket_milestone").on(table.userId, table.milestoneDraws, table.milestoneSeq),
+    // 同一用户同一活动轮次的同一档位只发一次：重复领取时第 0 张必然撞索引，整笔赠券因此被挡下。
+    // 包含 activityKey，确保不同活动轮次可以各自领一次。
+    // SQLite 的唯一索引把 NULL 视为互不相等，所以买券 / 抽中赠券的行（milestoneDraws 为 NULL）不受影响。
+    unique("uq_lottery_ticket_milestone").on(table.userId, table.milestoneDraws, table.milestoneSeq, table.activityKey),
   ],
 );
 
