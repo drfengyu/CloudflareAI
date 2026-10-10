@@ -37,6 +37,10 @@
 
 - **买券失败时返回具体错误原因**（`app/(dashboard)/lottery/actions.ts`）：`buyTickets` catch 块把原始错误信息拼进返回值（如 `发券失败：too many SQL variables`），不再统一返回「发券失败，请稍后再试」，便于线上定位。
 
+- **买 50 张券发券失败（D1 参数超限）**（`lib/lottery/store.ts`）：
+  - `grantTickets` 中 `batchRows(values, 8)` 列数算错，实际 INSERT 包含 10 个字段（Drizzle 自动补 `usedDrawId`、`expired` 默认值），12 行 × 10 列 = 120 参数，超过 D1 的 100 参数限制。
+  - 修复为 `batchRows(values, 10)`，每批最多 10 行（10×10=100，刚好不超限），50 张券分 5 批插入。
+
 ### 变更
 
 - **保底机制重做：固定翻倍 → 渐进式概率提升**（`lib/lottery/prize-math.ts` + `app/(dashboard)/lottery/actions.ts` + `lottery-wheel.tsx`）：

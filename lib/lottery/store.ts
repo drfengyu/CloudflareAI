@@ -226,8 +226,8 @@ export async function grantTickets(
       createdAt: new Date(),
     };
   });
-  // 每行绑 8 个参数，一次买 50 张就是 400 个，会直接撞 D1 的参数墙，必须分片。
-  for (const batch of batchRows(values, 8)) {
+  // 每行绑 10 个参数（含 Drizzle 自动补的 usedDrawId、expired 默认值），一次买 50 张就是 500 个，会直接撞 D1 的参数墙，必须分片。
+  for (const batch of batchRows(values, 10)) {
     await db.insert(lotteryTickets).values(batch);
   }
   return ids;
