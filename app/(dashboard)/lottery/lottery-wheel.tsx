@@ -746,6 +746,30 @@ export function LotteryWheel(props: LotteryWheelProps) {
       </Card>
 
       <div className="space-y-6">
+        {/* 我的战绩：顶部展示，用户最关心 */}
+        <Card className="border-cyan-400/20 bg-gradient-to-br from-cyan-400/5 to-transparent">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <span className="text-cyan-400">📊</span>
+              我的战绩
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-3 gap-3 text-center">
+            <div className="rounded-lg bg-white/5 py-2">
+              <p className="text-xl font-bold text-cyan-300">{props.totalDraws}</p>
+              <p className="mt-0.5 text-[11px] text-white/50">累计抽奖</p>
+            </div>
+            <div className="rounded-lg bg-white/5 py-2">
+              <p className="text-xl font-bold text-amber-300">{tickets}</p>
+              <p className="mt-0.5 text-[11px] text-white/50">可用券</p>
+            </div>
+            <div className="rounded-lg bg-white/5 py-2">
+              <p className="text-xl font-bold text-emerald-300">{formatCredits(props.totalCredits)}</p>
+              <p className="mt-0.5 text-[11px] text-white/50">总余额 cr</p>
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-base">本次结果</CardTitle>
@@ -801,31 +825,45 @@ export function LotteryWheel(props: LotteryWheelProps) {
           </CardContent>
         </Card>
 
-        {/* 中奖墙：最近 24 小时大奖播报，社会化证明「真的能中」 */}
-        <Card>
+        {/* 中奖墙：最近 24 小时大奖播报，纵向无缝滚动，社会化证明「真的能中」 */}
+        <Card className="overflow-hidden">
+          <style>{bigWinMarqueeKeyframes}</style>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">最近大奖 <span className="text-xs font-normal text-muted-foreground">（24 小时）</span></CardTitle>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <span className="text-amber-400">🏆</span>
+              最近大奖
+              <span className="text-xs font-normal text-muted-foreground">（24 小时 · 悬停暂停）</span>
+            </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {props.bigWins.length === 0 ? (
-              <p className="py-4 text-center text-xs text-muted-foreground">暂无大奖记录，来做第一个幸运儿！</p>
+              <p className="py-6 text-center text-xs text-muted-foreground">暂无大奖记录，来做第一个幸运儿！</p>
             ) : (
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {props.bigWins.map((win) => (
-                  <div
-                    key={win.id}
-                    className="flex shrink-0 items-center gap-2 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2"
-                  >
-                    <span className="text-base">🎉</span>
-                    <div className="leading-tight">
-                      <p className="text-xs font-medium text-amber-200">{win.userLabel}</p>
-                      <p className="text-[11px] text-white/60">
-                        {win.label}
-                        <span className="ml-1.5 text-white/30">{relativeTime(win.createdAt)}</span>
-                      </p>
+              <div className="relative h-48 overflow-hidden">
+                {/* 顶部/底部渐隐遮罩 */}
+                <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-6 bg-gradient-to-b from-background to-transparent" />
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-6 bg-gradient-to-t from-background to-transparent" />
+                <div className="lottery-bigwin-track space-y-2 px-3 py-2">
+                  {/* 复制一份实现无缝滚动 */}
+                  {[...props.bigWins, ...props.bigWins].map((win, idx) => (
+                    <div
+                      key={`${win.id}-${idx}`}
+                      className="flex items-center gap-3 rounded-lg border border-amber-400/15 bg-gradient-to-r from-amber-400/8 to-transparent px-3 py-2"
+                    >
+                      <span className="text-lg shrink-0">{win.grantTickets > 0 ? "🎟️" : "💰"}</span>
+                      <div className="min-w-0 flex-1 leading-tight">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-xs font-semibold text-amber-200">{win.userLabel}</span>
+                          <span className="shrink-0 text-[10px] text-white/40">{relativeTime(win.createdAt)}</span>
+                        </div>
+                        <p className="mt-0.5 text-sm font-bold text-white">
+                          {win.credits > 0 && <span className="text-emerald-400">+{formatCredits(win.credits)} cr</span>}
+                          {win.grantTickets > 0 && <span className="text-amber-300">+{win.grantTickets} 张券</span>}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </CardContent>
@@ -891,26 +929,6 @@ export function LotteryWheel(props: LotteryWheelProps) {
             </ul>
           </CardContent>
         </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">我的战绩</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-3 gap-3 text-center">
-            <div>
-              <p className="text-lg font-semibold">{props.totalDraws}</p>
-              <p className="text-xs text-muted-foreground">累计抽奖</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold">{tickets}</p>
-              <p className="text-xs text-muted-foreground">可用券</p>
-            </div>
-            <div>
-              <p className="text-lg font-semibold">{formatCredits(props.totalCredits)} cr</p>
-              <p className="text-xs text-muted-foreground">总余额</p>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
@@ -944,3 +962,17 @@ function StatusBadge({ status }: { status: ActivityStatus }) {
     </span>
   );
 }
+
+/** 中奖墙纵向无缝滚动动画 */
+const bigWinMarqueeKeyframes = `
+@keyframes lottery-bigwin-scroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}
+.lottery-bigwin-track {
+  animation: lottery-bigwin-scroll 30s linear infinite;
+}
+.lottery-bigwin-track:hover {
+  animation-play-state: paused;
+}
+`;
