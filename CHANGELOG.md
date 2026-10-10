@@ -7,6 +7,16 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **活动轮次支持**（`lib/db/schema.ts` + `migrations/010_lottery_activity_round.sql` + `lib/lottery/*` + `app/(dashboard)/lottery/*` + `app/(dashboard)/admin/settings/*`）：
+  - `lottery_ticket` 和 `lottery_draw` 表新增 `activityKey` 字段（text，可空，用活动 `startAt` 字符串作为轮次唯一标识），`lottery_ticket` 新增 `expired` 字段（integer，默认 0）。迁移 `010_lottery_activity_round.sql` 已执行到线上 D1，加了 `idx_lottery_ticket_activity` 和 `idx_lottery_draw_activity` 索引。
+  - 管理端「限时活动」配置新增 **「活动结束时未使用券作废」** 开关（`ticketsExpireOnActivityEnd`）。开启后，新一轮活动开始时上一期未使用的券自动标记 `expired=1`，不再计入可用券；关闭则券继续有效、可跨轮使用。
+  - 券过期触发时机：用户访问抽奖页或尝试抽奖时，若活动已结束且开关开启，自动作废该用户本轮未使用的券。只标记不物理删除，便于管理端对账。
+  - **保底按活动轮次重置**：`countConsecutiveMisses` 和 `countDraws` 支持按 `activityKey` 过滤，新一轮活动开始后连续未中计数和累抽次数从零开始，旧活动的保底不继承到新活动。
+  - **记录页按活动轮次分组**：`listDrawRecords` 返回 `activityKey`，`lotteryBalance` 支持按 `activityKey` 过滤。前端记录页分两组汇总：当前活动战绩（新活动重计）+ 全部活动累计战绩；明细按轮次分组，当前活动展开、旧活动折叠可点击展开，历史数据（`activityKey` 为 null）归为「历史活动」。
+  - 购券、赠券（累抽档位+中奖赠券档）、开奖记录均写入当前 `activityKey`，确保每轮活动的数据可独立追溯。
+
 ### 修复
 
 - **线上抽奖开奖失败（累抽赠券唯一索引冲突）**（`lib/db/schema.ts` + `migrations/011_lottery_milestone_unique_activity.sql` + `app/(dashboard)/lottery/actions.ts`）：
@@ -20,7 +30,22 @@
 
 - **登录页加载慢**（`lib/settings/index.ts`）：`getAuthChannels()` 3 次 D1 查询从串行改为 `Promise.all` 并行。
 
+- **后台返还率计算未计入累抽送券**（`lib/lottery/prize-math.ts` + `app/(dashboard)/admin/settings/lottery-form.tsx`）：
+  - `lotteryExpectation()` 此前只算内圈+外圈开奖返还，完全忽略 `milestones`（累抽达标送券），导致后台改送券档位时返还率提示纹丝不动。
+  - 新增 `milestoneCostPerTicket()`：总送券价值按最高档位 draws 均摊到每抽（保守估计，用户抽得越少实际占比越高），计入 `perTicket` 与 `returnRate`。
+  - 后台预览 UI 新增「累抽送券均摊 X cr/次」一行，说明文字补充送券档位改动会影响返还率。
+
+- **买券失败时返回具体错误原因**（`app/(dashboard)/lottery/actions.ts`）：`buyTickets` catch 块把原始错误信息拼进返回值（如 `发券失败：too many SQL variables`），不再统一返回「发券失败，请稍后再试」，便于线上定位。
+
 ### 变更
+
+- **保底机制重做：固定翻倍 → 渐进式概率提升**（`lib/lottery/prize-math.ts` + `app/(dashboard)/lottery/actions.ts` + `lottery-wheel.tsx`）：
+  - 阈值从 8 次提高到 **16 次**（`LUCKY_MISS_THRESHOLD`），后调整为 **12 次**。
+  - 去掉固定翻倍（`LUCKY_OUTER_BOOST=2`），改为每多连续未中 1 次，外圈概率 **+0.1%**（`LUCKY_CHANCE_STEP_PERCENT`），上限 **20%**（`LUCKY_CHANCE_CAP_PERCENT`），后调整为 **+0.5%，上限 35%**。
+  - 新增 `calculateLuckyChance(consecutiveMisses, baseChance)` 统一计算当前外圈概率，服务端开奖与前端展示共用。
+  - 前端进度条分两段：前 12 次显示距离阈值进度，达到阈值后显示距离 35% 上限的进度，并实时显示当前外圈概率百分比。
+  - 中一次外圈正档（正数 cr 或赠券）后连续未中计数清零，重新开始累积。
+  - 服务端返回值新增 `luckyChancePercent`，toast 提示从「外圈概率翻倍」改为显示实际概率。
 
 - **保底参数调整：更快触发、更快提升、更高上限**（`lib/lottery/prize-math.ts` + `app/(dashboard)/lottery/lottery-wheel.tsx`）：
   - 阈值从 16 次降到 **12 次**（`LUCKY_MISS_THRESHOLD`），保底更早生效。
@@ -35,32 +60,9 @@
   - 新增 `drawingLuckyChance` 状态，抽奖请求返回后立即设置本次外圈概率（含保底提升），动画期间在保底进度条区域实时显示，动画结束后清空。
   - 保底已触发时显示「本次外圈概率 X%（保底已触发）」。
 
-### 新增
-
-- **活动轮次支持**（`lib/db/schema.ts` + `migrations/010_lottery_activity_round.sql` + `lib/lottery/*` + `app/(dashboard)/lottery/*` + `app/(dashboard)/admin/settings/*`）：
-  - `lottery_ticket` 和 `lottery_draw` 表新增 `activityKey` 字段（text，可空，用活动 `startAt` 字符串作为轮次唯一标识），`lottery_ticket` 新增 `expired` 字段（integer，默认 0）。迁移 `010_lottery_activity_round.sql` 已执行到线上 D1，加了 `idx_lottery_ticket_activity` 和 `idx_lottery_draw_activity` 索引。
-  - 管理端「限时活动」配置新增 **「活动结束时未使用券作废」** 开关（`ticketsExpireOnActivityEnd`）。开启后，新一轮活动开始时上一期未使用的券自动标记 `expired=1`，不再计入可用券；关闭则券继续有效、可跨轮使用。
-  - 券过期触发时机：用户访问抽奖页或尝试抽奖时，若活动已结束且开关开启，自动作废该用户本轮未使用的券。只标记不物理删除，便于管理端对账。
-  - **保底按活动轮次重置**：`countConsecutiveMisses` 和 `countDraws` 支持按 `activityKey` 过滤，新一轮活动开始后连续未中计数和累抽次数从零开始，旧活动的保底不继承到新活动。
-  - **记录页按活动轮次分组**：`listDrawRecords` 返回 `activityKey`，`lotteryBalance` 支持按 `activityKey` 过滤。前端记录页分两组汇总：当前活动战绩（新活动重计）+ 全部活动累计战绩；明细按轮次分组，当前活动展开、旧活动折叠可点击展开，历史数据（`activityKey` 为 null）归为「历史活动」。
-  - 购券、赠券（累抽档位+中奖赠券档）、开奖记录均写入当前 `activityKey`，确保每轮活动的数据可独立追溯。
-
-### 修复
-
-- **后台返还率计算未计入累抽送券**（`lib/lottery/prize-math.ts` + `app/(dashboard)/admin/settings/lottery-form.tsx`）：
-  - `lotteryExpectation()` 此前只算内圈+外圈开奖返还，完全忽略 `milestones`（累抽达标送券），导致后台改送券档位时返还率提示纹丝不动。
-  - 新增 `milestoneCostPerTicket()`：总送券价值按最高档位 draws 均摊到每抽（保守估计，用户抽得越少实际占比越高），计入 `perTicket` 与 `returnRate`。
-  - 后台预览 UI 新增「累抽送券均摊 X cr/次」一行，说明文字补充送券档位改动会影响返还率。
-
-### 变更
-
-- **保底机制重做：固定翻倍 → 渐进式概率提升**（`lib/lottery/prize-math.ts` + `app/(dashboard)/lottery/actions.ts` + `lottery-wheel.tsx`）：
-  - 阈值从 8 次提高到 **16 次**（`LUCKY_MISS_THRESHOLD`）。
-  - 去掉固定翻倍（`LUCKY_OUTER_BOOST=2`），改为每多连续未中 1 次，外圈概率 **+0.1%**（`LUCKY_CHANCE_STEP_PERCENT`），上限 **20%**（`LUCKY_CHANCE_CAP_PERCENT`）。
-  - 新增 `calculateLuckyChance(consecutiveMisses, baseChance)` 统一计算当前外圈概率，服务端开奖与前端展示共用。
-  - 前端进度条分两段：前 16 次显示距离阈值进度，达到阈值后显示距离 20% 上限的进度，并实时显示当前外圈概率百分比。
-  - 中一次外圈正档（正数 cr 或赠券）后连续未中计数清零，重新开始累积。
-  - 服务端返回值新增 `luckyChancePercent`，toast 提示从「外圈概率翻倍」改为显示实际概率。
+- **10连抽同一扇区多次命中时指针并排显示**（`app/(dashboard)/lottery/lottery-wheel.tsx`）：
+  - 同一 innerIndex 的多根结果指针在扇区宽度 70% 范围内均匀分布，加角度偏移并排显示，避免重叠成一根。
+  - 例：同一扇区命中 3 次 → 3 根指针分别在中心左右偏移，清晰可见每一根。
 
 ## [0.7.0] - 2026-10-09
 
