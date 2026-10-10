@@ -196,6 +196,7 @@ export default async function LotteryPage() {
           consecutiveMisses={consecutiveMisses}
           luckyThreshold={LUCKY_MISS_THRESHOLD}
           bigWins={bigWins}
+          balanceCredits={balance.total}
         />
         {recordsCard}
       </div>

@@ -9,7 +9,7 @@ import { formatCredits } from "@/lib/billing/credits";
 import { toast } from "sonner";
 import { buyTickets, drawLottery } from "./actions";
 import type { ActivityStatus, DrawOutcome } from "@/lib/lottery/prize-math";
-import { calculateLuckyChance, LUCKY_CHANCE_CAP_PERCENT } from "@/lib/lottery/prize-math";
+import { calculateLuckyChance, LUCKY_CHANCE_CAP_PERCENT, LUCKY_CHANCE_STEP_PERCENT } from "@/lib/lottery/prize-math";
 import type { BigWinRecord } from "@/lib/lottery/records";
 
 /** 外沿还有两道发光环，viewBox 要比最大半径留出这点余量，否则环带会被裁掉。 */
@@ -73,6 +73,8 @@ export interface LotteryWheelProps {
   luckyThreshold: number;
   /** 最近 24 小时大奖记录，用于中奖墙展示。 */
   bigWins: BigWinRecord[];
+  /** 用户当前可用总余额（永久+未过期临时），用于买券按钮余额不足时禁用。 */
+  balanceCredits: number;
 }
 
 /** 霓虹配色：每个音调给深浅两档交替，相邻扇区才分得开。赠券档用金色与 cr 档区分。 */
@@ -273,6 +275,8 @@ export function LotteryWheel(props: LotteryWheelProps) {
   const [now, setNow] = useState(() => Date.now());
   /** 本次会话内免费抽是否已用掉；服务端 revalidate 后 props 会更新，但动画期间靠本地状态挡重复点击。 */
   const [freeDrawUsed, setFreeDrawUsed] = useState(false);
+  /** 动画期间显示的本次外圈概率（含保底提升）；抽奖请求返回后立即设置，动画结束后清空。 */
+  const [drawingLuckyChance, setDrawingLuckyChance] = useState<number | null>(null);
   const timers = useRef<number[]>([]);
 
   const active = props.status === "active";
@@ -333,6 +337,8 @@ export function LotteryWheel(props: LotteryWheelProps) {
     const drawn = response.data.results;
     setResults(drawn);
     setTickets(response.data.ticketsLeft);
+    // 动画期间实时显示本次外圈概率（含保底提升）
+    setDrawingLuckyChance(response.data.luckyChancePercent ?? props.outerChancePercent);
 
     // 内圈：把最后一次的落点转到顶部指针处。
     const last = drawn[drawn.length - 1];
@@ -384,7 +390,10 @@ export function LotteryWheel(props: LotteryWheelProps) {
         spokesDone + 600,
       );
     }
-    later(() => router.refresh(), spokesDone);
+    later(() => {
+      setDrawingLuckyChance(null);
+      router.refresh();
+    }, spokesDone);
   }
 
   async function handleBuy() {
@@ -620,45 +629,56 @@ export function LotteryWheel(props: LotteryWheelProps) {
             </button>
           </div>
 
-          {/* 保底进度条：连续未中达阈值后外圈概率线性提升（每多1次+0.1%，上限20%） */}
+          {/* 保底进度条：连续未中达阈值后外圈概率线性提升（每多1次+0.5%，上限35%） */}
           <div className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3">
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-white/50">保底进度（连续未中大奖）</span>
               <span
                 className={
-                  consecutiveMisses >= props.luckyThreshold ? "text-amber-300 font-medium" : "text-white/60"
+                  (drawingLuckyChance !== null || consecutiveMisses >= props.luckyThreshold)
+                    ? "text-amber-300 font-medium"
+                    : "text-white/60"
                 }
               >
-                {consecutiveMisses >= props.luckyThreshold
-                  ? `外圈概率 ${calculateLuckyChance(consecutiveMisses, props.outerChancePercent)}%（上限 ${LUCKY_CHANCE_CAP_PERCENT}%）`
-                  : `${consecutiveMisses} / ${props.luckyThreshold}`}
+                {drawingLuckyChance !== null
+                  ? `本次外圈概率 ${drawingLuckyChance}%${drawingLuckyChance > props.outerChancePercent ? "（保底已触发）" : ""}`
+                  : consecutiveMisses >= props.luckyThreshold
+                    ? `外圈概率 ${calculateLuckyChance(consecutiveMisses, props.outerChancePercent)}%（上限 ${LUCKY_CHANCE_CAP_PERCENT}%）`
+                    : `${consecutiveMisses} / ${props.luckyThreshold}`}
               </span>
             </div>
             <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10">
               <div
                 className={cn(
                   "h-full rounded-full transition-all duration-500",
-                  consecutiveMisses >= props.luckyThreshold
+                  (drawingLuckyChance !== null || consecutiveMisses >= props.luckyThreshold)
                     ? "bg-gradient-to-r from-amber-400 to-orange-400"
                     : "bg-gradient-to-r from-cyan-400 to-fuchsia-400",
                 )}
                 style={{
                   width: `${
-                    consecutiveMisses >= props.luckyThreshold
+                    drawingLuckyChance !== null
                       ? Math.min(
                           100,
-                          ((calculateLuckyChance(consecutiveMisses, props.outerChancePercent) -
-                            props.outerChancePercent) /
+                          ((drawingLuckyChance - props.outerChancePercent) /
                             (LUCKY_CHANCE_CAP_PERCENT - props.outerChancePercent)) *
                             100,
                         )
-                      : Math.min(100, (consecutiveMisses / props.luckyThreshold) * 100)
+                      : consecutiveMisses >= props.luckyThreshold
+                        ? Math.min(
+                            100,
+                            ((calculateLuckyChance(consecutiveMisses, props.outerChancePercent) -
+                              props.outerChancePercent) /
+                              (LUCKY_CHANCE_CAP_PERCENT - props.outerChancePercent)) *
+                              100,
+                          )
+                        : Math.min(100, (consecutiveMisses / props.luckyThreshold) * 100)
                   }%`,
                 }}
               />
             </div>
             <p className="mt-1.5 text-[10px] leading-relaxed text-white/35">
-              连续 {props.luckyThreshold} 次未中外圈正档（正数 cr 或赠券）后，每多 1 次未中外圈概率 +0.1%，
+              连续 {props.luckyThreshold} 次未中外圈正档（正数 cr 或赠券）后，每多 1 次未中外圈概率 +{LUCKY_CHANCE_STEP_PERCENT}%，
               上限 {LUCKY_CHANCE_CAP_PERCENT}%；中一次大奖后计数清零重新累积。
             </p>
           </div>
@@ -667,6 +687,9 @@ export function LotteryWheel(props: LotteryWheelProps) {
             <div className="flex-1">
               <label className="text-[11px] text-white/50" htmlFor="lottery-buy-count">
                 购买抽奖券（{props.ticketPriceCredits} cr / 张）
+                <span className="ml-2 text-white/40">
+                  需 {(buyCount * props.ticketPriceCredits).toFixed(2)} cr / 余额 {props.balanceCredits.toFixed(2)} cr
+                </span>
               </label>
               <input
                 id="lottery-buy-count"
@@ -680,7 +703,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
             </div>
             <button
               onClick={handleBuy}
-              disabled={!active || buying}
+              disabled={!active || buying || props.balanceCredits < buyCount * props.ticketPriceCredits}
               className="h-8 shrink-0 rounded bg-white/10 px-3 text-xs font-medium text-white transition hover:bg-white/20 disabled:opacity-40"
             >
               {buying ? "…" : `买 ${buyCount} 张`}

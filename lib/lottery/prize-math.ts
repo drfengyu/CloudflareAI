@@ -14,18 +14,18 @@ export const LOTTERY_CONFIG_KEY = "lottery_config";
 export const TOPUP_TYPE_LOTTERY = 6;
 
 /** 保底机制：连续未中大奖达到此次数后，外圈概率开始线性提升。 */
-export const LUCKY_MISS_THRESHOLD = 16;
+export const LUCKY_MISS_THRESHOLD = 12;
 
 /** 保底：每多连续未中 1 次，外圈概率增加多少个百分点。 */
-export const LUCKY_CHANCE_STEP_PERCENT = 0.1;
+export const LUCKY_CHANCE_STEP_PERCENT = 0.5;
 
 /** 保底：外圈概率上限（%），超过后不再提升。 */
-export const LUCKY_CHANCE_CAP_PERCENT = 20;
+export const LUCKY_CHANCE_CAP_PERCENT = 35;
 
 /**
  * 根据连续未中大奖次数计算当前外圈概率（%）。
  *
- * 前 LUCKY_MISS_THRESHOLD 次保持基础概率；之后每多 1 次未中，外圈概率 +0.1%，
+ * 前 LUCKY_MISS_THRESHOLD 次保持基础概率；之后每多 1 次未中，外圈概率 +0.5%，
  * 直到 LUCKY_CHANCE_CAP_PERCENT 上限。中一次外圈正档后计数清零，重新开始累积。
  */
 export function calculateLuckyChance(consecutiveMisses: number, baseChancePercent: number): number {

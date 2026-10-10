@@ -7,6 +7,34 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **线上抽奖开奖失败（累抽赠券唯一索引冲突）**（`lib/db/schema.ts` + `migrations/011_lottery_milestone_unique_activity.sql` + `app/(dashboard)/lottery/actions.ts`）：
+  - 唯一索引 `uq_lottery_ticket_milestone` 从 `(userId, milestoneDraws, milestoneSeq)` 改为 `(userId, milestoneDraws, milestoneSeq, activityKey)`，允许不同活动轮次各自领一次累抽赠券。迁移 `011` 已执行到线上 D1。
+  - `isUniqueConflict()` 兼容 Drizzle 包装后的错误格式（同时检查 `error.message` 和 `error.cause?.message`），确保唯一索引冲突被正确捕获、不拖垮整批开奖。
+  - 开奖失败时返回具体失败步骤和错误原因（如 `开奖失败（milestoneGrant_0）：...`），便于线上定位。
+
+- **JWT 缺失 role 导致全站卡顿+抽奖失败**（`auth.ts` + `types/next-auth.d.ts` + `app/(dashboard)/layout.tsx`）：
+  - `jwt` callback 存 `role` 到 token，`session` callback 传到 `session.user`；catch 块和用户不存在时设默认值 `role=1`，避免 D1 查询超时时 role 为 undefined 导致无限重试查库。
+  - dashboard layout 从 session 读 role，不再每次导航查数据库。
+
+- **登录页加载慢**（`lib/settings/index.ts`）：`getAuthChannels()` 3 次 D1 查询从串行改为 `Promise.all` 并行。
+
+### 变更
+
+- **保底参数调整：更快触发、更快提升、更高上限**（`lib/lottery/prize-math.ts` + `app/(dashboard)/lottery/lottery-wheel.tsx`）：
+  - 阈值从 16 次降到 **12 次**（`LUCKY_MISS_THRESHOLD`），保底更早生效。
+  - 步长从 0.1% 提高到 **0.5%**（`LUCKY_CHANCE_STEP_PERCENT`），概率提升更快。
+  - 上限从 20% 提高到 **35%**（`LUCKY_CHANCE_CAP_PERCENT`），进度条不会过早到顶。
+  - 从基础概率 12.5% 加到 35% 上限需要 45 次，总共 57 次（12+45）达上限。
+
+- **买券按钮余额不足时禁用**（`app/(dashboard)/lottery/lottery-wheel.tsx` + `page.tsx`）：
+  - `LotteryWheel` 新增 `balanceCredits` prop，买券区域显示「需 X cr / 余额 Y cr」，余额不足时按钮禁用，防止负债买券。
+
+- **转圈动画期间实时显示本次外圈概率**（`app/(dashboard)/lottery/lottery-wheel.tsx`）：
+  - 新增 `drawingLuckyChance` 状态，抽奖请求返回后立即设置本次外圈概率（含保底提升），动画期间在保底进度条区域实时显示，动画结束后清空。
+  - 保底已触发时显示「本次外圈概率 X%（保底已触发）」。
+
 ### 新增
 
 - **活动轮次支持**（`lib/db/schema.ts` + `migrations/010_lottery_activity_round.sql` + `lib/lottery/*` + `app/(dashboard)/lottery/*` + `app/(dashboard)/admin/settings/*`）：
