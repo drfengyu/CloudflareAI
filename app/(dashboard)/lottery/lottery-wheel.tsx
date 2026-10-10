@@ -416,7 +416,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
       <Card className="overflow-hidden border-white/10 bg-transparent p-0">
-        <div style={{ background: PANEL }} className="px-5 pb-5 pt-4">
+        <div style={{ background: PANEL }} className="px-5 pb-4 pt-4">
           <div className="flex items-center justify-between text-white/90">
             <div>
               <p className="text-sm font-semibold tracking-[0.18em]">LUCKY WHEEL</p>
@@ -431,7 +431,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
             <StatusBadge status={props.status} />
           </div>
 
-          <div className="relative mx-auto mt-3 w-full max-w-[520px]">
+          <div className="relative mx-auto mt-2 w-full max-w-[520px]">
             {/* 顶部固定指针：内圈落点停在这里 */}
             <div className="absolute left-1/2 top-1 z-20 -translate-x-1/2">
               <div
@@ -623,13 +623,13 @@ export function LotteryWheel(props: LotteryWheelProps) {
             </svg>
           </div>
 
-          <p className="mt-2 text-center text-[11px] leading-relaxed text-white/40">
+          <p className="mt-1.5 text-center text-[11px] leading-relaxed text-white/40">
             格子太窄时文案会先缩成 <span className="text-white/75">★</span>（cr 档）或{" "}
             <span className="text-white/75">券</span>（赠券档），窄到连记号都放不下的只留一个亮点——
             那正是概率最低的几档。鼠标悬停在格子上可看完整奖品与概率，全部档位也在下方「奖池与规则」公示。
           </p>
 
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="mt-3 grid grid-cols-2 gap-3">
             <button
               onClick={() => handleDraw(1)}
               disabled={!active || busy || (!canFreeDraw && tickets < 1)}
@@ -700,7 +700,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
             </p>
           </div>
 
-          <div className="mt-3 flex items-end gap-2 rounded-lg border border-white/10 bg-white/5 p-3">
+          <div className="mt-2 flex items-end gap-2 rounded-lg border border-white/10 bg-white/5 p-3">
             <div className="flex-1">
               <label className="text-[11px] text-white/50" htmlFor="lottery-buy-count">
                 购买抽奖券（{props.ticketPriceCredits} cr / 张）
