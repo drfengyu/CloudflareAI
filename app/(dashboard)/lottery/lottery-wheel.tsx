@@ -564,36 +564,53 @@ export function LotteryWheel(props: LotteryWheelProps) {
                 })}
 
                 {/* 结果指针：内圈落点画短线，走通外圈的入口画长线伸进环带 */}
-                {spokes.map((spoke) => {
-                  const span = innerSectorSpans[spoke.innerIndex] ?? innerSectorSpans[0];
-                  const reachesOuter = spoke.outerIndex !== null;
-                  const tip = polar(reachesOuter ? OUTER_R - 4 : INNER_R - 6, span.center);
-                  const base = polar(SPOKE_BASE, span.center);
-                  return (
-                    <g
-                      key={`spoke-${spoke.seq}`}
-                      style={{
-                        animation: "lottery-spoke-in 320ms ease-out",
-                        transformOrigin: `${C}px ${C}px`,
-                      }}
-                    >
-                      <line
-                        x1={base.x}
-                        y1={base.y}
-                        x2={tip.x}
-                        y2={tip.y}
-                        stroke={reachesOuter ? "#f0abfc" : "#f0f9ff"}
-                        strokeWidth={3}
-                        strokeLinecap="round"
-                        strokeDasharray={
-                          reachesOuter && spoke.seq !== lastEntrySeq(spokes) ? "5 4" : undefined
-                        }
-                        filter="url(#neon-glow)"
-                      />
-                      <circle cx={tip.x} cy={tip.y} r={4} fill={reachesOuter ? "#f0abfc" : "#22d3ee"} />
-                    </g>
-                  );
-                })}
+                {/* 同一扇区多次命中时，指针加角度偏移并排显示，避免重叠成一根 */}
+                {(() => {
+                  // 统计每个 innerIndex 的命中次数和累计序号
+                  const countByIndex = new Map<number, number>();
+                  const seqByIndex = new Map<number, number>();
+                  for (const s of spokes) {
+                    countByIndex.set(s.innerIndex, (countByIndex.get(s.innerIndex) ?? 0) + 1);
+                  }
+                  return spokes.map((spoke) => {
+                    const span = innerSectorSpans[spoke.innerIndex] ?? innerSectorSpans[0];
+                    const count = countByIndex.get(spoke.innerIndex) ?? 1;
+                    const idx = seqByIndex.get(spoke.innerIndex) ?? 0;
+                    seqByIndex.set(spoke.innerIndex, idx + 1);
+                    // 同扇区多根指针：在扇区宽度 70% 范围内均匀分布
+                    const usableWidth = (span.end - span.start) * 0.7;
+                    const step = count > 1 ? usableWidth / (count - 1) : 0;
+                    const angleOffset = count > 1 ? (idx - (count - 1) / 2) * step : 0;
+                    const angle = span.center + angleOffset;
+                    const reachesOuter = spoke.outerIndex !== null;
+                    const tip = polar(reachesOuter ? OUTER_R - 4 : INNER_R - 6, angle);
+                    const base = polar(SPOKE_BASE, angle);
+                    return (
+                      <g
+                        key={`spoke-${spoke.seq}`}
+                        style={{
+                          animation: "lottery-spoke-in 320ms ease-out",
+                          transformOrigin: `${C}px ${C}px`,
+                        }}
+                      >
+                        <line
+                          x1={base.x}
+                          y1={base.y}
+                          x2={tip.x}
+                          y2={tip.y}
+                          stroke={reachesOuter ? "#f0abfc" : "#f0f9ff"}
+                          strokeWidth={3}
+                          strokeLinecap="round"
+                          strokeDasharray={
+                            reachesOuter && spoke.seq !== lastEntrySeq(spokes) ? "5 4" : undefined
+                          }
+                          filter="url(#neon-glow)"
+                        />
+                        <circle cx={tip.x} cy={tip.y} r={4} fill={reachesOuter ? "#f0abfc" : "#22d3ee"} />
+                      </g>
+                    );
+                  });
+                })()}
               </g>
 
               <circle cx={C} cy={C} r={HUB_R} fill="url(#hub-gradient)" stroke="#22d3ee" strokeOpacity={0.6} strokeWidth={1.5} />
