@@ -752,17 +752,17 @@ export function LotteryWheel(props: LotteryWheelProps) {
             <CardTitle className="text-base">我的战绩</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-3 gap-3 text-center">
-            <div className="rounded-lg border border-white/10 py-2">
-              <p className="text-xl font-bold text-white">{props.totalDraws}</p>
-              <p className="mt-0.5 text-[11px] text-white/40">累计抽奖</p>
+            <div className="rounded-lg border border-border bg-muted/40 py-2">
+              <p className="text-xl font-bold">{props.totalDraws}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">累计抽奖</p>
             </div>
-            <div className="rounded-lg border border-white/10 py-2">
-              <p className="text-xl font-bold text-white">{tickets}</p>
-              <p className="mt-0.5 text-[11px] text-white/40">可用券</p>
+            <div className="rounded-lg border border-border bg-muted/40 py-2">
+              <p className="text-xl font-bold">{tickets}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">可用券</p>
             </div>
-            <div className="rounded-lg border border-white/10 py-2">
-              <p className="text-xl font-bold text-white">{formatCredits(props.totalCredits)}</p>
-              <p className="mt-0.5 text-[11px] text-white/40">总余额 cr</p>
+            <div className="rounded-lg border border-border bg-muted/40 py-2">
+              <p className="text-xl font-bold">{formatCredits(props.totalCredits)}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">总余额 cr</p>
             </div>
           </CardContent>
         </Card>
@@ -836,24 +836,25 @@ export function LotteryWheel(props: LotteryWheelProps) {
             {props.bigWins.length === 0 ? (
               <p className="py-6 text-center text-xs text-muted-foreground">暂无大奖记录，来做第一个幸运儿！</p>
             ) : (
-              <div className="relative h-56 overflow-hidden bg-slate-900/50">
-                {/* 顶部/底部渐隐遮罩（减弱，避免遮挡内容） */}
-                <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-4 bg-gradient-to-b from-background to-transparent" />
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-4 bg-gradient-to-t from-background to-transparent" />
+              <div className="relative h-56 overflow-hidden">
                 <div className="lottery-bigwin-track space-y-2 px-3 py-2">
                   {/* 复制一份实现无缝滚动 */}
                   {[...props.bigWins, ...props.bigWins].map((win, idx) => (
                     <div
                       key={`${win.id}-${idx}`}
-                      className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2.5"
+                      className="flex items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2.5"
                     >
-                      <span className="text-base shrink-0">{win.grantTickets > 0 ? "🎟️" : "💰"}</span>
+                      <span className="shrink-0 text-base leading-none">
+                        {win.grantTickets > 0 ? "🎟️" : "💰"}
+                      </span>
                       <div className="min-w-0 flex-1 leading-tight">
                         <div className="flex items-baseline justify-between gap-2">
-                          <span className="truncate text-xs font-medium text-white/80">{win.userLabel}</span>
-                          <span className="shrink-0 text-[10px] text-white/50">{relativeTime(win.createdAt)}</span>
+                          <span className="truncate text-sm font-medium">{win.userLabel}</span>
+                          <span className="shrink-0 text-xs text-muted-foreground">
+                            {relativeTime(win.createdAt)}
+                          </span>
                         </div>
-                        <p className="mt-1 text-sm font-semibold text-white">
+                        <p className="mt-0.5 text-sm font-semibold">
                           {win.credits > 0 && `+${formatCredits(win.credits)} cr`}
                           {win.grantTickets > 0 && `+${win.grantTickets} 张券`}
                         </p>
