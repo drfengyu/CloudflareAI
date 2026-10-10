@@ -747,25 +747,22 @@ export function LotteryWheel(props: LotteryWheelProps) {
 
       <div className="space-y-6">
         {/* 我的战绩：顶部展示，用户最关心 */}
-        <Card className="border-cyan-400/20 bg-gradient-to-br from-cyan-400/5 to-transparent">
+        <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-base">
-              <span className="text-cyan-400">📊</span>
-              我的战绩
-            </CardTitle>
+            <CardTitle className="text-base">我的战绩</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-3 gap-3 text-center">
-            <div className="rounded-lg bg-white/5 py-2">
-              <p className="text-xl font-bold text-cyan-300">{props.totalDraws}</p>
-              <p className="mt-0.5 text-[11px] text-white/50">累计抽奖</p>
+            <div className="rounded-lg border border-white/10 py-2">
+              <p className="text-xl font-bold text-white">{props.totalDraws}</p>
+              <p className="mt-0.5 text-[11px] text-white/40">累计抽奖</p>
             </div>
-            <div className="rounded-lg bg-white/5 py-2">
-              <p className="text-xl font-bold text-amber-300">{tickets}</p>
-              <p className="mt-0.5 text-[11px] text-white/50">可用券</p>
+            <div className="rounded-lg border border-white/10 py-2">
+              <p className="text-xl font-bold text-white">{tickets}</p>
+              <p className="mt-0.5 text-[11px] text-white/40">可用券</p>
             </div>
-            <div className="rounded-lg bg-white/5 py-2">
-              <p className="text-xl font-bold text-emerald-300">{formatCredits(props.totalCredits)}</p>
-              <p className="mt-0.5 text-[11px] text-white/50">总余额 cr</p>
+            <div className="rounded-lg border border-white/10 py-2">
+              <p className="text-xl font-bold text-white">{formatCredits(props.totalCredits)}</p>
+              <p className="mt-0.5 text-[11px] text-white/40">总余额 cr</p>
             </div>
           </CardContent>
         </Card>
@@ -848,17 +845,17 @@ export function LotteryWheel(props: LotteryWheelProps) {
                   {[...props.bigWins, ...props.bigWins].map((win, idx) => (
                     <div
                       key={`${win.id}-${idx}`}
-                      className="flex items-center gap-3 rounded-lg border border-amber-400/15 bg-gradient-to-r from-amber-400/8 to-transparent px-3 py-2"
+                      className="flex items-center gap-3 rounded-lg border border-amber-400/30 bg-gradient-to-r from-amber-400/15 to-amber-400/5 px-3 py-2"
                     >
                       <span className="text-lg shrink-0">{win.grantTickets > 0 ? "🎟️" : "💰"}</span>
                       <div className="min-w-0 flex-1 leading-tight">
                         <div className="flex items-baseline justify-between gap-2">
-                          <span className="truncate text-xs font-semibold text-amber-200">{win.userLabel}</span>
-                          <span className="shrink-0 text-[10px] text-white/40">{relativeTime(win.createdAt)}</span>
+                          <span className="truncate text-xs font-semibold text-amber-100">{win.userLabel}</span>
+                          <span className="shrink-0 text-[10px] text-white/60">{relativeTime(win.createdAt)}</span>
                         </div>
-                        <p className="mt-0.5 text-sm font-bold text-white">
-                          {win.credits > 0 && <span className="text-emerald-400">+{formatCredits(win.credits)} cr</span>}
-                          {win.grantTickets > 0 && <span className="text-amber-300">+{win.grantTickets} 张券</span>}
+                        <p className="mt-0.5 text-sm font-bold">
+                          {win.credits > 0 && <span className="text-emerald-300">+{formatCredits(win.credits)} cr</span>}
+                          {win.grantTickets > 0 && <span className="text-amber-200">+{win.grantTickets} 张券</span>}
                         </p>
                       </div>
                     </div>
@@ -970,7 +967,7 @@ const bigWinMarqueeKeyframes = `
   100% { transform: translateY(-50%); }
 }
 .lottery-bigwin-track {
-  animation: lottery-bigwin-scroll 30s linear infinite;
+  animation: lottery-bigwin-scroll 45s linear infinite;
 }
 .lottery-bigwin-track:hover {
   animation-play-state: paused;
