@@ -35,6 +35,36 @@
 > 定价这个旋钮等于废掉。因此内圈保持绝对值。历史配置里若出现过 `innerPrizes[].multiplier`，
 > `sanitizeInner` 会按当次券价折回绝对 cr 读取。
 
+## 调池子先看数：`scripts/lottery-sim.ts`
+
+改 `option.lottery_config` 之前先在本地跑模拟。它**只读**线上配置（或 `--file` 指定的 JSON），
+走真实的 `rollPrize` 路径 + 保底 + 累抽档位做蒙特卡洛，按会话规模输出两组指标：
+站点侧（有效返还率、站点每券净得）与体感侧（单注亏损率、单注≥券价、大奖/千注、最深单注、
+会话不亏率、最差 10% 净亏）。
+
+```bash
+npx tsx --env-file=.env.local scripts/lottery-sim.ts                           # 现状基线
+npx tsx --env-file=.env.local scripts/lottery-sim.ts --soften 0.5 --target 93  # 负档减半、名义压到 93%
+npx tsx --env-file=.env.local scripts/lottery-sim.ts --file /tmp/pool.json     # 回读 what-if 再验一遍
+```
+
+带 `--soften/--target` 时会打印一份**可直接抄进后台**的奖池（内圈取整、外圈倍数两位小数），
+`--out` 可落盘成 JSON。脚本不写库，改线上仍然要管理员在后台保存。
+
+两条从模拟里得到的结论，比"返还率定多少"更值得先看：
+
+- **「等于券价」那一档是体感锚点，调池子时别把它等比缩掉。** 名义返还率一模一样的两份配置，
+  只把 150 cr 档缩成 144（跌破券价），单抽不亏率就从 56% 掉到 42%。所以 `--soften` 默认带
+  `--keep-be`：补回名义时只削高于券价的档。反例是"负档清零"——为守住名义必须狠削正档，
+  大奖供给从 31/千注掉到 19/千注，中奖墙会明显变空。
+- **倒扣的深度比频率更伤。** 最深单注从 −300（外圈 ×−2）收到 −150，代价只是最高档 300→262、
+  ×20→×17.5，换来"一次会话亏掉 60% 以上"的概率归零。倒扣扣的是永久余额且允许扣成负数，
+  是这个活动最容易出投诉的地方。
+
+口径提醒：模拟里的**有效返还率**含赠券续命多抽的部分，通常高于后台那行**名义返还率**；
+而"站点每券净得"没扣临时余额过期未用（`prizeValidDays`）与每日免费抽，两者方向相反，
+别把它当财务数用。
+
 ## 对外文案只写实际 cr
 
 倍数（`multiplier`）是配置里的内部表达，**转盘扇区、奖池规则、开奖结果与钱包流水一律显示实际 cr**。
@@ -158,6 +188,7 @@ lottery_draw                 逐次开奖记录；unique(batchId, seq)
 | `app/(dashboard)/lottery/lottery-records.tsx` | 「我的活动记录」卡片（服务端渲染） |
 | `app/(dashboard)/admin/lottery/page.tsx` | 后台活动记录页（角色 ≥10） |
 | `app/(dashboard)/admin/settings/lottery-form.tsx` | 后台配置表单 |
+| `scripts/lottery-sim.ts` | 奖池模拟器（只读线上配置，跑蒙特卡洛出体感与收益指标） |
 
 ## 实现注意
 
