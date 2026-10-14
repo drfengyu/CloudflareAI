@@ -234,5 +234,11 @@ lottery_draw                 逐次开奖记录；unique(batchId, seq)
   所以后台那行「返还率」把送出去的券也算成成本。
 - **改奖池要先部署再改配置**：`kind='tickets'` 在旧代码里会被读成 `multiplier` 缺失 → 0 cr 奖品，
   真实用户会抽到一堆空档。顺序固定为「代码上线 → 写 `option.lottery_config`」。
+- **切轮次序：要作废旧轮券，就得在改窗口之前先跑作废**。`ticketsExpireOnActivityEnd` 的触发点在
+  抽奖页 `status === "ended"` 那一支，用的 key 是**配置里当前的 `startAt`**；而
+  `countUnusedTickets` / `pickUnusedTicketIds` 都不按 `activityKey` 过滤。所以直接把 `startAt` 换成新值，
+  旧轮未使用的券不会被标 `expired`，而是继续留在券包里可用（记录页会把它归到旧轮分组，但抽得到）。
+  想让"活动结束券作废"真的兑现，顺序是：旧窗口结束、配置未改时让用户访问一次页面，或直接按旧 key
+  跑一次 `expireTicketsForActivity(userId, 旧key)`，然后再写新窗口。
 - **`scripts/run-migration.js`**：按行剥掉 `--` 注释后再切句（早先按整块 filter，首行是注释的迁移文件会被判成
   0 条语句却打印成功）；0 条语句直接退出，D1 以 HTTP 200 + `success:false` 返回的报错也会抛出。
