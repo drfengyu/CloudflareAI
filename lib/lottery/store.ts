@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { batchRows, d1Run, db, D1_MAX_BINDINGS } from "@/lib/db/d1-http";
 import {
   lotteryDraws,
@@ -111,23 +111,37 @@ export async function listRecentDraws(userId: string, limit = 20): Promise<DrawR
 }
 
 /**
- * 今日是否已用过免费抽：查今天第一条 `ticketId IS NULL` 的开奖记录。
- * 免费抽不消耗券，所以行上的 ticketId 为空；买券抽的行都绑了券 id。
- * `createdAt` 是毫秒整数，按北京时间日历日切（00:00 起算）。
+ * 北京日期键（"2026-10-17"）。免费抽的「今天」与 `lottery_draw.freeDrawDate` 都用它，
+ * 所以判据不依赖服务器时区，也不依赖 `createdAt` 的毫秒落在哪个 UTC 日里。
  */
-export async function hasUsedFreeDrawToday(userId: string, now = Date.now()): Promise<boolean> {
-  // 北京时间 = UTC + 8h；先挪到 UTC+8 再取当天 0 点，最后挪回 UTC 毫秒。
-  const cnNow = now + 8 * 60 * 60 * 1000;
-  const cnDayStart = cnNow - (cnNow % (24 * 60 * 60 * 1000));
-  const todayStartMs = cnDayStart - 8 * 60 * 60 * 1000;
+export function beijingDayKey(now = Date.now()): string {
+  return new Date(now + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/**
+ * 今日是否已用过免费抽。一条查询两种判据（少一次 D1 往返）：
+ *
+ * - `freeDrawDate = 今天`：迁移 012 起免费抽那行直接写当天日期，也是唯一索引挡住并发重复领的那一列。
+ * - `ticketId IS NULL AND createdAt >= 今天 0 点`：迁移之前产生的记录没有 freeDrawDate，
+ *   留着这条兜底，免得刚上线那天已经抽过的人又能白嫖一次。
+ */
+export async function hasUsedFreeDrawToday(
+  userId: string,
+  dayKey = beijingDayKey(),
+): Promise<boolean> {
+  // "2026-10-17" + 北京 00:00 → UTC 毫秒。
+  const dayStartMs = Date.parse(`${dayKey}T00:00:00+08:00`);
   const rows = await db
     .select({ c: sql<number>`COUNT(*)` })
     .from(lotteryDraws)
     .where(
       and(
         eq(lotteryDraws.userId, userId),
-        isNull(lotteryDraws.ticketId),
-        sql`${lotteryDraws.createdAt} >= ${todayStartMs}`,
+        or(
+          eq(lotteryDraws.freeDrawDate, dayKey),
+          // createdAt 是 timestamp_ms 模式，比较值要传 Date（驱动自己折算成毫秒）。
+          and(isNull(lotteryDraws.ticketId), gte(lotteryDraws.createdAt, new Date(dayStartMs))),
+        ),
       ),
     );
   return Number(rows[0]?.c ?? 0) > 0;

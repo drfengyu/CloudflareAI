@@ -29,6 +29,26 @@
 
 ### 修复
 
+- **进程内限流形同虚设 + 免费抽可并发重复领**（`lib/rate-limit.ts` + `lib/db/schema.ts` + `lib/lottery/store.ts` + `app/(dashboard)/lottery/actions.ts` + `app/(dashboard)/wallet/actions.ts` + `app/v1/*` + `migrations/012_lottery_free_draw_idempotency_and_rate_limit.sql`，详见 `docs/fixes/2026-10-17-in-process-rate-limit.md`）：
+  - `checkRateLimit` 的计数原来放在模块级 `Map` 里，Vercel 每个实例各有一份，买券 / 开奖 / 下支付单的
+    「每分钟 N 次」只挡同一个实例上的连点。现在这些**花钱的动作**改走 D1 计数：新表 `rate_limit_bucket`
+    一行一个固定窗口桶，一条 UPSERT 同时完成「开窗 / 计数 / 判上限」，`WHERE` 守住「到上限就不更新」，
+    所以计数不会被自己顶高，解除只靠窗口滚动；过期桶按 2% 概率顺手删（无常驻进程，不搞定时器）。函数变 async。
+  - `/v1/chat/completions` 与 `/v1/messages` **不**接 D1：那里每次调用多一条 D1 写就是给首 token 前塞
+    100~200ms，不值。原实现改名 `checkInProcessRateLimit`，注释写明它是每实例一份的宽松护栏，
+    真正按用户兜底的是额度与计费。
+  - **每日免费抽的库层幂等**：`lottery_draw` 新增 `freeDrawDate`（只有免费抽那行写北京日期，付费抽为 NULL），
+    配 `unique(userId, freeDrawDate)`。`hasUsedFreeDrawToday` 是先读后写，两个请求同时进来都读到「今天没抽过」
+    于是双双放行；现在页面那道检查保留（少一次回滚），闸门交给唯一索引，撞上它时 `drawLottery` 走既有补偿把
+    本批已写的行退回，并返回「今日免费抽已使用，明天再来」。
+  - `hasUsedFreeDrawToday` 的判据同时兼容迁移前的记录（`ticketId IS NULL AND createdAt >= 北京今日 0 点`），
+    两条判据合在一条查询里，不额外多打一次 D1；新增 `beijingDayKey()` 统一「今天」的口径。
+  - 附带：进程内那份限流的清理定时器加了 `.unref()`，一次性脚本 import 到本模块时不再挂住进程不退。
+  - 对线上 D1 实测（临时数据全部清掉，`test@example.com` 的 12 条真实开奖历史核对未受影响）：
+    同用户同天第二条免费抽被 `UNIQUE constraint failed: lottery_draw.userId, lottery_draw.freeDrawDate` 挡下；
+    两条 `freeDrawDate=NULL` 的付费行互不冲突；60 秒窗上限 2 串行四次 = `true,true,false,false` 且计数停在 2；
+    窗口滚动后重新放行；并发六次上限 3 恰好放行 3 次。
+
 - **兑换码生成没有额度与使用次数上限（资损口子）**（`lib/billing/redemption-limits.ts` + `app/(dashboard)/admin/redemptions/actions.ts` + `generate-codes-dialog.tsx`）：
   - `generateRedemptionCodes` 原先只校验 `quota > 0`、`maxUses ≥ 1` 与「一次 ≤ 100 个」，填 `quota = 1000000000`
     也能生成（站点没有汇率换算层，这类值直接就是可消耗的 credits 量）。

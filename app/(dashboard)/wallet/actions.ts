@@ -97,7 +97,7 @@ export async function createPayOrder(amountCny: number, channel: string) {
   const currentUserId = await requireUser();
 
   // 下单防刷：每用户 1 分钟内最多 5 笔订单（内存限流，单实例有效）
-  if (!checkRateLimit(`pay-order:${currentUserId}`, { window: 60_000, limit: 5 })) {
+  if (!(await checkRateLimit(`pay-order:${currentUserId}`, { window: 60_000, limit: 5 }))) {
     throw new Error("操作过于频繁，请 1 分钟后再试");
   }
 

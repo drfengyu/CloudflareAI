@@ -126,13 +126,23 @@ option.lottery_config        活动配置（JSON，见下）
 lottery_ticket               一行一券；usedDrawId 非空即已消耗
   source                     buy=花钱买 / gift=累抽档位送 / prize=外圈抽中
   milestoneSeq               档位内第几张（0 起）；非档位赠券恒为 0
-  unique(userId, milestoneDraws, milestoneSeq)   档位赠券只发一次的幂等键（NULL 不参与唯一性）
+  unique(userId, milestoneDraws, milestoneSeq, activityKey)   档位赠券只发一次的幂等键（NULL 不参与唯一性）
 lottery_draw                 逐次开奖记录；unique(batchId, seq)
   grantTickets               本注抽中的赠券张数（0 = cr 档）
+  freeDrawDate               只有「今日免费抽」那行写北京日期（如 2026-10-17），付费抽为 NULL
+  unique(userId, freeDrawDate) 免费抽的库层幂等键：一天只能领一次，并发/连点由它兜底
   migration: migrations/007_lottery.sql
   migration: migrations/008_lottery_prize_tickets.sql（加 grantTickets 列）
   migration: migrations/009_lottery_milestone_seq.sql（加 milestoneSeq 列并重建唯一索引）
+  migration: migrations/011_lottery_milestone_unique_activity.sql（赠券唯一键加上 activityKey）
+  migration: migrations/012_lottery_free_draw_idempotency_and_rate_limit.sql（加 freeDrawDate + 唯一索引，建 rate_limit_bucket 表）
+rate_limit_bucket            跨实例限流计数，一行一个固定窗口桶（见 lib/rate-limit.ts）
 ```
+
+**免费抽为什么要有 `freeDrawDate`**：`hasUsedFreeDrawToday` 是先读后写，两个请求同时进来时都读到
+「今天还没抽」，于是双双放行——一天能白嫖好几次。页面上那道检查留着（省一次写失败的回滚），
+真正的闸门是唯一索引：撞了它就是「今日免费抽已使用，明天再来」，`drawLottery` 里按
+`isUniqueConflict` 识别并把整批已写的行退回。
 
 配置结构（`lib/lottery/prize-math.ts` 的 `LotteryConfig`）：
 

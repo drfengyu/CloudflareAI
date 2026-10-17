@@ -428,7 +428,36 @@ export const lotteryDraws = sqliteTable(
     }),
     /** 活动轮次标识（活动 startAt 字符串）；历史数据为 null。 */
     activityKey: text("activityKey"),
+    /**
+     * 2026-10-17 新增：只有「今日免费抽」那一行写值（北京日期，如 "2026-10-17"），花钱抽的写 null。
+     * 配合下面的唯一索引，让并发/连点免费抽在库层被挡下——`hasUsedFreeDrawToday` 是先读后写，
+     * 两个请求同时进来时都会读到「今天还没抽」，只靠它一天能抽好几次。
+     */
+    freeDrawDate: text("freeDrawDate"),
     createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
   },
-  (table) => [unique().on(table.batchId, table.seq)],
+  (table) => [
+    unique().on(table.batchId, table.seq),
+    // SQLite 的唯一索引认为 NULL 互不相等，所以付费抽（freeDrawDate 为 null）不受影响。
+    unique("uq_lottery_draw_free_draw").on(table.userId, table.freeDrawDate),
+  ],
 );
+
+/**
+ * 2026-10-17 新增：跨实例的固定窗口限流计数。
+ *
+ * 原先 `lib/rate-limit.ts` 用的是进程内 Map，Vercel 每个实例各有一份，形同虚设。
+ * 一行一个窗口桶，计数靠一条 UPSERT 完成（见 `lib/rate-limit.ts`），不依赖事务。
+ */
+export const rateLimitBuckets = sqliteTable("rate_limit_bucket", {
+  /** `scope:subject`，如 `lottery-draw:uuid`。 */
+  bucketKey: text("bucketKey").primaryKey(),
+  /** 窗口起点（按 windowMs 对齐的毫秒时间戳）；跨过新窗口时计数重置。 */
+  windowStart: integer("windowStart").notNull(),
+  /** 当前窗口内已通过的请求数。 */
+  count: integer("count").notNull(),
+  /** 该桶的窗口上限（随请求带上，改配置不用清表）。 */
+  limitValue: integer("limitValue").notNull(),
+  /** 桶的回收时间（窗口结束 + 一段宽限），过期由偶发的清理语句删掉。 */
+  expiresAt: integer("expiresAt").notNull(),
+});

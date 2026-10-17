@@ -4,7 +4,7 @@ import { z } from "zod";
 import { openaiCompatible } from "@/lib/cloudflare/ai";
 import { extractBearerToken, verifyApiKey } from "@/lib/auth/api-key";
 import { logUsage, verifyBalance, estimateRequestCredits } from "@/lib/usage/meter";
-import { checkRateLimit } from "@/lib/rate-limit";
+import { checkInProcessRateLimit } from "@/lib/rate-limit";
 import { interceptOpenAIStream, openAIResponseToSSE } from "@/lib/usage/stream-intercept";
 import { routeToChannel, getChannelConfig } from "@/lib/channels/router";
 
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
   const { userId, apiKeyId, allowedModels, channelId } = verified;
 
   // 限流：每用户每分钟 60 次请求
-  if (!checkRateLimit(`openai:${userId}`, { window: 60_000, limit: 60 })) {
+  if (!checkInProcessRateLimit(`openai:${userId}`, { window: 60_000, limit: 60 })) {
     return Response.json({ error: "Rate limit exceeded" }, { status: 429 });
   }
 

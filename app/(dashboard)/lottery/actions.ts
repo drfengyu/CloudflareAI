@@ -16,6 +16,7 @@ import {
 } from "@/lib/lottery/prize-math";
 import {
   adjustPermanentBalance,
+  beijingDayKey,
   buildTemporaryPrizeRow,
   countConsecutiveMisses,
   countDraws,
@@ -72,7 +73,7 @@ export async function buyTickets(
     if (!Number.isInteger(count) || count < 1 || count > MAX_TICKETS_PER_PURCHASE) {
       return { success: false, error: `单次最多购买 ${MAX_TICKETS_PER_PURCHASE} 张` };
     }
-    if (!checkRateLimit(`lottery-buy:${userId}`, { window: 60_000, limit: 10 })) {
+    if (!(await checkRateLimit(`lottery-buy:${userId}`, { window: 60_000, limit: 10 }))) {
       return { success: false, error: "操作过于频繁，请 1 分钟后再试" };
     }
 
@@ -171,6 +172,8 @@ function planDrawBatch(
   batchId: string,
   ticketIds: (string | null)[],
   activityKey: string | null,
+  /** 免费抽那一批写当天的北京日期（唯一索引挡重复领）；花钱抽传 null。 */
+  freeDrawDate: string | null,
 ): DrawBatchPlan {
   const batchSpend = round2(config.ticketPriceCredits * count);
   const results: DrawOutcome[] = [];
@@ -199,6 +202,7 @@ function planDrawBatch(
       grantTickets: outcome.grantTickets,
       ticketId: ticketIds[i],
       activityKey,
+      freeDrawDate,
       createdAt,
     });
     results.push({ ...outcome, seq: i + 1 });
@@ -298,12 +302,16 @@ export async function drawLottery(
   try {
     const userId = await requireUser();
     if (count !== 1 && count !== 10) return { success: false, error: "只能抽 1 次或 10 次" };
-    if (!checkRateLimit(`lottery-draw:${userId}`, { window: 60_000, limit: 12 })) {
+    if (!(await checkRateLimit(`lottery-draw:${userId}`, { window: 60_000, limit: 12 }))) {
       return { success: false, error: "操作过于频繁，请稍后再试" };
     }
 
     // 免费抽只对单抽生效，且服务端自己验证今日是否已用过。
-    const freeDrawEligible = useFreeDraw && count === 1 && !(await hasUsedFreeDrawToday(userId));
+    // 「今天」= 今天的北京日期：先查（免费的快速路径），查不到再退回按时间窗口的老判据
+    // （迁移前产生的记录没有 freeDrawDate，否则当天已抽过的人还能再白嫖一次）。
+    const freeDrawDay = beijingDayKey();
+    const freeDrawEligible =
+      useFreeDraw && count === 1 && !(await hasUsedFreeDrawToday(userId, freeDrawDay));
 
     // 一波并发读：活动窗口、可用券、券包余量、本批之前的累计次数、连续未中大奖次数（保底用）。
     // 免费抽不需要取券 id，但 ticketsBefore / drawsBefore 仍然要算（返回值与档位判定用）。
@@ -345,7 +353,15 @@ export async function drawLottery(
     const ticketIds: (string | null)[] = freeDrawEligible ? [null] : pickedIds;
 
     const batchId = crypto.randomUUID();
-    const plan = planDrawBatch(userId, effectiveConfig, count, batchId, ticketIds, activityKey);
+    const plan = planDrawBatch(
+      userId,
+      effectiveConfig,
+      count,
+      batchId,
+      ticketIds,
+      activityKey,
+      freeDrawEligible ? freeDrawDay : null,
+    );
 
     if (!freeDrawEligible) {
       if (!(await lockTickets(pickedIds, rowIds(plan.drawRows)))) {
@@ -409,6 +425,10 @@ export async function drawLottery(
       );
       // 免费抽没有锁定任何券，locked 传空数组即可。
       await compensateDrawBatch(userId, plan, issuedTicketIds, freeDrawEligible ? [] : pickedIds);
+      // 免费抽撞唯一索引 = 今天这一发已经领过了（并发或连点），不是故障，说人话回去。
+      if (freeDrawEligible && failedTask.label === "insertDrawRows" && isUniqueConflict(reason)) {
+        return { success: false, error: "今日免费抽已使用，明天再来" };
+      }
       const detail = reason instanceof Error ? reason.message : String(reason);
       return { success: false, error: `开奖失败（${failedTask.label}）：${detail}` };
     }
