@@ -29,19 +29,6 @@
 
 ### 修复
 
-- **抽奖倒扣把用户永久余额扣成负数**（`lib/lottery/prize-math.ts` + `lib/lottery/store.ts` + `app/(dashboard)/lottery/actions.ts`）：
-  - 负档金额现在由新的纯函数 `clampClawback(credits, room)` 按**开奖前的永久余额**截断：`drawLottery` 在
-    原有那次并发读里多取 `getPermanentBalance(userId)`，整批共享一个「可扣余量」并逐注消耗——余额 80 时
-    抽中 −150 只扣 80，同批后面的负档变成 0 cr（转盘格子照旧，结果卡与流水文案为「0 cr（余额见底，未倒扣）」，
-    金额为 0 不写 `topup` 行）。本批先中的永久余额奖品会把余量抬回去，避免「刚中 ×17.5 永久大奖却扣不动后面的负档」。
-  - `adjustPermanentBalance()` 对负数 delta 改为 `MAX(balance + delta, 0)`：并发开奖时的兜底，宁可少扣也不让用户欠站点 credits。
-    正数 delta（退款、永久余额奖品、买券回滚）走原来的加法分支，不受影响。
-  - 同步过期表述：活动页规则、后台内圈提示、`README.md`、`docs/BILLING_GUIDE.md`、`docs/features/lottery.md` 里
-    「允许扣成负数」全部改成新口径；`docs/features/lottery.md` 新增「倒扣下限」段说明截断与兜底。
-  - 线上被旧逻辑扣成负数的账号有 2 个：`test@163.com` −1,400 cr（倒扣流水 23 笔 / −1,755）、
-    LinuxDO 注册的 `…@privaterelay.linux.do` −1,598.8 cr（倒扣 41 笔 / −3,404）。新校验只挡住以后，
-    这两笔存量要不要归零属于线上数据操作，另行确认后再动。
-
 - **兑换码生成没有额度与使用次数上限（资损口子）**（`lib/billing/redemption-limits.ts` + `app/(dashboard)/admin/redemptions/actions.ts` + `generate-codes-dialog.tsx`）：
   - `generateRedemptionCodes` 原先只校验 `quota > 0`、`maxUses ≥ 1` 与「一次 ≤ 100 个」，填 `quota = 1000000000`
     也能生成（站点没有汇率换算层，这类值直接就是可消耗的 credits 量）。
@@ -78,6 +65,12 @@
   - 多批插入从串行改为 `Promise.all` 并行，D1 HTTP API 无状态可并发，100 张券从串行 ~5 秒降到 ~1.5 秒。
 
 ### 变更
+
+- **抽奖倒扣口径定案：允许扣成负数**（`lib/lottery/store.ts` + `app/(dashboard)/lottery/actions.ts` + `docs/features/lottery.md`）：
+  2026-10-17 曾实现过「一批合计最多把永久余额扣到 0」的下限（开奖前读余额、按余额逐注截断负档、
+  `adjustPermanentBalance()` 用 `MAX(balance + delta, 0)` 兜底），管理员看过之后要求**回退**，理由是要与消费侧
+  `deductCredits` 保持同一口径。回退后代码恢复为无条件扣永久余额，`docs/features/lottery.md`「倒扣不设下限」
+  记下这个定案，避免下次又被当成 bug 提回去。
 
 - **中奖墙重做：横向滚动 → 纵向无缝自动滚动**（`app/(dashboard)/lottery/lottery-wheel.tsx`）：
   - 从横向卡片滚动改为纵向列表，固定高度 h-56 + CSS `@keyframes` 无缝向上滚动（60 秒一轮），鼠标悬停暂停。

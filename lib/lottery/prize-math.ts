@@ -150,30 +150,6 @@ export function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-/**
- * 2026-10-17 新增：把一次倒扣（负数奖品）截到「还能扣多少」以内。
- *
- * 抽中负档时扣的是用户的永久余额，而余额是用户充值买模型的钱；抽奖是娱乐活动，
- * 不该让它把用户扣成欠站点 credits（线上真出现过 −1,598.8 的账户）。所以这里把
- * 整批的可用余额当作一个 `room` 额度逐次消耗：`room` 只会被负档减少，正档不吃它。
- *
- * 纯函数、单独放这里，是为了能用脚本直接对真代码断言，而不是在测试里复制一份。
- *
- * @param credits 该次的原始结果，负数才需要截断
- * @param room 本次之前还能倒扣多少（永久余额的下限），负数按 0 处理
- * @returns `credits` 截断后的金额，`room` 扣掉本次实际倒扣后的余量
- */
-export function clampClawback(
-  credits: number,
-  room: number,
-): { credits: number; room: number } {
-  const available = Math.max(0, round2(room));
-  if (credits >= 0) return { credits: round2(credits), room: available };
-  // 只往 0 的方向截：-150 剩 80 可扣 → 实际扣 80；余额为 0 时这一档变成 0 cr。
-  const next = Math.max(credits, -available);
-  return { credits: round2(next), room: round2(available + next) };
-}
-
 function sanitizeInner(value: unknown, ticketPrice: number): InnerPrize[] {
   if (!Array.isArray(value)) return [];
   return value
