@@ -302,12 +302,29 @@ export async function spendCredits(
   return { ok: true };
 }
 
-/** 结算倒扣：把整批的净负数一次加到永久余额上（允许余额变负，与消费扣费口径一致）。 */
+/** 读永久余额：抽奖倒扣的下限依据（消费扣费仍走 `spendCredits` 的条件更新）。 */
+export async function getPermanentBalance(userId: string): Promise<number> {
+  const rows = await db
+    .select({ v: users.balanceCredits })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return Number(rows[0]?.v ?? 0);
+}
+
+/**
+ * 结算本批的永久余额净额：正数（永久余额奖品）直接加，负数（倒扣）**最多扣到 0**。
+ *
+ * 正常路径下 `planDrawBatch` 已经按开奖前的永久余额把每一注的倒扣额截断过，流水与余额天然
+ * 一致；这里的 `MAX(..., 0)` 是并发兜底——两批同时开奖时，"用户欠站点 credits" 也不该发生。
+ * 旧行为是无条件 UPDATE 允许扣成负数，线上已因此产生 2 个负余额账号（合计 −2,998.8 cr）。
+ */
 export async function adjustPermanentBalance(userId: string, delta: number): Promise<void> {
-  await db
-    .update(users)
-    .set({ balanceCredits: sql`${users.balanceCredits} + ${delta}` })
-    .where(eq(users.id, userId));
+  const next =
+    delta < 0
+      ? sql`MAX(${users.balanceCredits} + ${delta}, 0)`
+      : sql`${users.balanceCredits} + ${delta}`;
+  await db.update(users).set({ balanceCredits: next }).where(eq(users.id, userId));
 }
 
 /** 造一笔带过期的中奖临时余额行；发奖走批量插入，所以这里只造行。 */

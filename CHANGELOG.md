@@ -29,6 +29,31 @@
 
 ### 修复
 
+- **抽奖倒扣把用户永久余额扣成负数**（`lib/lottery/prize-math.ts` + `lib/lottery/store.ts` + `app/(dashboard)/lottery/actions.ts`）：
+  - 负档金额现在由新的纯函数 `clampClawback(credits, room)` 按**开奖前的永久余额**截断：`drawLottery` 在
+    原有那次并发读里多取 `getPermanentBalance(userId)`，整批共享一个「可扣余量」并逐注消耗——余额 80 时
+    抽中 −150 只扣 80，同批后面的负档变成 0 cr（转盘格子照旧，结果卡与流水文案为「0 cr（余额见底，未倒扣）」，
+    金额为 0 不写 `topup` 行）。本批先中的永久余额奖品会把余量抬回去，避免「刚中 ×17.5 永久大奖却扣不动后面的负档」。
+  - `adjustPermanentBalance()` 对负数 delta 改为 `MAX(balance + delta, 0)`：并发开奖时的兜底，宁可少扣也不让用户欠站点 credits。
+    正数 delta（退款、永久余额奖品、买券回滚）走原来的加法分支，不受影响。
+  - 同步过期表述：活动页规则、后台内圈提示、`README.md`、`docs/BILLING_GUIDE.md`、`docs/features/lottery.md` 里
+    「允许扣成负数」全部改成新口径；`docs/features/lottery.md` 新增「倒扣下限」段说明截断与兜底。
+  - 线上被旧逻辑扣成负数的账号有 2 个：`test@163.com` −1,400 cr（倒扣流水 23 笔 / −1,755）、
+    LinuxDO 注册的 `…@privaterelay.linux.do` −1,598.8 cr（倒扣 41 笔 / −3,404）。新校验只挡住以后，
+    这两笔存量要不要归零属于线上数据操作，另行确认后再动。
+
+- **兑换码生成没有额度与使用次数上限（资损口子）**（`lib/billing/redemption-limits.ts` + `app/(dashboard)/admin/redemptions/actions.ts` + `generate-codes-dialog.tsx`）：
+  - `generateRedemptionCodes` 原先只校验 `quota > 0`、`maxUses ≥ 1` 与「一次 ≤ 100 个」，填 `quota = 1000000000`
+    也能生成（站点没有汇率换算层，这类值直接就是可消耗的 credits 量）。
+  - 新增服务端硬校验：单码额度 ≤ `MAX_REDEMPTION_QUOTA = 100_000` cr、单码使用次数 ≤ `MAX_REDEMPTION_USES = 1_000`，
+    超限返回带具体数字的错误信息。上限常量放在 `lib/billing/redemption-limits.ts`（不放 `"use server"` 文件里：
+    Next 要求该文件的每个导出都是 async 函数），后台弹窗与动作共用同一份数。
+  - 顺带修 NaN：空输入框经 `parseInt` 变成 NaN，而 `NaN <= 0` 为 false，能绕过原来的数值校验，现在先过 `Number.isFinite`。
+  - 弹窗两个输入框补 `max` 与上限提示，避免管理员提交后才发现被挡。
+  - 线上那三条超额码（10 亿 / 100 万 / 100 万，都在 2026-06 生成）经核对**无需处理**：两条已被管理员自己的
+    账号用掉，第三条 `N6VA72AK2TQ3WU67` 从未使用，且三条都带 `expiresAt` 并早已过期，兑换时先被
+    「兑换码已过期」挡下；当时发放的额度走的是临时余额（`balanceValidDays = 7`），到期即回收。
+
 - **线上抽奖开奖失败（累抽赠券唯一索引冲突）**（`lib/db/schema.ts` + `migrations/011_lottery_milestone_unique_activity.sql` + `app/(dashboard)/lottery/actions.ts`）：
   - 唯一索引 `uq_lottery_ticket_milestone` 从 `(userId, milestoneDraws, milestoneSeq)` 改为 `(userId, milestoneDraws, milestoneSeq, activityKey)`，允许不同活动轮次各自领一次累抽赠券。迁移 `011` 已执行到线上 D1。
   - `isUniqueConflict()` 兼容 Drizzle 包装后的错误格式（同时检查 `error.message` 和 `error.cause?.message`），确保唯一索引冲突被正确捕获、不拖垮整批开奖。

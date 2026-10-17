@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 import { generateRedemptionCodes } from "./actions";
+import { MAX_REDEMPTION_QUOTA, MAX_REDEMPTION_USES } from "@/lib/billing/redemption-limits";
 import { toast } from "sonner";
 
 export function GenerateCodesDialog() {
@@ -81,9 +82,13 @@ export function GenerateCodesDialog() {
               value={quota}
               onChange={(e) => setQuota(parseInt(e.target.value))}
               min={1}
+              max={MAX_REDEMPTION_QUOTA}
               className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
               required
             />
+            <p className="mt-1 text-xs text-muted-foreground">
+              单码额度上限 {MAX_REDEMPTION_QUOTA.toLocaleString()} cr
+            </p>
           </div>
 
           <div>
@@ -95,11 +100,12 @@ export function GenerateCodesDialog() {
               value={maxUses}
               onChange={(e) => setMaxUses(parseInt(e.target.value))}
               min={1}
+              max={MAX_REDEMPTION_USES}
               className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
               required
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              每个兑换码可以被使用的次数
+              每个兑换码可以被使用的次数，上限 {MAX_REDEMPTION_USES.toLocaleString()}
             </p>
           </div>
 

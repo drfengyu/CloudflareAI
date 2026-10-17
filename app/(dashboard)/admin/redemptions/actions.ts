@@ -1,6 +1,7 @@
 "use server";
 
 import { batchRows, db } from "@/lib/db/d1-http";
+import { MAX_REDEMPTION_QUOTA, MAX_REDEMPTION_USES } from "@/lib/billing/redemption-limits";
 import { redemptions, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
@@ -15,6 +16,10 @@ function generateCode(length: number = 16): string {
   return code;
 }
 
+/**
+ * 单码额度与次数上限见 `lib/billing/redemption-limits.ts`（前端表单共用同一份数值）。
+ * 加校验的起因：此前这里只校验 `quota > 0`，线上发出过 10 亿 cr 的码。
+ */
 export async function generateRedemptionCodes(formData: {
   count: number;
   quota: number;
@@ -35,17 +40,23 @@ export async function generateRedemptionCodes(formData: {
     throw new Error("权限不足");
   }
 
-  // 验证输入
-  if (formData.count < 1 || formData.count > 100) {
+  // 验证输入。注意 NaN 过不了 `<= 0` 这类比较，所以先判 Number.isFinite。
+  if (!Number.isFinite(formData.count) || formData.count < 1 || formData.count > 100) {
     throw new Error("生成数量必须在 1-100 之间");
   }
 
-  if (formData.quota <= 0) {
+  if (!Number.isFinite(formData.quota) || formData.quota <= 0) {
     throw new Error("额度必须大于 0");
   }
+  if (formData.quota > MAX_REDEMPTION_QUOTA) {
+    throw new Error(`单码额度不能超过 ${MAX_REDEMPTION_QUOTA} cr（当前 ${formData.quota} cr）`);
+  }
 
-  if (formData.maxUses < 1) {
+  if (!Number.isFinite(formData.maxUses) || formData.maxUses < 1) {
     throw new Error("最大使用次数必须大于 0");
+  }
+  if (formData.maxUses > MAX_REDEMPTION_USES) {
+    throw new Error(`单码最大使用次数不能超过 ${MAX_REDEMPTION_USES}`);
   }
 
   // 计算兑换码过期时间

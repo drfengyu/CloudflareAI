@@ -7,6 +7,7 @@ import { getLotteryConfig } from "@/lib/lottery/config";
 import {
   activityWindow,
   calculateLuckyChance,
+  clampClawback,
   currentActivityKey,
   formatPrizeLabel,
   rollPrize,
@@ -25,6 +26,7 @@ import {
   deleteTickets,
   deleteTopupsByIds,
   expireTicketsForActivity,
+  getPermanentBalance,
   grantTickets,
   hasUsedFreeDrawToday,
   insertDrawRows,
@@ -171,6 +173,8 @@ function planDrawBatch(
   batchId: string,
   ticketIds: (string | null)[],
   activityKey: string | null,
+  /** 开奖前的永久余额：倒扣最多把它扣到 0，不允许用户因此欠站点 credits。 */
+  availablePermanentCredits: number,
 ): DrawBatchPlan {
   const batchSpend = round2(config.ticketPriceCredits * count);
   const results: DrawOutcome[] = [];
@@ -179,10 +183,20 @@ function planDrawBatch(
   const tempRows: TempRow[] = [];
   let permanentDelta = 0;
   let prizeTickets = 0;
+  let clawbackRoom = Math.max(0, round2(availablePermanentCredits));
 
   for (let i = 0; i < count; i += 1) {
     const outcome = rollPrize(config, batchSpend);
-    const amount = round2(outcome.credits);
+    // 2026-10-17：负档不再把永久余额扣成负数，可扣余量见 clampClawback()。
+    const clamped = clampClawback(outcome.credits, clawbackRoom);
+    clawbackRoom = clamped.room;
+    const amount = clamped.credits;
+    const label =
+      outcome.credits < 0 && amount !== round2(outcome.credits)
+        ? amount === 0
+          ? "0 cr（余额见底，未倒扣）"
+          : formatPrizeLabel(amount)
+        : outcome.label;
     const createdAt = new Date();
     const drawId = crypto.randomUUID();
 
@@ -192,7 +206,7 @@ function planDrawBatch(
       batchId,
       seq: i + 1,
       ring: outcome.ring,
-      label: outcome.label,
+      label,
       multiplier: outcome.multiplier,
       deltaCredits: amount,
       baseCredits: outcome.ring === "outer" ? outcome.baseCredits : 0,
@@ -201,7 +215,8 @@ function planDrawBatch(
       activityKey,
       createdAt,
     });
-    results.push({ ...outcome, seq: i + 1 });
+    // 结果面板与账本必须同数：倒扣被截断时，这里给的也是截断后的金额与文案。
+    results.push({ ...outcome, credits: amount, label, seq: i + 1 });
     prizeTickets += outcome.grantTickets;
 
     // 赠券档不产生 cr 变动，也就不写流水（否则钱包里会躺一条「+3 张券 0 cr」的噪声行）。
@@ -210,19 +225,22 @@ function planDrawBatch(
     // 流水里也只记实际 cr 与落在哪一圈，倍数是配置的内部表达；永久余额标注「永久」。
     const ringLabel = outcome.ring === "outer" ? "外圈" : "内圈";
     const permanentTag = outcome.balanceType === "permanent" ? "（永久）" : "";
-    const label = `${ringLabel} ${formatPrizeLabel(amount)}${permanentTag}`;
+    const topupLabel = `${ringLabel} ${formatPrizeLabel(amount)}${permanentTag}`;
     topupRows.push({
       id: crypto.randomUUID(),
       userId,
       amount,
       type: TOPUP_TYPE_LOTTERY,
-      description: `限时活动抽奖 ${label}`,
+      description: `限时活动抽奖 ${topupLabel}`,
       createdAt,
     });
 
     if (amount > 0 && outcome.balanceType === "permanent") {
       // 永久余额奖品：直接进永久余额，不过期。
       permanentDelta = round2(permanentDelta + amount);
+      // 它同时把可倒扣的余量抬上去：本批先抽中永久余额大奖、后面再中负档时，
+      // 那一笔是扣得掉的，不该被截成 0。
+      clawbackRoom = round2(clawbackRoom + amount);
     } else if (amount > 0) {
       // 普通正数奖品：发带过期的临时余额。
       tempRows.push(
@@ -234,7 +252,8 @@ function planDrawBatch(
         ),
       );
     } else {
-      // 倒扣：直接扣永久余额，允许扣成负数。
+      // 倒扣：直接扣永久余额。金额在循环开头已被 clampClawback 截过，
+      // 所以这里最多把整批的可用余额扣到 0，不会再往负数走。
       permanentDelta = round2(permanentDelta + amount);
     }
   }
@@ -310,12 +329,15 @@ export async function drawLottery(
     // countDraws / countConsecutiveMisses 按当前活动轮次过滤，新活动战绩重计、保底重置。
     const config = await getLotteryConfig();
     const activityKey = currentActivityKey(config);
-    const [pickedIds, ticketsBefore, drawsBefore, consecutiveMisses] = await Promise.all([
-      freeDrawEligible ? Promise.resolve<string[]>([]) : pickUnusedTicketIds(userId, count),
-      countUnusedTickets(userId),
-      countDraws(userId, activityKey),
-      countConsecutiveMisses(userId, 30, activityKey),
-    ]);
+    const [pickedIds, ticketsBefore, drawsBefore, consecutiveMisses, permanentBefore] =
+      await Promise.all([
+        freeDrawEligible ? Promise.resolve<string[]>([]) : pickUnusedTicketIds(userId, count),
+        countUnusedTickets(userId),
+        countDraws(userId, activityKey),
+        countConsecutiveMisses(userId, 30, activityKey),
+        // 倒扣下限的依据。买券的 cr 在上一笔动作里就扣完了，所以现在读到的就是本批可倒扣的上限。
+        getPermanentBalance(userId),
+      ]);
 
     // 活动结束且配置允许券过期时，自动作废该用户本轮未使用的券。
     // 用户在活动结束后首次尝试抽奖时触发，标记 expired=1 后不再计入可用券。
@@ -345,7 +367,15 @@ export async function drawLottery(
     const ticketIds: (string | null)[] = freeDrawEligible ? [null] : pickedIds;
 
     const batchId = crypto.randomUUID();
-    const plan = planDrawBatch(userId, effectiveConfig, count, batchId, ticketIds, activityKey);
+    const plan = planDrawBatch(
+      userId,
+      effectiveConfig,
+      count,
+      batchId,
+      ticketIds,
+      activityKey,
+      permanentBefore,
+    );
 
     if (!freeDrawEligible) {
       if (!(await lockTickets(pickedIds, rowIds(plan.drawRows)))) {
