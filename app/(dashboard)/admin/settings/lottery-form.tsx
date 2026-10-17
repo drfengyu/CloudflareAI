@@ -306,7 +306,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
 
       <PrizeSection
         title="内圈奖品（固定加/减 cr）"
-        hint="绝对 cr，不随券价自动缩放——券价因此是独立的利润率杠杆。扇区宽度按权重分配，权重同时决定中奖概率；负数直接从永久余额扣除，可能扣成负数。"
+        hint="绝对 cr，不随券价自动缩放——券价因此是独立的利润率杠杆。扇区宽度按权重分配，权重同时决定中奖概率；负数先扣用户未过期的临时余额（越早到期越先扣），不够再扣永久余额，本金可能扣成负数。"
         columns={[
           { key: "credits", label: "cr 变动" },
           { key: "weight", label: "权重" },

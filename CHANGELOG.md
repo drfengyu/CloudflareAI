@@ -29,6 +29,33 @@
 
 ### 修复
 
+- **抽奖倒扣先吃临时余额，不再优先砸本金**（`lib/lottery/store.ts` + `app/(dashboard)/lottery/actions.ts` + `app/(dashboard)/lottery/lottery-wheel.tsx` + `app/(dashboard)/admin/settings/lottery-form.tsx` + `docs/features/lottery.md` + `docs/BILLING_GUIDE.md`）：
+  - 症状：中了倒扣档只会 `UPDATE user SET balanceCredits = balanceCredits - ?`，完全绕过 `temporary_balance`。
+    于是出现「本金已经欠着，临时余额还正着」的分裂账户——改之前线上就有两例：LinuxDO relay 账号本金 −1,598.80 cr
+    却还躺着 14 笔共 2,051.39 cr 的未过期临时余额（2026-10-21 起逐笔作废，最晚一笔 11-14），`test@163.com`
+    本金 −1,400 cr 配 9 笔共 1,274.08 cr。分裂本身不动总额，界面靠「负数补正」把 relay 显示成可用 +452.58 cr，
+    但这些行一作废补正就没得补了，用户当天会发现余额从正翻负；那笔欠账其实一直是站点没真收回的惩罚额。
+  - 现在与买券 / 消费同一条顺序：**未过期的临时余额（越早到期越先扣）→ 永久余额**，倒扣仍不设下限
+    （定案见下方「抽奖倒扣口径定案」，本次只改扣哪一层，没改扣到多少）。新原语 `clawbackCredits(userId, amount, excludeIds)`
+    返回一份扣款凭据（每张临时行扣了多少、被清空的是哪张、本金扣了多少），开奖失败的补偿路径 `refundClawback()`
+    照凭据逐项退回，被删掉的空行按快照原 id / 原额度 / 原到期时间重建，避免回滚把用户的中奖额退丢了。
+    `excludeIds` 用来跳过本批开奖刚写进去的中奖行——那些钱是同批发放的，不该被同批倒扣吃掉。
+  - 单行扣款用 `UPDATE ... WHERE id = ? AND amount >= ?` 条件写：`changes = 0` 说明这行被并发消费改走了，
+    跳过它、把额度留给下一行或本金，绝不超扣。退回本金排在「删临时行」之后，防止并发下退成双份。
+  - 踩到的坑（都改了）：
+    - 把 `new Date()` 直接塞进 raw `sql` 模板会绑成 ISO 字符串，而 `expiresAt` 存的是毫秒整数，
+      SQLite 里数字恒小于字符串 → 「未过期」条件永假，临时余额一层都扣不到。改用 `gt()` / `asc()`。
+    - 取整只能作用在「还欠多少」，不能作用在「这一行扣多少」：对 0.3 cr 的行连扣三次 0.1，
+      库里剩下 `0.09999999999999998`，先 round 再比就把这丝尾巴抬成 0.1，反而大过行内余额 →
+      条件写失败、0.1 全落本金，尾巴留在即将过期的临时行里。现在按行内原值扣，尾巴由最后一笔吸收。
+  - 对线上 D1 实测（自建一次性用户 `tmp-claw-*`，测完整行删掉；结束时 `user` 表回到 5 行、`tmp-claw` 残留 0 行），
+    7 组用例全绿：① 只扣临时且按到期先后（30 空行删除 + 50 行扣 35 剩 15），本金 100 分文未动；② 照凭据退回后
+    三行额度复原 30/50/1000、被删的空行按原 id 重建，本金仍是 100；③ 临时 150 不够扣 235 → 本金扣 85 剩 15；
+    ④ 没有临时余额时本金 100 直接扣成 −185（下限按定案保持打开），退回后回到 100；⑤ `excludeIds` 命中的行
+    分文未动、差额落到本金；⑥ 金额 0 直接返回空凭据，不写库；⑦ 上述 0.1 × 3 浮点用例。
+  - 界面文案与文档同步：转盘规则、后台倒扣说明、`README.md`、`docs/BILLING_GUIDE.md` 账本表都改成
+    「先扣未过期临时余额（越早到期越先扣），不够再扣永久余额，可能扣成负数」。
+
 - **进程内限流形同虚设 + 免费抽可并发重复领**（`lib/rate-limit.ts` + `lib/db/schema.ts` + `lib/lottery/store.ts` + `app/(dashboard)/lottery/actions.ts` + `app/(dashboard)/wallet/actions.ts` + `app/v1/*` + `migrations/012_lottery_free_draw_idempotency_and_rate_limit.sql`，详见 `docs/fixes/2026-10-17-in-process-rate-limit.md`）：
   - `checkRateLimit` 的计数原来放在模块级 `Map` 里，Vercel 每个实例各有一份，买券 / 开奖 / 下支付单的
     「每分钟 N 次」只挡同一个实例上的连点。现在这些**花钱的动作**改走 D1 计数：新表 `rate_limit_bucket`

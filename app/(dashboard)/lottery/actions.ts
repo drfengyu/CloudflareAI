@@ -18,6 +18,7 @@ import {
   adjustPermanentBalance,
   beijingDayKey,
   buildTemporaryPrizeRow,
+  clawbackCredits,
   countConsecutiveMisses,
   countDraws,
   countUnusedTickets,
@@ -33,8 +34,10 @@ import {
   insertTopupRows,
   lockTickets,
   pickUnusedTicketIds,
+  refundClawback,
   spendCredits,
   unlockTickets,
+  type ClawbackReceipt,
 } from "@/lib/lottery/store";
 import { lotteryDraws, temporaryBalances, topups } from "@/lib/db/schema";
 
@@ -155,8 +158,10 @@ interface DrawBatchPlan {
   drawRows: DrawRow[];
   topupRows: TopupRow[];
   tempRows: TempRow[];
-  /** 本批倒扣合计（负数）。中奖走带过期的临时余额，不并进这个净额。 */
+  /** 本批落到永久余额上的正数净额（目前只有「永久余额」奖型）。倒扣不进这里，见 clawbackTotal。 */
   permanentDelta: number;
+  /** 本批倒扣合计（正数）。结算时先吃未过期的临时余额，剩下的才落到本金上。 */
+  clawbackTotal: number;
   /** 本批抽中的赠券张数。 */
   prizeTickets: number;
 }
@@ -181,6 +186,7 @@ function planDrawBatch(
   const topupRows: TopupRow[] = [];
   const tempRows: TempRow[] = [];
   let permanentDelta = 0;
+  let clawbackTotal = 0;
   let prizeTickets = 0;
 
   for (let i = 0; i < count; i += 1) {
@@ -238,12 +244,20 @@ function planDrawBatch(
         ),
       );
     } else {
-      // 倒扣：直接扣永久余额，允许扣成负数（与消费扣费同一口径）。
-      permanentDelta = round2(permanentDelta + amount);
+      // 倒扣：先累计到本批，结算时先吃未过期的临时余额、不够再扣本金（见 clawbackCredits）。
+      clawbackTotal = round2(clawbackTotal - amount);
     }
   }
 
-  return { results, drawRows, topupRows, tempRows, permanentDelta, prizeTickets };
+  return {
+    results,
+    drawRows,
+    topupRows,
+    tempRows,
+    permanentDelta,
+    clawbackTotal,
+    prizeTickets,
+  };
 }
 
 /**
@@ -255,6 +269,8 @@ async function compensateDrawBatch(
   plan: DrawBatchPlan,
   issuedTicketIds: string[],
   lockedTicketIds: string[],
+  /** 已经发生的倒扣回收；没执行到就传 null。 */
+  clawback: ClawbackReceipt | null,
 ): Promise<void> {
   try {
     await Promise.all([
@@ -267,6 +283,8 @@ async function compensateDrawBatch(
         ? adjustPermanentBalance(userId, -plan.permanentDelta)
         : Promise.resolve(),
     ]);
+    // 退回倒扣要排在删临时余额之后：那批中奖行会被删掉，先加回再删就白加一场。
+    if (clawback) await refundClawback(userId, clawback);
   } catch (rollbackError) {
     console.error("[drawLottery] 整批回滚失败，需人工核对", rollbackError);
   }
@@ -400,6 +418,9 @@ export async function drawLottery(
           })
         : Promise.resolve();
 
+    // 本批倒扣实际扣了哪里，回滚时按它退回。
+    let clawbackReceipt: ClawbackReceipt | null = null;
+
     // 每个写入操作打标签，失败时能精准定位是哪一步炸了
     const writeTasks: Array<{ label: string; promise: Promise<unknown> }> = [
       { label: "insertDrawRows", promise: insertDrawRows(plan.drawRows) },
@@ -408,6 +429,17 @@ export async function drawLottery(
       {
         label: "adjustPermanentBalance",
         promise: plan.permanentDelta !== 0 ? adjustPermanentBalance(userId, plan.permanentDelta) : Promise.resolve(),
+      },
+      {
+        // 倒扣：先吃他手里未过期的临时余额（最早到期的先扣），不够的部分才落到本金。
+        // 本批刚发的中奖行按 id 排除，免得同一次写入里「刚发给他就当场扣走」。
+        label: "clawbackCredits",
+        promise:
+          plan.clawbackTotal > 0
+            ? clawbackCredits(userId, plan.clawbackTotal, rowIds(plan.tempRows)).then((receipt) => {
+                clawbackReceipt = receipt;
+              })
+            : Promise.resolve(),
       },
       { label: "prizeGrant", promise: prizeGrant },
       ...milestoneGrants.map((p, i) => ({ label: `milestoneGrant_${i}`, promise: p })),
@@ -424,7 +456,13 @@ export async function drawLottery(
         reason instanceof Error ? { message: reason.message, stack: reason.stack } : reason,
       );
       // 免费抽没有锁定任何券，locked 传空数组即可。
-      await compensateDrawBatch(userId, plan, issuedTicketIds, freeDrawEligible ? [] : pickedIds);
+      await compensateDrawBatch(
+        userId,
+        plan,
+        issuedTicketIds,
+        freeDrawEligible ? [] : pickedIds,
+        clawbackReceipt,
+      );
       // 免费抽撞唯一索引 = 今天这一发已经领过了（并发或连点），不是故障，说人话回去。
       if (freeDrawEligible && failedTask.label === "insertDrawRows" && isUniqueConflict(reason)) {
         return { success: false, error: "今日免费抽已使用，明天再来" };

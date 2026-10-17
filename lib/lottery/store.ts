@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import { batchRows, d1Run, db, D1_MAX_BINDINGS } from "@/lib/db/d1-http";
 import {
   lotteryDraws,
@@ -247,6 +247,11 @@ export async function grantTickets(
   return ids;
 }
 
+/** 金额按 1e-6 对齐，避免多次加减后留下浮点尾巴（0.1+0.2 那类）。 */
+function round6(value: number): number {
+  return Math.round(value * 1e6) / 1e6;
+}
+
 /** 收回刚发出的券；发券之后还有步骤失败时用它把券清干净。 */
 export async function deleteTickets(ids: string[]): Promise<void> {
   for (const batch of batchRows(ids, 1)) {
@@ -317,16 +322,119 @@ export async function spendCredits(
 }
 
 /**
- * 结算本批的永久余额净额（正数=永久余额奖品，负数=倒扣）。
+ * 结算本批落到永久余额上的**正数**净额（目前只有「永久余额」奖型）。
  *
- * 允许扣成负数，与消费侧 `deductCredits` 同一口径——2026-10-17 管理员明确定案：抽奖的倒扣
- * 就按实际金额扣，不透支也不封顶。曾提过「最多扣到 0」的下限，被他回退。
+ * 倒扣不走这里：2026-10-17 起它先吃未过期的临时余额，剩下的才动本金，见 `clawbackCredits()`。
+ * 这里仍是无条件加法/减法，本金可以被扣成负数——管理员 2026-10-17 明确定过：不给倒扣加下限，
+ * 与消费侧 `deductCredits` 同口径。曾提过「最多扣到 0」，被他回退，别再往这个方向加东西。
  */
 export async function adjustPermanentBalance(userId: string, delta: number): Promise<void> {
   await db
     .update(users)
     .set({ balanceCredits: sql`${users.balanceCredits} + ${delta}` })
     .where(eq(users.id, userId));
+}
+
+/** 一次倒扣实际扣了哪些地方，失败时按它原路退回。 */
+export interface ClawbackReceipt {
+  temp: {
+    id: string;
+    taken: number;
+    /** 被扣空因而删掉的行；退回时按这份快照原样重建（id 都不变）。 */
+    deletedRow?: (typeof temporaryBalances.$inferInsert & { id: string }) | null;
+  }[];
+  /** 临时余额不够、落到永久余额上的部分。 */
+  permanent: number;
+}
+
+/**
+ * 回收整批的倒扣：先扣未过期的临时余额（最早过期的先扣），不够再扣永久余额（允许扣成负数）。
+ *
+ * 2026-10-17 改口径。原先倒扣一步砸在永久余额上，于是出现「本金欠着 1,598.80 cr，
+ * 手上却还躺着 2,051.39 cr 未过期的临时余额」这种分裂账户：站点没真的收回成本，
+ * 那些赠送额度逐笔作废完，用户才发现可用余额从正翻负。
+ * 现在跟买券、模型消费走同一优先级——先把快过期的赠送额度花掉，惩罚金额一分不少，只是少的是
+ * 本来就要作废的那份钱。
+ *
+ * @param excludeIds 本批刚发出的中奖行。发奖与倒扣在同一次写入里并发进行，不排除掉会出现
+ *                   「刚发给他的钱当场又被倒扣拿走」，账目也难核对。
+ */
+export async function clawbackCredits(
+  userId: string,
+  amount: number,
+  excludeIds: string[] = [],
+): Promise<ClawbackReceipt> {
+  const receipt: ClawbackReceipt = { temp: [], permanent: 0 };
+  let remaining = round6(amount);
+  if (remaining <= 0) return receipt;
+
+  const rows = await db
+    .select()
+    .from(temporaryBalances)
+    .where(
+      and(
+        eq(temporaryBalances.userId, userId),
+        // 必须用 gt()：expiresAt 存毫秒整数，raw sql 会把 Date 绑成 ISO 字符串，比较恒假。
+        gt(temporaryBalances.expiresAt, new Date()),
+        excludeIds.length ? notInArray(temporaryBalances.id, excludeIds) : undefined,
+      ),
+    )
+    .orderBy(asc(temporaryBalances.expiresAt));
+
+  for (const row of rows) {
+    if (remaining <= 0) break;
+    // 2026-10-17 修复：取整只能作用在「还欠多少」上，扣这一行时要照库里的原值扣。
+    // 先减后 round 会把 0.3-0.1-0.1 剩下的 0.09999999999999998 抬成 0.1，比行内余额还大，
+    // `amount >= ?` 恒假 → 这行被跳过、0.1 全落本金，而那丝尾巴留在即将过期的临时行里。
+    const take = row.amount <= remaining ? row.amount : remaining;
+    if (take <= 0) continue;
+    const { changes } = await d1Run(
+      "UPDATE temporary_balance SET amount = amount - ? WHERE id = ? AND amount >= ?",
+      [take, row.id, take],
+    );
+    // changes=0 = 这一行被并发消费改走了，跳过它，钱留给下一行或本金，绝不超扣。
+    if (changes !== 1) continue;
+    receipt.temp.push({
+      id: row.id,
+      taken: take,
+      deletedRow: take >= row.amount ? { ...row } : null,
+    });
+    remaining = round6(remaining - take);
+  }
+
+  if (remaining > 0) {
+    await d1Run("UPDATE user SET balanceCredits = balanceCredits - ? WHERE id = ?", [
+      remaining,
+      userId,
+    ]);
+    receipt.permanent = remaining;
+  }
+
+  // 扣空的行删掉，跟 spendCredits 一致，免得钱包明细里躺一串 0 cr 条目。
+  for (const hit of receipt.temp) {
+    if (hit.deletedRow) await db.delete(temporaryBalances).where(eq(temporaryBalances.id, hit.id));
+  }
+
+  return receipt;
+}
+
+/** 按凭据退回一次倒扣（整批回滚用）。临时余额优先加回原行，行已经没了就按快照重建。 */
+export async function refundClawback(userId: string, receipt: ClawbackReceipt): Promise<void> {
+  for (const hit of receipt.temp) {
+    const { changes } = await d1Run(
+      "UPDATE temporary_balance SET amount = amount + ? WHERE id = ?",
+      [hit.taken, hit.id],
+    );
+    if (changes !== 1 && hit.deletedRow) {
+      const row = hit.deletedRow;
+      await db
+        .insert(temporaryBalances)
+        .values({ id: row.id, userId, amount: row.amount, expiresAt: row.expiresAt, description: row.description });
+    }
+  }
+  if (receipt.permanent !== 0) {
+    await adjustPermanentBalance(userId, receipt.permanent);
+  }
 }
 
 /** 造一笔带过期的中奖临时余额行；发奖走批量插入，所以这里只造行。 */

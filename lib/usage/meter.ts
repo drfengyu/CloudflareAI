@@ -99,7 +99,10 @@ export async function logUsage(input: {
 /**
  * 从用户余额中扣减 credits。
  * 策略：优先扣临时余额（最早过期的先扣），不够再扣永久余额。
- * 不允许过度扣减（不会让余额变负）。
+ *
+ * 最后一步是无下限的减法：正常路径上调用方已经预检过总额，扣不穿；但并发消费、
+ * 或预检之后本金又被别处扣走时，本金会变成负数。这是站点定下的口径（欠账允许存在，
+ * 见 `docs/BILLING_GUIDE.md`），不是漏网——别在这里加 `MAX(..., 0)`。
  */
 async function deductCredits(userId: string, amount: number): Promise<void> {
   let remaining = amount;
