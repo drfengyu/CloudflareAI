@@ -29,8 +29,18 @@ const INNER_LABEL_R = INNER_R * 0.76;
 const HUB_R = 34;
 const SPOKE_BASE = 20;
 
-const SPIN_INNER_MS = 2600;
+/**
+ * 内圈拆成两段（2026-10-19 提速）：预转在服务端请求发出的瞬间就开始，用来盖住那段网络等待
+ * （原先请求回来前盘面是静止的，白等 1 秒左右）；响应回来后再接管转到真正的停点。
+ * CSS transition 中途改目标值会从当前插值位置继续过渡，所以接管不会跳。
+ */
+const PRE_SPIN_MS = 1200;
+const PRE_SPIN_DEG = 540;
+const SPIN_SETTLE_MS = 1500;
+const SETTLE_EASING = "cubic-bezier(0.16, 0.9, 0.2, 1)";
 const SPIN_OUTER_MS = 1500;
+/** 读数针从上一格滑到下一格：环带只在第一发进外圈时摇一次，后面不再重摇（结果已定，摇圈没有信息量）。 */
+const OUTER_SWEEP_MS = 700;
 /** 一次外圈转停后停留多久再读下一发（10 连抽可能进入好几次）。 */
 const OUTER_HOLD_MS = 800;
 const SPOKE_STEP_MS = 130;
@@ -302,6 +312,14 @@ export function LotteryWheel(props: LotteryWheelProps) {
   const [innerRotation, setInnerRotation] = useState(0);
   const [outerRotation, setOuterRotation] = useState(0);
   /**
+   * 内圈当前这一段的过渡参数（2026-10-19 提速）：预转用匀速、接管定停用减速曲线，
+   * 两段时长不同，所以不能像原先那样把 transition 写死在渲染里。
+   */
+  const [innerSpin, setInnerSpin] = useState<{ ms: number; easing: string }>({
+    ms: SPIN_SETTLE_MS,
+    easing: SETTLE_EASING,
+  });
+  /**
    * 外圈读数针的角度（绝对角，null = 不画）。
    * 2026-10-19 改：外圈转停后这根针停在**中奖格子本身所在的奖励扇区**，
    * 不再让奖品转到内圈入口落点下面——那样读数位置永远被钉在入口那一格的方向上。
@@ -309,6 +327,8 @@ export function LotteryWheel(props: LotteryWheelProps) {
   const [outerPointerDeg, setOuterPointerDeg] = useState<number | null>(null);
   /** 跳位（不动画）用：把针瞬移到这一发的入口落点，下一步再扫到奖励格。 */
   const [outerPointerAnimated, setOuterPointerAnimated] = useState(true);
+  /** 读数针这一次移动用多久：首发跟着环带摇（SPIN_OUTER_MS），后续只是滑到下一格（OUTER_SWEEP_MS）。 */
+  const [outerPointerMs, setOuterPointerMs] = useState(SPIN_OUTER_MS);
   const [phase, setPhase] = useState<"idle" | "inner" | "outer" | "done">("idle");
   const [tickets, setTickets] = useState(props.tickets);
   const [spokes, setSpokes] = useState<DrawOutcome[]>([]);
@@ -364,10 +384,16 @@ export function LotteryWheel(props: LotteryWheelProps) {
     setResults(null);
     setSpokes([]);
     setOuterPointerDeg(null);
+    // 2026-10-19 提速：请求一发出就先匀速空转，把服务端那段等待盖掉（这一段与结果无关）。
+    const preSpinDeg = innerRotation + PRE_SPIN_DEG;
+    setInnerRotation(preSpinDeg);
+    setInnerSpin({ ms: PRE_SPIN_MS, easing: "linear" });
 
     const response = await drawLottery(count, useFree);
     if (!response.success) {
       setPhase("idle");
+      // 开奖失败时预转已经转出去了，用一段短减速把它停住（目标角不变，只改时长，所以不会跳）。
+      setInnerSpin({ ms: 400, easing: SETTLE_EASING });
       toast.error(response.error);
       router.refresh();
       return;
@@ -384,45 +410,58 @@ export function LotteryWheel(props: LotteryWheelProps) {
     // 动画期间实时显示本次外圈概率（含保底提升）
     setDrawingLuckyChance(response.data.luckyChancePercent ?? props.outerChancePercent);
 
-    // 内圈：把最后一次的落点转到顶部指针处。
+    // 内圈：从预转的位置接管，把最后一次的落点转到顶部指针处。
     const last = drawn[drawn.length - 1];
     const lastSpan = innerSectorSpans[last.innerIndex] ?? innerSectorSpans[0];
     // 先算出内圈最终角度并留住：外圈读数针的位置要用同一个基准，否则两边会错开。
-    const innerFinal = rotationTo(innerRotation, lastSpan.center, 0, 5);
+    // 圈数从 5 降到 2：预转已经转掉一圈半，接管段只需再转两圈就够看。
+    const innerFinal = rotationTo(preSpinDeg, lastSpan.center, 0, 2);
     setInnerRotation(innerFinal);
+    setInnerSpin({ ms: SPIN_SETTLE_MS, easing: SETTLE_EASING });
 
-    const revealStart = SPIN_INNER_MS;
+    // 计时器的零点是「响应回来、接管开始」那一刻，所以起点只剩接管这一段。
+    const revealStart = SPIN_SETTLE_MS;
     drawn.forEach((result, index) => {
       later(() => {
         setSpokes((prev) => [...prev, result]);
       }, revealStart + index * SPOKE_STEP_MS);
     });
 
-    // 外圈：每一次进入外圈的落点都要单独转一次、读一次（10 连抽里可能进入好几发）。
+    // 外圈：每一次进入外圈的落点都要读一次（10 连抽里可能进入好几发）。
+    // 2026-10-19 提速：环带只在第一发摇一次，后面几发只让读数针滑到下一格——
+    // 结果在这一步之前就已经定了，摇几圈都不改变「针停在哪格」，重复摇纯属耗时。
     const entries = drawn.filter((r) => r.outerIndex !== null);
     const entryAngles = spokeAngles(drawn, innerSectorSpans);
     const spokesDone = revealStart + drawn.length * SPOKE_STEP_MS;
     if (entries.length > 0) {
       let at = spokesDone + 120;
-      for (const entry of entries) {
+      entries.forEach((entry, index) => {
         const outerSpan = outerSpans[entry.outerIndex ?? 0] ?? outerSpans[0];
         // 外圈只整圈转（3 圈），所以这一格转停后的朝向 = 它此刻的自然朝向，与转几圈无关。
         const restDeg = (((outerSpan.center + innerFinal + outerRotation) % 360) + 360) % 360;
-        const startDeg = entryAngles.get(entry.seq) ?? 0;
         const jumpAt = at;
-        later(() => {
-          setPhase("outer");
-          // 先把读数针瞬移到这一发的入口落点（不动画），下一步再扫过去，看着就是「从落点扫到奖励格」。
-          setOuterPointerAnimated(false);
-          setOuterPointerDeg(startDeg);
-        }, jumpAt);
-        later(() => {
-          setOuterPointerAnimated(true);
-          setOuterPointerDeg(restDeg);
-          setOuterRotation((current) => current + 3 * 360);
-        }, jumpAt + 60);
-        at = jumpAt + SPIN_OUTER_MS + OUTER_HOLD_MS;
-      }
+        if (index === 0) {
+          later(() => {
+            setPhase("outer");
+            // 先把读数针瞬移到这一发的入口落点（不动画），下一步再扫过去，看着就是「从落点扫到奖励格」。
+            setOuterPointerAnimated(false);
+            setOuterPointerDeg(entryAngles.get(entry.seq) ?? 0);
+          }, jumpAt);
+          later(() => {
+            setOuterPointerAnimated(true);
+            setOuterPointerMs(SPIN_OUTER_MS);
+            setOuterPointerDeg(restDeg);
+            setOuterRotation((current) => current + 3 * 360);
+          }, jumpAt + 60);
+          at = jumpAt + SPIN_OUTER_MS + OUTER_HOLD_MS;
+        } else {
+          later(() => {
+            setOuterPointerMs(OUTER_SWEEP_MS);
+            setOuterPointerDeg(restDeg);
+          }, jumpAt);
+          at = jumpAt + OUTER_SWEEP_MS + OUTER_HOLD_MS;
+        }
+      });
       later(() => setPhase("done"), at);
     } else {
       later(() => setPhase("done"), spokesDone);
@@ -576,7 +615,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
                 style={{
                   transform: `rotate(${innerRotation}deg)`,
                   transformOrigin: "50% 50%",
-                  transition: `transform ${SPIN_INNER_MS}ms cubic-bezier(0.16, 0.9, 0.2, 1)`,
+                  transition: `transform ${innerSpin.ms}ms ${innerSpin.easing}`,
                 }}
               >
                 {props.innerSectors.map((sector, index) => {
@@ -660,7 +699,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
               </g>
 
               {/* 外圈读数针：静态层（不随内圈转），转停后压在**中奖那一格自己所在的奖励扇区**上。
-                  每发进入外圈都先把针瞬移到它的入口落点，再扫到格子处；多次进入就逐发依次读。 */}
+                  第一发先把针瞬移到入口落点再随环带扫到格子处；后续几发环带不再重摇，针直接滑过去。 */}
               {outerPointerDeg !== null &&
                 (() => {
                   const from = polar(OUTER_POINTER_IN, 0);
@@ -671,7 +710,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
                         transform: `rotate(${outerPointerDeg}deg)`,
                         transformOrigin: "50% 50%",
                         transition: outerPointerAnimated
-                          ? `transform ${SPIN_OUTER_MS}ms cubic-bezier(0.16, 0.9, 0.2, 1)`
+                          ? `transform ${outerPointerMs}ms ${SETTLE_EASING}`
                           : "none",
                       }}
                     >
@@ -997,7 +1036,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
             </div>
             <ul className="list-disc space-y-1 pl-4">
               <li>内圈指针停在「外圈入口」时指针变长顶到环带内侧，随后一根外圈读数针从落点扫到转停后的那一格奖励上。</li>
-              <li>10 连抽一次转停后依次落 10 根指针；每发进入外圈都逐发依次转、依次读，读数针停在那一发中的奖励格本身。</li>
+              <li>10 连抽一次转停后依次落 10 根指针；外圈只摇一次，读数针按开奖顺序逐发滑到各自的中奖格。</li>
               <li>中奖 cr 作为临时余额发放，有效期 {props.prizeValidDays} 天，过期未用自动消失。</li>
               <li>转到倒扣时先扣未过期的临时余额（越早到期越先扣），不够再扣永久余额，本金可能因此扣成负数。</li>
               <li>活动结束后未使用的券作废，不折算回 cr。</li>
