@@ -252,6 +252,34 @@ function rotationTo(current: number, sectorCenter: number, targetAngle: number, 
   return next;
 }
 
+/**
+ * 每根结果指针在盘面局部坐标下的角度（与内圈一起旋转）。
+ *
+ * 同一扇区被多次命中时，指针按扇区宽度的 70% 并排散开，免得叠成一根。**外圈对位必须用这张表里的角**：
+ * 2026-10-19 修——原先外圈是按入口扇区的正中（`span.center`）对位，而入口那根长指针常常因为并排
+ * 被推开十几度（10 连抽里入口扇区命中 3 根时偏移 ±22.7°），转停后奖品停在指针旁边，看起来就是
+ * 「指针没停到实际区域」。渲染和动画目标改成同一个来源，两边就不可能再对不上。
+ */
+function spokeAngles(results: DrawOutcome[], sectorSpans: Span[]) {
+  const countByIndex = new Map<number, number>();
+  for (const spoke of results) {
+    countByIndex.set(spoke.innerIndex, (countByIndex.get(spoke.innerIndex) ?? 0) + 1);
+  }
+  const seqByIndex = new Map<number, number>();
+  const angles = new Map<number, number>();
+  for (const spoke of results) {
+    const span = sectorSpans[spoke.innerIndex] ?? sectorSpans[0];
+    if (!span) continue;
+    const count = countByIndex.get(spoke.innerIndex) ?? 1;
+    const idx = seqByIndex.get(spoke.innerIndex) ?? 0;
+    seqByIndex.set(spoke.innerIndex, idx + 1);
+    const step = count > 1 ? ((span.end - span.start) * 0.7) / (count - 1) : 0;
+    const angleOffset = count > 1 ? (idx - (count - 1) / 2) * step : 0;
+    angles.set(spoke.seq, span.center + angleOffset);
+  }
+  return angles;
+}
+
 function formatCountdown(ms: number) {
   if (ms <= 0) return "0 分";
   const minutes = Math.floor(ms / 60_000);
@@ -354,15 +382,18 @@ export function LotteryWheel(props: LotteryWheelProps) {
 
     // 入口落点：指针变长伸进外圈，外圈再转一次把对应奖品转到这根指针下。
     const entry = [...drawn].reverse().find((r) => r.outerIndex !== null);
+    // 对位用的是这根指针**实际画出来的角度**（同扇区多命中时被并排推开过），不是扇区正中。
+    const entryAngle = entry
+      ? (spokeAngles(drawn, innerSectorSpans).get(entry.seq) ??
+        (innerSectorSpans[entry.innerIndex] ?? innerSectorSpans[0])?.center ??
+        0)
+      : 0;
     const spokesDone = revealStart + drawn.length * SPOKE_STEP_MS;
     if (entry) {
       later(() => {
         setPhase("outer");
-        const entrySpan = innerSectorSpans[entry.innerIndex] ?? innerSectorSpans[0];
         const outerSpan = outerSpans[entry.outerIndex ?? 0];
-        setOuterRotation((current) =>
-          rotationTo(current, outerSpan.center, entrySpan.center, 3),
-        );
+        setOuterRotation((current) => rotationTo(current, outerSpan.center, entryAngle, 3));
       }, spokesDone + 120);
       later(() => setPhase("done"), spokesDone + 120 + SPIN_OUTER_MS);
     } else {
@@ -563,25 +594,12 @@ export function LotteryWheel(props: LotteryWheelProps) {
                   );
                 })}
 
-                {/* 结果指针：内圈落点画短线，走通外圈的入口画长线伸进环带 */}
-                {/* 同一扇区多次命中时，指针加角度偏移并排显示，避免重叠成一根 */}
+                {/* 结果指针：内圈落点画短线，走通外圈的入口画长线伸进环带。
+                    角度一律取 spokeAngles()，与外圈对位同源。 */}
                 {(() => {
-                  // 统计每个 innerIndex 的命中次数和累计序号
-                  const countByIndex = new Map<number, number>();
-                  const seqByIndex = new Map<number, number>();
-                  for (const s of spokes) {
-                    countByIndex.set(s.innerIndex, (countByIndex.get(s.innerIndex) ?? 0) + 1);
-                  }
+                  const angles = spokeAngles(spokes, innerSectorSpans);
                   return spokes.map((spoke) => {
-                    const span = innerSectorSpans[spoke.innerIndex] ?? innerSectorSpans[0];
-                    const count = countByIndex.get(spoke.innerIndex) ?? 1;
-                    const idx = seqByIndex.get(spoke.innerIndex) ?? 0;
-                    seqByIndex.set(spoke.innerIndex, idx + 1);
-                    // 同扇区多根指针：在扇区宽度 70% 范围内均匀分布
-                    const usableWidth = (span.end - span.start) * 0.7;
-                    const step = count > 1 ? usableWidth / (count - 1) : 0;
-                    const angleOffset = count > 1 ? (idx - (count - 1) / 2) * step : 0;
-                    const angle = span.center + angleOffset;
+                    const angle = angles.get(spoke.seq) ?? 0;
                     const reachesOuter = spoke.outerIndex !== null;
                     const tip = polar(reachesOuter ? OUTER_R - 4 : INNER_R - 6, angle);
                     const base = polar(SPOKE_BASE, angle);
