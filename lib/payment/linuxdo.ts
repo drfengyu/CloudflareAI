@@ -1,4 +1,4 @@
-import { getSetting } from "@/lib/settings";
+import { getSettingsMap } from "@/lib/settings";
 import { epaySign, epayVerify } from "./epay";
 
 /**
@@ -28,16 +28,25 @@ export interface LinuxdoConfig {
 }
 
 export async function getLinuxdoConfig(): Promise<LinuxdoConfig> {
-  const [enabled, apiUrl, pid, key, rate, minCny, maxCny] = await Promise.all([
-    getSetting("ldpay_enabled", false),
-    getSetting("ldpay_api_url", "https://credit.linux.do/epay"),
-    getSetting("ldpay_pid", ""),
-    getSetting("ldpay_key", ""),
-    getSetting("ldpay_rate", 1),
-    getSetting("ldpay_min", 1),
-    getSetting("ldpay_max", 1000),
-  ]);
-  return { enabled, apiUrl, pid, key, rate, minCny, maxCny };
+  // 2026-10-17 性能：7 个键合成一次 IN 查询（原先 7 条并发 SELECT）。
+  const cfg = await getSettingsMap({
+    ldpay_enabled: false,
+    ldpay_api_url: "https://credit.linux.do/epay",
+    ldpay_pid: "",
+    ldpay_key: "",
+    ldpay_rate: 1,
+    ldpay_min: 1,
+    ldpay_max: 1000,
+  });
+  return {
+    enabled: cfg.ldpay_enabled,
+    apiUrl: cfg.ldpay_api_url,
+    pid: cfg.ldpay_pid,
+    key: cfg.ldpay_key,
+    rate: cfg.ldpay_rate,
+    minCny: cfg.ldpay_min,
+    maxCny: cfg.ldpay_max,
+  };
 }
 
 /**

@@ -78,9 +78,8 @@ export async function withoutExpiredGrants<T extends GrantTopupRow>(
     return rows;
   }
 
-  const checkinValidDays = await readValidDaysOption("checkin_valid_days");
-  const lotteryValidDays = await readLotteryPrizeValidDays();
-
+  // 2026-10-17 性能：这三条互不依赖（两个有效天数配置 + 兑换码行），原先一条接一条打 D1，
+  // 串行 3 次往返 ≈ 1.2 秒；并发成一波后只剩最慢那条的时间。
   const redemptionIds = [
     ...new Set(
       grantableRows
@@ -88,16 +87,19 @@ export async function withoutExpiredGrants<T extends GrantTopupRow>(
         .filter((id): id is string => Boolean(id)),
     ),
   ];
-  const redemptionRows =
+  const [checkinValidDays, lotteryValidDays, redemptionRows] = await Promise.all([
+    readValidDaysOption("checkin_valid_days"),
+    readLotteryPrizeValidDays(),
     redemptionIds.length > 0
-      ? await db
+      ? db
           .select({
             id: redemptions.id,
             balanceValidDays: redemptions.balanceValidDays,
           })
           .from(redemptions)
           .where(inArray(redemptions.id, redemptionIds))
-      : [];
+      : Promise.resolve([] as { id: string; balanceValidDays: number | null }[]),
+  ]);
   const validDaysByRedemption = new Map(
     redemptionRows.map((row) => [row.id, row.balanceValidDays ?? DEFAULT_VALID_DAYS]),
   );

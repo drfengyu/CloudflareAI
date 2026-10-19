@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { getSetting } from "@/lib/settings";
+import { getSettingsMap } from "@/lib/settings";
 
 /**
  * 易支付（彩虹易支付）接入封装。
@@ -21,16 +21,25 @@ export interface EpayConfig {
 }
 
 export async function getEpayConfig(): Promise<EpayConfig> {
-  const [enabled, apiUrl, pid, key, rate, minCny, maxCny] = await Promise.all([
-    getSetting("epay_enabled", false),
-    getSetting("epay_api_url", ""),
-    getSetting("epay_pid", ""),
-    getSetting("epay_key", ""),
-    getSetting("recharge_rate", 10),
-    getSetting("recharge_min", 1),
-    getSetting("recharge_max", 1000),
-  ]);
-  return { enabled, apiUrl, pid, key, rate, minCny, maxCny };
+  // 2026-10-17 性能：7 个键合成一次 IN 查询（原先 7 条并发 SELECT）。
+  const cfg = await getSettingsMap({
+    epay_enabled: false,
+    epay_api_url: "",
+    epay_pid: "",
+    epay_key: "",
+    recharge_rate: 10,
+    recharge_min: 1,
+    recharge_max: 1000,
+  });
+  return {
+    enabled: cfg.epay_enabled,
+    apiUrl: cfg.epay_api_url,
+    pid: cfg.epay_pid,
+    key: cfg.epay_key,
+    rate: cfg.recharge_rate,
+    minCny: cfg.recharge_min,
+    maxCny: cfg.recharge_max,
+  };
 }
 
 /** 计算易支付 MD5 签名（参数按 key 排序拼接 + 密钥）。 */

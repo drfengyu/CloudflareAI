@@ -29,6 +29,27 @@
 
 ### 修复
 
+- **钱包页与密钥页串行取数 / 每键一条查询（页面加载慢）**（`app/(dashboard)/wallet/page.tsx` + `app/(dashboard)/keys/page.tsx` + `lib/billing/display-balance.ts` + `lib/billing/grant-expiry.ts` + `lib/settings/index.ts` + `lib/payment/{epay,linuxdo}.ts`，2026-10-17）：
+  - 先量后改：在 `lib/db/d1-http.ts` 临时埋点数每条 SQL 的发起时刻与耗时（测完已撤），本地 dev 跑真 D1、
+    `curl` 每页 3 次取最快。基线是**一次 D1 REST 往返 350~500ms**（偶发 1.2~2.2s 尖峰），聚合本身不贵
+    （`usage_log` 全站才 475 行），所以页面慢基本等于「往返条数 × 有没有串成链」。
+  - **/wallet**：永久余额、临时余额、充值流水、支付单、支付配置这 5 条互不依赖的查询原先是一条接一条
+    `await`；并发成一波。`withoutExpiredGrants()` 里两个有效天数配置 + 兑换码行同理并发。
+    实测 **2.15~3.71 秒 → 0.58~0.71 秒**，D1 从 11 条降到 5 条。
+  - **/keys**：原先 `for (const key of keys)` 每把 key 单查一次 `usage_log` 汇总（**N+1 且串行**，
+    key 越多越慢），改成一条 `GROUP BY apiKeyId`；顺带去掉为「可用渠道列表」重复打的那次 `channels` 查询
+    （直接从已有结果筛 `status=1`），并把余额/密钥/渠道/模型目录/定价合成一波（外部 Cloudflare API 也一起并发）。
+    实测 4 把 key 的账号 **4.13~4.80 秒 → 0.62~1.02 秒**，D1 从 10 条降到 6 条。
+  - **`option` 逐键查询改批量**：新增 `getSettingsMap(defaults)`，一次 `IN` 拿多个键；
+    `getEpayConfig`/`getLinuxdoConfig`（各 7 个键）与 `getAuthChannels`（3 个键）各从 7/7/3 条查询降到 1 条。
+    值解析抽成 `coerceSettingValue`，`getSetting` 与批量版共用，语义不变（JSON 型配置仍走 `getSetting`）。
+  - **等价性核对**（临时脚本，只读）：对线上 36 个 `option` 键逐一比对 `getSetting` 与 `getSettingsMap`
+    的取值，**0 处不一致**，缺失键仍回落默认值。`usage_log` 的归属也查过（481 行里 459 行带 apiKeyId，
+    其中 354 行的 key 已被删除，且不存在「keyId 属于别人」的行），所以按 `userId` 过滤再分组与原先
+    按 keyId 逐条查询的显示结果一致。
+  - 测速用的账号/key/流水是一次性数据，测完已整行删除（用户数回到 5、`usage_log` 回到 475 行）。
+  - **口径未动**：只改并发与查询形状，余额计算、展示补正、抽奖倒扣顺序一字未改。
+
 - **抽奖倒扣先吃临时余额，不再优先砸本金**（`lib/lottery/store.ts` + `app/(dashboard)/lottery/actions.ts` + `app/(dashboard)/lottery/lottery-wheel.tsx` + `app/(dashboard)/admin/settings/lottery-form.tsx` + `docs/features/lottery.md` + `docs/BILLING_GUIDE.md`）：
   - 症状：中了倒扣档只会 `UPDATE user SET balanceCredits = balanceCredits - ?`，完全绕过 `temporary_balance`。
     于是出现「本金已经欠着，临时余额还正着」的分裂账户——改之前线上就有两例：LinuxDO relay 账号本金 −1,598.80 cr
@@ -112,6 +133,16 @@
   - 多批插入从串行改为 `Promise.all` 并行，D1 HTTP API 无状态可并发，100 张券从串行 ~5 秒降到 ~1.5 秒。
 
 ### 变更
+
+- **线上 2 个负本金账号补正为 0（只动数据，不动算法）**（2026-10-17，管理员开口要求）：
+  LinuxDO relay 账号本金 −1,598.8030194006433、`test@163.com` 本金 −1,400，各补一笔等额本金归零，
+  共发放 2,998.8030194 cr；每笔写一条 `topup type=2`（描述「负本金补正：本金归零（2026-10-17 管理员定案）」），
+  正向永久发放必须用 `type=2`——`type=6` 会被钱包当成会过期的奖励而隐藏。未过期的临时余额一分未动
+  （relay 2,051.387 cr、`test@163.com` 1,274.075 cr，其中部分行在补正当天到期后由过期回收机制正常作废）。
+  **展示口径「负数补正」与倒扣算法都未修改**，倒扣允许扣成负数的定案也仍然生效（将来还会再出现负本金）。
+  写入方式：先只读预演列出目标账号，再用「读到的原值」做条件更新（`WHERE balanceCredits = ?`，
+  并发变过就跳过），补正后另起进程复核；第一次因把补正额按 1e-6 对齐，relay 留下 −4.0064e-7 的尾巴，
+  随后归零并把那条流水的金额补齐到实际变动值。核对结果：负本金账号 0 个，补正流水 2 条。
 
 - **抽奖倒扣口径定案：允许扣成负数**（`lib/lottery/store.ts` + `app/(dashboard)/lottery/actions.ts` + `docs/features/lottery.md`）：
   2026-10-17 曾实现过「一批合计最多把永久余额扣到 0」的下限（开奖前读余额、按余额逐注截断负档、

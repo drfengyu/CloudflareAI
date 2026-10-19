@@ -80,23 +80,26 @@ export function calculateDisplayBalance(
  * 永久余额可能因超扣变成负数，但临时余额仍在补正。
  */
 export async function getActualBalance(userId: string): Promise<number> {
-  const [userRow] = await db
-    .select({ balanceCredits: users.balanceCredits })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  // 2026-10-17 性能：两条查询互不依赖，原先串行两次 D1 往返；并发成一波。
+  const now = new Date();
+  const [userRow, tempRows] = await Promise.all([
+    db
+      .select({ balanceCredits: users.balanceCredits })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1)
+      .then((rows) => rows[0]),
+    db
+      .select({
+        amount: temporaryBalances.amount,
+        expiresAt: temporaryBalances.expiresAt,
+      })
+      .from(temporaryBalances)
+      .where(eq(temporaryBalances.userId, userId)),
+  ]);
 
   const permanent = userRow?.balanceCredits ?? 0;
 
-  const tempRows = await db
-    .select({
-      amount: temporaryBalances.amount,
-      expiresAt: temporaryBalances.expiresAt,
-    })
-    .from(temporaryBalances)
-    .where(eq(temporaryBalances.userId, userId));
-
-  const now = new Date();
   const temporary = tempRows
     .filter((tb) => new Date(tb.expiresAt) > now)
     .reduce((acc, tb) => acc + tb.amount, 0);

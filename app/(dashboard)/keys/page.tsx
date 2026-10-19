@@ -16,48 +16,67 @@ export const dynamic = "force-dynamic";
 
 export default async function KeysPage() {
   const userId = await requireUser();
-  const userBalance = await getActualBalance(userId);
 
-  // Fetch API keys (without leftJoin to avoid Drizzle field mapping bug)
-  const keys = await db
-    .select({
-      id: apiKeys.id,
-      name: apiKeys.name,
-      prefix: apiKeys.prefix,
-      status: apiKeys.status,
-      quotaCredits: apiKeys.quotaCredits,
-      remainCredits: apiKeys.remainCredits,
-      expiresAt: apiKeys.expiresAt,
-      allowedModels: apiKeys.allowedModels,
-      allowedIps: apiKeys.allowedIps,
-      lastUsedAt: apiKeys.lastUsedAt,
-      createdAt: apiKeys.createdAt,
-      channelId: apiKeys.channelId,
-    })
-    .from(apiKeys)
-    .where(eq(apiKeys.userId, userId))
-    .orderBy(desc(apiKeys.createdAt));
-
-  // Fetch all channels separately
-  const allChannels = await db
-    .select({ id: channels.id, name: channels.name, type: channels.type })
-    .from(channels);
+  // 2026-10-17 性能：这几条互不依赖，原先是一条接一条 await（含下面那个每键一次的 N+1），
+  // 并发成一波后关键路径只剩最慢那条。
+  const [userBalance, keys, allChannels, keyUsageRows, catalog, pricingModels] =
+    await Promise.all([
+      getActualBalance(userId),
+      // Fetch API keys (without leftJoin to avoid Drizzle field mapping bug)
+      db
+        .select({
+          id: apiKeys.id,
+          name: apiKeys.name,
+          prefix: apiKeys.prefix,
+          status: apiKeys.status,
+          quotaCredits: apiKeys.quotaCredits,
+          remainCredits: apiKeys.remainCredits,
+          expiresAt: apiKeys.expiresAt,
+          allowedModels: apiKeys.allowedModels,
+          allowedIps: apiKeys.allowedIps,
+          lastUsedAt: apiKeys.lastUsedAt,
+          createdAt: apiKeys.createdAt,
+          channelId: apiKeys.channelId,
+        })
+        .from(apiKeys)
+        .where(eq(apiKeys.userId, userId))
+        .orderBy(desc(apiKeys.createdAt)),
+      // Fetch all channels separately（带 status，下面的「可用渠道列表」直接从它筛，不再多打一次 D1）
+      db
+        .select({ id: channels.id, name: channels.name, type: channels.type, status: channels.status })
+        .from(channels),
+      // 每张 key 的用量：原先 `for (const key of keys)` 每把 key 单查一次 usage_log（N+1、串行），
+      // key 越多越慢。改成按 apiKeyId 分组，一条查询拿全。
+      db
+        .select({
+          apiKeyId: usageLogs.apiKeyId,
+          used: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
+          calls: sql<number>`COUNT(*)`,
+        })
+        .from(usageLogs)
+        .where(eq(usageLogs.userId, userId))
+        .groupBy(usageLogs.apiKeyId),
+      // 获取所有模型列表（供 KeySheet 模型白名单使用）——外部 Cloudflare API，与 D1 查询并发
+      fetchModelCatalog(),
+      // 从 model_pricing 拿其他渠道的模型（含 channelId）
+      db
+        .select({ modelId: modelPricing.modelId, channelId: modelPricing.channelId })
+        .from(modelPricing)
+        .where(sql`${modelPricing.channelId} IS NOT NULL`),
+    ]);
 
   const channelMap = new Map(allChannels.map(c => [c.id, c]));
 
+  // 获取可用渠道列表：直接从上面那次 channels 查询里筛（原先为它单独又打了一次 D1）。
+  const channelList = allChannels
+    .filter((c): c is { id: string; name: string; type: string; status: number } => c.type !== null)
+    .filter((c) => c.status === 1)
+    .map(({ id, name, type }) => ({ id, name, type }));
+
   const keyUsageMap = new Map<string, { used: number; calls: number }>();
-  for (const key of keys) {
-    const usageRows = await db
-      .select({
-        total: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
-        count: sql<number>`COUNT(*)`,
-      })
-      .from(usageLogs)
-      .where(eq(usageLogs.apiKeyId, key.id));
-    keyUsageMap.set(key.id, {
-      used: usageRows[0]?.total || 0,
-      calls: usageRows[0]?.count || 0,
-    });
+  for (const row of keyUsageRows) {
+    if (!row.apiKeyId) continue; // apiKeyId 为空是 Playground 等网页端调用，不属于任何 key
+    keyUsageMap.set(row.apiKeyId, { used: row.used || 0, calls: row.calls || 0 });
   }
 
   const data: ApiKeyRow[] = keys.map((k) => {
@@ -84,19 +103,10 @@ export default async function KeysPage() {
     };
   });
 
-  // 获取可用渠道列表
-  const channelList: { id: string; name: string; type: string }[] = (
-    await db
-      .select({ id: channels.id, name: channels.name, type: channels.type })
-      .from(channels)
-      .where(eq(channels.status, 1))
-  ).filter((c): c is { id: string; name: string; type: string } => c.type !== null);
-
   // 获取所有模型列表（供 KeySheet 模型白名单使用）
   // 每个模型携带 channelId：Cloudflare hosted 模型 channelId = null（属于默认 Cloudflare 渠道，
   // 因为默认渠道 default-cloudflare 在数据库里独立存在，但 hosted 模型并不在 model_pricing 表里
   // 写它的 channelId — 这里统一用 'default-cloudflare' 占位，便于按渠道过滤）。
-  const catalog = await fetchModelCatalog();
   const defaultCfChannel = channelList.find((c) => c.type === "cloudflare");
   const cfModels = catalog
     .filter((m) => m.source === "hosted")
@@ -106,13 +116,8 @@ export default async function KeysPage() {
       channelId: defaultCfChannel?.id || null,
     }));
 
-  // 从 model_pricing 拿其他渠道的模型（含 channelId）
-  const pricingModels = await db
-    .select({ modelId: modelPricing.modelId, channelId: modelPricing.channelId })
-    .from(modelPricing)
-    .where(sql`${modelPricing.channelId} IS NOT NULL`);
-
   const cfModelIds = new Set(cfModels.map((c) => c.id));
+  // 其他渠道的模型来自 model_pricing（含 channelId）
   const extraModels = pricingModels
     .filter((p) => p.channelId && !cfModelIds.has(p.modelId))
     .map((p) => ({

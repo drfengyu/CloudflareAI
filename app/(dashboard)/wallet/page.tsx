@@ -26,28 +26,46 @@ export default async function WalletPage({
 }) {
   const userId = await requireUser();
   const params = await searchParams;
+  const now = new Date();
 
-  // 获取用户永久余额
-  const userRows = await db
-    .select({ balanceCredits: users.balanceCredits })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1);
+  // 充值流水只保留近三个月，更早的历史不再展示。
+  const historyCutoff = cnDaysAgoStart(90);
+
+  // 2026-10-17 性能：这 5 条查询互不依赖（全都只按 userId 取数），原先是一条接一条 await，
+  // 串行 5 次 D1 往返 ≈ 2 秒；并发成一波后只剩最慢那条的时间。取数口径一字未改。
+  const [userRows, tempBalances, recentTopups, payOrders, linuxdoConfig] = await Promise.all([
+    // 获取用户永久余额
+    db
+      .select({ balanceCredits: users.balanceCredits })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1),
+    // 获取未过期的临时余额（过期判定下沉到 SQL，不再把已失效的行读进内存）
+    db
+      .select()
+      .from(temporaryBalances)
+      .where(and(eq(temporaryBalances.userId, userId), gt(temporaryBalances.expiresAt, now)))
+      .orderBy(temporaryBalances.expiresAt),
+    // 获取充值流水
+    db
+      .select()
+      .from(topups)
+      .where(and(eq(topups.userId, userId), gte(topups.createdAt, historyCutoff)))
+      .orderBy(desc(topups.createdAt))
+      .limit(20),
+    // 在线充值订单（含回跳订单号置顶逻辑交给客户端组件）
+    // 这里不按 historyCutoff 裁剪：待支付/支付确认中的订单可以陈旧到任意久，而这张卡是
+    // 用户唯一能自查并手动「查询」催单的地方，裁剪会把未到账订单从视野里抹掉。
+    db
+      .select()
+      .from(paymentOrders)
+      .where(eq(paymentOrders.userId, userId))
+      .orderBy(desc(paymentOrders.createdAt))
+      .limit(10),
+    getLinuxdoConfig(),
+  ]);
 
   const permanentBalance = userRows[0]?.balanceCredits || 0;
-
-  // 获取未过期的临时余额（过期判定下沉到 SQL，不再把已失效的行读进内存）
-  const now = new Date();
-  const tempBalances = await db
-    .select()
-    .from(temporaryBalances)
-    .where(
-      and(
-        eq(temporaryBalances.userId, userId),
-        gt(temporaryBalances.expiresAt, now),
-      ),
-    )
-    .orderBy(temporaryBalances.expiresAt);
 
   // 计算总余额：包含所有未过期的临时余额（不过滤小额）
   // JS 侧再判一次是兜底：异常值在 SQL 里可能被宽松比较放行，宁可少显示也不虚增余额。
@@ -88,31 +106,8 @@ export default async function WalletPage({
 
   const totalBalance = permanentBalance + temporaryTotal;
 
-  // 充值流水只保留近三个月，更早的历史不再展示。
-  const historyCutoff = cnDaysAgoStart(90);
-
-  // 获取充值流水
-  const recentTopups = await db
-    .select()
-    .from(topups)
-    .where(
-      and(eq(topups.userId, userId), gte(topups.createdAt, historyCutoff)),
-    )
-    .orderBy(desc(topups.createdAt))
-    .limit(20);
-
   // 签到奖励与兑换码发的是一次性临时余额，到期之后不再作为「可用余额来源」显示。
   const topupRecords = await withoutExpiredGrants(recentTopups, now);
-
-  // 在线充值订单（含回跳订单号置顶逻辑交给客户端组件）
-  // 这里不按 historyCutoff 裁剪：待支付/支付确认中的订单可以陈旧到任意久，而这张卡是
-  // 用户唯一能自查并手动「查询」催单的地方，裁剪会把未到账订单从视野里抹掉。
-  const payOrders = await db
-    .select()
-    .from(paymentOrders)
-    .where(eq(paymentOrders.userId, userId))
-    .orderBy(desc(paymentOrders.createdAt))
-    .limit(10);
 
   const serializedOrders: SerializedPayOrder[] = payOrders.map((o) => ({
     orderNo: o.orderNo,
@@ -126,8 +121,6 @@ export default async function WalletPage({
 
   const justReturned = params.paid === "1";
   const highlightOrderNo = params.orderNo ?? undefined;
-
-  const linuxdoConfig = await getLinuxdoConfig();
 
   return (
     <>
