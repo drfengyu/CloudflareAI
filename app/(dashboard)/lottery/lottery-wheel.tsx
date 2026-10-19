@@ -15,10 +15,15 @@ import type { BigWinRecord } from "@/lib/lottery/records";
 /** 外沿还有两道发光环，viewBox 要比最大半径留出这点余量，否则环带会被裁掉。 */
 const SIZE = 400;
 const C = SIZE / 2;
-/** 外圈环形带、内圈盘面、中心轴三层的半径。入口指针会从内圈一直伸进外圈带。 */
+/** 外圈环形带、内圈盘面、中心轴三层的半径。读数针压在环带里的奖励格上，入口指针停在环带内侧之前。 */
 const OUTER_R = 182;
 const OUTER_IN = 144;
 const INNER_R = 136;
+/** 外圈读数针的两端：从环带内侧往里压 8（盖住盘面边缘，看着像从落点伸出去）到贴近外沿，整根落在奖励格上。 */
+const OUTER_POINTER_IN = OUTER_IN - 8;
+const OUTER_POINTER_OUT = OUTER_R - 2;
+/** 内圈入口指针的末端：停在环带内侧之前，不压到任何奖励格——它只表示内圈这一发的落点方向。 */
+const ENTRY_SPOKE_TIP_R = OUTER_IN - 3;
 /** 内圈标签的落点半径：贴外沿一点，同样的扇区角能多分到的弧长，标签就不容易被判「放不下」。 */
 const INNER_LABEL_R = INNER_R * 0.76;
 const HUB_R = 34;
@@ -26,6 +31,8 @@ const SPOKE_BASE = 20;
 
 const SPIN_INNER_MS = 2600;
 const SPIN_OUTER_MS = 1500;
+/** 一次外圈转停后停留多久再读下一发（10 连抽可能进入好几次）。 */
+const OUTER_HOLD_MS = 800;
 const SPOKE_STEP_MS = 130;
 
 type Tone = "positive" | "negative" | "zero" | "entry" | "ticket" | "permanent";
@@ -294,6 +301,14 @@ export function LotteryWheel(props: LotteryWheelProps) {
   const router = useRouter();
   const [innerRotation, setInnerRotation] = useState(0);
   const [outerRotation, setOuterRotation] = useState(0);
+  /**
+   * 外圈读数针的角度（绝对角，null = 不画）。
+   * 2026-10-19 改：外圈转停后这根针停在**中奖格子本身所在的奖励扇区**，
+   * 不再让奖品转到内圈入口落点下面——那样读数位置永远被钉在入口那一格的方向上。
+   */
+  const [outerPointerDeg, setOuterPointerDeg] = useState<number | null>(null);
+  /** 跳位（不动画）用：把针瞬移到这一发的入口落点，下一步再扫到奖励格。 */
+  const [outerPointerAnimated, setOuterPointerAnimated] = useState(true);
   const [phase, setPhase] = useState<"idle" | "inner" | "outer" | "done">("idle");
   const [tickets, setTickets] = useState(props.tickets);
   const [spokes, setSpokes] = useState<DrawOutcome[]>([]);
@@ -348,6 +363,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
     setPhase("inner");
     setResults(null);
     setSpokes([]);
+    setOuterPointerDeg(null);
 
     const response = await drawLottery(count, useFree);
     if (!response.success) {
@@ -371,7 +387,9 @@ export function LotteryWheel(props: LotteryWheelProps) {
     // 内圈：把最后一次的落点转到顶部指针处。
     const last = drawn[drawn.length - 1];
     const lastSpan = innerSectorSpans[last.innerIndex] ?? innerSectorSpans[0];
-    setInnerRotation((current) => rotationTo(current, lastSpan.center, 0, 5));
+    // 先算出内圈最终角度并留住：外圈读数针的位置要用同一个基准，否则两边会错开。
+    const innerFinal = rotationTo(innerRotation, lastSpan.center, 0, 5);
+    setInnerRotation(innerFinal);
 
     const revealStart = SPIN_INNER_MS;
     drawn.forEach((result, index) => {
@@ -380,22 +398,32 @@ export function LotteryWheel(props: LotteryWheelProps) {
       }, revealStart + index * SPOKE_STEP_MS);
     });
 
-    // 入口落点：指针变长伸进外圈，外圈再转一次把对应奖品转到这根指针下。
-    const entry = [...drawn].reverse().find((r) => r.outerIndex !== null);
-    // 对位用的是这根指针**实际画出来的角度**（同扇区多命中时被并排推开过），不是扇区正中。
-    const entryAngle = entry
-      ? (spokeAngles(drawn, innerSectorSpans).get(entry.seq) ??
-        (innerSectorSpans[entry.innerIndex] ?? innerSectorSpans[0])?.center ??
-        0)
-      : 0;
+    // 外圈：每一次进入外圈的落点都要单独转一次、读一次（10 连抽里可能进入好几发）。
+    const entries = drawn.filter((r) => r.outerIndex !== null);
+    const entryAngles = spokeAngles(drawn, innerSectorSpans);
     const spokesDone = revealStart + drawn.length * SPOKE_STEP_MS;
-    if (entry) {
-      later(() => {
-        setPhase("outer");
-        const outerSpan = outerSpans[entry.outerIndex ?? 0];
-        setOuterRotation((current) => rotationTo(current, outerSpan.center, entryAngle, 3));
-      }, spokesDone + 120);
-      later(() => setPhase("done"), spokesDone + 120 + SPIN_OUTER_MS);
+    if (entries.length > 0) {
+      let at = spokesDone + 120;
+      for (const entry of entries) {
+        const outerSpan = outerSpans[entry.outerIndex ?? 0] ?? outerSpans[0];
+        // 外圈只整圈转（3 圈），所以这一格转停后的朝向 = 它此刻的自然朝向，与转几圈无关。
+        const restDeg = (((outerSpan.center + innerFinal + outerRotation) % 360) + 360) % 360;
+        const startDeg = entryAngles.get(entry.seq) ?? 0;
+        const jumpAt = at;
+        later(() => {
+          setPhase("outer");
+          // 先把读数针瞬移到这一发的入口落点（不动画），下一步再扫过去，看着就是「从落点扫到奖励格」。
+          setOuterPointerAnimated(false);
+          setOuterPointerDeg(startDeg);
+        }, jumpAt);
+        later(() => {
+          setOuterPointerAnimated(true);
+          setOuterPointerDeg(restDeg);
+          setOuterRotation((current) => current + 3 * 360);
+        }, jumpAt + 60);
+        at = jumpAt + SPIN_OUTER_MS + OUTER_HOLD_MS;
+      }
+      later(() => setPhase("done"), at);
     } else {
       later(() => setPhase("done"), spokesDone);
     }
@@ -601,7 +629,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
                   return spokes.map((spoke) => {
                     const angle = angles.get(spoke.seq) ?? 0;
                     const reachesOuter = spoke.outerIndex !== null;
-                    const tip = polar(reachesOuter ? OUTER_R - 4 : INNER_R - 6, angle);
+                    const tip = polar(reachesOuter ? ENTRY_SPOKE_TIP_R : INNER_R - 6, angle);
                     const base = polar(SPOKE_BASE, angle);
                     return (
                       <g
@@ -630,6 +658,37 @@ export function LotteryWheel(props: LotteryWheelProps) {
                   });
                 })()}
               </g>
+
+              {/* 外圈读数针：静态层（不随内圈转），转停后压在**中奖那一格自己所在的奖励扇区**上。
+                  每发进入外圈都先把针瞬移到它的入口落点，再扫到格子处；多次进入就逐发依次读。 */}
+              {outerPointerDeg !== null &&
+                (() => {
+                  const from = polar(OUTER_POINTER_IN, 0);
+                  const to = polar(OUTER_POINTER_OUT, 0);
+                  return (
+                    <g
+                      style={{
+                        transform: `rotate(${outerPointerDeg}deg)`,
+                        transformOrigin: "50% 50%",
+                        transition: outerPointerAnimated
+                          ? `transform ${SPIN_OUTER_MS}ms cubic-bezier(0.16, 0.9, 0.2, 1)`
+                          : "none",
+                      }}
+                    >
+                      <line
+                        x1={from.x}
+                        y1={from.y}
+                        x2={to.x}
+                        y2={to.y}
+                        stroke="#f0abfc"
+                        strokeWidth={4}
+                        strokeLinecap="round"
+                        filter="url(#neon-glow)"
+                      />
+                      <circle cx={to.x} cy={to.y} r={5} fill="#f0abfc" filter="url(#neon-glow)" />
+                    </g>
+                  );
+                })()}
 
               <circle cx={C} cy={C} r={HUB_R} fill="url(#hub-gradient)" stroke="#22d3ee" strokeOpacity={0.6} strokeWidth={1.5} />
               <text x={C} y={C - 3} textAnchor="middle" fill="#f8fafc" fontSize={16} fontWeight={700}>
@@ -937,8 +996,8 @@ export function LotteryWheel(props: LotteryWheelProps) {
               </ul>
             </div>
             <ul className="list-disc space-y-1 pl-4">
-              <li>内圈指针停在「外圈入口」时指针变长，外圈再转一次决定最终结果。</li>
-              <li>10 连抽一次转停后依次落 10 根指针；外圈只按最后一次进入的落点对位，其余入口结果见右侧明细。</li>
+              <li>内圈指针停在「外圈入口」时指针变长顶到环带内侧，随后一根外圈读数针从落点扫到转停后的那一格奖励上。</li>
+              <li>10 连抽一次转停后依次落 10 根指针；每发进入外圈都逐发依次转、依次读，读数针停在那一发中的奖励格本身。</li>
               <li>中奖 cr 作为临时余额发放，有效期 {props.prizeValidDays} 天，过期未用自动消失。</li>
               <li>转到倒扣时先扣未过期的临时余额（越早到期越先扣），不够再扣永久余额，本金可能因此扣成负数。</li>
               <li>活动结束后未使用的券作废，不折算回 cr。</li>
