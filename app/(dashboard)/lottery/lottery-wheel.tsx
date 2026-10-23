@@ -15,19 +15,23 @@ import type { BigWinRecord } from "@/lib/lottery/records";
 /** 外沿还有两道发光环，viewBox 要比最大半径留出这点余量，否则环带会被裁掉。 */
 const SIZE = 400;
 const C = SIZE / 2;
-/** 外圈环形带、内圈盘面、中心轴三层的半径。读数针压在环带里的奖励格上，入口指针停在环带内侧之前。 */
+/** 外圈环形带、内圈盘面、中心轴三层的半径。 */
 const OUTER_R = 182;
 const OUTER_IN = 144;
 const INNER_R = 136;
-/** 外圈读数针的两端：从环带内侧往里压 8（盖住盘面边缘，看着像从落点伸出去）到贴近外沿，整根落在奖励格上。 */
-const OUTER_POINTER_IN = OUTER_IN - 8;
+const HUB_R = 34;
+const SPOKE_BASE = 20;
+/**
+ * 外圈读数针的两端。必须是一根从中心轴附近一路伸进环带的**长针**：
+ * 2026-10-19 反馈——原先只画环带里那一段（136→180），转停后最显眼的仍然是内圈那根停在「外圈入口」
+ * 扇区里的落点长指针，于是被读成「外圈指针还在外圈入口」。长针压住奖励格才读得出「指针停在哪一格」。
+ */
+const OUTER_POINTER_IN = HUB_R + 8;
 const OUTER_POINTER_OUT = OUTER_R - 2;
 /** 内圈入口指针的末端：停在环带内侧之前，不压到任何奖励格——它只表示内圈这一发的落点方向。 */
 const ENTRY_SPOKE_TIP_R = OUTER_IN - 3;
 /** 内圈标签的落点半径：贴外沿一点，同样的扇区角能多分到的弧长，标签就不容易被判「放不下」。 */
 const INNER_LABEL_R = INNER_R * 0.76;
-const HUB_R = 34;
-const SPOKE_BASE = 20;
 
 /**
  * 内圈拆成两段（2026-10-19 提速）：预转在服务端请求发出的瞬间就开始，用来盖住那段网络等待
@@ -720,10 +724,12 @@ export function LotteryWheel(props: LotteryWheelProps) {
                         x2={to.x}
                         y2={to.y}
                         stroke="#f0abfc"
-                        strokeWidth={4}
+                        strokeWidth={5}
                         strokeLinecap="round"
                         filter="url(#neon-glow)"
                       />
+                      {/* 白色芯：针要跨过深色扇区和环带，只留洋红描边在暗格上几乎看不见 */}
+                      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#fdf4ff" strokeWidth={2} strokeLinecap="round" />
                       <circle cx={to.x} cy={to.y} r={5} fill="#f0abfc" filter="url(#neon-glow)" />
                     </g>
                   );
@@ -1035,7 +1041,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
               </ul>
             </div>
             <ul className="list-disc space-y-1 pl-4">
-              <li>内圈指针停在「外圈入口」时指针变长顶到环带内侧，随后一根外圈读数针从落点扫到转停后的那一格奖励上。</li>
+              <li>内圈指针停在「外圈入口」时指针变长顶到环带内侧，随后一根贯穿盘面的外圈读数针从落点扫到转停后的那一格奖励上，并停在那一格。</li>
               <li>10 连抽一次转停后依次落 10 根指针；外圈只摇一次，读数针按开奖顺序逐发滑到各自的中奖格。</li>
               <li>中奖 cr 作为临时余额发放，有效期 {props.prizeValidDays} 天，过期未用自动消失。</li>
               <li>转到倒扣时先扣未过期的临时余额（越早到期越先扣），不够再扣永久余额，本金可能因此扣成负数。</li>
