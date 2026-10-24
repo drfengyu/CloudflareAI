@@ -324,15 +324,13 @@ export function LotteryWheel(props: LotteryWheelProps) {
     easing: SETTLE_EASING,
   });
   /**
-   * 外圈读数针的角度（绝对角，null = 不画）。
-   * 2026-10-19 改：外圈转停后这根针停在**中奖格子本身所在的奖励扇区**，
-   * 不再让奖品转到内圈入口落点下面——那样读数位置永远被钉在入口那一格的方向上。
+   * 外圈读数针数组：每次进入外圈就加一根，停在该发奖品的格子上。
+   * 2026-10-23 改：多根长针同时显示（不再只有一根依次移动），每根对应一次外圈入口。
    */
-  const [outerPointerDeg, setOuterPointerDeg] = useState<number | null>(null);
-  /** 跳位（不动画）用：把针瞬移到这一发的入口落点，下一步再扫到奖励格。 */
-  const [outerPointerAnimated, setOuterPointerAnimated] = useState(true);
-  /** 读数针这一次移动用多久：首发跟着环带摇（SPIN_OUTER_MS），后续只是滑到下一格（OUTER_SWEEP_MS）。 */
-  const [outerPointerMs, setOuterPointerMs] = useState(SPIN_OUTER_MS);
+  const [outerNeedles, setOuterNeedles] = useState<{ deg: number; colorIndex: number }[]>([]);
+  /** 第一根针的动画控制：先瞬移到入口落点，再扫到奖励格。 */
+  const [firstNeedleAnimated, setFirstNeedleAnimated] = useState(true);
+  const [firstNeedleMs, setFirstNeedleMs] = useState(SPIN_OUTER_MS);
   const [phase, setPhase] = useState<"idle" | "inner" | "outer" | "done">("idle");
   const [tickets, setTickets] = useState(props.tickets);
   const [spokes, setSpokes] = useState<DrawOutcome[]>([]);
@@ -387,7 +385,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
     setPhase("inner");
     setResults(null);
     setSpokes([]);
-    setOuterPointerDeg(null);
+    setOuterNeedles([]);
     // 2026-10-19 提速：请求一发出就先匀速空转，把服务端那段等待盖掉（这一段与结果无关）。
     const preSpinDeg = innerRotation + PRE_SPIN_DEG;
     setInnerRotation(preSpinDeg);
@@ -431,9 +429,9 @@ export function LotteryWheel(props: LotteryWheelProps) {
       }, revealStart + index * SPOKE_STEP_MS);
     });
 
-    // 外圈：每一次进入外圈的落点都要读一次（10 连抽里可能进入好几发）。
-    // 2026-10-19 提速：环带只在第一发摇一次，后面几发只让读数针滑到下一格——
-    // 结果在这一步之前就已经定了，摇几圈都不改变「针停在哪格」，重复摇纯属耗时。
+    // 外圈：每一次进入外圈都加一根读数针，停在该发奖品的格子上。
+    // 2026-10-23 改：多根长针同时显示（不再只有一根依次移动）。
+    // 环带只在第一发摇一次，后面几发的针直接出现在各自格子上。
     const entries = drawn.filter((r) => r.outerIndex !== null);
     const entryAngles = spokeAngles(drawn, innerSectorSpans);
     const spokesDone = revealStart + drawn.length * SPOKE_STEP_MS;
@@ -447,21 +445,21 @@ export function LotteryWheel(props: LotteryWheelProps) {
         if (index === 0) {
           later(() => {
             setPhase("outer");
-            // 先把读数针瞬移到这一发的入口落点（不动画），下一步再扫过去，看着就是「从落点扫到奖励格」。
-            setOuterPointerAnimated(false);
-            setOuterPointerDeg(entryAngles.get(entry.seq) ?? 0);
+            // 第一根针：先瞬移到入口落点（不动画），下一步再扫到奖励格。
+            setFirstNeedleAnimated(false);
+            setOuterNeedles([{ deg: entryAngles.get(entry.seq) ?? 0, colorIndex: 0 }]);
           }, jumpAt);
           later(() => {
-            setOuterPointerAnimated(true);
-            setOuterPointerMs(SPIN_OUTER_MS);
-            setOuterPointerDeg(restDeg);
+            setFirstNeedleAnimated(true);
+            setFirstNeedleMs(SPIN_OUTER_MS);
+            setOuterNeedles([{ deg: restDeg, colorIndex: 0 }]);
             setOuterRotation((current) => current + 3 * 360);
           }, jumpAt + 60);
           at = jumpAt + SPIN_OUTER_MS + OUTER_HOLD_MS;
         } else {
           later(() => {
-            setOuterPointerMs(OUTER_SWEEP_MS);
-            setOuterPointerDeg(restDeg);
+            // 后续针：直接出现在各自格子上（环带已停，位置固定）。
+            setOuterNeedles((prev) => [...prev, { deg: restDeg, colorIndex: index }]);
           }, jumpAt);
           at = jumpAt + OUTER_SWEEP_MS + OUTER_HOLD_MS;
         }
@@ -702,38 +700,42 @@ export function LotteryWheel(props: LotteryWheelProps) {
                 })()}
               </g>
 
-              {/* 外圈读数针：静态层（不随内圈转），转停后压在**中奖那一格自己所在的奖励扇区**上。
-                  第一发先把针瞬移到入口落点再随环带扫到格子处；后续几发环带不再重摇，针直接滑过去。 */}
-              {outerPointerDeg !== null &&
-                (() => {
-                  const from = polar(OUTER_POINTER_IN, 0);
-                  const to = polar(OUTER_POINTER_OUT, 0);
-                  return (
-                    <g
-                      style={{
-                        transform: `rotate(${outerPointerDeg}deg)`,
-                        transformOrigin: "50% 50%",
-                        transition: outerPointerAnimated
-                          ? `transform ${outerPointerMs}ms ${SETTLE_EASING}`
-                          : "none",
-                      }}
-                    >
-                      <line
-                        x1={from.x}
-                        y1={from.y}
-                        x2={to.x}
-                        y2={to.y}
-                        stroke="#f0abfc"
-                        strokeWidth={5}
-                        strokeLinecap="round"
-                        filter="url(#neon-glow)"
-                      />
-                      {/* 白色芯：针要跨过深色扇区和环带，只留洋红描边在暗格上几乎看不见 */}
-                      <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#fdf4ff" strokeWidth={2} strokeLinecap="round" />
-                      <circle cx={to.x} cy={to.y} r={5} fill="#f0abfc" filter="url(#neon-glow)" />
-                    </g>
-                  );
-                })()}
+              {/* 外圈读数针（多根）：静态层（不随内圈转），每根停在该发奖品的格子上。
+                  2026-10-23 改：多根长针同时显示，每根对应一次外圈入口。第一根有动画，后续直接出现。 */}
+              {outerNeedles.map((needle, idx) => {
+                const from = polar(OUTER_POINTER_IN, 0);
+                const to = polar(OUTER_POINTER_OUT, 0);
+                const isFirst = idx === 0;
+                const colors = ["#f0abfc", "#22d3ee", "#fbbf24", "#a78bfa", "#fb7185"];
+                const color = colors[needle.colorIndex % colors.length];
+                return (
+                  <g
+                    key={idx}
+                    style={{
+                      transform: `rotate(${needle.deg}deg)`,
+                      transformOrigin: "50% 50%",
+                      transition: isFirst
+                        ? firstNeedleAnimated
+                          ? `transform ${firstNeedleMs}ms ${SETTLE_EASING}`
+                          : "none"
+                        : "none",
+                    }}
+                  >
+                    <line
+                      x1={from.x}
+                      y1={from.y}
+                      x2={to.x}
+                      y2={to.y}
+                      stroke={color}
+                      strokeWidth={5}
+                      strokeLinecap="round"
+                      filter="url(#neon-glow)"
+                    />
+                    <line x1={from.x} y1={from.y} x2={to.x} y2={to.y} stroke="#fdf4ff" strokeWidth={2} strokeLinecap="round" />
+                    <circle cx={to.x} cy={to.y} r={5} fill={color} filter="url(#neon-glow)" />
+                  </g>
+                );
+              })}
 
               <circle cx={C} cy={C} r={HUB_R} fill="url(#hub-gradient)" stroke="#22d3ee" strokeOpacity={0.6} strokeWidth={1.5} />
               <text x={C} y={C - 3} textAnchor="middle" fill="#f8fafc" fontSize={16} fontWeight={700}>

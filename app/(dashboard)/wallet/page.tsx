@@ -16,6 +16,7 @@ import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 import { withoutExpiredGrants } from "@/lib/billing/grant-expiry";
 import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
 import { formatCnDate, cnDaysAgoStart } from "@/lib/date";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -254,8 +255,14 @@ export default async function WalletPage({
                       )}
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-semibold text-success">
-                        +{formatCredits(record.amount)} cr
+                      <p
+                        className={cn(
+                          "text-lg font-semibold",
+                          record.amount >= 0 ? "text-success" : "text-destructive",
+                        )}
+                      >
+                        {record.amount >= 0 ? "+" : ""}
+                        {formatCredits(record.amount)} cr
                       </p>
                     </div>
                   </div>
