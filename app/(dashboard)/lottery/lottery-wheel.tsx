@@ -22,14 +22,11 @@ const INNER_R = 136;
 const HUB_R = 34;
 const SPOKE_BASE = 20;
 /**
- * 外圈读数针的两端。必须是一根从中心轴附近一路伸进环带的**长针**：
- * 2026-10-19 反馈——原先只画环带里那一段（136→180），转停后最显眼的仍然是内圈那根停在「外圈入口」
- * 扇区里的落点长指针，于是被读成「外圈指针还在外圈入口」。长针压住奖励格才读得出「指针停在哪一格」。
+ * 外圈读数针的两端。2026-10-23 改：起点从中心（r=0）开始，消除与中心轴的间隙。
+ * 终点仍贴近外沿（OUTER_POINTER_OUT = 180）。
  */
-const OUTER_POINTER_IN = HUB_R + 8;
+const OUTER_POINTER_IN = 0;
 const OUTER_POINTER_OUT = OUTER_R - 2;
-/** 内圈入口指针的末端：停在环带内侧之前，不压到任何奖励格——它只表示内圈这一发的落点方向。 */
-const ENTRY_SPOKE_TIP_R = OUTER_IN - 3;
 /** 内圈标签的落点半径：贴外沿一点，同样的扇区角能多分到的弧长，标签就不容易被判「放不下」。 */
 const INNER_LABEL_R = INNER_R * 0.76;
 
@@ -663,40 +660,39 @@ export function LotteryWheel(props: LotteryWheelProps) {
                   );
                 })}
 
-                {/* 结果指针：内圈落点画短线，走通外圈的入口画长线伸进环带。
+                {/* 结果指针：内圈落点画短线，只画不进入外圈的指针。
+                    2026-10-23 改：进入外圈的指针不再画（由静态层的多根读数针代替），避免指针总数混乱。
                     角度一律取 spokeAngles()，与外圈对位同源。 */}
                 {(() => {
                   const angles = spokeAngles(spokes, innerSectorSpans);
-                  return spokes.map((spoke) => {
-                    const angle = angles.get(spoke.seq) ?? 0;
-                    const reachesOuter = spoke.outerIndex !== null;
-                    const tip = polar(reachesOuter ? ENTRY_SPOKE_TIP_R : INNER_R - 6, angle);
-                    const base = polar(SPOKE_BASE, angle);
-                    return (
-                      <g
-                        key={`spoke-${spoke.seq}`}
-                        style={{
-                          animation: "lottery-spoke-in 320ms ease-out",
-                          transformOrigin: `${C}px ${C}px`,
-                        }}
-                      >
-                        <line
-                          x1={base.x}
-                          y1={base.y}
-                          x2={tip.x}
-                          y2={tip.y}
-                          stroke={reachesOuter ? "#f0abfc" : "#f0f9ff"}
-                          strokeWidth={3}
-                          strokeLinecap="round"
-                          strokeDasharray={
-                            reachesOuter && spoke.seq !== lastEntrySeq(spokes) ? "5 4" : undefined
-                          }
-                          filter="url(#neon-glow)"
-                        />
-                        <circle cx={tip.x} cy={tip.y} r={4} fill={reachesOuter ? "#f0abfc" : "#22d3ee"} />
-                      </g>
-                    );
-                  });
+                  return spokes
+                    .filter((spoke) => spoke.outerIndex === null)
+                    .map((spoke) => {
+                      const angle = angles.get(spoke.seq) ?? 0;
+                      const tip = polar(INNER_R - 6, angle);
+                      const base = polar(SPOKE_BASE, angle);
+                      return (
+                        <g
+                          key={`spoke-${spoke.seq}`}
+                          style={{
+                            animation: "lottery-spoke-in 320ms ease-out",
+                            transformOrigin: `${C}px ${C}px`,
+                          }}
+                        >
+                          <line
+                            x1={base.x}
+                            y1={base.y}
+                            x2={tip.x}
+                            y2={tip.y}
+                            stroke="#f0f9ff"
+                            strokeWidth={3}
+                            strokeLinecap="round"
+                            filter="url(#neon-glow)"
+                          />
+                          <circle cx={tip.x} cy={tip.y} r={4} fill="#22d3ee" />
+                        </g>
+                      );
+                    });
                 })()}
               </g>
 
@@ -1054,14 +1050,6 @@ export function LotteryWheel(props: LotteryWheelProps) {
       </div>
     </div>
   );
-}
-
-/** 多根入口指针时，只有最后一根与外圈精确对位，其余画虚线示意。 */
-function lastEntrySeq(spokes: DrawOutcome[]) {
-  for (let i = spokes.length - 1; i >= 0; i -= 1) {
-    if (spokes[i].outerIndex !== null) return spokes[i].seq;
-  }
-  return -1;
 }
 
 function StatusBadge({ status }: { status: ActivityStatus }) {
