@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, AuthChannelsForm, EpaySettingsForm, LinuxdoSettingsForm } from "./settings-form";
 import { DashboardInfoForm } from "./dashboard-info-form";
 import { LotteryForm } from "./lottery-form";
-import { getLotteryConfig } from "@/lib/lottery/config";
+import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
 import type { AnnouncementInput, FaqItem } from "@/lib/settings/dashboard-info";
 
 export const dynamic = "force-dynamic";
@@ -27,26 +27,37 @@ function parseArray<T>(raw: string | undefined): T[] {
 export default async function AdminSettingsPage() {
   const currentUserId = await requireUser();
 
-  // 检查权限
-  const currentUser = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, currentUserId))
-    .limit(1);
+  // 2026-10-23 性能：权限检查 + 设置查询并发（原先串行 3 次 D1 往返）。
+  // lotteryConfig 直接从 allSettings 里取，不再单独调 getLotteryConfig（省一次 D1）。
+  const [currentUser, allSettings] = await Promise.all([
+    db
+      .select()
+      .from(users)
+      .where(eq(users.id, currentUserId))
+      .limit(1),
+    db.select().from(options),
+  ]);
 
   if (!currentUser[0] || currentUser[0].role < 10) {
     redirect("/dashboard");
   }
-
-  // 获取所有设置
-  const allSettings = await db.select().from(options);
-  const lotteryConfig = await getLotteryConfig();
 
   // 转换为 key-value 对象
   const settings: Record<string, string> = {};
   allSettings.forEach((opt) => {
     settings[opt.key] = opt.value;
   });
+
+  // 从 allSettings 里直接解析 lotteryConfig，避免额外一次 getSetting 查询
+  const lotteryConfig = (() => {
+    const raw = settings.lottery_config;
+    if (!raw) return sanitizeLotteryConfig(null);
+    try {
+      return sanitizeLotteryConfig(JSON.parse(raw));
+    } catch {
+      return sanitizeLotteryConfig(null);
+    }
+  })();
 
   return (
     <>
