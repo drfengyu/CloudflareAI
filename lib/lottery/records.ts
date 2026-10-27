@@ -267,18 +267,18 @@ export async function listDrawRecords(opts: {
     .limit(opts.limit ?? 50);
 
   const ticketIds = [...new Set(rows.map((r) => r.ticketId).filter((id): id is string => !!id))];
-  const ticketRows: { id: string; source: "buy" | "gift" | "prize"; priceCredits: number }[] = [];
-  for (const chunk of batchRows(ticketIds, 1)) {
-    const part = await db
-      .select({
-        id: lotteryTickets.id,
-        source: lotteryTickets.source,
-        priceCredits: lotteryTickets.priceCredits,
-      })
-      .from(lotteryTickets)
-      .where(inArray(lotteryTickets.id, chunk));
-    ticketRows.push(...part);
-  }
+  // 2026-10-23 性能：批量查询所有 ticketId，不再逐个查（N+1 → 1 次查询）。
+  const ticketRows: { id: string; source: "buy" | "gift" | "prize"; priceCredits: number }[] =
+    ticketIds.length > 0
+      ? await db
+          .select({
+            id: lotteryTickets.id,
+            source: lotteryTickets.source,
+            priceCredits: lotteryTickets.priceCredits,
+          })
+          .from(lotteryTickets)
+          .where(inArray(lotteryTickets.id, ticketIds))
+      : [];
   const ticketMap = new Map(ticketRows.map((t) => [t.id, t]));
 
   return rows.map((row) => {
@@ -355,15 +355,15 @@ export async function listRecentBigWins(opts: {
     .limit(limit);
 
   // 不用 leftJoin（drizzle-orm v0.45.2 字段错位 bug），单独查用户再手动映射。
+  // 2026-10-23 性能：批量查询所有 userId，不再逐个查（N+1 → 1 次查询）。
   const userIds = [...new Set(rows.map((r) => r.userId))];
-  const userRows: { id: string; email: string | null; name: string | null }[] = [];
-  for (const chunk of batchRows(userIds, 1)) {
-    const part = await db
-      .select({ id: users.id, email: users.email, name: users.name })
-      .from(users)
-      .where(inArray(users.id, chunk));
-    userRows.push(...part);
-  }
+  const userRows: { id: string; email: string | null; name: string | null }[] =
+    userIds.length > 0
+      ? await db
+          .select({ id: users.id, email: users.email, name: users.name })
+          .from(users)
+          .where(inArray(users.id, userIds))
+      : [];
   const userMap = new Map(userRows.map((u) => [u.id, u]));
 
   return rows.map((row) => {
