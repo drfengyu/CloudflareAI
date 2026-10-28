@@ -145,12 +145,13 @@ export async function lotteryBalanceByUser(win?: LotteryWindow): Promise<Lottery
       paidOut: paidOutExpr,
       clawedBack: clawedBackExpr,
       ticketFace: ticketFaceExpr,
+      net: netExpr,
       lastDrawAt: sql<number | null>`MAX(${lotteryDraws.createdAt})`,
     })
     .from(lotteryDraws)
     .where(drawWindowCondition(win))
     .groupBy(lotteryDraws.userId)
-    .orderBy(desc(netExpr));
+    .orderBy(desc(sql`net`));
 
   return rows.map((row) => ({
     ...toBalance(row),
