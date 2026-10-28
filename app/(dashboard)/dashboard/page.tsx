@@ -1,4 +1,5 @@
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import Link from "next/link";
 import { db } from "@/lib/db/d1-http";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -324,7 +325,52 @@ export default async function DashboardPage({
       <div className="space-y-6 p-8">
         {/* 四组核心指标 */}
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatGroupCard icon={<BarChart3 className="h-4 w-4" />} title="账户数据" items={accountItems} />
+          <Card>
+            <CardHeader className="flex items-center gap-2 border-b border-border">
+              <span className="text-muted-foreground"><BarChart3 className="h-4 w-4" /></span>
+              <CardTitle>账户数据</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                {accountItems.map((item) => (
+                  <div key={item.label} className="flex items-start gap-3">
+                    <span
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                        item.tone === "info"
+                          ? "bg-[color:var(--info)]/15 text-[color:var(--info)]"
+                          : item.tone === "warning"
+                            ? "bg-[color:var(--warning)]/15 text-[color:var(--warning)]"
+                            : item.tone === "success"
+                              ? "bg-[color:var(--success)]/15 text-[color:var(--success)]"
+                              : item.tone === "danger"
+                                ? "bg-[color:var(--destructive)]/15 text-[color:var(--destructive)]"
+                                : "bg-secondary text-muted-foreground"
+                      }`}
+                    >
+                      {item.icon}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground">{item.label}</p>
+                      <p className="truncate text-base font-semibold text-foreground">
+                        {item.value}
+                      </p>
+                      {item.sub ? (
+                        <p className="truncate text-[11px] text-muted-foreground">{item.sub}</p>
+                      ) : null}
+                    </div>
+                    {item.href && item.actionLabel ? (
+                      <Link
+                        href={item.href}
+                        className="shrink-0 rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+                      >
+                        {item.actionLabel}
+                      </Link>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
           <StatGroupCard icon={<Activity className="h-4 w-4" />} title="使用统计" items={usageItems} />
           <StatGroupCard icon={<Clock className="h-4 w-4" />} title="资源消耗" items={resourceItems} />
           <StatGroupCard icon={<Timer className="h-4 w-4" />} title="性能指标" items={perfItems} />
