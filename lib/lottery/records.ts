@@ -167,15 +167,14 @@ export interface LotteryUserRecord extends LotteryUserBalance {
 export async function lotteryUserRecords(win?: LotteryWindow): Promise<LotteryUserRecord[]> {
   const stats = await lotteryBalanceByUser(win);
   const userIds = stats.map((s) => s.userId);
-  const userRows: { id: string; email: string | null }[] = [];
-  // inArray 每个 id 占一个绑定参数，超过 100 个 D1 直接拒绝，所以分段查。
-  for (const chunk of batchRows(userIds, 1)) {
-    const part = await db
-      .select({ id: users.id, email: users.email })
-      .from(users)
-      .where(inArray(users.id, chunk));
-    userRows.push(...part);
-  }
+  // 2026-10-23 性能：批量查询所有 userId，不再逐个查（N+1 → 1 次查询）。
+  const userRows: { id: string; email: string | null }[] =
+    userIds.length > 0
+      ? await db
+          .select({ id: users.id, email: users.email })
+          .from(users)
+          .where(inArray(users.id, userIds))
+      : [];
   const emailMap = new Map(userRows.map((u) => [u.id, u.email]));
   return stats.map((s) => ({
     ...s,

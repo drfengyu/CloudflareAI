@@ -18,6 +18,7 @@ import {
 } from "@/lib/settings/dashboard-info";
 import { formatCredits } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
+import { lotteryBalance } from "@/lib/lottery/records";
 import {
   cnBucketKeys,
   cnGreeting,
@@ -157,6 +158,7 @@ export default async function DashboardPage({
     announcements,
     faq,
     uptimeConfig,
+    lotteryStats,
   ] = await Promise.all([
     db
       .select({ name: users.name, email: users.email })
@@ -181,6 +183,14 @@ export default async function DashboardPage({
     getAnnouncements().catch(() => []),
     getFaq().catch(() => []),
     getUptimeConfig().catch(() => ({ enabled: false, apiUrl: "" })),
+    lotteryBalance({ userId }).catch(() => ({
+      draws: 0,
+      outerHits: 0,
+      paidOut: 0,
+      clawedBack: 0,
+      ticketFace: 0,
+      net: 0,
+    })),
   ]);
 
   const balance = balanceInfo.total;
@@ -217,6 +227,13 @@ export default async function DashboardPage({
       label: "历史消耗",
       value: `${formatCredits(lifetime.totalCredits)} cr`,
       sub: `累计 ${lifetime.totalCalls.toLocaleString()} 次调用`,
+    },
+    {
+      icon: <Coins className="h-4 w-4" />,
+      tone: lotteryStats.net >= 0 ? "success" : "danger",
+      label: "转盘抽奖",
+      value: `${lotteryStats.net >= 0 ? "+" : ""}${formatCredits(lotteryStats.net)} cr`,
+      sub: `累计 ${lotteryStats.draws} 次抽奖`,
     },
   ];
 
