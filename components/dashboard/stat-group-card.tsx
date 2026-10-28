@@ -25,6 +25,36 @@ export interface StatItem {
   actionLabel?: string;
 }
 
+// 2026-10-28 修复：行渲染抽成可导出组件，账户数据卡（同样式但两行布局）复用，避免拷贝图标/色调模板。
+export function StatItemRow({ item }: { item: StatItem }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${TONE_CLASS[item.tone]}`}
+      >
+        {item.icon}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-muted-foreground">{item.label}</p>
+        <p className="truncate text-base font-semibold text-foreground">
+          {item.value}
+        </p>
+        {item.sub ? (
+          <p className="truncate text-[11px] text-muted-foreground">{item.sub}</p>
+        ) : null}
+      </div>
+      {item.href && item.actionLabel ? (
+        <Link
+          href={item.href}
+          className="shrink-0 rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
+        >
+          {item.actionLabel}
+        </Link>
+      ) : null}
+    </div>
+  );
+}
+
 /** 分组统计卡：一个标题带两行指标，对齐 new-api 控制台的卡片密度。 */
 export function StatGroupCard({
   icon,
@@ -43,30 +73,7 @@ export function StatGroupCard({
       </CardHeader>
       <CardContent className="space-y-3 pt-4">
         {items.map((item) => (
-          <div key={item.label} className="flex items-center gap-3">
-            <span
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${TONE_CLASS[item.tone]}`}
-            >
-              {item.icon}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-xs text-muted-foreground">{item.label}</p>
-              <p className="truncate text-base font-semibold text-foreground">
-                {item.value}
-              </p>
-              {item.sub ? (
-                <p className="truncate text-[11px] text-muted-foreground">{item.sub}</p>
-              ) : null}
-            </div>
-            {item.href && item.actionLabel ? (
-              <Link
-                href={item.href}
-                className="shrink-0 rounded-lg border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
-              >
-                {item.actionLabel}
-              </Link>
-            ) : null}
-          </div>
+          <StatItemRow key={item.label} item={item} />
         ))}
       </CardContent>
     </Card>

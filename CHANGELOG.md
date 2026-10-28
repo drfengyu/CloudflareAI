@@ -42,6 +42,13 @@
   - 用户行顺带取 `balanceCredits`，临时余额单独并发查——替代 `getUserTotalBalance` 内部
     「用户行 → 临时余额」的两跳串行往返。看板关键路径从 auth + 2 跳降到 auth + 1 跳。
 
+- **看板四组核心指标卡改 2×2 网格**（`app/(dashboard)/dashboard/page.tsx` + `components/dashboard/stat-group-card.tsx`，2026-10-28）：
+  - 现象：账户数据卡跨全宽独占一行，下面三张统计卡右侧空出一列。
+  - 改法：外层网格 `md:grid-cols-2`——账户数据+使用统计一行，资源消耗+性能指标一行，无空列。
+    账户数据卡内改两行：当前余额（含「充值」入口）独占一行，历史消耗/转盘抽奖并排一行；
+    卡内容垂直居中（`flex flex-1 flex-col justify-center`）避免比使用统计矮时显空。
+  - 顺带把统计行渲染抽成导出组件 `StatItemRow`（`stat-group-card.tsx`），账户卡复用同一套图标/色调模板。
+
 - **转盘指针视觉优化**（`app/(dashboard)/lottery/lottery-wheel.tsx`，2026-10-23）：
   - 移除进入外圈的虚线入口指针（由静态层多根读数针代替，避免指针总数混乱）
   - 外圈读数针起点从 r=42 改到 r=0（消除与中心轴的间隙）
