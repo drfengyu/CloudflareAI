@@ -1,32 +1,5 @@
-/**
- * 抽奖奖池模拟器：读线上（或本地 JSON）配置，蒙特卡洛跑真实开奖路径，输出「站点收益」与
- * 「用户体感」两组指标，供调 `option.lottery_config` 之前先看数。
- *
- *   npx tsx --env-file=.env.local scripts/lottery-sim.ts
- *   npx tsx --env-file=.env.local scripts/lottery-sim.ts --target 93 --soften 0.5
- *   npx tsx --env-file=.env.local scripts/lottery-sim.ts --out /tmp/pool.json
- *   npx tsx --env-file=.env.local scripts/lottery-sim.ts --file /tmp/pool.json
- *
- * 参数：
- *   --sessions N   每种会话跑多少个（默认 8000）
- *   --draws a,b,c  会话规模 = 一次买几张券（默认 1,10,30,100）
- *   --target R     把名义返还率压到 R%（只等比缩放正档，负档不动）
- *   --soften F     负档乘 F（0.5 = 减半），再补回名义返还率；配 --keep-be 时只削高于券价的档
- *   --no-keep-be   补回名义时连「等于券价」那一档一起缩（默认关掉，因为体感主要靠它）
- *   --file P       从 JSON 读配置（默认读线上，只读不写）
- *   --out P        把最终（含 what-if）配置写到 JSON，可直接贴回后台
- *   --seed N       随机种子，默认固定，保证两次跑同一份池子结果一致
- *
- * 口径说明（和后台那行「返还率」不完全一样，别混）：
- *   - 名义返还率 = lotteryExpectation() 的数，含累抽送券均摊，是「每抽一次期望回多少 cr / 券价」。
- *   - 有效返还率 = 会话拿回的 cr 合计 / 实付券价合计。中来的券和档位赠券会让人多抽，
- *     多抽产生的 cr 也计进分子，所以它通常**高于**名义值——这才是用户账本上的真实感受。
- *   - 赠券不按面值重复计一次：它的价值体现在后续开奖的 cr 里。
- *   - credits 不是现金：中奖发的是 `prizeValidDays` 天临时余额，过期未用即站点纯利，
- *     所以这里的「站点/券」是保守（偏低）估计。
- */
+// 只读奖池的会话模拟器；参数与收益口径见 docs/features/lottery.md。
 import { readFileSync, writeFileSync } from "node:fs";
-import { getLotteryConfig } from "../lib/lottery/config";
 import {
   calculateLuckyChance,
   lotteryExpectation,
@@ -42,6 +15,7 @@ const BIG_WIN_TICKETS = 3;
 interface Options {
   sessions: number;
   draws: number[];
+  batchSize: 1 | 10;
   target: number | null;
   soften: number | null;
   keepBreakEven: boolean;
@@ -50,10 +24,11 @@ interface Options {
   seed: number;
 }
 
-function parseArgs(argv: string[]): Options {
+export function parseArgs(argv: string[]): Options {
   const opts: Options = {
     sessions: 8_000,
     draws: [1, 10, 30, 100],
+    batchSize: 1,
     target: null,
     soften: null,
     keepBreakEven: true,
@@ -63,35 +38,57 @@ function parseArgs(argv: string[]): Options {
   };
   for (let i = 0; i < argv.length; i += 1) {
     const key = argv[i];
-    const next = () => argv[(i += 1)];
+    const next = () => {
+      const value = argv[++i];
+      if (!value?.trim() || value.startsWith("--")) throw new Error(`${key} 需要参数值`);
+      return value;
+    };
     if (key === "--sessions") opts.sessions = Number(next());
     else if (key === "--draws") opts.draws = next().split(",").map((n) => Number(n.trim()));
+    else if (key === "--batch") opts.batchSize = Number(next()) as 1 | 10;
     else if (key === "--target") opts.target = Number(next());
     else if (key === "--soften") opts.soften = Number(next());
     else if (key === "--no-keep-be") opts.keepBreakEven = false;
     else if (key === "--file") opts.file = next();
     else if (key === "--out") opts.out = next();
     else if (key === "--seed") opts.seed = Number(next());
-    else {
-      console.error(`未知参数：${key}`);
-      process.exit(1);
-    }
+    else throw new Error(`未知参数：${key}`);
+  }
+  if (!Number.isSafeInteger(opts.sessions) || opts.sessions <= 0) {
+    throw new Error("--sessions 必须是正整数");
+  }
+  if (opts.draws.some((n) => !Number.isSafeInteger(n) || n <= 0 || n > 100_000)) {
+    throw new Error("--draws 必须是 1~100000 的整数列表");
+  }
+  if (opts.batchSize !== 1 && opts.batchSize !== 10) throw new Error("--batch 必须是 1 或 10");
+  if (!Number.isInteger(opts.seed) || opts.seed < 0 || opts.seed > 0xffffffff) {
+    throw new Error("--seed 必须是 0~4294967295 的整数");
+  }
+  if (opts.target !== null && (!Number.isFinite(opts.target) || opts.target < 0)) {
+    throw new Error("--target 必须是非负有限数");
+  }
+  if (opts.soften !== null && (!Number.isFinite(opts.soften) || opts.soften < 0 || opts.soften > 1)) {
+    throw new Error("--soften 必须在 0~1 之间");
   }
   return opts;
 }
 
-function makeRng(seed: number) {
-  let state = seed >>> 0 || 1;
+// Mulberry32 使用 32 位乘法，避免浮点大整数乘法丢位造成短周期；仅供模拟。
+export function makeRng(seed: number) {
+  let state = seed >>> 0;
   return () => {
-    state = (state * 1103515245 + 12345) & 0x7fffffff;
-    return state / 0x7fffffff;
+    let value = (state = (state + 0x6d2b79f5) >>> 0);
+    value = Math.imul(value ^ (value >>> 15), value | 1);
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
   };
 }
 
 interface SessionStats {
   effective: number;
+  effectiveStandardError: number | null;
   housePerTicket: number;
-  lossRate: number;
+  clawbackRate: number;
   breakEvenRate: number;
   bigWinPer1k: number;
   worstDraw: number;
@@ -101,20 +98,20 @@ interface SessionStats {
   ruinPct: number;
 }
 
-/**
- * 一个会话 = 买 bought 张券，一直抽到券包空（中来的券与档位赠券都能续命）。
- * 保底按「每注重算」模拟，和线上按整批取一次快照略有差别，对 10 连抽会略微高估保底触发率。
- */
-function simulate(
+export function simulate(
   config: LotteryConfig,
   sessions: number,
   bought: number,
   rng: () => number,
+  { batchSize = 1 }: { batchSize?: 1 | 10 } = {},
 ): SessionStats {
   const price = config.ticketPriceCredits;
+  const spent = round2(bought * price);
   let draws = 0;
   let sumCredits = 0;
-  let loss = 0;
+  let meanCredits = 0;
+  let creditM2 = 0;
+  let clawbacks = 0;
   let breakEven = 0;
   let bigWins = 0;
   let worstDraw = 0;
@@ -126,49 +123,61 @@ function simulate(
     let drawn = 0;
     let misses = 0;
     let credits = 0;
-    let nextMilestone = 0;
 
-    // 上限防住「一直中赠券停不下来」的极端会话；正常配置下远达不到。
-    while (tickets > 0 && drawn < bought * 4 + 20) {
-      tickets -= 1;
-      drawn += 1;
-      draws += 1;
+    while (tickets > 0) {
+      const count = batchSize === 10 && tickets >= 10 ? 10 : 1;
+      if (drawn + count > 100_000) {
+        throw new Error(`会话 ${s + 1} 达到 100000 抽上限，剩余 ${tickets} 张券；停止输出收益，请检查赠券配置`);
+      }
+      tickets -= count;
 
+      // 服务端批前只读取最近 30 条开奖记录，并在整批内复用同一个概率。
       const chance = calculateLuckyChance(misses, config.outerChancePercent);
       const active =
         chance > config.outerChancePercent ? { ...config, outerChancePercent: chance } : config;
-      const r = rollPrize(active, bought * price, rng);
+      let prizeTickets = 0;
+      const batchSpend = round2(count * price);
+      for (let i = 0; i < count; i += 1) {
+        const r = rollPrize(active, batchSpend, rng);
+        credits += r.credits;
+        prizeTickets += r.grantTickets;
+        if (r.credits < 0) clawbacks += 1;
+        if (r.credits + r.grantTickets * price >= price) breakEven += 1;
+        if (r.credits >= BIG_WIN_CREDITS || r.grantTickets >= BIG_WIN_TICKETS) bigWins += 1;
+        worstDraw = Math.min(worstDraw, r.credits);
+        misses = r.ring === "outer" && (r.credits > 0 || r.grantTickets > 0)
+          ? 0 : Math.min(30, misses + 1);
+      }
 
-      credits += r.credits;
-      sumCredits += r.credits;
-      tickets += r.grantTickets;
-      if (r.credits < 0) loss += 1;
-      if (r.credits + r.grantTickets * price >= price) breakEven += 1;
-      if (r.credits >= BIG_WIN_CREDITS || r.grantTickets >= BIG_WIN_TICKETS) bigWins += 1;
-      worstDraw = Math.min(worstDraw, r.credits);
-      misses = r.ring === "outer" && (r.credits > 0 || r.grantTickets > 0) ? 0 : misses + 1;
-
-      while (
-        nextMilestone < config.milestones.length &&
-        drawn >= config.milestones[nextMilestone].draws
-      ) {
-        tickets += config.milestones[nextMilestone].tickets;
-        nextMilestone += 1;
+      const drawsBefore = drawn;
+      drawn += count;
+      draws += count;
+      tickets += prizeTickets;
+      for (const milestone of config.milestones) {
+        if (milestone.draws > drawsBefore && milestone.draws <= drawn) {
+          tickets += milestone.tickets;
+        }
       }
     }
 
-    const spent = bought * price;
+    sumCredits += credits;
+    const delta = credits - meanCredits;
+    meanCredits += delta / (s + 1);
+    creditM2 += delta * (credits - meanCredits);
     const net = credits - spent;
     nets.push(net);
     if (net <= -0.6 * spent) ruin += 1;
   }
 
   nets.sort((a, b) => a - b);
-  const totalSpent = sessions * bought * price;
+  const totalSpent = sessions * spent;
   return {
     effective: (sumCredits / totalSpent) * 100,
+    // 赠券续抽彼此相关，抽样误差必须按独立会话而非逐注计算。
+    effectiveStandardError: sessions > 1
+      ? (Math.sqrt(creditM2 / (sessions - 1) / sessions) / spent) * 100 : null,
     housePerTicket: (totalSpent - sumCredits) / (sessions * bought),
-    lossRate: (loss / draws) * 100,
+    clawbackRate: (clawbacks / draws) * 100,
     breakEvenRate: (breakEven / draws) * 100,
     bigWinPer1k: (bigWins / draws) * 1000,
     worstDraw: Math.abs(worstDraw),
@@ -258,25 +267,23 @@ function formatPool(config: LotteryConfig): string {
   return `内圈 ${inner}\n外圈 ${outer}`;
 }
 
-function table(
-  label: string,
-  config: LotteryConfig,
-  opts: Options,
-  rng: () => number,
-): string[] {
+export function table(label: string, config: LotteryConfig, opts: Options): string[] {
   const nominal = lotteryExpectation(config).returnRate;
   const lines = [
     `${label}｜券价 ${config.ticketPriceCredits}｜外圈 ${config.outerChancePercent}%｜名义 ${nominal.toFixed(2)}%`,
-    ["买券", "有效", "站点/券", "单注亏损", "单注≥券价", "大奖/千注", "最深单注", "会话不亏", "中位净", "最差10%", "亏超60%"].join("\t"),
+    `批次 ${opts.batchSize}（不足10券时单抽）｜每组 ${opts.sessions} 会话｜seed ${opts.seed}｜倍率基数 ${config.multiplierBase}`,
+    ["买券", "有效", "±95%抽样(pp)", "站点/券", "倒扣率", "单注≥券价", "大奖/千注", "最深倒扣", "会话不亏", "中位净", "最差10%", "亏超60%"].join("\t"),
   ];
   for (const bought of opts.draws) {
-    const r = simulate(config, opts.sessions, bought, rng);
+    // 每个规模及 what-if 重置同一种子，避免结果随表格顺序变化。
+    const r = simulate(config, opts.sessions, bought, makeRng(opts.seed), { batchSize: opts.batchSize });
     lines.push(
       [
         `${bought}`,
-        `${r.effective.toFixed(1)}%`,
-        r.housePerTicket.toFixed(1),
-        `${r.lossRate.toFixed(1)}%`,
+        `${r.effective.toFixed(2)}%`,
+        r.effectiveStandardError === null ? "N/A" : (1.96 * r.effectiveStandardError).toFixed(2),
+        r.housePerTicket.toFixed(2),
+        `${r.clawbackRate.toFixed(1)}%`,
         `${r.breakEvenRate.toFixed(1)}%`,
         r.bigWinPer1k.toFixed(1),
         r.worstDraw.toFixed(0),
@@ -294,33 +301,36 @@ async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const config = opts.file
     ? (JSON.parse(readFileSync(opts.file, "utf-8")) as LotteryConfig)
-    : await getLotteryConfig();
+    : await (await import("../lib/lottery/config")).getLotteryConfig();
   const nominal = lotteryExpectation(config).returnRate;
-  const rng = makeRng(opts.seed);
+  let outputConfig = config;
 
-  console.log(table(opts.file ? "本地配置" : "线上配置", config, opts, rng).join("\n"));
+  console.log(`活动 ${config.startAt} ~ ${config.endAt}`);
+  console.log(table(opts.file ? "本地配置" : "线上配置", config, opts).join("\n"));
 
   if (opts.target !== null || opts.soften !== null) {
     const target = opts.target ?? nominal;
-    const next =
-      opts.soften !== null
-        ? reshape(config, opts.soften, target, opts.keepBreakEven)
-        : fitNominal(config, target);
-    console.log("\n" + table("what-if", next, opts, rng).join("\n"));
-    console.log(`\nwhat-if 奖池（${opts.soften !== null ? `负档×${opts.soften}、` : ""}名义 ${lotteryExpectation(next).returnRate.toFixed(2)}%${opts.keepBreakEven ? "、回本档未动" : ""}）：`);
-    console.log(formatPool(next));
-    if (opts.out) {
-      writeFileSync(opts.out, JSON.stringify(next, null, 2), "utf-8");
-      console.log(`\n已写 ${opts.out}（只是本地文件，没有动线上 option.lottery_config）`);
-    }
+    outputConfig = opts.soften !== null
+      ? reshape(config, opts.soften, target, opts.keepBreakEven)
+      : fitNominal(config, target);
+    console.log("\n" + table("what-if", outputConfig, opts).join("\n"));
+    console.log(`\nwhat-if 奖池（${opts.soften !== null ? `负档×${opts.soften}、` : ""}名义 ${lotteryExpectation(outputConfig).returnRate.toFixed(2)}%${opts.soften !== null && opts.keepBreakEven ? "、回本档未动" : ""}）：`);
+    console.log(formatPool(outputConfig));
+  }
+  if (opts.out) {
+    writeFileSync(opts.out, JSON.stringify(outputConfig, null, 2), "utf-8");
+    console.log(`\n已写 ${opts.out}（只是本地文件，没有动线上 option.lottery_config）`);
   }
 
   console.log(
-    "\n口径：有效返还率含赠券续命产生的额外开奖，通常高于名义值；「站点/券」未计临时余额过期与免费抽。",
+    "\n口径：每个会话从零累计/零保底开始，固定当前券价，赠券全部续抽；不含每日免费抽、跨会话累计、配置变更或余额过期。有效值可高于或低于名义值，站点/券是 cr 账本差额而非现金利润。",
   );
+  console.log("±95% 是模拟均值的近似抽样误差，不是历史实际返还的预测区间；单注≥券价把赠券按面值计，倒扣率仅指 cr<0。");
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}
