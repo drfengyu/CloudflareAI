@@ -29,6 +29,19 @@
 
 ### 修复
 
+- **管理端活动记录页 500 修复**（`lib/lottery/records.ts`，2026-10-28）：
+  - 根因一：`lotteryBalanceByUser` 把「按净收益倒序」写成 `ORDER BY` 聚合表达式（含相关子查询），
+    D1 解析失败；改成引用 SELECT 别名也不行——drizzle 的 `sql` 字段在 SELECT 里不输出 `AS`。
+    改法：去掉 SQL 层排序，分组结果（每用户一行）在 JS 侧按 `net` 排序。
+  - 根因二：`listDrawRecords` 管理侧一次取 200 条明细，券的 `inArray` 最多 200 个 id，
+    超过 D1 每条语句 100 个绑定参数上限直接被拒。改法：`batchRows(ticketIds, 1)` 分段查。
+
+- **数据看板加载提速**（`app/(dashboard)/dashboard/page.tsx` + `lib/settings/dashboard-info.ts`，2026-10-28）：
+  - 公告/FAQ/Uptime 配置同在 option 表，原先 4 次 D1 往返（4×~400ms 基线）合成 1 次 IN 查询
+    （`getDashboardInfoRaw`），解析口径与单独读取完全一致。
+  - 用户行顺带取 `balanceCredits`，临时余额单独并发查——替代 `getUserTotalBalance` 内部
+    「用户行 → 临时余额」的两跳串行往返。看板关键路径从 auth + 2 跳降到 auth + 1 跳。
+
 - **转盘指针视觉优化**（`app/(dashboard)/lottery/lottery-wheel.tsx`，2026-10-23）：
   - 移除进入外圈的虚线入口指针（由静态层多根读数针代替，避免指针总数混乱）
   - 外圈读数针起点从 r=42 改到 r=0（消除与中心轴的间隙）

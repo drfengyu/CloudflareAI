@@ -56,7 +56,6 @@ const paidOutExpr = sql`COALESCE(SUM(CASE WHEN ${lotteryDraws.deltaCredits} > 0 
 const clawedBackExpr = sql`COALESCE(SUM(CASE WHEN ${lotteryDraws.deltaCredits} < 0 THEN -${lotteryDraws.deltaCredits} ELSE 0 END), 0)`;
 const outerHitsExpr = sql`COALESCE(SUM(CASE WHEN ${lotteryDraws.ring} = 'outer' THEN 1 ELSE 0 END), 0)`;
 const ticketFaceExpr = sql`COALESCE(SUM(${drawnTicketCredits}), 0)`;
-const netExpr = sql`(${ticketFaceExpr} + ${clawedBackExpr} - ${paidOutExpr})`;
 
 function drawWindowCondition(win?: LotteryWindow) {
   return win
@@ -137,6 +136,9 @@ export interface LotteryUserBalance extends LotteryBalance {
 
 /** 按用户聚合的开奖收益；净收益倒序，先看在站点上赚得最多的用户。 */
 export async function lotteryBalanceByUser(win?: LotteryWindow): Promise<LotteryUserBalance[]> {
+  // 2026-10-28 修复：不把排序交给 SQL——ORDER BY 聚合表达式（含相关子查询）在 D1 上
+  // 解析失败；引用 SELECT 别名也不行，drizzle 的 sql 字段不输出 AS。分组结果很小，
+  // 在 JS 侧按净收益排序。
   const rows = await db
     .select({
       userId: lotteryDraws.userId,
@@ -145,19 +147,19 @@ export async function lotteryBalanceByUser(win?: LotteryWindow): Promise<Lottery
       paidOut: paidOutExpr,
       clawedBack: clawedBackExpr,
       ticketFace: ticketFaceExpr,
-      net: netExpr,
       lastDrawAt: sql<number | null>`MAX(${lotteryDraws.createdAt})`,
     })
     .from(lotteryDraws)
     .where(drawWindowCondition(win))
-    .groupBy(lotteryDraws.userId)
-    .orderBy(desc(sql`net`));
+    .groupBy(lotteryDraws.userId);
 
-  return rows.map((row) => ({
-    ...toBalance(row),
-    userId: row.userId,
-    lastDrawAt: row.lastDrawAt == null ? null : new Date(Number(row.lastDrawAt)),
-  }));
+  return rows
+    .map((row) => ({
+      ...toBalance(row),
+      userId: row.userId,
+      lastDrawAt: row.lastDrawAt == null ? null : new Date(Number(row.lastDrawAt)),
+    }))
+    .sort((a, b) => b.net - a.net);
 }
 
 /** 上面那份聚合行补上邮箱（管理侧主表要显示用户），同样是两次查询手动映射以避开 leftJoin。 */
@@ -267,19 +269,23 @@ export async function listDrawRecords(opts: {
     .limit(opts.limit ?? 50);
 
   const ticketIds = [...new Set(rows.map((r) => r.ticketId).filter((id): id is string => !!id))];
-  // 2026-10-23 性能：批量查询所有 ticketId，不再逐个查（N+1 → 1 次查询）。
-  const ticketRows: { id: string; source: "buy" | "gift" | "prize"; priceCredits: number }[] =
-    ticketIds.length > 0
-      ? await db
-          .select({
-            id: lotteryTickets.id,
-            source: lotteryTickets.source,
-            priceCredits: lotteryTickets.priceCredits,
-          })
-          .from(lotteryTickets)
-          .where(inArray(lotteryTickets.id, ticketIds))
-      : [];
-  const ticketMap = new Map(ticketRows.map((t) => [t.id, t]));
+  // 2026-10-28 修复：管理侧一次取 200 条明细，inArray 最多可到 200 个 id；
+  // D1 每条语句最多 100 个绑定参数，必须分段查（batchRows(ids, 1) 即每段 100 个）。
+  const ticketMap = new Map<
+    string,
+    { id: string; source: "buy" | "gift" | "prize"; priceCredits: number }
+  >();
+  for (const chunk of batchRows(ticketIds, 1)) {
+    const part = await db
+      .select({
+        id: lotteryTickets.id,
+        source: lotteryTickets.source,
+        priceCredits: lotteryTickets.priceCredits,
+      })
+      .from(lotteryTickets)
+      .where(inArray(lotteryTickets.id, chunk));
+    for (const t of part) ticketMap.set(t.id, t);
+  }
 
   return rows.map((row) => {
     const ticket = row.ticketId ? ticketMap.get(row.ticketId) : undefined;

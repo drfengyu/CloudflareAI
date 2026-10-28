@@ -1,9 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import Link from "next/link";
 import { db } from "@/lib/db/d1-http";
-import { users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
-import { requireUser, getUserTotalBalance } from "@/lib/usage/meter";
+import { users, temporaryBalances } from "@/lib/db/schema";
+import { and, eq, gt } from "drizzle-orm";
+import { requireUser } from "@/lib/usage/meter";
 import {
   getUsageSummary,
   getUsageTrend,
@@ -12,11 +12,7 @@ import {
   getUsageByChannel,
   type UsageWindow,
 } from "@/lib/usage/queries";
-import {
-  getAnnouncements,
-  getFaq,
-  getUptimeConfig,
-} from "@/lib/settings/dashboard-info";
+import { getDashboardInfoRaw } from "@/lib/settings/dashboard-info";
 import { formatCredits } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 import { lotteryBalance } from "@/lib/lottery/records";
@@ -152,17 +148,17 @@ export default async function DashboardPage({
     me,
     summary,
     lifetime,
-    balanceInfo,
+    tempBalances,
     trend,
     modelCalls,
     channelUsage,
-    announcements,
-    faq,
-    uptimeConfig,
+    info,
     lotteryStats,
   ] = await Promise.all([
+    // 2026-10-28 性能：用户行顺带取 balanceCredits（原先 getUserTotalBalance 内部
+    // 串行再查一次用户行 + 临时余额，两跳 D1 往返），临时余额单独并发查。
     db
-      .select({ name: users.name, email: users.email })
+      .select({ name: users.name, email: users.email, balanceCredits: users.balanceCredits })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1)
@@ -177,13 +173,23 @@ export default async function DashboardPage({
       avgLatencyMs: null,
     })),
     getLifetimeUsage(userId).catch(() => ({ totalCalls: 0, totalCredits: 0 })),
-    getUserTotalBalance(userId).catch(() => ({ permanent: 0, temporary: 0, total: 0 })),
+    db
+      .select({ amount: temporaryBalances.amount })
+      .from(temporaryBalances)
+      .where(
+        and(eq(temporaryBalances.userId, userId), gt(temporaryBalances.expiresAt, new Date())),
+      )
+      .catch(() => []),
     getUsageTrend(userId, win, granularity).catch(() => []),
     getUsageByModel(userId, win, "calls").catch(() => []),
     getUsageByChannel(userId, win).catch(() => []),
-    getAnnouncements().catch(() => []),
-    getFaq().catch(() => []),
-    getUptimeConfig().catch(() => ({ enabled: false, apiUrl: "" })),
+    // 2026-10-28 性能：公告/FAQ/Uptime 配置同在 option 表，原先 4 次 D1 往返合成 1 次。
+    getDashboardInfoRaw().catch(() => ({
+      announcements: [],
+      faq: [],
+      uptimeEnabled: false,
+      uptimeApiUrl: "",
+    })),
     lotteryBalance({ userId }).catch(() => ({
       draws: 0,
       outerHits: 0,
@@ -193,6 +199,14 @@ export default async function DashboardPage({
       net: 0,
     })),
   ]);
+
+  const balancePermanent = me[0]?.balanceCredits ?? 0;
+  const balanceTemporary = tempBalances.reduce((sum, tb) => sum + Number(tb.amount), 0);
+  const balanceInfo = {
+    permanent: balancePermanent,
+    temporary: balanceTemporary,
+    total: balancePermanent + balanceTemporary,
+  };
 
   const balance = balanceInfo.total;
   const displayBalance = calculateDisplayBalance(balanceInfo.permanent, balanceInfo.temporary);
@@ -398,9 +412,9 @@ export default async function DashboardPage({
 
         {/* 系统公告 / 常见问答 / 服务可用性 */}
         <div className="grid gap-4 lg:grid-cols-4">
-          <AnnouncementCard items={announcements} className="lg:col-span-2" />
-          <FaqCard items={faq} />
-          <UptimeCard enabled={uptimeConfig.enabled} />
+          <AnnouncementCard items={info.announcements} className="lg:col-span-2" />
+          <FaqCard items={info.faq} />
+          <UptimeCard enabled={info.uptimeEnabled} />
         </div>
       </div>
     </>

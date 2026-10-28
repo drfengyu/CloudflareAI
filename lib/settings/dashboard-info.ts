@@ -1,3 +1,6 @@
+import { db } from "@/lib/db/d1-http";
+import { options } from "@/lib/db/schema";
+import { inArray } from "drizzle-orm";
 import { getSetting } from "@/lib/settings";
 import { formatCnWallClock, parseCnWallClock } from "@/lib/date";
 
@@ -50,9 +53,8 @@ function normalizeAnnouncementType(value: unknown): AnnouncementType {
     : "default";
 }
 
-/** 读取公告：按发布时间倒序，只取最新 ANNOUNCEMENT_LIMIT 条；时间解析失败的条目丢弃。 */
-export async function getAnnouncements(): Promise<Announcement[]> {
-  const raw = await getSetting<unknown>("dashboard_announcements", []);
+/** 解析公告 JSON：按发布时间倒序，只取最新 ANNOUNCEMENT_LIMIT 条；时间解析失败的条目丢弃。 */
+function parseAnnouncements(raw: unknown): Announcement[] {
   if (!Array.isArray(raw)) return [];
 
   const items: Announcement[] = [];
@@ -75,9 +77,13 @@ export async function getAnnouncements(): Promise<Announcement[]> {
   return items.sort((a, b) => b.date - a.date).slice(0, ANNOUNCEMENT_LIMIT);
 }
 
-/** 读取常见问答：按配置顺序原样返回，最多 FAQ_LIMIT 条。 */
-export async function getFaq(): Promise<FaqItem[]> {
-  const raw = await getSetting<unknown>("dashboard_faq", []);
+/** 读取公告：按发布时间倒序，只取最新 ANNOUNCEMENT_LIMIT 条；时间解析失败的条目丢弃。 */
+export async function getAnnouncements(): Promise<Announcement[]> {
+  return parseAnnouncements(await getSetting<unknown>("dashboard_announcements", []));
+}
+
+/** 解析 FAQ JSON：按配置顺序原样返回，最多 FAQ_LIMIT 条。 */
+function parseFaq(raw: unknown): FaqItem[] {
   if (!Array.isArray(raw)) return [];
 
   const items: FaqItem[] = [];
@@ -97,12 +103,68 @@ export async function getFaq(): Promise<FaqItem[]> {
   return items;
 }
 
+/** 读取常见问答：按配置顺序原样返回，最多 FAQ_LIMIT 条。 */
+export async function getFaq(): Promise<FaqItem[]> {
+  return parseFaq(await getSetting<unknown>("dashboard_faq", []));
+}
+
 export async function getUptimeConfig() {
   const [enabled, apiUrl] = await Promise.all([
     getSetting("uptime_enabled", false),
     getSetting("uptime_api_url", ""),
   ]);
   return { enabled, apiUrl: apiUrl.trim() };
+}
+
+export interface DashboardInfoRaw {
+  announcements: Announcement[];
+  faq: FaqItem[];
+  uptimeEnabled: boolean;
+  uptimeApiUrl: string;
+}
+
+/** 公告/FAQ/Uptime 四个配置键，读库时一次取回。 */
+const DASHBOARD_INFO_KEYS = [
+  "dashboard_announcements",
+  "dashboard_faq",
+  "uptime_enabled",
+  "uptime_api_url",
+];
+
+function coerceBool(raw: string | null | undefined): boolean {
+  return raw === "true" || raw === "1";
+}
+
+function coerceJson(raw: string | null | undefined): unknown {
+  if (raw === undefined || raw === null) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 2026-10-28 性能：看板页原先公告、FAQ、Uptime 配置各查一次 option 表（4 次 D1 往返，
+ * 每次 ~400ms 基线）。四键同表，合成一次 IN 查询；解析逻辑与单独读取完全一致。
+ */
+export async function getDashboardInfoRaw(): Promise<DashboardInfoRaw> {
+  let values = new Map<string, string | null>();
+  try {
+    const rows = await db
+      .select({ key: options.key, value: options.value })
+      .from(options)
+      .where(inArray(options.key, DASHBOARD_INFO_KEYS));
+    values = new Map(rows.map((row) => [row.key, row.value]));
+  } catch (err) {
+    console.error("[getDashboardInfoRaw] Failed to read dashboard info keys:", err);
+  }
+  return {
+    announcements: parseAnnouncements(coerceJson(values.get("dashboard_announcements"))),
+    faq: parseFaq(coerceJson(values.get("dashboard_faq"))),
+    uptimeEnabled: coerceBool(values.get("uptime_enabled")),
+    uptimeApiUrl: (values.get("uptime_api_url") ?? "").trim(),
+  };
 }
 
 export type UptimeStatus = "up" | "down" | "maint" | "pending";
