@@ -336,8 +336,8 @@ export default async function DashboardPage({
       </div>
 
       <div className="space-y-6 p-8">
-        {/* 四组核心指标。2026-10-28 修复：改 2×2 网格——账户数据不再独占整行，右侧也不留空列 */}
-        <div className="grid gap-4 md:grid-cols-2">
+        {/* 四组核心指标。2026-10-28 修复：大屏四卡一行（xl:grid-cols-4），窄屏退 2×2 / 单列 */}
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Card className="flex flex-col">
             <CardHeader className="flex items-center gap-2 border-b border-border">
               <span className="text-muted-foreground"><BarChart3 className="h-4 w-4" /></span>
