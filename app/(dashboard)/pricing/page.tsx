@@ -2,7 +2,8 @@ import { PageHeader } from "@/components/dashboard/page-header";
 import { PricingTabs } from "@/components/pricing/pricing-tabs";
 import { fetchModelCatalog, type NormalizedModel } from "@/lib/cloudflare/catalog";
 import { getDisplayPrice } from "@/lib/billing/display-price";
-import { getAllModelPricing, getPricingConfig } from "@/lib/billing/model-pricing";
+import { getPricingConfig } from "@/lib/billing/model-pricing";
+import { getCachedModelPricingMap } from "@/lib/billing/pricing-cache";
 import { db } from "@/lib/db/d1-http";
 import { channels, modelPricing } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -16,7 +17,7 @@ const CATEGORY_ORDER = ["text", "image", "vision", "embeddings", "translate", "s
 export default async function PricingPage() {
   const [cfModels, pricingMap, baseMultiplier, channelRows] = await Promise.all([
     fetchModelCatalog(),
-    getAllModelPricing(),
+    getCachedModelPricingMap(),
     getPricingConfig().then((c) => c.baseMultiplier),
     db
       .select({ id: channels.id, name: channels.name, type: channels.type })

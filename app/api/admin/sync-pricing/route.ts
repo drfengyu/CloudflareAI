@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { syncModelPricing } from "@/lib/billing/model-pricing";
+import { revalidateTag } from "next/cache";
+import { invalidatePricingCaches, syncModelPricing } from "@/lib/billing/model-pricing";
+import { PRICING_CACHE_TAG } from "@/lib/billing/pricing-cache";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
 import { users } from "@/lib/db/schema";
@@ -28,6 +30,8 @@ export async function GET() {
     }
 
     const result = await syncModelPricing();
+    invalidatePricingCaches();
+    revalidateTag(PRICING_CACHE_TAG, { expire: 0 });
     return NextResponse.json({ success: true, ...result });
   } catch (error) {
     return NextResponse.json(

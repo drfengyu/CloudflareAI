@@ -1,7 +1,7 @@
 import { db } from "@/lib/db/d1-http";
 import { modelPricing, options } from "@/lib/db/schema";
 import { fetchModelCatalog, type NormalizedModel } from "@/lib/cloudflare/catalog";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 /**
  * 新版价格策略（2026-06-16 重构）：
@@ -212,6 +212,15 @@ let pricingConfigCache: {
 
 const CACHE_TTL = 60_000; // 1 分钟缓存
 
+/** 只读定价配置用到的 5 个键，避免整表扫 option（36 行）。 */
+const PRICING_CONFIG_KEYS = [
+  "pricing_base_multiplier",
+  "pricing_adjust_threshold",
+  "pricing_adjust_multiplier_low",
+  "pricing_adjust_multiplier_high",
+  "pricing_default_price_per_million",
+] as const;
+
 export async function getPricingConfig() {
   const now = Date.now();
   if (pricingConfigCache && now - pricingConfigCache.cachedAt < CACHE_TTL) {
@@ -219,7 +228,10 @@ export async function getPricingConfig() {
   }
 
   try {
-    const rows = await db.select().from(options);
+    const rows = await db
+      .select({ key: options.key, value: options.value })
+      .from(options)
+      .where(inArray(options.key, [...PRICING_CONFIG_KEYS]));
     const map = new Map(rows.map((r) => [r.key, r.value]));
 
     const config = {
@@ -318,6 +330,8 @@ export async function syncModelPricing(): Promise<{ inserted: number; updated: n
   const newPricing = computeNewPricing(catalog);
   let inserted = 0;
   let updated = 0;
+  // 写完整表后清掉进程内价格缓存，避免同实例继续用旧行。
+  pricingRowCache.clear();
 
   for (const model of catalog) {
     const isImage = isImageModel(model.id, model.category);
@@ -381,10 +395,47 @@ export async function syncModelPricing(): Promise<{ inserted: number; updated: n
  */
 export async function syncModelPricingWithSettings(): Promise<{ inserted: number; updated: number }> {
   // 清除缓存，强制重新读取配置
-  pricingConfigCache = null;
+  invalidatePricingCaches();
 
   // 重新同步
   return await syncModelPricing();
+}
+
+/**
+ * 单模型定价行的短缓存。
+ *
+ * 一次网关请求里「预检」和「结算」会各查一次同一个模型（外加预留档位一次），
+ * 三次读的是同一行。10 秒 TTL 只覆盖同一次请求，后台改价最多晚 10 秒生效。
+ */
+const PRICING_ROW_TTL_MS = 10_000;
+type PricingRow = typeof modelPricing.$inferSelect;
+const pricingRowCache = new Map<string, { row: PricingRow | null; at: number }>();
+
+async function getPricingRow(modelId: string): Promise<PricingRow | null> {
+  const now = Date.now();
+  const hit = pricingRowCache.get(modelId);
+  if (hit && now - hit.at < PRICING_ROW_TTL_MS) return hit.row;
+
+  const rows = await db
+    .select()
+    .from(modelPricing)
+    .where(eq(modelPricing.modelId, modelId))
+    .limit(1);
+  const row = rows[0] ?? null;
+  pricingRowCache.set(modelId, { row, at: now });
+  return row;
+}
+
+/** 供余额预检读取输出预留档位，复用同一行短缓存。 */
+export async function getModelReserveOutputTokens(modelId: string): Promise<number | null> {
+  const row = await getPricingRow(modelId);
+  return row?.reserveOutputTokens ?? null;
+}
+
+/** 定价配置或价格行变更后清空进程内缓存；跨实例失效由调用方 revalidateTag。 */
+export function invalidatePricingCaches(): void {
+  pricingConfigCache = null;
+  pricingRowCache.clear();
 }
 
 /**
@@ -398,23 +449,18 @@ export async function getModelPricing(modelId: string): Promise<{
   unit: string;
   multiplier: number;
 } | null> {
-  const rows = await db
-    .select()
-    .from(modelPricing)
-    .where(eq(modelPricing.modelId, modelId))
-    .limit(1);
+  const row = await getPricingRow(modelId);
+  if (!row) return null;
 
-  if (!rows[0]) return null;
-
-  const multiplier = rows[0].multiplier ?? 1.0;
+  const multiplier = row.multiplier ?? 1.0;
   const config = await getPricingConfig();
 
   return {
-    inputPrice: (rows[0].inputPrice ?? config.defaultPricePerMillion) * multiplier,
-    outputPrice: (rows[0].outputPrice ?? rows[0].inputPrice ?? config.defaultPricePerMillion) * multiplier,
-    isImage: rows[0].isImage === 1,
-    fixedPrice: (rows[0].fixedPrice ?? IMAGE_MODEL_DEFAULT_PRICE) * multiplier,
-    unit: rows[0].unit ?? "per M input tokens",
+    inputPrice: (row.inputPrice ?? config.defaultPricePerMillion) * multiplier,
+    outputPrice: (row.outputPrice ?? row.inputPrice ?? config.defaultPricePerMillion) * multiplier,
+    isImage: row.isImage === 1,
+    fixedPrice: (row.fixedPrice ?? IMAGE_MODEL_DEFAULT_PRICE) * multiplier,
+    unit: row.unit ?? "per M input tokens",
     multiplier,
   };
 }
@@ -430,7 +476,17 @@ export async function getAllModelPricing(): Promise<Map<string, {
   unit: string;
   multiplier: number;
 }>> {
-  const rows = await db.select().from(modelPricing);
+  const rows = await db
+    .select({
+      modelId: modelPricing.modelId,
+      inputPrice: modelPricing.inputPrice,
+      outputPrice: modelPricing.outputPrice,
+      isImage: modelPricing.isImage,
+      fixedPrice: modelPricing.fixedPrice,
+      unit: modelPricing.unit,
+      multiplier: modelPricing.multiplier,
+    })
+    .from(modelPricing);
   const config = await getPricingConfig();
   const map = new Map();
 

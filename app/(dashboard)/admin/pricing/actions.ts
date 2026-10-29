@@ -1,9 +1,12 @@
 "use server";
 
+import { revalidateTag } from "next/cache";
 import { db } from "@/lib/db/d1-http";
 import { modelPricing, users } from "@/lib/db/schema";
 import { requireUser } from "@/lib/usage/meter";
 import { eq } from "drizzle-orm";
+import { invalidatePricingCaches } from "@/lib/billing/model-pricing";
+import { PRICING_CACHE_TAG } from "@/lib/billing/pricing-cache";
 
 /**
  * 更新单个模型的定价倍率（仅管理员）。
@@ -39,6 +42,9 @@ export async function updateModelMultiplier(
         updatedAt: new Date(),
       })
       .where(eq(modelPricing.modelId, modelId));
+
+    invalidatePricingCaches();
+    revalidateTag(PRICING_CACHE_TAG, { expire: 0 });
 
     return { success: true };
   } catch (error) {
@@ -79,6 +85,9 @@ export async function updateModelReserve(
       .update(modelPricing)
       .set({ reserveOutputTokens: tokens, updatedAt: new Date() })
       .where(eq(modelPricing.modelId, modelId));
+
+    invalidatePricingCaches();
+    revalidateTag(PRICING_CACHE_TAG, { expire: 0 });
 
     return { success: true };
   } catch (error) {
@@ -133,6 +142,9 @@ export async function batchUpdateMultipliers(
         errors.push(`${modelId}: ${e instanceof Error ? e.message : "更新失败"}`);
       }
     }
+
+    invalidatePricingCaches();
+    revalidateTag(PRICING_CACHE_TAG, { expire: 0 });
 
     return { success: errors.length === 0, updated, errors };
   } catch (error) {

@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { syncModelPricingWithSettings } from "@/lib/billing/model-pricing";
+import { PRICING_CACHE_TAG } from "@/lib/billing/pricing-cache";
 import { invalidateCreditsPerUsdCache } from "@/lib/billing/credits";
 import { parseCnWallClock } from "@/lib/date";
 import {
@@ -135,6 +136,8 @@ export async function updatePricingSettings(formData: {
 
   // 重新同步价格表（使用新的配置）
   const result = await syncModelPricingWithSettings();
+
+  revalidateTag(PRICING_CACHE_TAG, { expire: 0 });
 
   revalidatePath("/admin/settings");
   revalidatePath("/admin/pricing");

@@ -62,7 +62,7 @@ export async function POST(req: NextRequest) {
   // 嵌入模型不返回真实 usage，按字符类别估算 token（CJK≈1/字，其余≈1/4字符）
   const estimatedTokens = estimateTokensTotal(texts);
   const estimatedCredits = await calculateCredits(model, estimatedTokens, 0);
-  const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits);
+  const balanceCheck = await verifyBalance(userId, apiKeyId, estimatedCredits, verified.keyState);
   if (!balanceCheck.ok) {
     return Response.json({ error: balanceCheck.reason }, { status: 402 });
   }

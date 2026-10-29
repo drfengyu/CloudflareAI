@@ -1,6 +1,7 @@
 import { db } from "@/lib/db/d1-http";
 import { usageLogs, users, apiKeys, channels, type UsageLog } from "@/lib/db/schema";
 import { desc, eq, gte, lt, and, sql } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import type { BucketGranularity } from "@/lib/date";
 
 /**
@@ -49,17 +50,28 @@ export async function getUsageSummary(userId: string, win: UsageWindow) {
   return rows[0] || EMPTY_SUMMARY;
 }
 
-/** 历史累计消耗（刻意不受看板时间窗口影响——「历史消耗」就该是全生命周期）。 */
-export async function getLifetimeUsage(userId: string) {
-  const rows = await db
-    .select({
-      totalCalls: sql<number>`COUNT(*)`,
-      totalCredits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
-    })
-    .from(usageLogs)
-    .where(eq(usageLogs.userId, userId));
+/**
+ * 历史累计消耗（刻意不受看板时间窗口影响——「历史消耗」就该是全生命周期）。
+ * 全表 COUNT+SUM 随栈增长只会越扫越贵，而看板显示慢 60 秒无感，故读侧缓存 1 分钟。
+ */
+const getCachedLifetimeUsage = unstable_cache(
+  async (userId: string) => {
+    const rows = await db
+      .select({
+        totalCalls: sql<number>`COUNT(*)`,
+        totalCredits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
+      })
+      .from(usageLogs)
+      .where(eq(usageLogs.userId, userId));
 
-  return rows[0] || { totalCalls: 0, totalCredits: 0 };
+    return rows[0] || { totalCalls: 0, totalCredits: 0 };
+  },
+  ["usage-lifetime"],
+  { revalidate: 60 },
+);
+
+export async function getLifetimeUsage(userId: string) {
+  return getCachedLifetimeUsage(userId);
 }
 
 /** 获取用户余额（Phase C: credits 模型，取代旧的 quota） */
@@ -183,6 +195,27 @@ export async function getUsageTrend(
     .orderBy(sql`${bucket} ASC`);
 }
 
+/**
+ * 历史页的 COUNT(*) 与翻页无关，只随筛选条件变化；每翻一页都全扫一遍太贵，
+ * 按 (userId, model, task) 缓存 60 秒。`""` 表示不带该筛选。
+ */
+const getCachedUsageCount = unstable_cache(
+  async (userId: string, model: string, task: string) => {
+    const conditions = [eq(usageLogs.userId, userId)];
+    if (model) conditions.push(eq(usageLogs.model, model));
+    if (task) conditions.push(eq(usageLogs.task, task));
+
+    const rows = await db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(usageLogs)
+      .where(and(...conditions));
+
+    return rows[0]?.count || 0;
+  },
+  ["usage-count"],
+  { revalidate: 60 },
+);
+
 /** 分页查询用量记录（历史页） */
 export async function queryUsage(input: {
   userId: string;
@@ -200,7 +233,7 @@ export async function queryUsage(input: {
 
   const where = and(...conditions);
 
-  const [logs, countResult] = await Promise.all([
+  const [logs, total] = await Promise.all([
     db
       .select({
         id: usageLogs.id,
@@ -228,11 +261,8 @@ export async function queryUsage(input: {
       .orderBy(desc(usageLogs.createdAt))
       .limit(pageSize)
       .offset(offset),
-    db
-      .select({ count: sql<number>`COUNT(*)` })
-      .from(usageLogs)
-      .where(where),
+    getCachedUsageCount(userId, model ?? "", task ?? ""),
   ]);
 
-  return { logs, total: countResult[0]?.count || 0 };
+  return { logs, total };
 }

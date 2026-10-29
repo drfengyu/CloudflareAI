@@ -113,6 +113,47 @@ Cloudflare 面板显示 D1 免费额度「已读取行」早上就跑到 40.86k 
 写路径用一次性临时用户跑通「买券 → 消耗 → 开奖 → 读回 → 回滚 → 删除」，
 删除后统计行随外键级联清空；纯增量口径另有 `tests/lottery-stats.test.ts`（6 个用例）。
 
+## 第三阶段：读侧缓存与网关读合并（同日补）
+
+索引和累计行压掉了「大表全扫」，剩下的读取集中在两类：**每页都会重复算的固定聚合**
+（历史累计、历史页总数、24h 大奖、整张价格表），以及**网关每次请求都要重读的同一批行**
+（api key 行、模型定价行）。这一轮不改账本和数据口径，只做缓存与读合并。
+
+| 改动 | 位置 | 做法 |
+|---|---|---|
+| 价格表整表缓存 | `lib/billing/pricing-cache.ts`（新）+ `models` / `pricing` 页 | `unstable_cache`，tag `model-pricing`，300s |
+| 单模型定价行短缓存 | `lib/billing/model-pricing.ts` | 10s 进程内缓存，预检 / 结算 / 预留档位三次读同一行 |
+| 定价配置只读 5 个键 | `getPricingConfig` | 原来 `SELECT * FROM option`（36 行）→ `inArray` 5 键（10 行） |
+| 改价即时失效 | `admin/pricing/actions.ts`、`admin/settings/actions.ts`、`api/admin/sync-pricing` | `invalidatePricingCaches()` + `revalidateTag("model-pricing", { expire: 0 })` |
+| 令牌额度原子扣减 | `lib/usage/meter.ts` `logUsage` | 先读后写 → 一条 `UPDATE ... CASE`，少一次读，也不会被并发覆盖 |
+| 网关预检复用 key 行 | `lib/auth/api-key.ts` + `verifyBalance` | `verifyApiKey` 返回 `keyState`，三个 `/v1/*` 路由传入，省一次 `api_keys` 读 |
+| 历史累计缓存 | `lib/usage/queries.ts` | `unstable_cache` 60s（看板「历史消耗」） |
+| 历史页 COUNT 缓存 | `lib/usage/queries.ts` | `unstable_cache` 60s，key = (userId, model, task)，翻页不再重扫 |
+| 24h 大奖缓存 | `lib/lottery/records.ts` | `unstable_cache` 60s，`createdAt` 存毫秒数再还原 |
+| 管理端用户列表去 N+1 | `app/(dashboard)/admin/users/page.tsx` | 逐用户 `getUserTotalBalance`（2N 次往返）→ 一次 `temporary_balance` 按 userId 聚合 |
+
+### 实测（临时路由拦截 fetch 读 `meta.rows_read`，验完即删）
+
+| 场景 | 改前 | 改后（首次 / 缓存命中） |
+|---|---|---|
+| 看板「历史消耗」 | 206 行 | 206 / **0** |
+| `/history` COUNT（每翻一页） | 206 行 | 206 / **0** |
+| `/lottery` 24h 大奖 | 118 行（2 查询） | 118 / **0** |
+| `/models`、`/pricing` 价格表 | 371 行 + option 36 行 | 371 + option **10** / **0** |
+| 网关余额预检 | 3 查询（预留档位 + 定价行 + 配置） | 2 查询（定价行 + 配置） |
+| `verifyApiKey` + `verifyBalance` | 4 查询 | 3 查询（复用 key 行） |
+| `/admin/users` 余额列 | 2 + 2N 查询 | 3 查询（实测聚合 44 行） |
+
+原子扣额度 SQL 用不存在的 key id 跑了一次（命中 0 行、不改数据），确认 D1 接受
+`CASE WHEN remain_credits IS NULL ...` 这条 UPDATE。
+
+### 边界
+
+- 缓存只容错「慢 60~300 秒」的数据：改价走了 tag 失效所以即时；历史累计 / 大奖 / 历史页总数
+  最多滞后 60 秒，翻页的明细本身不缓存。
+- `unstable_cache` 依赖 Next 的 incremental cache，在 Next 之外（脚本直调）会抛
+  `Invariant: incrementalCache missing`——脚本里要测这些函数需自建 `globalThis.__incrementalCache`。
+
 ## 已知边界
 
 - 累计行是派生数据，唯一真源仍是 `lottery_ticket` / `lottery_draw`。若「统计写成功、其余写失败、

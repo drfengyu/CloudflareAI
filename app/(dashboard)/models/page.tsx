@@ -3,13 +3,14 @@ import { ModelBrowser } from "@/components/models/model-browser";
 import { Badge } from "@/components/ui/badge";
 import { fetchModelCatalog } from "@/lib/cloudflare/catalog";
 import { fetchAllChannelsModels } from "@/lib/cloudflare/channel-catalog";
-import { getAllModelPricing, getPricingConfig } from "@/lib/billing/model-pricing";
+import { getCachedModelPricingMap } from "@/lib/billing/pricing-cache";
+import { getPricingConfig } from "@/lib/billing/model-pricing";
 
 export const dynamic = "force-dynamic";
 
 export default async function ModelsPage() {
   let cfModels: Awaited<ReturnType<typeof fetchModelCatalog>> = [];
-  let pricingMap: Awaited<ReturnType<typeof getAllModelPricing>> = new Map();
+  let pricingMap: Awaited<ReturnType<typeof getCachedModelPricingMap>> = new Map();
   let error: string | null = null;
   let channelData: Awaited<ReturnType<typeof fetchAllChannelsModels>> = {
     channels: [],
@@ -21,7 +22,7 @@ export default async function ModelsPage() {
   try {
     [cfModels, pricingMap, channelData, baseMultiplier] = await Promise.all([
       fetchModelCatalog(),
-      getAllModelPricing(),
+      getCachedModelPricingMap(),
       fetchAllChannelsModels().catch(() => ({
         channels: [],
         modelsByChannel: {},

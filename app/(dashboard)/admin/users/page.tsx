@@ -1,9 +1,9 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { db } from "@/lib/db/d1-http";
-import { users } from "@/lib/db/schema";
-import { desc, eq } from "drizzle-orm";
-import { requireUser, getUserTotalBalance } from "@/lib/usage/meter";
+import { users, temporaryBalances } from "@/lib/db/schema";
+import { desc, eq, gt, sql } from "drizzle-orm";
+import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
 import { UsersTable } from "./users-table";
 
@@ -42,21 +42,29 @@ export default async function AdminUsersPage() {
     .from(users)
     .orderBy(desc(users.createdAt));
 
-  // 获取每个用户的真实总余额（永久 + 临时）
-  const usersWithBalance = await Promise.all(
-    allUsers.map(async (u) => {
-      const balance = await getUserTotalBalance(u.id);
-      return {
-        ...u,
-        totalBalance: balance.total,
-        permanentBalance: balance.permanent,
-        temporaryBalance: balance.temporary,
-        roleLabel: roleLabels[u.role || 1] || roleLabels[1],
-      };
+  // 临时余额一次聚合取回：原先逐用户调 getUserTotalBalance 是 2N 次 D1 往返。
+  const tempRows = await db
+    .select({
+      userId: temporaryBalances.userId,
+      amount: sql<number>`COALESCE(SUM(${temporaryBalances.amount}), 0)`,
     })
-  );
+    .from(temporaryBalances)
+    .where(gt(temporaryBalances.expiresAt, new Date()))
+    .groupBy(temporaryBalances.userId);
 
-  const data = usersWithBalance;
+  const tempByUser = new Map(tempRows.map((r) => [r.userId, r.amount]));
+
+  const data = allUsers.map((u) => {
+    const permanentBalance = u.balanceCredits ?? 0;
+    const temporaryBalance = tempByUser.get(u.id) ?? 0;
+    return {
+      ...u,
+      totalBalance: permanentBalance + temporaryBalance,
+      permanentBalance,
+      temporaryBalance,
+      roleLabel: roleLabels[u.role || 1] || roleLabels[1],
+    };
+  });
 
   return (
     <>

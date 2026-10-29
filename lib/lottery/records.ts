@@ -1,4 +1,5 @@
 import { and, desc, eq, gt, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { batchRows, db } from "@/lib/db/d1-http";
 import { lotteryDraws, lotteryTickets, lotteryUserStats, users } from "@/lib/db/schema";
 import { round2 } from "./prize-math";
@@ -455,61 +456,79 @@ export interface BigWinRecord {
  * 最近 N 小时内的大奖播报：deltaCredits >= threshold 或 grantTickets >= ticketThreshold。
  * 用于活动页底部的中奖墙，社会化证明「真的能中大奖」。
  * 用户邮箱脱敏：保留首字符 + *** + @域名；无邮箱时用用户 ID 前 8 位。
+ *
+ * 中奖墙对实时性无要求，同参数 60 秒内复用结果——`since` 随缓存重建才重算，
+ * 免得每次打开活动页都扫一遍近 24h 的开奖明细。
  */
+const getCachedRecentBigWins = unstable_cache(
+  async (thresholdCredits: number, thresholdTickets: number, hours: number, limit: number) => {
+    const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+
+    const rows = await db
+      .select({
+        id: lotteryDraws.id,
+        userId: lotteryDraws.userId,
+        label: lotteryDraws.label,
+        deltaCredits: lotteryDraws.deltaCredits,
+        grantTickets: lotteryDraws.grantTickets,
+        createdAt: lotteryDraws.createdAt,
+      })
+      .from(lotteryDraws)
+      .where(
+        and(
+          gte(lotteryDraws.createdAt, since),
+          sql`(${lotteryDraws.deltaCredits} >= ${thresholdCredits} OR ${lotteryDraws.grantTickets} >= ${thresholdTickets})`,
+        ),
+      )
+      .orderBy(desc(lotteryDraws.createdAt), desc(lotteryDraws.seq))
+      .limit(limit);
+
+    // 不用 leftJoin（drizzle-orm v0.45.2 字段错位 bug），单独查用户再手动映射。
+    // 2026-10-23 性能：批量查询所有 userId，不再逐个查（N+1 → 1 次查询）。
+    const userIds = [...new Set(rows.map((r) => r.userId))];
+    const userRows: { id: string; email: string | null; name: string | null }[] =
+      userIds.length > 0
+        ? await db
+            .select({ id: users.id, email: users.email, name: users.name })
+            .from(users)
+            .where(inArray(users.id, userIds))
+        : [];
+    const userMap = new Map(userRows.map((u) => [u.id, u]));
+
+    return rows.map((row) => {
+      const user = userMap.get(row.userId);
+      return {
+        id: row.id,
+        userLabel: maskUserLabel(user?.email ?? null, user?.name ?? null, row.userId),
+        label: row.label,
+        credits: Number(row.deltaCredits),
+        grantTickets: Number(row.grantTickets ?? 0),
+        // unstable_cache 用 JSON 序列化，Date 会变字符串；这里先存毫秒数，取回再还原。
+        createdAt: row.createdAt ? row.createdAt.getTime() : null,
+      };
+    });
+  },
+  ["lottery-big-wins"],
+  { revalidate: 60 },
+);
+
 export async function listRecentBigWins(opts: {
   thresholdCredits?: number;
   thresholdTickets?: number;
   hours?: number;
   limit?: number;
 }): Promise<BigWinRecord[]> {
-  const thresholdCredits = opts.thresholdCredits ?? 500;
-  const thresholdTickets = opts.thresholdTickets ?? 3;
-  const hours = opts.hours ?? 24;
-  const limit = opts.limit ?? 30;
-  const since = new Date(Date.now() - hours * 60 * 60 * 1000);
+  const cached = await getCachedRecentBigWins(
+    opts.thresholdCredits ?? 500,
+    opts.thresholdTickets ?? 3,
+    opts.hours ?? 24,
+    opts.limit ?? 30,
+  );
 
-  const rows = await db
-    .select({
-      id: lotteryDraws.id,
-      userId: lotteryDraws.userId,
-      label: lotteryDraws.label,
-      deltaCredits: lotteryDraws.deltaCredits,
-      grantTickets: lotteryDraws.grantTickets,
-      createdAt: lotteryDraws.createdAt,
-    })
-    .from(lotteryDraws)
-    .where(
-      and(
-        gte(lotteryDraws.createdAt, since),
-        sql`(${lotteryDraws.deltaCredits} >= ${thresholdCredits} OR ${lotteryDraws.grantTickets} >= ${thresholdTickets})`,
-      ),
-    )
-    .orderBy(desc(lotteryDraws.createdAt), desc(lotteryDraws.seq))
-    .limit(limit);
-
-  // 不用 leftJoin（drizzle-orm v0.45.2 字段错位 bug），单独查用户再手动映射。
-  // 2026-10-23 性能：批量查询所有 userId，不再逐个查（N+1 → 1 次查询）。
-  const userIds = [...new Set(rows.map((r) => r.userId))];
-  const userRows: { id: string; email: string | null; name: string | null }[] =
-    userIds.length > 0
-      ? await db
-          .select({ id: users.id, email: users.email, name: users.name })
-          .from(users)
-          .where(inArray(users.id, userIds))
-      : [];
-  const userMap = new Map(userRows.map((u) => [u.id, u]));
-
-  return rows.map((row) => {
-    const user = userMap.get(row.userId);
-    return {
-      id: row.id,
-      userLabel: maskUserLabel(user?.email ?? null, user?.name ?? null, row.userId),
-      label: row.label,
-      credits: Number(row.deltaCredits),
-      grantTickets: Number(row.grantTickets ?? 0),
-      createdAt: row.createdAt,
-    };
-  });
+  return cached.map((row) => ({
+    ...row,
+    createdAt: row.createdAt === null ? null : new Date(row.createdAt),
+  }));
 }
 
 /** 脱敏用户标识：邮箱首字符 + *** + 域名；无邮箱用昵称；都没有用用户 ID 前 8 位。 */

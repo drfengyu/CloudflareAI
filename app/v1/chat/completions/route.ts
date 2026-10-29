@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
     task: "Text Generation",
   });
 
-  const balanceCheck = await verifyBalance(userId, apiKeyId, precheck.credits);
+  const balanceCheck = await verifyBalance(userId, apiKeyId, precheck.credits, verified.keyState);
   if (!balanceCheck.ok) {
     const detail = `${balanceCheck.reason}：本次预检需要 ${precheck.credits.toFixed(2)} cr，当前可用 ${balanceCheck.availableCredits.toFixed(2)} cr`;
     after(() => {

@@ -27,6 +27,18 @@
 
 ### 修复
 
+- **D1 读放大治理第三阶段：读侧缓存与网关读合并**（`lib/billing/pricing-cache.ts` 等 13 个文件，2026-10-29）：
+  - 价格表改用 `unstable_cache`（tag `model-pricing`，300s），后台改全局倍率 / 单模型倍率 / 同步价格后
+    `invalidatePricingCaches()` + `revalidateTag` 即时失效；`getPricingConfig` 只读 5 个定价键（option 36 行 → 10 行）。
+  - 单模型定价行加 10s 进程内缓存：网关「预检 / 结算 / 预留档位」三次读同一行合并为一次。
+  - `logUsage` 扣令牌额度改为一条 `UPDATE ... CASE WHEN remain_credits IS NULL ...`，去掉了先读后写；
+    `verifyApiKey` 把 key 行以 `keyState` 交给 `verifyBalance`，`/v1/chat`、`/v1/messages`、`/v1/embeddings`
+    各少一次 `api_keys` 读。
+  - 看板「历史消耗」、`/history` 的 COUNT、`/lottery` 24h 大奖加 60s 读缓存；`/admin/users` 余额列
+    从逐用户 `getUserTotalBalance`（2N 次往返）改为一次 `temporary_balance` 聚合。
+  - 实测（拦截 `meta.rows_read`）：缓存命中后上述聚合 0 行读取，价格页 option 从 36 行降到 10 行，
+    网关预检 3 → 2 查询、鉴权链 4 → 3 查询。详见 `docs/fixes/2026-10-29-d1-read-amplification.md`。
+
 - **看板「活动抽奖」金额显示成站点收益**（`app/(dashboard)/dashboard/page.tsx`，2026-10-29）：
   - 卡片直接展示 `lotteryBalance().net`（券面 + 回收 − 发放，站点视角），用户实际是 −29629.78 时看板却显示 +29629.78。
   - 改为展示用户盈亏 `-net`（中奖 − 倒扣 − 券面），正负与 `/lottery` 记录页的净收益一致。

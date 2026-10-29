@@ -58,12 +58,19 @@ export function generateApiKey(): { key: string; hash: string; prefix: string; e
 /**
  * 根据明文 API key 查找并返回验证后的 { userId, apiKeyId, allowedModels, channelId }（Phase B 增强版）。
  * 校验：status=1（启用）、未过期、IP白名单（如有）。
+ * `keyState` 带上额度/过期/状态，供 `verifyBalance` 复用，避免同一次请求再查一遍 key 行。
  * 返回 null 表示无效/不通过。
  */
 export async function verifyApiKey(
   key: string,
   clientIp?: string,
-): Promise<{ userId: string; apiKeyId: string; allowedModels: string[] | null; channelId: string | null } | null> {
+): Promise<{
+  userId: string;
+  apiKeyId: string;
+  allowedModels: string[] | null;
+  channelId: string | null;
+  keyState: { remainCredits: number | null; expiresAt: Date | null; status: number };
+} | null> {
   if (!key.startsWith("sk-cfai-")) return null;
 
   const hash = crypto.createHash("sha256").update(key).digest("hex");
@@ -111,6 +118,11 @@ export async function verifyApiKey(
     apiKeyId: apiKey.id,
     allowedModels,
     channelId: apiKey.channelId ?? null,
+    keyState: {
+      remainCredits: apiKey.remainCredits ?? null,
+      expiresAt: apiKey.expiresAt ? new Date(apiKey.expiresAt) : null,
+      status: apiKey.status,
+    },
   };
 }
 

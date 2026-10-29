@@ -1,7 +1,8 @@
 import { auth } from "@/auth";
 import { db } from "@/lib/db/d1-http";
-import { usageLogs, users, apiKeys, temporaryBalances, modelPricing } from "@/lib/db/schema";
+import { usageLogs, users, apiKeys, temporaryBalances } from "@/lib/db/schema";
 import { calculateCredits } from "@/lib/billing/pricing";
+import { getModelReserveOutputTokens } from "@/lib/billing/model-pricing";
 import { eq, sql, and, gt } from "drizzle-orm";
 import { estimateTokens } from "./tokens";
 
@@ -50,29 +51,16 @@ export async function logUsage(input: {
 
     // 扣减令牌额度（如果有限制）
     if (input.apiKeyId) {
-      const keyRows = await db
-        .select({ remainCredits: apiKeys.remainCredits })
-        .from(apiKeys)
-        .where(eq(apiKeys.id, input.apiKeyId))
-        .limit(1);
-
-      if (keyRows[0] && keyRows[0].remainCredits !== null) {
-        const newRemain = keyRows[0].remainCredits - creditsUsed;
-        await db
-          .update(apiKeys)
-          .set({
-            remainCredits: newRemain,
-            status: newRemain <= 0 ? 4 : undefined, // 额度耗尽→status=4
-            lastUsedAt: new Date(),
-          })
-          .where(eq(apiKeys.id, input.apiKeyId));
-      } else {
-        // 无限额度令牌，仅更新 lastUsedAt
-        await db
-          .update(apiKeys)
-          .set({ lastUsedAt: new Date() })
-          .where(eq(apiKeys.id, input.apiKeyId));
-      }
+      // 一条原子 UPDATE 同时处理「有限额 / 无限额」与耗尽置 4：
+      // 不先读后写，少一次 D1 读取，也不会和并发请求互相覆盖额度。
+      await db
+        .update(apiKeys)
+        .set({
+          remainCredits: sql`CASE WHEN ${apiKeys.remainCredits} IS NULL THEN NULL ELSE ${apiKeys.remainCredits} - ${creditsUsed} END`,
+          status: sql`CASE WHEN ${apiKeys.remainCredits} IS NOT NULL AND ${apiKeys.remainCredits} - ${creditsUsed} <= 0 THEN 4 ELSE ${apiKeys.status} END`,
+          lastUsedAt: new Date(),
+        })
+        .where(eq(apiKeys.id, input.apiKeyId));
     }
   }
 
@@ -204,12 +192,7 @@ export async function estimateRequestCredits(input: {
   task?: string;
 }): Promise<{ credits: number; inputTokens: number; outputTokens: number }> {
   const inputTokens = estimateTokens(input.inputText);
-  const rows = await db
-    .select({ reserve: modelPricing.reserveOutputTokens })
-    .from(modelPricing)
-    .where(eq(modelPricing.modelId, input.model))
-    .limit(1);
-  const reserve = rows[0]?.reserve ?? DEFAULT_RESERVE_OUTPUT_TOKENS;
+  const reserve = (await getModelReserveOutputTokens(input.model)) ?? DEFAULT_RESERVE_OUTPUT_TOKENS;
   const outputTokens = Math.min(input.requestedMaxTokens ?? reserve, reserve);
   const credits = await calculateCredits(
     input.model,
@@ -230,6 +213,7 @@ export async function verifyBalance(
   userId: string,
   apiKeyId: string | undefined,
   estimatedCredits: number,
+  knownKey?: { remainCredits: number | null; expiresAt: Date | null; status: number },
 ): Promise<{
   ok: boolean;
   reason?: string;
@@ -250,23 +234,25 @@ export async function verifyBalance(
     return fail("Insufficient balance", available);
   }
 
-  // 查令牌额度（如果有限制）
+  // 查令牌额度（如果有限制）。网关已从 verifyApiKey 拿到同一行，传进来省一次 D1 读。
   if (apiKeyId) {
-    const keyRows = await db
-      .select({
-        remainCredits: apiKeys.remainCredits,
-        expiresAt: apiKeys.expiresAt,
-        status: apiKeys.status
-      })
-      .from(apiKeys)
-      .where(eq(apiKeys.id, apiKeyId))
-      .limit(1);
+    const key =
+      knownKey ??
+      (
+        await db
+          .select({
+            remainCredits: apiKeys.remainCredits,
+            expiresAt: apiKeys.expiresAt,
+            status: apiKeys.status
+          })
+          .from(apiKeys)
+          .where(eq(apiKeys.id, apiKeyId))
+          .limit(1)
+      )[0];
 
-    if (!keyRows[0]) {
+    if (!key) {
       return fail("API key not found", available);
     }
-
-    const key = keyRows[0];
 
     // 检查过期时间
     if (key.expiresAt && new Date(key.expiresAt) < new Date()) {
