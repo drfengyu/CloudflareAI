@@ -10,11 +10,13 @@ import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
 import { RedeemCodeDialog } from "./redeem-code-dialog";
 import { CheckinCalendarCard } from "./checkin-calendar-card";
-import { RechargeOrdersCard, type SerializedPayOrder } from "./recharge-orders-card";
+import { RechargeOrdersCard } from "./recharge-orders-card";
+import { TempBalancesCard, type SerializedTempBalance } from "./temp-balances-card";
 import { formatCredits } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
-import { visibleTopupWhere } from "@/lib/billing/grant-expiry";
+import { walletTopupWhere } from "@/lib/billing/grant-expiry";
 import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
+import { PAY_ORDER_PAGE_SIZE, serializePayOrder } from "@/lib/payment/pay-order-view";
 import { formatCnDate, cnDaysAgoStart } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
@@ -51,7 +53,7 @@ export default async function WalletPage({
       .from(temporaryBalances)
       .where(and(eq(temporaryBalances.userId, userId), gt(temporaryBalances.expiresAt, now)))
       .orderBy(temporaryBalances.expiresAt),
-    // 在线充值订单（含回跳订单号置顶逻辑交给客户端组件）
+    // 在线充值订单（含回跳订单号置顶逻辑交给客户端组件；翻页也在卡片内局部刷新）
     // 这里不按 historyCutoff 裁剪：待支付/支付确认中的订单可以陈旧到任意久，而这张卡是
     // 用户唯一能自查并手动「查询」催单的地方，裁剪会把未到账订单从视野里抹掉。
     db
@@ -59,10 +61,10 @@ export default async function WalletPage({
       .from(paymentOrders)
       .where(eq(paymentOrders.userId, userId))
       .orderBy(desc(paymentOrders.createdAt))
-      .limit(10),
+      .limit(PAY_ORDER_PAGE_SIZE + 1),
     getLinuxdoConfig(),
-    // 充值流水的可见性条件（含近三个月裁剪 + 发放到期过滤）
-    visibleTopupWhere(userId, historyCutoff, now),
+    // 充值流水的可见性条件（含近三个月裁剪 + 发放到期过滤，活动流水整类排除）
+    walletTopupWhere(userId, historyCutoff, now),
   ]);
 
   const permanentBalance = userRows[0]?.balanceCredits || 0;
@@ -114,14 +116,15 @@ export default async function WalletPage({
   const hasMoreTopups = recentTopups.length > TOPUP_PAGE_SIZE;
   const topupRecords = recentTopups.slice(0, TOPUP_PAGE_SIZE);
 
-  const serializedOrders: SerializedPayOrder[] = payOrders.map((o) => ({
-    orderNo: o.orderNo,
-    amountCny: o.amountCny,
-    credits: o.credits,
-    status: o.status,
-    channel: o.channel ?? null,
-    paidAt: o.paidAt ? new Date(o.paidAt).toISOString() : null,
-    createdAt: new Date(o.createdAt!).toISOString(),
+  const hasMorePayOrders = payOrders.length > PAY_ORDER_PAGE_SIZE;
+  const serializedOrders = payOrders.slice(0, PAY_ORDER_PAGE_SIZE).map(serializePayOrder);
+
+  const serializedTempBalances: SerializedTempBalance[] = displayTempBalances.map((tb) => ({
+    id: tb.id,
+    displayAmount: tb.displayAmount,
+    usedForCompensation: tb.usedForCompensation,
+    description: tb.description ?? null,
+    expiresAtLabel: formatCnDate(tb.expiresAt),
   }));
 
   const justReturned = params.paid === "1";
@@ -172,51 +175,16 @@ export default async function WalletPage({
         {/* 签到日历 */}
         <CheckinCalendarCard />
 
-        {/* 在线充值订单（回跳确认 + 轮询） */}
+        {/* 在线充值订单（回跳确认 + 轮询 + 卡片内翻页） */}
         <RechargeOrdersCard
           orders={serializedOrders}
+          initialHasNext={hasMorePayOrders}
           highlightOrderNo={highlightOrderNo}
           justReturned={justReturned}
         />
 
-        {/* 临时余额明细 */}
-        {displayTempBalances.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">临时余额明细</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {displayTempBalances.map((tb) => (
-                  <div
-                    key={tb.id}
-                    className="flex items-center justify-between rounded-lg border border-border bg-card p-3"
-                  >
-                    <div className="flex-1">
-                      <p className="text-sm font-medium">
-                        {formatCredits(tb.displayAmount)} credits
-                        {tb.usedForCompensation > 0 && (
-                          <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
-                            ({formatCredits(tb.usedForCompensation)} 已用于补正)
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{tb.description}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">
-                        过期时间
-                      </p>
-                      <p className="text-sm">
-                        {formatCnDate(tb.expiresAt)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* 临时余额明细（卡片内本地分页） */}
+        <TempBalancesCard balances={serializedTempBalances} />
 
         {/* 充值流水 */}
         <Card>
@@ -246,9 +214,7 @@ export default async function WalletPage({
                               ? "签到奖励"
                               : record.type === 5
                                 ? "在线充值"
-                                : record.type === 6
-                                  ? "限时活动"
-                                  : "其他充值"}
+                                : "其他充值"}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {formatDistanceToNow(new Date(record.createdAt!), {

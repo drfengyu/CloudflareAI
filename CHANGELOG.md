@@ -13,7 +13,7 @@
   「我的活动记录」「后台活动记录 · 逐次明细」「使用历史」「钱包 · 充值记录」超过 10 条即显示页底翻页，
   翻页保留当前筛选参数（`range` / `model` / `task`）。抽奖两处的总数直接取累计统计行 `draws`、
   钱包用多取一条探测下一页，都不额外 COUNT；`listDrawRecords` 新增 `offset` 参数。
-  钱包「发放过期即隐藏」的过滤下沉进 SQL（`visibleTopupWhere`），LIMIT/OFFSET 作用在可见行上，
+  钱包「发放过期即隐藏」的过滤下沉进 SQL（`walletTopupWhere`），LIMIT/OFFSET 作用在可见行上，
   避免先取一页再剔除过期行导致每页不满 10 条（实测 15 条流水中只有 5 条可见，现在一页显示 5 条且不出翻页条）。
 - **活动轮次支持**（`lib/db/schema.ts` + `migrations/010_lottery_activity_round.sql` + `lib/lottery/*` + `app/(dashboard)/lottery/*` + `app/(dashboard)/admin/settings/*`）：
   - `lottery_ticket` 和 `lottery_draw` 表新增 `activityKey` 字段（text，可空，用活动 `startAt` 字符串作为轮次唯一标识），`lottery_ticket` 新增 `expired` 字段（integer，默认 0）。迁移 `010_lottery_activity_round.sql` 已执行到线上 D1，加了 `idx_lottery_ticket_activity` 和 `idx_lottery_draw_activity` 索引。
@@ -30,6 +30,15 @@
   - `--soften` 默认保留不高于券价的正档，`--no-keep-be` 可关闭；旧版具体返还预测与体感对比因模拟偏差撤回，见下方 2026-10-28 修复。
   - 配套：`tsx` 从 drizzle-kit 的传递依赖提为显式 devDependency（脚本入口要它），并把脚本收尾从
     `process.exit(0)` 改成自然退出——Windows 下带着未关的 fetch socket 强退会在 stderr 抛 libuv 断言。
+
+### 变更
+
+- **钱包页：充值记录去掉活动流水，订单与临时余额改为卡片内翻页**（`app/(dashboard)/wallet/*`、`lib/billing/grant-expiry.ts`、`lib/payment/pay-order-view.ts`，2026-10-29）：
+  「充值记录」整类排除 `topup type=6`（买券 / 中奖 / 倒扣），活动明细仍看 `/lottery`「我的活动记录」与
+  后台 `/admin/lottery`；可见性条件相应简化为只对兑换码(type=1)、签到(type=3)做过期过滤，并少读一次 `lottery_config`。
+  「在线充值订单」与「临时余额明细」各自带卡片内翻页（每页 10 条），翻页只更新卡片数据、URL 不跳转、页面不重载：
+  订单翻页走 server action `listMyPayOrders`（多取一条探测下一页），临时余额在服务端算好负数补正后交给客户端本地分页。
+  `Pagination` 增加 `onPageChange` 按钮模式。
 
 ### 修复
 

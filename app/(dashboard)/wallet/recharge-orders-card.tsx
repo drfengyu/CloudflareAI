@@ -4,21 +4,13 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/dashboard/pagination";
 import { toast } from "sonner";
 import { RefreshCw, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
-import { checkOrderStatus } from "./actions";
+import { checkOrderStatus, listMyPayOrders } from "./actions";
+import { type SerializedPayOrder } from "@/lib/payment/pay-order-view";
 import { cn } from "@/lib/utils";
 import { formatCnDateTime } from "@/lib/date";
-
-export interface SerializedPayOrder {
-  orderNo: string;
-  amountCny: number;
-  credits: number;
-  status: number;
-  channel: string | null;
-  paidAt: string | null;
-  createdAt: string;
-}
 
 const STATUS_META: Record<number, { label: string; tone: "default" | "success" | "warning" | "muted" | "danger" }> = {
   0: { label: "待支付", tone: "warning" },
@@ -30,20 +22,41 @@ const STATUS_META: Record<number, { label: string; tone: "default" | "success" |
 
 interface Props {
   orders: SerializedPayOrder[];
+  /** 服务端多取一条探测出的「还有下一页」 */
+  initialHasNext?: boolean;
   /** 回跳时携带的订单号（?paid=1&orderNo=xxx） */
   highlightOrderNo?: string;
   /** 是否刚从支付页回跳（?paid=1） */
   justReturned?: boolean;
 }
 
-export function RechargeOrdersCard({ orders, highlightOrderNo, justReturned }: Props) {
+export function RechargeOrdersCard({ orders, initialHasNext, highlightOrderNo, justReturned }: Props) {
   const [items, setItems] = useState(orders);
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(Boolean(initialHasNext));
+  const [paging, setPaging] = useState(false);
   const [refreshing, setRefreshing] = useState<string | null>(null);
 
   // 有回跳订单号时，初次挂载主动查一次 + 置顶
   const activeOrder = highlightOrderNo
     ? items.find((o) => o.orderNo === highlightOrderNo) ?? null
     : null;
+
+  // 局部翻页：只换这张卡的数据，不改 URL、不整页刷新。
+  const goToPage = async (target: number) => {
+    if (paging || target === page) return;
+    setPaging(true);
+    try {
+      const result = await listMyPayOrders(target);
+      setItems(result.orders);
+      setHasNext(result.hasNext);
+      setPage(target);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "加载订单失败");
+    } finally {
+      setPaging(false);
+    }
+  };
 
   const refresh = async (orderNo: string) => {
     setRefreshing(orderNo);
@@ -89,9 +102,9 @@ export function RechargeOrdersCard({ orders, highlightOrderNo, justReturned }: P
     }, 4000);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.map((o) => o.status).join(","), highlightOrderNo]);
+  }, [items.map((o) => o.status).join(","), highlightOrderNo, page]);
 
-  if (items.length === 0) return null;
+  if (items.length === 0 && page === 1) return null;
 
   return (
     <Card>
@@ -123,46 +136,58 @@ export function RechargeOrdersCard({ orders, highlightOrderNo, justReturned }: P
           </div>
         )}
 
-        {items.map((order) => {
-          const meta = STATUS_META[order.status] ?? STATUS_META[9];
-          const isHighlight = highlightOrderNo === order.orderNo;
-          return (
-            <div
-              key={order.orderNo}
-              className={cn(
-                "flex items-center justify-between rounded-lg border border-border bg-card p-3",
-                isHighlight && "border-primary/50"
-              )}
-            >
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="truncate text-sm font-mono text-muted-foreground">{order.orderNo}</p>
-                  <Badge tone={meta.tone}>{meta.label}</Badge>
-                </div>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {order.channel === "alipay" ? "支付宝" : order.channel === "wechat" ? "微信支付" : order.channel === "linuxdo" ? "LinuxDO 积分" : order.channel}
-                  {" · "}{order.channel === "linuxdo" ? "" : "¥"}{order.amountCny}
-                  {order.channel === "linuxdo" ? " 积分" : ""} · {formatCnDateTime(order.createdAt)}
-                  {order.paidAt && ` · ${formatCnDateTime(order.paidAt)} 支付`}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <p className="text-sm font-semibold">+{order.credits} cr</p>
-                {(order.status === 0 || order.status === 1) && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={refreshing === order.orderNo}
-                    onClick={() => refresh(order.orderNo)}
-                  >
-                    <RefreshCw className={cn("h-3.5 w-3.5", refreshing === order.orderNo && "animate-spin")} />
-                    查询
-                  </Button>
+        {items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">暂无订单</p>
+        ) : (
+          items.map((order) => {
+            const meta = STATUS_META[order.status] ?? STATUS_META[9];
+            const isHighlight = highlightOrderNo === order.orderNo;
+            return (
+              <div
+                key={order.orderNo}
+                className={cn(
+                  "flex items-center justify-between rounded-lg border border-border bg-card p-3",
+                  isHighlight && "border-primary/50"
                 )}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-mono text-muted-foreground">{order.orderNo}</p>
+                    <Badge tone={meta.tone}>{meta.label}</Badge>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {order.channel === "alipay" ? "支付宝" : order.channel === "wechat" ? "微信支付" : order.channel === "linuxdo" ? "LinuxDO 积分" : order.channel}
+                    {" · "}{order.channel === "linuxdo" ? "" : "¥"}{order.amountCny}
+                    {order.channel === "linuxdo" ? " 积分" : ""} · {formatCnDateTime(order.createdAt)}
+                    {order.paidAt && ` · ${formatCnDateTime(order.paidAt)} 支付`}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  <p className="text-sm font-semibold">+{order.credits} cr</p>
+                  {(order.status === 0 || order.status === 1) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={refreshing === order.orderNo}
+                      onClick={() => refresh(order.orderNo)}
+                    >
+                      <RefreshCw className={cn("h-3.5 w-3.5", refreshing === order.orderNo && "animate-spin")} />
+                      查询
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
+
+        <Pagination
+          page={page}
+          hasNext={hasNext}
+          basePath="/wallet"
+          onPageChange={goToPage}
+          disabled={paging}
+        />
       </CardContent>
     </Card>
   );

@@ -172,6 +172,9 @@ npx tsx --test tests/lottery-simulation.test.ts
 | 抽中赠券 | 直接发 N 张 `source='prize'` 的券，**不动 cr、不写流水** |
 | 全部资金变动 | 写 `topup` 流水，`type = 6`，描述含奖品文案 |
 
+> 钱包 `/wallet` 的「充值记录」不展示 `type=6` 流水（活动账目统一在 `/lottery`「我的活动记录」与
+> `/admin/lottery` 查看）；中奖发放的临时余额仍会出现在钱包的「临时余额明细」里。
+
 **倒扣的扣款顺序（2026-10-17 改）**：`clawbackCredits()`（`lib/lottery/store.ts`）把整批倒扣按
 「未过期临时余额（`expiresAt` 升序）→ 本金」的顺序回收，跟买券、模型消费走同一条优先级。
 改之前倒扣是一步砸本金，于是出现过这种分裂：某账号本金被砸成 −1,598.80，手上却还躺着 14 笔共 2,051.39 cr

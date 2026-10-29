@@ -1,14 +1,20 @@
 "use server";
 
 import { db } from "@/lib/db/d1-http";
-import { redemptions, topups, temporaryBalances } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  paymentOrders,
+  redemptions,
+  topups,
+  temporaryBalances,
+} from "@/lib/db/schema";
+import { desc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { getEpayConfig, buildEpayPayUrl } from "@/lib/payment/epay";
 import { getLinuxdoConfig, buildLinuxdoPayUrl } from "@/lib/payment/linuxdo";
 import { createRechargeOrder, getOrderByNo, reconcileOrder } from "@/lib/payment/order";
+import { PAY_ORDER_PAGE_SIZE, serializePayOrder } from "@/lib/payment/pay-order-view";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function redeemCode(code: string) {
@@ -178,5 +184,26 @@ export async function checkOrderStatus(orderNo: string) {
     channel: latest.channel ?? null,
     createdAt: new Date(latest.createdAt!).toISOString(),
     paidAt: latest.paidAt ? new Date(latest.paidAt).toISOString() : null,
+  };
+}
+
+/**
+ * 「在线充值订单」卡片的局部翻页数据。多取一条探测下一页，避免 extra COUNT。
+ */
+export async function listMyPayOrders(page: number) {
+  const currentUserId = await requireUser();
+  const safePage = Math.max(1, Math.trunc(Number(page)) || 1);
+
+  const rows = await db
+    .select()
+    .from(paymentOrders)
+    .where(eq(paymentOrders.userId, currentUserId))
+    .orderBy(desc(paymentOrders.createdAt))
+    .limit(PAY_ORDER_PAGE_SIZE + 1)
+    .offset((safePage - 1) * PAY_ORDER_PAGE_SIZE);
+
+  return {
+    orders: rows.slice(0, PAY_ORDER_PAGE_SIZE).map(serializePayOrder),
+    hasNext: rows.length > PAY_ORDER_PAGE_SIZE,
   };
 }
