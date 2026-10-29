@@ -1,38 +1,31 @@
 import { PageHeader } from "@/components/dashboard/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Pagination } from "@/components/dashboard/pagination";
+import { Card, CardContent } from "@/components/ui/card";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
-import { users, topups, temporaryBalances, paymentOrders } from "@/lib/db/schema";
+import { users, temporaryBalances, paymentOrders } from "@/lib/db/schema";
 import { and, desc, eq, gt } from "drizzle-orm";
 import { Wallet, Clock } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import { zhCN } from "date-fns/locale";
 import { RedeemCodeDialog } from "./redeem-code-dialog";
 import { CheckinCalendarCard } from "./checkin-calendar-card";
 import { RechargeOrdersCard } from "./recharge-orders-card";
 import { TempBalancesCard, type SerializedTempBalance } from "./temp-balances-card";
+import { TopupRecordsCard } from "./topup-records-card";
 import { formatCredits } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
-import { walletTopupWhere } from "@/lib/billing/grant-expiry";
+import { listWalletTopupPage, walletTopupWhere } from "@/lib/billing/grant-expiry";
 import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
 import { PAY_ORDER_PAGE_SIZE, serializePayOrder } from "@/lib/payment/pay-order-view";
 import { formatCnDate, cnDaysAgoStart } from "@/lib/date";
-import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
-
-/** 充值流水每页条数；多取一条用来判断是否还有下一页（省一次 COUNT）。 */
-const TOPUP_PAGE_SIZE = 10;
 
 export default async function WalletPage({
   searchParams,
 }: {
-  searchParams: Promise<{ paid?: string; orderNo?: string; page?: string }>;
+  searchParams: Promise<{ paid?: string; orderNo?: string }>;
 }) {
   const userId = await requireUser();
   const params = await searchParams;
-  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
   const now = new Date();
 
   // 充值流水只保留近三个月，更早的历史不再展示。
@@ -105,16 +98,8 @@ export default async function WalletPage({
   const totalBalance = permanentBalance + temporaryTotal;
 
   // 签到奖励与兑换码发的是一次性临时余额，到期之后不再作为「可用余额来源」显示。
-  // 过期判定已下沉进 SQL，LIMIT 取到的就是可见行；多取一条判断是否还有下一页。
-  const recentTopups = await db
-    .select()
-    .from(topups)
-    .where(topupWhere)
-    .orderBy(desc(topups.createdAt))
-    .limit(TOPUP_PAGE_SIZE + 1)
-    .offset((page - 1) * TOPUP_PAGE_SIZE);
-  const hasMoreTopups = recentTopups.length > TOPUP_PAGE_SIZE;
-  const topupRecords = recentTopups.slice(0, TOPUP_PAGE_SIZE);
+  // 过期判定已下沉进 SQL，LIMIT 取到的就是可见行；翻页由卡片内 server action 复用同一入口。
+  const topupPage = await listWalletTopupPage(topupWhere, 1);
 
   const hasMorePayOrders = payOrders.length > PAY_ORDER_PAGE_SIZE;
   const serializedOrders = payOrders.slice(0, PAY_ORDER_PAGE_SIZE).map(serializePayOrder);
@@ -186,64 +171,11 @@ export default async function WalletPage({
         {/* 临时余额明细（卡片内本地分页） */}
         <TempBalancesCard balances={serializedTempBalances} />
 
-        {/* 充值流水 */}
-        <Card>
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">充值记录</CardTitle>
-            <span className="text-xs text-muted-foreground">
-              仅显示最近三个月 · 每页 {TOPUP_PAGE_SIZE} 条
-            </span>
-          </CardHeader>
-          <CardContent>
-            {topupRecords.length === 0 ? (
-              <p className="text-sm text-muted-foreground">暂无充值记录</p>
-            ) : (
-              <div className="space-y-2">
-                {topupRecords.map((record) => (
-                  <div
-                    key={record.id}
-                    className="flex items-center justify-between rounded-lg border border-border bg-card p-3"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">
-                        {record.type === 1
-                          ? "兑换码充值"
-                          : record.type === 2
-                            ? "管理员充值"
-                            : record.type === 3
-                              ? "签到奖励"
-                              : record.type === 5
-                                ? "在线充值"
-                                : "其他充值"}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(record.createdAt!), {
-                          addSuffix: true,
-                          locale: zhCN,
-                        })}
-                      </p>
-                      {record.description && (
-                        <p className="text-xs text-muted-foreground">{record.description}</p>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <p
-                        className={cn(
-                          "text-lg font-semibold",
-                          record.amount >= 0 ? "text-success" : "text-destructive",
-                        )}
-                      >
-                        {record.amount >= 0 ? "+" : ""}
-                        {formatCredits(record.amount)} cr
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <Pagination page={page} hasNext={hasMoreTopups} basePath="/wallet" />
-          </CardContent>
-        </Card>
+        {/* 充值流水（卡片内局部翻页） */}
+        <TopupRecordsCard
+          records={topupPage.records}
+          initialHasNext={topupPage.hasNext}
+        />
       </div>
     </>
   );

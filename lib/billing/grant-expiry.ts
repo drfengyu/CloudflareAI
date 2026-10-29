@@ -15,7 +15,8 @@
 
 import { db } from "@/lib/db/d1-http";
 import { options, redemptions, topups } from "@/lib/db/schema";
-import { eq, sql, type SQL } from "drizzle-orm";
+import { TOPUP_PAGE_SIZE, serializeTopup } from "@/lib/billing/topup-view";
+import { desc, eq, sql, type SQL } from "drizzle-orm";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -48,4 +49,25 @@ export async function walletTopupWhere(
   const validDays = sql`CASE ${topups.type} WHEN 1 THEN ${redemptionValidDays} ELSE ${checkinValidDays} END`;
 
   return sql`${topups.userId} = ${userId} AND ${topups.type} <> 6 AND ${topups.createdAt} >= ${since.getTime()} AND (${topups.type} NOT IN (1, 3) OR ${topups.createdAt} > ${now.getTime()} - ${DAY_MS} * ${validDays})`;
+}
+
+/**
+ * 按可见性条件读取一页充值流水。多取一条探测是否还有下一页，省一次 COUNT。
+ * 首屏由 wallet 页取第 1 页，卡片内翻页由 `listMyTopups` 复用同一入口。
+ */
+export async function listWalletTopupPage(where: SQL, page: number) {
+  const safePage = Math.max(1, Math.trunc(Number(page)) || 1);
+
+  const rows = await db
+    .select()
+    .from(topups)
+    .where(where)
+    .orderBy(desc(topups.createdAt))
+    .limit(TOPUP_PAGE_SIZE + 1)
+    .offset((safePage - 1) * TOPUP_PAGE_SIZE);
+
+  return {
+    records: rows.slice(0, TOPUP_PAGE_SIZE).map(serializeTopup),
+    hasNext: rows.length > TOPUP_PAGE_SIZE,
+  };
 }

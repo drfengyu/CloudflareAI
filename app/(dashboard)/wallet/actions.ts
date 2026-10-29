@@ -15,6 +15,8 @@ import { getEpayConfig, buildEpayPayUrl } from "@/lib/payment/epay";
 import { getLinuxdoConfig, buildLinuxdoPayUrl } from "@/lib/payment/linuxdo";
 import { createRechargeOrder, getOrderByNo, reconcileOrder } from "@/lib/payment/order";
 import { PAY_ORDER_PAGE_SIZE, serializePayOrder } from "@/lib/payment/pay-order-view";
+import { listWalletTopupPage, walletTopupWhere } from "@/lib/billing/grant-expiry";
+import { cnDaysAgoStart } from "@/lib/date";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 export async function redeemCode(code: string) {
@@ -206,4 +208,13 @@ export async function listMyPayOrders(page: number) {
     orders: rows.slice(0, PAY_ORDER_PAGE_SIZE).map(serializePayOrder),
     hasNext: rows.length > PAY_ORDER_PAGE_SIZE,
   };
+}
+
+/**
+ * 「充值记录」卡片的局部翻页数据：与首屏同一可见性条件（近三个月 + 发放到期过滤）。
+ */
+export async function listMyTopups(page: number) {
+  const currentUserId = await requireUser();
+  const where = await walletTopupWhere(currentUserId, cnDaysAgoStart(90), new Date());
+  return listWalletTopupPage(where, page);
 }
