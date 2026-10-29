@@ -16,6 +16,7 @@ const TYPE_LABEL: Record<number, string> = {
   2: "管理员充值",
   3: "签到奖励",
   5: "在线充值",
+  7: "邀请奖励",
 };
 
 export function TopupRecordsCard({

@@ -13,6 +13,22 @@ export function cnDate(d: Date): Date {
   return new Date(d.getTime() + CN_OFFSET_MS);
 }
 
+/** 北京时区的日期键 `YYYY-MM-DD`（签到、按自然日去重的逻辑用）。 */
+export function cnDateString(ms: number | Date = Date.now()): string {
+  const bj = cnDate(new Date(ms));
+  const y = bj.getUTCFullYear();
+  const m = String(bj.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(bj.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** 在 `YYYY-MM-DD` 上加减天数（纯墙钟日期运算，不受时区影响）。 */
+export function shiftDateString(date: string, days: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const t = Date.UTC(y, m - 1, d) + days * 86_400_000;
+  return new Date(t).toISOString().slice(0, 10);
+}
+
 /** 北京时区「今天」0 点的真实时间戳（用于 DB 边界比较）。 */
 export function cnStartOfToday(): Date {
   const bj = cnDate(new Date());

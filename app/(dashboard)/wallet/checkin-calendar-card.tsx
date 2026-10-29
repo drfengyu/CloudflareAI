@@ -10,6 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils";
 import { getCheckinStatus, performCheckin } from "./checkin-actions";
 import { formatCredits } from "@/lib/billing/credits";
+import { cnDateString } from "@/lib/date";
 
 interface CheckinRecord {
   checkinDate: string;
@@ -21,6 +22,7 @@ interface CheckinStats {
   totalCheckins: number;
   checkinCount: number;
   checkedInToday: boolean;
+  streak: number;
   records: CheckinRecord[];
 }
 
@@ -28,6 +30,9 @@ interface CheckinData {
   enabled: boolean;
   minQuota: number;
   maxQuota: number;
+  streakEnabled: boolean;
+  streakDays: number;
+  streakReward: number;
   stats: CheckinStats;
 }
 
@@ -106,10 +111,7 @@ export function CheckinCalendarCard() {
     return records.reduce((sum, record) => sum + record.quotaAwarded, 0);
   }, [data?.stats?.records]);
 
-  const todayString = useMemo(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }, []);
+  const todayString = useMemo(() => cnDateString(), []);
 
   const checkedToday = data?.stats?.checkedInToday === true;
   const todayAward = checkinRecordsMap[todayString];
@@ -119,7 +121,12 @@ export function CheckinCalendarCard() {
     try {
       const result = await performCheckin();
       if (result.success && result.data) {
-        toast.success(`签到成功！获得 ${result.data.quotaAwarded.toFixed(2)} cr`);
+        const bonus = result.data.streakBonus;
+        toast.success(
+          bonus > 0
+            ? `签到成功！获得 ${result.data.quotaAwarded.toFixed(2)} cr（含连签 ${result.data.streak} 天奖励 ${bonus.toFixed(2)} cr）`
+            : `签到成功！获得 ${result.data.quotaAwarded.toFixed(2)} cr`,
+        );
         await fetchData(); // 刷新签到数据
         // 刷新页面以更新余额（Server Component 重新渲染）
         window.location.reload();
@@ -226,6 +233,9 @@ export function CheckinCalendarCard() {
                     已签到
                   </Badge>
                 )}
+                {data.stats.streak >= 2 && (
+                  <Badge tone="info">连签 {data.stats.streak} 天</Badge>
+                )}
                 {collapsed ? (
                   <ChevronDown className="h-4 w-4 text-muted-foreground" />
                 ) : (
@@ -235,7 +245,9 @@ export function CheckinCalendarCard() {
               <p className="text-sm text-muted-foreground">
                 {checkedToday && todayAward !== undefined
                   ? `今日 +${todayAward.toFixed(2)} cr`
-                  : "每日签到获得随机额度奖励"}
+                  : data.stats.streak > 0
+                    ? `已连续签到 ${data.stats.streak} 天，今天签到可延续`
+                    : "每日签到获得随机额度奖励"}
               </p>
             </div>
           </button>
@@ -252,13 +264,21 @@ export function CheckinCalendarCard() {
       {!collapsed && (
         <>
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-px border-b bg-border">
+          <div className="grid grid-cols-2 gap-px border-b bg-border sm:grid-cols-4">
             <div className="bg-card p-5 text-center">
               <div className="text-2xl font-semibold tabular-nums">
                 {data.stats.totalCheckins}
               </div>
               <div className="text-xs font-medium text-muted-foreground mt-1">
                 累计签到
+              </div>
+            </div>
+            <div className="bg-card p-5 text-center">
+              <div className="text-2xl font-semibold tabular-nums text-primary">
+                {data.stats.streak}
+              </div>
+              <div className="text-xs font-medium text-muted-foreground mt-1">
+                连续签到
               </div>
             </div>
             <div className="bg-card p-5 text-center">
@@ -372,6 +392,14 @@ export function CheckinCalendarCard() {
             <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
               <ul className="list-disc space-y-1 pl-5">
                 <li>每日签到获得随机额度奖励（{data.minQuota}-{data.maxQuota} cr）</li>
+                {data.streakEnabled && (
+                  <li>
+                    连续签到每满 {data.streakDays} 天，额外奖励{" "}
+                    {formatCredits(data.streakReward)} cr
+                    {data.stats.streak > 0 &&
+                      `（再签 ${data.streakDays - (data.stats.streak % data.streakDays)} 天可达下一档）`}
+                  </li>
+                )}
                 <li>奖励将直接充值到账户余额</li>
                 <li>已签到日期显示绿点标记</li>
               </ul>

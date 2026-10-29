@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { updateBasicSettings, updatePricingSettings, updateCheckinSettings, updateAuthChannels, updateEpaySettings, updateLinuxdoSettings } from "./actions";
+import { updateBasicSettings, updatePricingSettings, updateCheckinSettings, updateInviteSettings, updateAuthChannels, updateEpaySettings, updateLinuxdoSettings } from "./actions";
 import { toast } from "sonner";
 
 interface SettingsFormProps {
@@ -277,6 +277,9 @@ interface CheckinSettingsFormProps {
     minQuota: string;
     maxQuota: string;
     validDays: string;
+    streakEnabled: boolean;
+    streakDays: string;
+    streakReward: string;
   };
 }
 
@@ -285,6 +288,9 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
   const [minQuota, setMinQuota] = useState(initialSettings.minQuota);
   const [maxQuota, setMaxQuota] = useState(initialSettings.maxQuota);
   const [validDays, setValidDays] = useState(initialSettings.validDays);
+  const [streakEnabled, setStreakEnabled] = useState(initialSettings.streakEnabled);
+  const [streakDays, setStreakDays] = useState(initialSettings.streakDays);
+  const [streakReward, setStreakReward] = useState(initialSettings.streakReward);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -297,6 +303,9 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
         minQuota,
         maxQuota,
         validDays,
+        streakEnabled,
+        streakDays,
+        streakReward,
       });
       toast.success("签到设置已保存");
     } catch (error) {
@@ -379,6 +388,57 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
         </p>
       </div>
 
+      <div className="space-y-3 rounded-lg border border-border p-4">
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={streakEnabled}
+            onChange={(e) => setStreakEnabled(e.target.checked)}
+            disabled={!enabled}
+            className="h-4 w-4 rounded border-border"
+          />
+          <span className="text-sm font-medium">启用连签奖励</span>
+        </label>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">连签天数</label>
+            <input
+              type="number"
+              min="2"
+              max="365"
+              value={streakDays}
+              onChange={(e) => setStreakDays(e.target.value)}
+              disabled={!enabled || !streakEnabled}
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+              placeholder="7"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              连续签到每满这么多天发一次额外奖励
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              额外奖励（credits）
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={streakReward}
+              onChange={(e) => setStreakReward(e.target.value)}
+              disabled={!enabled || !streakEnabled}
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+              placeholder="200"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              达到连签天数时，在当日签到奖励之外额外发放
+            </p>
+          </div>
+        </div>
+      </div>
+
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
         <p className="text-xs text-muted-foreground">
           <strong>签到规则：</strong>
@@ -388,7 +448,112 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
           • 随机奖励：在最小和最大额度之间随机生成
           <br />
           • 奖励形式：临时余额（有效期 {validDays} 天）
+          <br />
+          • 连签奖励：连续签到每满 {streakDays} 天额外发放 {streakReward} cr
           <br />• 优先消耗：使用时优先扣减临时余额，不够再扣永久余额
+        </p>
+      </div>
+
+      <Button type="submit" disabled={loading}>
+        {loading ? "保存中..." : "保存设置"}
+      </Button>
+    </form>
+  );
+}
+
+interface InviteSettingsFormProps {
+  initialSettings: {
+    enabled: boolean;
+    inviterReward: string;
+    inviteeReward: string;
+  };
+}
+
+export function InviteSettingsForm({ initialSettings }: InviteSettingsFormProps) {
+  const [enabled, setEnabled] = useState(initialSettings.enabled);
+  const [inviterReward, setInviterReward] = useState(initialSettings.inviterReward);
+  const [inviteeReward, setInviteeReward] = useState(initialSettings.inviteeReward);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+
+    try {
+      await updateInviteSettings({ enabled, inviterReward, inviteeReward });
+      toast.success("邀请设置已保存");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="invite-enabled"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+          className="h-4 w-4 rounded border-border"
+        />
+        <label htmlFor="invite-enabled" className="text-sm font-medium">
+          启用邀请奖励
+        </label>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            邀请人奖励（credits）
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={inviterReward}
+            onChange={(e) => setInviterReward(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="300"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            好友注册成功后发给邀请人的永久余额
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">
+            被邀请人奖励（credits）
+          </label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={inviteeReward}
+            onChange={(e) => setInviteeReward(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="200"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            通过邀请链接注册的新用户额外获得的永久余额
+          </p>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+        <p className="text-xs text-muted-foreground">
+          <strong>邀请规则：</strong>
+          <br />
+          • 奖励在注册时直接发放，并写入双方钱包的充值记录
+          <br />
+          • 同一邀请人 24 小时内最多获得 10 次邀请奖励
+          <br />
+          • 注册仍受 IP 频率限制（24 小时最多 3 个账号）
+          <br />• 邀请码在用户首次打开「邀请好友」页时自动生成
         </p>
       </div>
 

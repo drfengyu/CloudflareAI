@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, primaryKey, unique } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, real, primaryKey, unique, index } from "drizzle-orm/sqlite-core";
 import type { AdapterAccountType } from "next-auth/adapters";
 
 /**
@@ -38,6 +38,10 @@ export const users = sqliteTable("user", {
   linuxdoId: text("linuxdoId").unique(),
   /** LinuxDO 信任等级（0-4）。 */
   linuxdoTrustLevel: integer("linuxdoTrustLevel"),
+  /** 邀请码（12 位小写十六进制）；老用户在首次打开邀请页时补发。 */
+  inviteCode: text("inviteCode").unique(),
+  /** 邀请人用户 ID（仅邮箱注册且携带有效邀请码时写入）。 */
+  invitedBy: text("invitedBy"),
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });
 
@@ -197,7 +201,7 @@ export const topups = sqliteTable("topup", {
     .references(() => users.id, { onDelete: "cascade" }),
   /** 变动金额（credits，可正可负，支持小数）。 */
   amount: real("amount").notNull(),
-  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负）。 */
+  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励。 */
   type: integer("type").notNull(),
   /** 描述：如"兑换码 ABC123"、"管理员充值"、"后台调整"。 */
   description: text("description"),
@@ -321,6 +325,32 @@ export const registrationLog = sqliteTable("registration_log", {
   userAgent: text("userAgent"),
 });
 
+/**
+ * 邀请记录：一个被邀请人只能有一条（`inviteeId` 唯一）。
+ * 奖励金额在注册当时锁定，之后改后台配置不影响历史记录。
+ */
+export const inviteRecords = sqliteTable(
+  "invite_record",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    inviterId: text("inviterId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    inviteeId: text("inviteeId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 实际发给邀请人的 credits（命中每日上限时为 0）。 */
+    inviterReward: real("inviterReward").notNull().default(0),
+    /** 实际发给被邀请人的 credits。 */
+    inviteeReward: real("inviteeReward").notNull().default(0),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [
+    unique("uq_invite_record_invitee").on(table.inviteeId),
+    index("idx_invite_record_inviter").on(table.inviterId, table.createdAt),
+  ],
+);
+
 /** 支付订单表：记录易支付（彩虹易支付）在线充值订单。 */
 export const paymentOrders = sqliteTable("payment_order", {
   id: text("id").primaryKey().$defaultFn(uuid),
@@ -357,6 +387,7 @@ export type TemporaryBalance = typeof temporaryBalances.$inferSelect;
 export type ModelPricing = typeof modelPricing.$inferSelect;
 export type RegistrationLog = typeof registrationLog.$inferSelect;
 export type PaymentOrder = typeof paymentOrders.$inferSelect;
+export type InviteRecord = typeof inviteRecords.$inferSelect;
 
 /**
  * 限时活动·抽奖券。一行 = 一张券，消耗方式是回填 `usedDrawId`：

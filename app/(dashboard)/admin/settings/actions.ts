@@ -155,6 +155,9 @@ export async function updateCheckinSettings(formData: {
   minQuota: string;
   maxQuota: string;
   validDays: string;
+  streakEnabled: boolean;
+  streakDays: string;
+  streakReward: string;
 }) {
   const currentUserId = await requireUser();
 
@@ -173,6 +176,8 @@ export async function updateCheckinSettings(formData: {
   const minQuota = parseFloat(formData.minQuota);
   const maxQuota = parseFloat(formData.maxQuota);
   const validDays = parseInt(formData.validDays);
+  const streakDays = Number(formData.streakDays);
+  const streakReward = parseFloat(formData.streakReward);
 
   if (isNaN(minQuota) || minQuota < 0) {
     throw new Error("最小奖励必须 ≥ 0");
@@ -186,15 +191,62 @@ export async function updateCheckinSettings(formData: {
   if (isNaN(validDays) || validDays < 1) {
     throw new Error("有效期必须 ≥ 1 天");
   }
+  if (!Number.isInteger(streakDays) || streakDays < 2 || streakDays > 365) {
+    throw new Error("连签天数需为 2 ~ 365 的整数");
+  }
+  if (!Number.isFinite(streakReward) || streakReward < 0 || streakReward > 1_000_000) {
+    throw new Error("连签奖励需在 0 ~ 1000000 credits 之间");
+  }
 
   // 更新设置
   await upsertOption("checkin_enabled", formData.enabled ? "true" : "false");
   await upsertOption("checkin_min_quota", formData.minQuota);
   await upsertOption("checkin_max_quota", formData.maxQuota);
   await upsertOption("checkin_valid_days", formData.validDays);
+  await upsertOption("checkin_streak_enabled", formData.streakEnabled ? "true" : "false");
+  await upsertOption("checkin_streak_days", String(streakDays));
+  await upsertOption("checkin_streak_reward", String(streakReward));
 
   revalidatePath("/admin/settings");
   revalidatePath("/wallet");
+
+  return { success: true };
+}
+
+export async function updateInviteSettings(formData: {
+  enabled: boolean;
+  inviterReward: string;
+  inviteeReward: string;
+}) {
+  const currentUserId = await requireUser();
+
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const inviterReward = parseFloat(formData.inviterReward);
+  const inviteeReward = parseFloat(formData.inviteeReward);
+
+  if (!Number.isFinite(inviterReward) || inviterReward < 0 || inviterReward > 1_000_000) {
+    throw new Error("邀请人奖励需在 0 ~ 1000000 credits 之间");
+  }
+  if (!Number.isFinite(inviteeReward) || inviteeReward < 0 || inviteeReward > 1_000_000) {
+    throw new Error("被邀请人奖励需在 0 ~ 1000000 credits 之间");
+  }
+
+  await upsertOption("invite_enabled", formData.enabled ? "true" : "false");
+  await upsertOption("invite_reward_inviter", String(inviterReward));
+  await upsertOption("invite_reward_invitee", String(inviteeReward));
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/invite");
+  revalidatePath("/register");
 
   return { success: true };
 }

@@ -5,9 +5,27 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.8.0] - 2026-10-29
 
 ### 新增
+
+- **邀请返利**（`lib/db/schema.ts` + `migrations/015_invite_rewards.sql` + `lib/invite/rewards.ts` + `app/(auth)/*` + `app/(dashboard)/invite/*` + `app/(dashboard)/admin/settings/*`）：
+  `user` 新增 `inviteCode`（12 位十六进制、唯一）与 `invitedBy`，新增 `invite_record`（`inviteeId` 唯一、奖励金额按注册当时锁定）；
+  迁移 015 已在线上 D1 执行，存量账号在首次打开邀请页时补发邀请码。
+  注册页 `?ref=` 透传邀请码，仅「启用状态 + 邀请码有效 + 功能开启 + 非本人邮箱」时归因；奖励写入双方永久余额并记
+  `topup type=7` 流水（邀请人描述带打码邮箱），发放失败只记日志、不回滚账号。`/invite` 展示邀请码 / 链接 / 规则 /
+  最近 20 条邀请与累计奖励；同一邀请人 24 小时最多获得 10 次奖励。后台「邀请奖励」卡片可开关并调整双方额度
+  （默认 300 / 200 cr）。实测：A 注册 → B 经链接注册后 A=2300、B=2200，`invite_record` 300/200，两条 type=7 流水文案正确。
+- **签到连签奖励**（`app/(dashboard)/wallet/checkin-actions.ts` + `checkin-calendar-card.tsx` + `lib/date.ts` + `app/(dashboard)/admin/settings/*`）：
+  连签天数按最近 366 天的签到日期回数，不新增列、不回填历史；今天未签时从昨天起算，不算断签。
+  每连续签到 N 天（默认 7）额外奖励一笔（默认 200 cr），与当日随机额度合并写入 `checkin`、`temporary_balance`
+  与 `topup type=3`，描述标注「含连签 N 天额外奖励」。签到卡新增「连签 N 天」徽标与连续签到统计，规则区显示
+  距下一档还差几天；后台可开关连签奖励并调整天数 / 额度。实测：预置前 6 天签到后真实签到，`streak=7`、
+  当日入账 295.83 cr（基础 95.83 + 200），临时余额与流水一致。
+- **API 上手页 `/docs`**（`app/(dashboard)/docs/page.tsx` + `lib/request-origin.ts` + `components/ui/copy-button.tsx` + `components/dashboard/sidebar.tsx`）：
+  三步接入（建 Key → 选模型 → 看定价）+ 接入信息（OpenAI / Anthropic 两个 base_url、Bearer 与 `x-api-key`、
+  无 `/api` 前缀）+ 端点表 + curl / Python OpenAI SDK / Anthropic SDK / embeddings 示例（一键复制）+ Shell 环境变量
+  + 错误码表；base_url 由请求头推导，线上直接显示当前域名。
 
 - **记录类页面统一分页（每页 10 条）**（`components/dashboard/pagination.tsx` 等 7 个文件，2026-10-29）：
   「我的活动记录」「后台活动记录 · 逐次明细」「使用历史」超过 10 条即显示页底翻页，

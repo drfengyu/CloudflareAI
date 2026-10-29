@@ -5,7 +5,9 @@ import bcrypt from "bcryptjs";
 import { AuthError } from "next-auth";
 import { headers } from "next/headers";
 import { signIn } from "@/auth";
-import { getUserByEmail, createCredentialUser } from "@/lib/db/queries";
+import { getUserByEmail, getUserByInviteCode, createCredentialUser } from "@/lib/db/queries";
+import { getInviteSettings } from "@/lib/settings";
+import { grantInviteRewards } from "@/lib/invite/rewards";
 import {
   checkIPRegistrationLimit,
   logRegistration,
@@ -17,6 +19,8 @@ const schema = z.object({
   name: z.string().trim().max(60).optional(),
   email: z.string().email("邮箱格式不正确"),
   password: z.string().min(8, "密码至少 8 位"),
+  /** 邀请码（注册页从 ?ref= 透传）；非法或失效时按普通注册处理。 */
+  ref: z.string().trim().max(64).optional(),
 });
 
 export interface AuthActionState {
@@ -31,12 +35,13 @@ export async function registerAction(
     name: formData.get("name") || undefined,
     email: formData.get("email"),
     password: formData.get("password"),
+    ref: formData.get("ref") || undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "输入有误" };
   }
 
-  const { email, password, name } = parsed.data;
+  const { email, password, name, ref } = parsed.data;
 
   // 检查是否为临时邮箱
   if (isTempEmail(email)) {
@@ -65,9 +70,43 @@ export async function registerAction(
     return { error: "该邮箱已注册" };
   }
 
+  // 邀请归因：邀请码无效、被邀请人是自己、或功能关闭时按普通注册处理。
+  const inviter = ref ? await getUserByInviteCode(ref) : undefined;
+  const inviteSettings = inviter ? await getInviteSettings() : undefined;
+  const invite =
+    inviter &&
+    inviteSettings?.enabled &&
+    inviter.email?.toLowerCase() !== email.toLowerCase()
+      ? {
+          inviterId: inviter.id,
+          inviterReward: inviteSettings.inviterReward,
+          inviteeReward: inviteSettings.inviteeReward,
+        }
+      : undefined;
+
   // 创建用户
   const passwordHash = await bcrypt.hash(password, 10);
-  await createCredentialUser({ email, passwordHash, name });
+  const userId = await createCredentialUser({
+    email,
+    passwordHash,
+    name,
+    invitedBy: invite?.inviterId,
+  });
+
+  // 奖励发放失败不影响注册本身：账号已创建，邀请关系仍可从 user.invitedBy 追溯。
+  if (invite) {
+    try {
+      await grantInviteRewards({
+        inviterId: invite.inviterId,
+        inviteeId: userId,
+        inviteeEmail: email,
+        inviterReward: invite.inviterReward,
+        inviteeReward: invite.inviteeReward,
+      });
+    } catch (err) {
+      console.error("[registerAction] Failed to grant invite rewards:", err);
+    }
+  }
 
   // 记录注册日志
   const userAgent = headersList.get("user-agent") || "unknown";

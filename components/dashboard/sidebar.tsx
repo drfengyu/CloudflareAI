@@ -20,6 +20,8 @@ import {
   Radio,
   Receipt,
   Sparkles,
+  Gift,
+  BookOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +44,7 @@ const NAV: NavGroup[] = [
       { href: "/dashboard", label: "数据看板", icon: LayoutDashboard },
       { href: "/models", label: "模型库", icon: Boxes },
       { href: "/pricing", label: "定价", icon: DollarSign },
+      { href: "/docs", label: "API 文档", icon: BookOpen },
       { href: "/lottery", label: "限时活动", icon: Sparkles },
     ],
   },
@@ -59,6 +62,7 @@ const NAV: NavGroup[] = [
     title: "个人",
     items: [
       { href: "/wallet", label: "我的钱包", icon: Wallet },
+      { href: "/invite", label: "邀请好友", icon: Gift },
       { href: "/keys", label: "API 密钥", icon: KeyRound },
       { href: "/history", label: "使用记录", icon: History },
       { href: "/settings", label: "设置", icon: Settings },

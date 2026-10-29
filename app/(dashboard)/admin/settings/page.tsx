@@ -5,7 +5,7 @@ import { users, options } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
-import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, AuthChannelsForm, EpaySettingsForm, LinuxdoSettingsForm } from "./settings-form";
+import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, InviteSettingsForm, AuthChannelsForm, EpaySettingsForm, LinuxdoSettingsForm } from "./settings-form";
 import { DashboardInfoForm } from "./dashboard-info-form";
 import { LotteryForm } from "./lottery-form";
 import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
@@ -110,6 +110,24 @@ export default async function AdminSettingsPage() {
                 minQuota: settings.checkin_min_quota || "0.01",
                 maxQuota: settings.checkin_max_quota || "0.1",
                 validDays: settings.checkin_valid_days || "7",
+                streakEnabled: settings.checkin_streak_enabled !== "false",
+                streakDays: settings.checkin_streak_days || "7",
+                streakReward: settings.checkin_streak_reward || "200",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">邀请奖励</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <InviteSettingsForm
+              initialSettings={{
+                enabled: settings.invite_enabled !== "false",
+                inviterReward: settings.invite_reward_inviter || "300",
+                inviteeReward: settings.invite_reward_invitee || "200",
               }}
             />
           </CardContent>

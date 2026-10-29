@@ -99,3 +99,18 @@ export async function getAuthChannels() {
     linuxdo: cfg.auth_linuxdo_enabled,
   };
 }
+
+/** 邀请返利配置：奖励直接进永久余额，金额在注册当时锁定到 invite_record。 */
+export async function getInviteSettings() {
+  const cfg = await getSettingsMap({
+    invite_enabled: true,
+    invite_reward_inviter: 300,
+    invite_reward_invitee: 200,
+  });
+
+  return {
+    enabled: cfg.invite_enabled,
+    inviterReward: Math.max(0, cfg.invite_reward_inviter),
+    inviteeReward: Math.max(0, cfg.invite_reward_invitee),
+  };
+}

@@ -33,10 +33,13 @@ function SubmitButton({ label }: { label: string }) {
 
 export function AuthForm({
   mode,
-  channels = { email: true, github: true, linuxdo: true }
+  channels = { email: true, github: true, linuxdo: true },
+  inviteCode,
 }: {
   mode: "login" | "register";
   channels?: { email: boolean; github: boolean; linuxdo: boolean };
+  /** 邀请链接带来的邀请码，注册时随表单提交。 */
+  inviteCode?: string;
 }) {
   const action = mode === "login" ? loginAction : registerAction;
   const [state, formAction] = useActionState<AuthActionState, FormData>(
@@ -78,6 +81,14 @@ export function AuthForm({
         {channels.email && (
           <>
             <form action={formAction} className="space-y-5">
+              {!isLogin && inviteCode && (
+                <input type="hidden" name="ref" value={inviteCode} />
+              )}
+              {!isLogin && inviteCode && (
+                <p className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                  已通过邀请链接进入，注册成功后双方都会获得邀请奖励。
+                </p>
+              )}
               {!isLogin && (
                 <Field name="name" type="text" label="昵称（可选）" required={false} />
               )}

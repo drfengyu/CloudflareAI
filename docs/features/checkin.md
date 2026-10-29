@@ -30,6 +30,10 @@ CREATE INDEX idx_checkin_user_date ON checkin(userId, checkinDate);
 | `checkin_enabled` | `"true"` / `"false"` | 是否启用签到功能 |
 | `checkin_min_quota` | `"0.01"` | 最小奖励额度 (cr, 1cr=$1) |
 | `checkin_max_quota` | `"0.1"` | 最大奖励额度 (cr, 1cr=$1) |
+| `checkin_valid_days` | `"7"` | 签到奖励进临时余额后的有效天数 |
+| `checkin_streak_enabled` | `"true"` / `"false"` | 是否启用连签额外奖励（默认开启） |
+| `checkin_streak_days` | `"7"` | 每连续签到多少天触发一次额外奖励 |
+| `checkin_streak_reward` | `"200"` | 每次连签里程碑额外奖励的 cr |
 
 ## API 接口
 
@@ -152,6 +156,10 @@ export async function performCheckin();
 
 2. **奖励计算**：
    - 随机生成：`minQuota + random(0, maxQuota - minQuota)`
+   - 连签（v0.8.0）：`readStreak` 取最近 366 天签到日期回数，今天已签从今天起算、未签从昨天起算；
+     当 `streak % streakDays === 0` 且开关打开、奖励 > 0 时追加 `streakReward`，合计写入签到行、临时余额与 `topup type=3`，
+     描述追加「含连签 N 天额外奖励 X cr」。连签不新增列、不回填历史。
+   - 切日按北京时间（`cnDateString()`），不随服务器 UTC 回退一天。
 
 3. **原子操作**（D1 不支持事务，手动回滚）：
    ```typescript
@@ -263,5 +271,5 @@ const calendarDays = useMemo(() => {
 
 1. **并发安全**：UNIQUE(userId, checkinDate) 约束防止重复签到
 2. **手动回滚**：D1 不支持嵌套事务，失败时删除 checkin 记录
-3. **时区处理**：使用服务器时区的 YYYY-MM-DD 格式
+3. **时区处理**：`cnDateString()` 统一按北京时间切日（服务器为 UTC，直接 `toISOString()` 会让北京时间 0–8 点算成前一天）
 4. **默认配置**：默认关闭，避免未配置时误触发
