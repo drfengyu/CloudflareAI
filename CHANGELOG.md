@@ -27,6 +27,10 @@
 
 ### 修复
 
+- **看板「活动抽奖」金额显示成站点收益**（`app/(dashboard)/dashboard/page.tsx`，2026-10-29）：
+  - 卡片直接展示 `lotteryBalance().net`（券面 + 回收 − 发放，站点视角），用户实际是 −29629.78 时看板却显示 +29629.78。
+  - 改为展示用户盈亏 `-net`（中奖 − 倒扣 − 券面），正负与 `/lottery` 记录页的净收益一致。
+
 - **抽奖累计统计行：把「全部」口径从整表扫描改成一行读写**（`lib/db/schema.ts` + `migrations/014_lottery_user_stats.sql` + `lib/lottery/stats.ts` + `lib/lottery/store.ts` + `lib/lottery/records.ts` + `app/(dashboard)/lottery/actions.ts`，2026-10-29）：
   - 索引救不了「不限时间」的 COUNT/SUM：`/lottery`、看板、管理端「全部」每次加载都要读完 `lottery_draw` / `lottery_ticket`（各 5.5k 行）。
   - 新增 `lottery_user_stats`（一行 = 用户 × 口径），开奖批次结算 / 买券 / 赠券 / 消耗券时增量 UPSERT；
@@ -243,6 +247,11 @@
   - 多批插入从串行改为 `Promise.all` 并行，D1 HTTP API 无状态可并发，100 张券从串行 ~5 秒降到 ~1.5 秒。
 
 ### 变更
+
+- **看板卡片更名、在线体验精简、限时活动页只显示当期**（2026-10-29）：
+  - 看板账户数据卡「转盘抽奖」更名为「活动抽奖」。
+  - 侧边栏「在线体验」移除语音、视频生成两个占位入口（`components/dashboard/sidebar.tsx`），对应路由页 `app/(dashboard)/playground/{speech,video}` 一并删除，`lib/categories.ts` 中两者的 `route` 置空；模型库与定价页的对应分类不受影响。
+  - 「我的活动记录」只展示当前活动轮次（`app/(dashboard)/lottery/lottery-records.tsx` + `lib/lottery/records.ts` + `app/(dashboard)/lottery/page.tsx`）：`listDrawRecords` 新增 `activityKey` 过滤，移除「全部活动累计战绩」汇总与旧活动折叠分组，卡片尾注与空态文案同步改为「本期」。
 
 - **10 连抽动画提速：外圈只摇一次 + 内圈预转盖住服务端等待**（`app/(dashboard)/lottery/lottery-wheel.tsx`，2026-10-19）：
   - 起因：上一版把「每次进入外圈都单独摇一次环带」做成逐发依次转，10 连抽里进 3 次外圈就要 10.9s；

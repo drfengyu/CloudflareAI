@@ -358,10 +358,21 @@ function toTicketTotals(row: TicketTotalsRow | undefined): LotteryTicketTotals {
 export async function listDrawRecords(opts: {
   win?: LotteryWindow;
   userId?: string;
+  activityKey?: string | null;
   limit?: number;
 }): Promise<DrawRecord[]> {
   const win = drawWindowCondition(opts.win);
-  const where = opts.userId ? and(win, eq(lotteryDraws.userId, opts.userId)) : win;
+  const activityCond =
+    opts.activityKey !== undefined
+      ? opts.activityKey === null
+        ? isNull(lotteryDraws.activityKey)
+        : eq(lotteryDraws.activityKey, opts.activityKey)
+      : undefined;
+  const where = and(
+    win,
+    activityCond,
+    opts.userId ? eq(lotteryDraws.userId, opts.userId) : undefined,
+  );
 
   const rows = await db
     .select({

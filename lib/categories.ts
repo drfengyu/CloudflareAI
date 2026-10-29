@@ -69,7 +69,7 @@ export const CATEGORIES: Category[] = [
     description: "语音转文本（Whisper）与文本转语音（MeloTTS）",
     icon: "Mic",
     tasks: ["Automatic Speech Recognition", "Text-to-Speech"],
-    route: "/playground/speech",
+    route: null,
   },
   {
     id: "embeddings",
@@ -110,7 +110,7 @@ export const CATEGORIES: Category[] = [
     description: "Cloudflare 原生暂不支持，规划接入第三方",
     icon: "Clapperboard",
     tasks: [],
-    route: "/playground/video",
+    route: null,
     comingSoon: true,
   },
 ];

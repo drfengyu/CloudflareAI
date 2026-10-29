@@ -222,6 +222,9 @@ export default async function DashboardPage({
     };
   });
 
+  // lotteryStats.net 是站点视角（券面 + 回收 − 发放），取反才是用户当期的盈亏。
+  const lotteryNet = -lotteryStats.net;
+
   const accountItems: StatItem[] = [
     {
       icon: <Wallet className="h-4 w-4" />,
@@ -244,9 +247,9 @@ export default async function DashboardPage({
     },
     {
       icon: <Coins className="h-4 w-4" />,
-      tone: lotteryStats.net >= 0 ? "success" : "danger",
-      label: "转盘抽奖",
-      value: `${lotteryStats.net >= 0 ? "+" : ""}${formatCredits(lotteryStats.net)} cr`,
+      tone: lotteryNet >= 0 ? "success" : "danger",
+      label: "活动抽奖",
+      value: `${lotteryNet >= 0 ? "+" : ""}${formatCredits(lotteryNet)} cr`,
       sub: `累计 ${lotteryStats.draws} 次抽奖`,
     },
   ];
