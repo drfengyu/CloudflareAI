@@ -27,6 +27,15 @@
 
 ### 修复
 
+- **抽奖累计统计行：把「全部」口径从整表扫描改成一行读写**（`lib/db/schema.ts` + `migrations/014_lottery_user_stats.sql` + `lib/lottery/stats.ts` + `lib/lottery/store.ts` + `lib/lottery/records.ts` + `app/(dashboard)/lottery/actions.ts`，2026-10-29）：
+  - 索引救不了「不限时间」的 COUNT/SUM：`/lottery`、看板、管理端「全部」每次加载都要读完 `lottery_draw` / `lottery_ticket`（各 5.5k 行）。
+  - 新增 `lottery_user_stats`（一行 = 用户 × 口径），开奖批次结算 / 买券 / 赠券 / 消耗券时增量 UPSERT；
+    整批回滚按同一份增量取反，`lastDrawAt` 按明细重算。
+  - 读侧 `lotteryBalance` / `lotteryBalanceByUser` / `lotteryTicketTotals` / `countDraws` 在无时间窗时读累计行
+    （每页从数千行降到 1 行 / 用户数量级）；管理端今日 / 近 7 日 / 近 30 日仍走明细聚合。
+  - 迁移 014 含历史回填（与明细逐项核对一致）与 `lottery_draw(userId, createdAt)` 索引，已执行到线上 D1；
+    需要重建时 `DELETE FROM lottery_user_stats` 后重跑 014。新增 `tests/lottery-stats.test.ts`（6 个用例）。
+
 - **D1 读取放大治理：补齐 6 个缺失索引**（`migrations/013_perf_indexes.sql`，2026-10-29）：
   - 现象：D1 免费层每日约 500 万行读取，10-29 单日已到 40.86k（10-28 曾因真实抽奖 + 全站性能测试直接耗尽）。
   - 根因：`EXPLAIN QUERY PLAN` 显示 `topup`（5,644 行）与 `temporary_balance` 按 `userId` 查询走 `SCAN`；

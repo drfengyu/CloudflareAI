@@ -444,6 +444,42 @@ export const lotteryDraws = sqliteTable(
 );
 
 /**
+ * 2026-10-29 新增：抽奖累计统计行，一行 = 一个用户 × 一个口径。
+ *
+ * 「不限时间」的 COUNT/SUM 加索引也救不了：`/lottery`、看板、管理端「全部」每次加载
+ * 都要把 `lottery_draw` / `lottery_ticket` 整表扫一遍，D1 免费层的每日读取额度很快见底。
+ * 改成开奖、买券时把增量写进这一行（`lib/lottery/stats.ts` 定义口径），读侧只取一行；
+ * 时间窗口径（管理端今日/近 7 日/近 30 日）仍然回到明细表聚合。
+ *
+ * scope：`all` = 全量累计；其余为活动轮次 startAt 字符串，与 `lottery_draw.activityKey` 同口径。
+ * 券侧计数（bought / unused / gift / prize）只维护 `all` 口径，活动轮次行里恒为 0。
+ */
+export const lotteryUserStats = sqliteTable(
+  "lottery_user_stats",
+  {
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    scope: text("scope").notNull(),
+    draws: integer("draws").notNull().default(0),
+    outerHits: integer("outerHits").notNull().default(0),
+    paidOut: real("paidOut").notNull().default(0),
+    clawedBack: real("clawedBack").notNull().default(0),
+    ticketFace: real("ticketFace").notNull().default(0),
+    /** 该口径内最后一次开奖时间；回滚时按明细重算。 */
+    lastDrawAt: integer("lastDrawAt", { mode: "timestamp_ms" }),
+    boughtTickets: integer("boughtTickets").notNull().default(0),
+    boughtCredits: real("boughtCredits").notNull().default(0),
+    unusedTickets: integer("unusedTickets").notNull().default(0),
+    unusedCredits: real("unusedCredits").notNull().default(0),
+    giftTickets: integer("giftTickets").notNull().default(0),
+    prizeTickets: integer("prizeTickets").notNull().default(0),
+    updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.scope] })],
+);
+
+/**
  * 2026-10-17 新增：跨实例的固定窗口限流计数。
  *
  * 原先 `lib/rate-limit.ts` 用的是进程内 Map，Vercel 每个实例各有一份，形同虚设。

@@ -3,10 +3,16 @@ import { batchRows, d1Run, db, D1_MAX_BINDINGS } from "@/lib/db/d1-http";
 import {
   lotteryDraws,
   lotteryTickets,
+  lotteryUserStats,
   temporaryBalances,
   topups,
   users,
 } from "@/lib/db/schema";
+import {
+  LOTTERY_STATS_ALL_SCOPE,
+  negateStatsDelta,
+  type LotteryStatsDelta,
+} from "./stats";
 
 /**
  * 抽奖的账本原语。
@@ -42,18 +48,20 @@ export async function countUnusedTickets(userId: string): Promise<number> {
   return Number(rows[0]?.c ?? 0);
 }
 
-/** 累计抽奖次数，累抽档位的判定依据。按活动轮次过滤，新活动战绩重计。 */
+/**
+ * 累计抽奖次数，累抽档位的判定依据。按活动轮次过滤，新活动战绩重计。
+ *
+ * 2026-10-29：改读 `lottery_user_stats` 的单行累计值——原先 COUNT(*) 要把该用户
+ * 本轮的开奖记录全扫一遍，每抽一次都重复读。口径与之前的 COUNT 一致。
+ */
 export async function countDraws(userId: string, activityKey?: string | null): Promise<number> {
+  const scope = activityKey || LOTTERY_STATS_ALL_SCOPE;
   const rows = await db
-    .select({ c: sql<number>`COUNT(*)` })
-    .from(lotteryDraws)
-    .where(
-      and(
-        eq(lotteryDraws.userId, userId),
-        activityKey ? eq(lotteryDraws.activityKey, activityKey) : undefined,
-      ),
-    );
-  return Number(rows[0]?.c ?? 0);
+    .select({ draws: lotteryUserStats.draws })
+    .from(lotteryUserStats)
+    .where(and(eq(lotteryUserStats.userId, userId), eq(lotteryUserStats.scope, scope)))
+    .limit(1);
+  return Number(rows[0]?.draws ?? 0);
 }
 
 /**
@@ -159,10 +167,20 @@ export async function globalLotteryStats(): Promise<{ totalDraws: number; player
   };
 }
 
-/** 取 n 张未消耗的券 id（最早发放的优先）。 */
-export async function pickUnusedTicketIds(userId: string, n: number): Promise<string[]> {
+/** 取 n 张未消耗的券（最早发放的优先），带上面值与来源给统计口径用。 */
+export interface UnusedTicketPick {
+  id: string;
+  source: "buy" | "gift" | "prize";
+  priceCredits: number;
+}
+
+export async function pickUnusedTickets(userId: string, n: number): Promise<UnusedTicketPick[]> {
   const rows = await db
-    .select({ id: lotteryTickets.id })
+    .select({
+      id: lotteryTickets.id,
+      source: lotteryTickets.source,
+      priceCredits: lotteryTickets.priceCredits,
+    })
     .from(lotteryTickets)
     .where(
       and(
@@ -173,7 +191,11 @@ export async function pickUnusedTicketIds(userId: string, n: number): Promise<st
     )
     .orderBy(asc(lotteryTickets.createdAt))
     .limit(n);
-  return rows.map((r) => r.id);
+  return rows.map((r) => ({
+    id: r.id,
+    source: r.source,
+    priceCredits: Number(r.priceCredits ?? 0),
+  }));
 }
 
 /**
@@ -512,4 +534,87 @@ export async function expireTicketsForActivity(userId: string, activityKey: stri
     [userId, activityKey],
   );
   return changes;
+}
+
+/**
+ * 2026-10-29 新增：累计统计行的增量 UPSERT。
+ *
+ * 一条语句同时完成「没有行就按增量建行 / 有行就累加」，依赖主键 ("userId", scope)；
+ * 不读旧值再写回，所以并发开奖不会互相覆盖。`lastDrawAt` 只取较大的那个。
+ */
+const STATS_NUMERIC_COLUMNS = [
+  "draws",
+  "outerHits",
+  "paidOut",
+  "clawedBack",
+  "ticketFace",
+  "boughtTickets",
+  "boughtCredits",
+  "unusedTickets",
+  "unusedCredits",
+  "giftTickets",
+  "prizeTickets",
+] as const;
+
+async function upsertStatsRow(
+  userId: string,
+  scope: string,
+  delta: LotteryStatsDelta,
+): Promise<void> {
+  const columns = STATS_NUMERIC_COLUMNS.map((column) => `"${column}"`).join(", ");
+  const placeholders = STATS_NUMERIC_COLUMNS.map(() => "?").join(", ");
+  const increments = STATS_NUMERIC_COLUMNS.map(
+    (column) => `"${column}" = "${column}" + excluded."${column}"`,
+  ).join(", ");
+  const values = STATS_NUMERIC_COLUMNS.map((column) => delta[column] ?? 0);
+  await d1Run(
+    `INSERT INTO lottery_user_stats ("userId", scope, ${columns}, "lastDrawAt", "updatedAt") ` +
+      `VALUES (?, ?, ${placeholders}, ?, ?) ` +
+      `ON CONFLICT("userId", scope) DO UPDATE SET ${increments}, ` +
+      `"lastDrawAt" = CASE ` +
+      `WHEN excluded."lastDrawAt" IS NULL THEN "lastDrawAt" ` +
+      `WHEN "lastDrawAt" IS NULL OR excluded."lastDrawAt" > "lastDrawAt" THEN excluded."lastDrawAt" ` +
+      `ELSE "lastDrawAt" END, ` +
+      `"updatedAt" = excluded."updatedAt"`,
+    // d1Run 走 JSON，Date 会被序列化成 ISO 字符串，这里必须传毫秒数。
+    [userId, scope, ...values, delta.lastDrawAt ? delta.lastDrawAt.getTime() : null, Date.now()],
+  );
+}
+
+function drawStatScopes(activityKey: string | null): string[] {
+  return activityKey ? [LOTTERY_STATS_ALL_SCOPE, activityKey] : [LOTTERY_STATS_ALL_SCOPE];
+}
+
+/** 整批开奖计入累计：全量口径 + 该批所属活动轮次各一行。 */
+export async function applyDrawStats(
+  userId: string,
+  activityKey: string | null,
+  delta: LotteryStatsDelta,
+): Promise<void> {
+  await Promise.all(drawStatScopes(activityKey).map((scope) => upsertStatsRow(userId, scope, delta)));
+}
+
+/** 回滚整批开奖：反向累加；`lastDrawAt` 用明细重算（增量表达不了「退回上一次时间」）。 */
+export async function revertDrawStats(
+  userId: string,
+  activityKey: string | null,
+  delta: LotteryStatsDelta,
+): Promise<void> {
+  const scopes = drawStatScopes(activityKey);
+  await Promise.all(scopes.map((scope) => upsertStatsRow(userId, scope, negateStatsDelta(delta))));
+  await Promise.all(
+    scopes.map((scope) =>
+      d1Run(
+        `UPDATE lottery_user_stats SET "lastDrawAt" = ` +
+          `(SELECT MAX(createdAt) FROM lottery_draw WHERE userId = ? AND (? = 'all' OR activityKey = ?)) ` +
+          `WHERE "userId" = ? AND scope = ?`,
+        [userId, scope, scope, userId, scope],
+      ),
+    ),
+  );
+}
+
+/** 券包侧计数只维护全量口径（活动轮次口径的券统计走明细查询）。 */
+export async function applyTicketStats(userId: string, delta: LotteryStatsDelta): Promise<void> {
+  await upsertStatsRow(userId, LOTTERY_STATS_ALL_SCOPE, delta);
 }

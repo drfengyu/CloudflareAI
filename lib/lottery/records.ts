@@ -1,14 +1,18 @@
-import { and, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, gt, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { batchRows, db } from "@/lib/db/d1-http";
-import { lotteryDraws, lotteryTickets, users } from "@/lib/db/schema";
+import { lotteryDraws, lotteryTickets, lotteryUserStats, users } from "@/lib/db/schema";
 import { round2 } from "./prize-math";
+import { LOTTERY_STATS_ALL_SCOPE } from "./stats";
 
 /**
  * 活动记录读取层：用户侧逐次明细 + 管理侧收益聚合。
  *
  * 不新增账本表——买券的钱在 `lottery_ticket.priceCredits`、开奖的账在
- * `lottery_draw.deltaCredits`，两边已经逐笔记全了，这里只做只读聚合。
- * 券面值用相关子查询取（drizzle 的 leftJoin 在本仓有 bug，见 AGENTS.md）。
+ * `lottery_draw.deltaCredits`，两边已经逐笔记全了，这里只做读取。
+ *
+ * 2026-10-29：**不限时间**的汇总改读 `lottery_user_stats` 的累计行（开奖/买券时增量维护），
+ * 不再扫整表；带时间窗的管理端口径仍然回到明细聚合，由 createdAt / (userId, createdAt)
+ * 索引把读取限制在窗口内。券面值用相关子查询取（drizzle 的 leftJoin 在本仓有 bug）。
  */
 
 /** 统计窗口：左闭右开 [start, end)，与用量看板同一口径，由页面算好传入。 */
@@ -103,6 +107,44 @@ function toBalance(row: BalanceRow | undefined): LotteryBalance {
 export async function lotteryBalance(
   opts: { win?: LotteryWindow; userId?: string; activityKey?: string | null } = {},
 ): Promise<LotteryBalance> {
+  // 带时间窗，或显式查「活动上线前的 null 轮次」：走明细聚合。
+  if (opts.win || opts.activityKey === null) return balanceFromDraws(opts);
+
+  const scope = opts.activityKey ?? LOTTERY_STATS_ALL_SCOPE;
+
+  if (opts.userId) {
+    const rows = await db
+      .select({
+        draws: lotteryUserStats.draws,
+        outerHits: lotteryUserStats.outerHits,
+        paidOut: lotteryUserStats.paidOut,
+        clawedBack: lotteryUserStats.clawedBack,
+        ticketFace: lotteryUserStats.ticketFace,
+      })
+      .from(lotteryUserStats)
+      .where(and(eq(lotteryUserStats.userId, opts.userId), eq(lotteryUserStats.scope, scope)))
+      .limit(1);
+    return toBalance(rows[0]);
+  }
+
+  // 全站「全部」：每用户一行，用户数远小于开奖行数。
+  const rows = await db
+    .select({
+      draws: sql<number>`COALESCE(SUM(${lotteryUserStats.draws}), 0)`,
+      outerHits: sql<number>`COALESCE(SUM(${lotteryUserStats.outerHits}), 0)`,
+      paidOut: sql<number>`COALESCE(SUM(${lotteryUserStats.paidOut}), 0)`,
+      clawedBack: sql<number>`COALESCE(SUM(${lotteryUserStats.clawedBack}), 0)`,
+      ticketFace: sql<number>`COALESCE(SUM(${lotteryUserStats.ticketFace}), 0)`,
+    })
+    .from(lotteryUserStats)
+    .where(eq(lotteryUserStats.scope, scope));
+  return toBalance(rows[0]);
+}
+
+/** 明细聚合：只在带时间窗 / 历史 null 轮次时使用，2026-10-29 之前是唯一路径。 */
+async function balanceFromDraws(
+  opts: { win?: LotteryWindow; userId?: string; activityKey?: string | null },
+): Promise<LotteryBalance> {
   const win = drawWindowCondition(opts.win);
   const activityCond =
     opts.activityKey !== undefined
@@ -136,6 +178,29 @@ export interface LotteryUserBalance extends LotteryBalance {
 
 /** 按用户聚合的开奖收益；净收益倒序，先看在站点上赚得最多的用户。 */
 export async function lotteryBalanceByUser(win?: LotteryWindow): Promise<LotteryUserBalance[]> {
+  if (!win) {
+    // 「全部」口径直接读累计行：每用户一行，不再扫整张开奖表。
+    const rows = await db
+      .select({
+        userId: lotteryUserStats.userId,
+        draws: lotteryUserStats.draws,
+        outerHits: lotteryUserStats.outerHits,
+        paidOut: lotteryUserStats.paidOut,
+        clawedBack: lotteryUserStats.clawedBack,
+        ticketFace: lotteryUserStats.ticketFace,
+        lastDrawAt: lotteryUserStats.lastDrawAt,
+      })
+      .from(lotteryUserStats)
+      .where(and(eq(lotteryUserStats.scope, LOTTERY_STATS_ALL_SCOPE), gt(lotteryUserStats.draws, 0)));
+    return rows
+      .map((row) => ({
+        ...toBalance(row),
+        userId: row.userId,
+        lastDrawAt: row.lastDrawAt == null ? null : new Date(Number(row.lastDrawAt)),
+      }))
+      .sort((a, b) => b.net - a.net);
+  }
+
   // 2026-10-28 修复：不把排序交给 SQL——ORDER BY 聚合表达式（含相关子查询）在 D1 上
   // 解析失败；引用 SELECT 别名也不行，drizzle 的 sql 字段不输出 AS。分组结果很小，
   // 在 JS 侧按净收益排序。
@@ -208,10 +273,12 @@ export async function lotteryTicketTotals(
   win?: LotteryWindow,
   userId?: string,
 ): Promise<LotteryTicketTotals> {
+  // 不限时间：读累计行（单用户一行 / 全站按用户数求和），不再扫券表。
+  if (!win) return ticketTotalsFromStats(userId);
+
   const where = and(
-    win
-      ? and(gte(lotteryTickets.createdAt, win.start), lt(lotteryTickets.createdAt, win.end))
-      : undefined,
+    gte(lotteryTickets.createdAt, win.start),
+    lt(lotteryTickets.createdAt, win.end),
     userId ? eq(lotteryTickets.userId, userId) : undefined,
   );
 
@@ -227,7 +294,56 @@ export async function lotteryTicketTotals(
     .from(lotteryTickets)
     .where(where);
 
-  const row = rows[0];
+  return toTicketTotals(rows[0]);
+}
+
+/** 累计行版本：券侧计数只维护全量口径（scope='all'）。 */
+async function ticketTotalsFromStats(userId?: string): Promise<LotteryTicketTotals> {
+  if (userId) {
+    const rows = await db
+      .select({
+        boughtTickets: lotteryUserStats.boughtTickets,
+        boughtCredits: lotteryUserStats.boughtCredits,
+        unusedTickets: lotteryUserStats.unusedTickets,
+        unusedCredits: lotteryUserStats.unusedCredits,
+        giftTickets: lotteryUserStats.giftTickets,
+        prizeTickets: lotteryUserStats.prizeTickets,
+      })
+      .from(lotteryUserStats)
+      .where(
+        and(
+          eq(lotteryUserStats.userId, userId),
+          eq(lotteryUserStats.scope, LOTTERY_STATS_ALL_SCOPE),
+        ),
+      )
+      .limit(1);
+    return toTicketTotals(rows[0]);
+  }
+
+  const rows = await db
+    .select({
+      boughtTickets: sql<number>`COALESCE(SUM(${lotteryUserStats.boughtTickets}), 0)`,
+      boughtCredits: sql<number>`COALESCE(SUM(${lotteryUserStats.boughtCredits}), 0)`,
+      unusedTickets: sql<number>`COALESCE(SUM(${lotteryUserStats.unusedTickets}), 0)`,
+      unusedCredits: sql<number>`COALESCE(SUM(${lotteryUserStats.unusedCredits}), 0)`,
+      giftTickets: sql<number>`COALESCE(SUM(${lotteryUserStats.giftTickets}), 0)`,
+      prizeTickets: sql<number>`COALESCE(SUM(${lotteryUserStats.prizeTickets}), 0)`,
+    })
+    .from(lotteryUserStats)
+    .where(eq(lotteryUserStats.scope, LOTTERY_STATS_ALL_SCOPE));
+  return toTicketTotals(rows[0]);
+}
+
+type TicketTotalsRow = {
+  boughtTickets?: unknown;
+  boughtCredits?: unknown;
+  unusedTickets?: unknown;
+  unusedCredits?: unknown;
+  giftTickets?: unknown;
+  prizeTickets?: unknown;
+};
+
+function toTicketTotals(row: TicketTotalsRow | undefined): LotteryTicketTotals {
   return {
     boughtTickets: Number(row?.boughtTickets ?? 0),
     boughtCredits: round2(Number(row?.boughtCredits ?? 0)),

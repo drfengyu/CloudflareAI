@@ -206,8 +206,20 @@ lottery_draw                 逐次开奖记录；unique(batchId, seq)
   migration: migrations/009_lottery_milestone_seq.sql（加 milestoneSeq 列并重建唯一索引）
   migration: migrations/011_lottery_milestone_unique_activity.sql（赠券唯一键加上 activityKey）
   migration: migrations/012_lottery_free_draw_idempotency_and_rate_limit.sql（加 freeDrawDate + 唯一索引，建 rate_limit_bucket 表）
+lottery_user_stats           按 (userId, scope) 累计的统计行；scope='all' 为全量口径，其余为活动轮次 startAt
+  draws / outerHits / paidOut / clawedBack / ticketFace / lastDrawAt   开奖侧累计（开奖批次结算时增量 upsert）
+  boughtTickets / boughtCredits / unusedTickets / unusedCredits / giftTickets / prizeTickets  券包侧累计（只维护 all 口径）
+  migration: migrations/014_lottery_user_stats.sql（建表 + 历史回填 + lottery_draw(userId, createdAt) 索引）
 rate_limit_bucket            跨实例限流计数，一行一个固定窗口桶（见 lib/rate-limit.ts）
 ```
+
+**为什么要有 `lottery_user_stats`**：`/lottery`、看板、管理端「全部」都要读「不限时间」的
+总次数/总收益/券面值。这类聚合没有可用的索引，每次加载都得把该用户（或全站）的历史行读完；
+D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见底。现在开奖/买券时用一条 UPSERT
+把增量写进行（`lib/lottery/stats.ts` 定义口径，`applyDrawStats` / `revertDrawStats` /
+`applyTicketStats` 落库），读侧只取一行；回滚整批开奖时按同一份增量反向扣回并重算 `lastDrawAt`。
+**管理端的时间窗口径（今日/近 7 日/近 30 日）仍然回到明细表聚合**，累计行不存时间维度。
+数据可由明细全量重算：先 `DELETE FROM lottery_user_stats` 再重跑 `migrations/014_lottery_user_stats.sql`。
 
 **免费抽为什么要有 `freeDrawDate`**：`hasUsedFreeDrawToday` 是先读后写，两个请求同时进来时都读到
 「今天还没抽」，于是双双放行——一天能白嫖好几次。页面上那道检查留着（省一次写失败的回滚），
@@ -240,8 +252,9 @@ rate_limit_bucket            跨实例限流计数，一行一个固定窗口桶
 
 ## 活动记录与站点收益
 
-钱本来就逐笔记在 `lottery_ticket` 与 `lottery_draw` 上，所以记录侧**不新增表**，只做只读聚合
-（`lib/lottery/records.ts`）。
+钱本来就逐笔记在 `lottery_ticket` 与 `lottery_draw` 上，两表始终是唯一真源；
+`lib/lottery/records.ts` 只负责读。2026-10-29 起，「不限时间」的汇总改读累计行
+`lottery_user_stats`（开奖/买券时增量维护），管理端的时间窗仍回到明细聚合。
 
 **用户侧**：`/lottery` 页面下方「我的活动记录」卡片——逐次时间、落在哪一圈、结果文案、cr 变动、
 用掉的券（购买 / 赠送 + 面值），外加一排汇总（次数、外圈命中、中奖发放、倒扣回收、已开奖券面值、本期净收益）。

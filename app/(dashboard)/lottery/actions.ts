@@ -16,6 +16,8 @@ import {
 } from "@/lib/lottery/prize-math";
 import {
   adjustPermanentBalance,
+  applyDrawStats,
+  applyTicketStats,
   beijingDayKey,
   buildTemporaryPrizeRow,
   clawbackCredits,
@@ -33,12 +35,22 @@ import {
   insertTemporaryBalanceRows,
   insertTopupRows,
   lockTickets,
-  pickUnusedTicketIds,
+  pickUnusedTickets,
   refundClawback,
+  revertDrawStats,
   spendCredits,
   unlockTickets,
   type ClawbackReceipt,
+  type UnusedTicketPick,
 } from "@/lib/lottery/store";
+import {
+  consumedTicketsDelta,
+  drawStatsDelta,
+  mergeStatsDeltas,
+  negateStatsDelta,
+  ticketStatsDelta,
+  type LotteryStatsDelta,
+} from "@/lib/lottery/stats";
 import { lotteryDraws, temporaryBalances, topups } from "@/lib/db/schema";
 
 const MAX_TICKETS_PER_PURCHASE = 100;
@@ -92,6 +104,12 @@ export async function buyTickets(
 
     // D1 没有事务，钱已经扣走了；发券或记流水再失败就必须把券收回、把钱退回，
     // 否则用户付了 cr 却拿不到券（退回走永久余额，比原路退回只多不少）。
+    const ticketDelta = ticketStatsDelta({
+      source: "buy",
+      count,
+      priceCredits: config.ticketPriceCredits,
+    });
+    let statsApplied = false;
     let issued: string[] = [];
     try {
       issued = await grantTickets(userId, count, {
@@ -109,10 +127,12 @@ export async function buyTickets(
           createdAt: new Date(),
         },
       ]);
+      await applyTicketStats(userId, ticketDelta);
+      statsApplied = true;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       console.error("[buyTickets] 发券失败，退回扣款", detail, error);
-      await compensatePurchase(userId, issued, cost);
+      await compensatePurchase(userId, issued, cost, statsApplied ? ticketDelta : null);
       return { success: false, error: `发券失败：${detail}，扣款已退回` };
     }
 
@@ -131,11 +151,19 @@ export async function buyTickets(
 /**
  * 买券失败的资金回滚：收回已发出的券，把扣掉的 cr 退回永久余额并补一条流水。
  * 本身再失败就只记日志——钱在用户余额里，不会凭空消失，人工按流水核对即可。
+ *
+ * `appliedStats` 非空表示累计统计行已经加过，要按同一份增量反向扣回。
  */
-async function compensatePurchase(userId: string, issued: string[], cost: number): Promise<void> {
+async function compensatePurchase(
+  userId: string,
+  issued: string[],
+  cost: number,
+  appliedStats: LotteryStatsDelta | null,
+): Promise<void> {
   try {
     await deleteTickets(issued);
     await adjustPermanentBalance(userId, cost);
+    if (appliedStats) await applyTicketStats(userId, negateStatsDelta(appliedStats));
     await insertTopupRows([
       {
         id: crypto.randomUUID(),
@@ -164,11 +192,15 @@ interface DrawBatchPlan {
   clawbackTotal: number;
   /** 本批抽中的赠券张数。 */
   prizeTickets: number;
+  /** 本批计入累计统计行的增量（笔数/外圈/发放/倒扣/券面/最后开奖时间）。 */
+  stats: LotteryStatsDelta;
 }
 
 /**
  * 逐注开奖只算随机数与账目，不碰数据库：一次 10 连抽的写入因此能压成「每表一条语句」，
  * 而不是每注各打两三次 D1 HTTP 往返（那是原先 7~10 秒的来源）。
+ *
+ * `ticketCredits` 是逐注消耗的券面值（免费抽那一注传 0），只用于累计统计行。
  */
 function planDrawBatch(
   userId: string,
@@ -176,6 +208,7 @@ function planDrawBatch(
   count: number,
   batchId: string,
   ticketIds: (string | null)[],
+  ticketCredits: number[],
   activityKey: string | null,
   /** 免费抽那一批写当天的北京日期（唯一索引挡重复领）；花钱抽传 null。 */
   freeDrawDate: string | null,
@@ -257,20 +290,32 @@ function planDrawBatch(
     permanentDelta,
     clawbackTotal,
     prizeTickets,
+    stats: drawStatsDelta(
+      drawRows.map((row, index) => ({
+        ring: row.ring,
+        deltaCredits: Number(row.deltaCredits),
+        ticketCredits: ticketCredits[index] ?? 0,
+        createdAt: row.createdAt ?? new Date(),
+      })),
+    ),
   };
 }
 
 /**
  * 整批撤销：这一批的行、发出去的券、净额扣款全部退回，券原样回券包。
  * 没有事务可依赖，所以逐表按 id 删；本身再失败只记日志，人工按 batchId 与流水核对。
+ *
+ * `appliedStats` 记录累计统计行有没有加过：加过就按同一份增量反向扣回（开奖时间重算）。
  */
 async function compensateDrawBatch(
   userId: string,
+  activityKey: string | null,
   plan: DrawBatchPlan,
   issuedTicketIds: string[],
   lockedTicketIds: string[],
   /** 已经发生的倒扣回收；没执行到就传 null。 */
   clawback: ClawbackReceipt | null,
+  appliedStats: { draw: boolean; ticket: LotteryStatsDelta | null },
 ): Promise<void> {
   try {
     await Promise.all([
@@ -283,6 +328,8 @@ async function compensateDrawBatch(
         ? adjustPermanentBalance(userId, -plan.permanentDelta)
         : Promise.resolve(),
     ]);
+    if (appliedStats.draw) await revertDrawStats(userId, activityKey, plan.stats);
+    if (appliedStats.ticket) await applyTicketStats(userId, negateStatsDelta(appliedStats.ticket));
     // 退回倒扣要排在删临时余额之后：那批中奖行会被删掉，先加回再删就白加一场。
     if (clawback) await refundClawback(userId, clawback);
   } catch (rollbackError) {
@@ -336,12 +383,13 @@ export async function drawLottery(
     // countDraws / countConsecutiveMisses 按当前活动轮次过滤，新活动战绩重计、保底重置。
     const config = await getLotteryConfig();
     const activityKey = currentActivityKey(config);
-    const [pickedIds, ticketsBefore, drawsBefore, consecutiveMisses] = await Promise.all([
-      freeDrawEligible ? Promise.resolve<string[]>([]) : pickUnusedTicketIds(userId, count),
+    const [pickedTickets, ticketsBefore, drawsBefore, consecutiveMisses] = await Promise.all([
+      freeDrawEligible ? Promise.resolve<UnusedTicketPick[]>([]) : pickUnusedTickets(userId, count),
       countUnusedTickets(userId),
       countDraws(userId, activityKey),
       countConsecutiveMisses(userId, 30, activityKey),
     ]);
+    const pickedIds = pickedTickets.map((ticket) => ticket.id);
 
     // 活动结束且配置允许券过期时，自动作废该用户本轮未使用的券。
     // 用户在活动结束后首次尝试抽奖时触发，标记 expired=1 后不再计入可用券。
@@ -367,8 +415,10 @@ export async function drawLottery(
       ? { ...config, outerChancePercent: luckyChancePercent }
       : config;
 
-    // 免费抽时 ticketIds 是 [null]，开奖行的 ticketId 留空，标记这是一次免费抽。
+    // 免费抽时 ticketIds 是 [null]，开奖行的 ticketId 留空，标记这是一次免费抽；
+    // 免费抽不消耗券，券面值计 0。
     const ticketIds: (string | null)[] = freeDrawEligible ? [null] : pickedIds;
+    const ticketFaces = freeDrawEligible ? [0] : pickedTickets.map((ticket) => ticket.priceCredits);
 
     const batchId = crypto.randomUUID();
     const plan = planDrawBatch(
@@ -377,6 +427,7 @@ export async function drawLottery(
       count,
       batchId,
       ticketIds,
+      ticketFaces,
       activityKey,
       freeDrawEligible ? freeDrawDay : null,
     );
@@ -421,6 +472,15 @@ export async function drawLottery(
     // 本批倒扣实际扣了哪里，回滚时按它退回。
     let clawbackReceipt: ClawbackReceipt | null = null;
 
+    // 券包侧累计：消耗掉的购买券（赠券/抽中券不进「未开奖」口径）、档位赠送、抽中赠券。
+    const boughtConsumed = pickedTickets.filter((ticket) => ticket.source === "buy");
+    const consumedDelta = consumedTicketsDelta(
+      boughtConsumed.length,
+      boughtConsumed.reduce((sum, ticket) => sum + ticket.priceCredits, 0),
+    );
+    let drawStatsApplied = false;
+    let appliedTicketDelta: LotteryStatsDelta | null = null;
+
     // 每个写入操作打标签，失败时能精准定位是哪一步炸了
     const writeTasks: Array<{ label: string; promise: Promise<unknown> }> = [
       { label: "insertDrawRows", promise: insertDrawRows(plan.drawRows) },
@@ -443,6 +503,24 @@ export async function drawLottery(
       },
       { label: "prizeGrant", promise: prizeGrant },
       ...milestoneGrants.map((p, i) => ({ label: `milestoneGrant_${i}`, promise: p })),
+      {
+        label: "drawStats",
+        promise: applyDrawStats(userId, activityKey, plan.stats).then(() => {
+          drawStatsApplied = true;
+        }),
+      },
+      {
+        // 券包侧统计要等赠券都发完才知道张数，排在赠券任务之后。
+        label: "ticketStats",
+        promise: Promise.all([prizeGrant, ...milestoneGrants]).then(async () => {
+          const delta = mergeStatsDeltas(consumedDelta, {
+            giftTickets: giftedTickets,
+            prizeTickets: plan.prizeTickets,
+          });
+          await applyTicketStats(userId, delta);
+          appliedTicketDelta = delta;
+        }),
+      },
     ];
 
     const settled = await Promise.allSettled(writeTasks.map((t) => t.promise));
@@ -458,10 +536,12 @@ export async function drawLottery(
       // 免费抽没有锁定任何券，locked 传空数组即可。
       await compensateDrawBatch(
         userId,
+        activityKey,
         plan,
         issuedTicketIds,
         freeDrawEligible ? [] : pickedIds,
         clawbackReceipt,
+        { draw: drawStatsApplied, ticket: appliedTicketDelta },
       );
       // 免费抽撞唯一索引 = 今天这一发已经领过了（并发或连点），不是故障，说人话回去。
       if (freeDrawEligible && failedTask.label === "insertDrawRows" && isUniqueConflict(reason)) {
