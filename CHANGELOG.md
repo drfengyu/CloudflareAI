@@ -27,6 +27,17 @@
 
 ### 修复
 
+- **D1 读取放大治理：补齐 6 个缺失索引**（`migrations/013_perf_indexes.sql`，2026-10-29）：
+  - 现象：D1 免费层每日约 500 万行读取，10-29 单日已到 40.86k（10-28 曾因真实抽奖 + 全站性能测试直接耗尽）。
+  - 根因：`EXPLAIN QUERY PLAN` 显示 `topup`（5,644 行）与 `temporary_balance` 按 `userId` 查询走 `SCAN`；
+    券包查询借 `uq_lottery_ticket_milestone (userId, …)` 扫该用户全部券；`lottery_draw` / 最近大奖按 `createdAt` 无索引。
+  - 改法：新增 `idx_topup_user_created`、`idx_lottery_ticket_user_state`、`idx_lottery_ticket_created`、
+    `idx_lottery_draw_created`、`idx_temporary_balance_user_expires`、`idx_usage_log_user_created`，已执行到线上 D1。
+    改后计划全部 `SEARCH` / `COVERING INDEX`，结果与 `NOT INDEXED` 对照一致。
+  - 效果：钱包充值流水约 5.7k 行 → 约 50 行；抽奖页约 2.2 万 → 约 1.65 万；管理端窗口口径大幅下降。
+    剩余读取主要来自 `lotteryBalance` / `lotteryTicketTotals` 等「全部/累计」聚合，索引无效，
+    需按用户累计统计行才能彻底压掉，涉及开奖写路径，暂未实施。见 `docs/fixes/2026-10-29-d1-read-amplification.md`。
+
 - **抽奖模拟预测可信度修复**（`scripts/lottery-sim.ts`，2026-10-28）：
   - 原随机数大整数乘法丢失精度，复现 10466 值短周期；改用可复现的 Mulberry32，仅影响离线模拟，不改变线上开奖。
   - `--batch 1|10` 区分购券量与每批抽数；奖金基数按本批券数计算并与线上一致取两位小数，保底按最多 30 条历史、整批概率快照模拟，赠券与档位批后发放。
