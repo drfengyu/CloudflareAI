@@ -2,6 +2,7 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/dashboard/pagination";
 import { formatCredits } from "@/lib/billing/credits";
 import { formatCnWallClock } from "@/lib/date";
 import { cn } from "@/lib/utils";
@@ -114,7 +115,10 @@ export function LotteryRecords({
   tickets,
   records,
   ticketsLeft,
-  recordLimit,
+  page,
+  totalPages,
+  totalRecords,
+  pageSize,
   activityLabel,
 }: {
   /** 当期活动战绩；null 表示当前没有活动轮次。 */
@@ -122,7 +126,10 @@ export function LotteryRecords({
   tickets: LotteryTicketTotals;
   records: DrawRecord[];
   ticketsLeft: number;
-  recordLimit: number;
+  page: number;
+  totalPages: number;
+  totalRecords: number;
+  pageSize: number;
   /** 当期活动的显示标签（通常是开始时间）。 */
   activityLabel: string;
 }) {
@@ -132,7 +139,7 @@ export function LotteryRecords({
         <CardTitle className="flex items-baseline justify-between gap-3 text-base">
           <span>我的活动记录</span>
           <span className="text-xs font-normal text-muted-foreground">
-            仅显示当期活动，最近 {recordLimit} 次
+            仅显示当期活动 · 每页 {pageSize} 条
           </span>
         </CardTitle>
       </CardHeader>
@@ -172,7 +179,7 @@ export function LotteryRecords({
 
             <div>
               <p className="mb-2 text-xs font-medium">
-                当期活动明细（{records.length} 条）
+                当期活动明细（共 {totalRecords} 条）
               </p>
               <ActivityRoundTable records={records} />
             </div>
@@ -182,6 +189,10 @@ export function LotteryRecords({
               cr），这部分不计入净收益；普通中奖以临时余额发放（过期未用自动作废），标注「永久」的奖品直接进永久余额、不过期。
             </p>
           </>
+        )}
+        {/* 放在空态之外：手工把 page 改超界时还能靠「上一页」走回来 */}
+        {totalRecords > 0 && (
+          <Pagination page={page} totalPages={totalPages} basePath="/lottery" />
         )}
       </CardContent>
     </Card>

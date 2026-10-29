@@ -30,8 +30,8 @@ import { LotteryWheel, type WheelOuter, type WheelSector } from "./lottery-wheel
 
 export const dynamic = "force-dynamic";
 
-/** 活动记录一次拉多少条；超过这个数只在卡片尾部提示，不做分页。 */
-const RECORD_LIMIT = 50;
+/** 活动记录每页条数；超过一页在卡片底部翻页。 */
+const RECORD_PAGE_SIZE = 10;
 
 const toneOf = (value: number): WheelSector["tone"] =>
   value > 0 ? "positive" : value < 0 ? "negative" : "zero";
@@ -110,8 +110,14 @@ function Notice({ title, hint }: { title: string; hint: string }) {
   );
 }
 
-export default async function LotteryPage() {
+export default async function LotteryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const userId = await requireUser();
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
   const config = await getLotteryConfig();
   const windowInfo = activityWindow(config);
   const activityKey = currentActivityKey(config);
@@ -130,12 +136,21 @@ export default async function LotteryPage() {
       lotteryBalance({ userId }),
       activityKey ? lotteryBalance({ userId, activityKey }) : Promise.resolve(null),
       lotteryTicketTotals(undefined, userId),
-      listDrawRecords({ userId, limit: RECORD_LIMIT, activityKey }),
+      listDrawRecords({
+        userId,
+        limit: RECORD_PAGE_SIZE,
+        offset: (page - 1) * RECORD_PAGE_SIZE,
+        activityKey,
+      }),
       getUserTotalBalance(userId),
       hasUsedFreeDrawToday(userId),
       countConsecutiveMisses(userId, 30, activityKey),
       listRecentBigWins({ thresholdCredits: 500, thresholdTickets: 3, hours: 24, limit: 20 }),
     ]);
+
+  // 当期口径的开奖总数即累计统计行的 draws，可直接当分页总数，不必再 COUNT 明细。
+  const recordTotal = (activityKey ? currentStats?.draws : myStats.draws) ?? 0;
+  const recordTotalPages = Math.max(1, Math.ceil(recordTotal / RECORD_PAGE_SIZE));
 
   const recordsCard = (
     <LotteryRecords
@@ -143,7 +158,10 @@ export default async function LotteryPage() {
       tickets={myTickets}
       records={records}
       ticketsLeft={tickets}
-      recordLimit={RECORD_LIMIT}
+      page={page}
+      totalPages={recordTotalPages}
+      totalRecords={recordTotal}
+      pageSize={RECORD_PAGE_SIZE}
       activityLabel={activityKey ?? "历史活动"}
     />
   );

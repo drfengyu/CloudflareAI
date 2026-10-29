@@ -9,6 +9,12 @@
 
 ### 新增
 
+- **记录类页面统一分页（每页 10 条）**（`components/dashboard/pagination.tsx` 等 7 个文件，2026-10-29）：
+  「我的活动记录」「后台活动记录 · 逐次明细」「使用历史」「钱包 · 充值记录」超过 10 条即显示页底翻页，
+  翻页保留当前筛选参数（`range` / `model` / `task`）。抽奖两处的总数直接取累计统计行 `draws`、
+  钱包用多取一条探测下一页，都不额外 COUNT；`listDrawRecords` 新增 `offset` 参数。
+  钱包「发放过期即隐藏」的过滤下沉进 SQL（`visibleTopupWhere`），LIMIT/OFFSET 作用在可见行上，
+  避免先取一页再剔除过期行导致每页不满 10 条（实测 15 条流水中只有 5 条可见，现在一页显示 5 条且不出翻页条）。
 - **活动轮次支持**（`lib/db/schema.ts` + `migrations/010_lottery_activity_round.sql` + `lib/lottery/*` + `app/(dashboard)/lottery/*` + `app/(dashboard)/admin/settings/*`）：
   - `lottery_ticket` 和 `lottery_draw` 表新增 `activityKey` 字段（text，可空，用活动 `startAt` 字符串作为轮次唯一标识），`lottery_ticket` 新增 `expired` 字段（integer，默认 0）。迁移 `010_lottery_activity_round.sql` 已执行到线上 D1，加了 `idx_lottery_ticket_activity` 和 `idx_lottery_draw_activity` 索引。
   - 管理端「限时活动」配置新增 **「活动结束时未使用券作废」** 开关（`ticketsExpireOnActivityEnd`）。开启后，新一轮活动开始时上一期未使用的券自动标记 `expired=1`，不再计入可用券；关闭则券继续有效、可跨轮使用。

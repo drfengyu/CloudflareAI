@@ -1,11 +1,14 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/dashboard/pagination";
 import { requireUser } from "@/lib/usage/meter";
 import { queryUsage } from "@/lib/usage/queries";
 import { formatCnDateTime } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 10;
 
 export default async function HistoryPage({
   searchParams,
@@ -14,16 +17,16 @@ export default async function HistoryPage({
 }) {
   const userId = await requireUser();
   const params = await searchParams;
-  const page = parseInt(params.page || "1", 10);
+  const page = Math.max(1, parseInt(params.page || "1", 10) || 1);
   const { logs, total } = await queryUsage({
     userId,
     page,
-    pageSize: 20,
+    pageSize: PAGE_SIZE,
     model: params.model,
     task: params.task,
   });
 
-  const totalPages = Math.ceil(total / 20);
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <>
@@ -125,29 +128,12 @@ export default async function HistoryPage({
             )}
 
             {/* 分页 */}
-            {totalPages > 1 && (
-              <div className="mt-4 flex items-center justify-center gap-2">
-                {page > 1 && (
-                  <a
-                    href={`/history?page=${page - 1}${params.model ? `&model=${params.model}` : ""}${params.task ? `&task=${params.task}` : ""}`}
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-secondary"
-                  >
-                    上一页
-                  </a>
-                )}
-                <span className="px-3 text-xs text-muted-foreground">
-                  {page} / {totalPages}
-                </span>
-                {page < totalPages && (
-                  <a
-                    href={`/history?page=${page + 1}${params.model ? `&model=${params.model}` : ""}${params.task ? `&task=${params.task}` : ""}`}
-                    className="rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-secondary"
-                  >
-                    下一页
-                  </a>
-                )}
-              </div>
-            )}
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              basePath="/history"
+              params={{ model: params.model, task: params.task }}
+            />
           </CardContent>
         </Card>
       </div>

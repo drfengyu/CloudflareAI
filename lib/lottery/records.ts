@@ -361,6 +361,7 @@ export async function listDrawRecords(opts: {
   userId?: string;
   activityKey?: string | null;
   limit?: number;
+  offset?: number;
 }): Promise<DrawRecord[]> {
   const win = drawWindowCondition(opts.win);
   const activityCond =
@@ -394,7 +395,8 @@ export async function listDrawRecords(opts: {
     .from(lotteryDraws)
     .where(where)
     .orderBy(desc(lotteryDraws.createdAt), desc(lotteryDraws.seq))
-    .limit(opts.limit ?? 50);
+    .limit(opts.limit ?? 50)
+    .offset(opts.offset ?? 0);
 
   const ticketIds = [...new Set(rows.map((r) => r.ticketId).filter((id): id is string => !!id))];
   // 2026-10-28 修复：管理侧一次取 200 条明细，inArray 最多可到 200 个 id；

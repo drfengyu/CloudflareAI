@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/dashboard/pagination";
 import { db } from "@/lib/db/d1-http";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -23,7 +24,7 @@ import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-const DETAIL_LIMIT = 200;
+const DETAIL_PAGE_SIZE = 10;
 
 const RANGE_TABS: { value: string; label: string }[] = [
   { value: "today", label: "今日" },
@@ -99,10 +100,11 @@ const TICKET_LABEL: Record<DrawRecord["ticketSource"], string> = {
 export default async function AdminLotteryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{ range?: string; page?: string }>;
 }) {
   const currentUserId = await requireUser();
   const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
 
   const currentUser = await db
     .select()
@@ -122,9 +124,13 @@ export default async function AdminLotteryPage({
     getLotteryConfig(),
     lotteryBalance({ win }),
     lotteryUserRecords(win),
-    listDrawRecords({ win, limit: DETAIL_LIMIT }),
+    listDrawRecords({ win, limit: DETAIL_PAGE_SIZE, offset: (page - 1) * DETAIL_PAGE_SIZE }),
     lotteryTicketTotals(win),
   ]);
+
+  // 开奖总注数就是同一窗口的累计统计行，直接当分页总数用，不再 COUNT 明细。
+  const detailTotal = balance.draws;
+  const detailTotalPages = Math.max(1, Math.ceil(detailTotal / DETAIL_PAGE_SIZE));
 
   const activity = activityWindow(config);
   const configuredRate = returnRatePercent(config);
@@ -247,7 +253,7 @@ export default async function AdminLotteryPage({
             <CardTitle className="text-base">
               逐次明细
               <span className="ml-2 text-xs font-normal text-muted-foreground">
-                最近 {DETAIL_LIMIT} 注 · 收益按单注口径：券面 + 回收 − 发放
+                共 {detailTotal} 注 · 每页 {DETAIL_PAGE_SIZE} 条 · 收益按单注口径：券面 + 回收 − 发放
               </span>
             </CardTitle>
           </CardHeader>
@@ -310,6 +316,12 @@ export default async function AdminLotteryPage({
                 </table>
               </div>
             )}
+            <Pagination
+              page={page}
+              totalPages={detailTotalPages}
+              basePath="/admin/lottery"
+              params={{ range: range === "all" ? undefined : range }}
+            />
           </CardContent>
         </Card>
       </div>

@@ -1,10 +1,10 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/dashboard/pagination";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
 import { users, topups, temporaryBalances, paymentOrders } from "@/lib/db/schema";
-import { and, desc, eq, gt, gte, sum } from "drizzle-orm";
+import { and, desc, eq, gt } from "drizzle-orm";
 import { Wallet, Clock } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
@@ -13,28 +13,32 @@ import { CheckinCalendarCard } from "./checkin-calendar-card";
 import { RechargeOrdersCard, type SerializedPayOrder } from "./recharge-orders-card";
 import { formatCredits } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
-import { withoutExpiredGrants } from "@/lib/billing/grant-expiry";
+import { visibleTopupWhere } from "@/lib/billing/grant-expiry";
 import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
 import { formatCnDate, cnDaysAgoStart } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+/** 充值流水每页条数；多取一条用来判断是否还有下一页（省一次 COUNT）。 */
+const TOPUP_PAGE_SIZE = 10;
+
 export default async function WalletPage({
   searchParams,
 }: {
-  searchParams: Promise<{ paid?: string; orderNo?: string }>;
+  searchParams: Promise<{ paid?: string; orderNo?: string; page?: string }>;
 }) {
   const userId = await requireUser();
   const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
   const now = new Date();
 
   // 充值流水只保留近三个月，更早的历史不再展示。
   const historyCutoff = cnDaysAgoStart(90);
 
-  // 2026-10-17 性能：这 5 条查询互不依赖（全都只按 userId 取数），原先是一条接一条 await，
+  // 2026-10-17 性能：这些查询互不依赖（全都只按 userId 取数），原先是一条接一条 await，
   // 串行 5 次 D1 往返 ≈ 2 秒；并发成一波后只剩最慢那条的时间。取数口径一字未改。
-  const [userRows, tempBalances, recentTopups, payOrders, linuxdoConfig] = await Promise.all([
+  const [userRows, tempBalances, payOrders, linuxdoConfig, topupWhere] = await Promise.all([
     // 获取用户永久余额
     db
       .select({ balanceCredits: users.balanceCredits })
@@ -47,13 +51,6 @@ export default async function WalletPage({
       .from(temporaryBalances)
       .where(and(eq(temporaryBalances.userId, userId), gt(temporaryBalances.expiresAt, now)))
       .orderBy(temporaryBalances.expiresAt),
-    // 获取充值流水
-    db
-      .select()
-      .from(topups)
-      .where(and(eq(topups.userId, userId), gte(topups.createdAt, historyCutoff)))
-      .orderBy(desc(topups.createdAt))
-      .limit(20),
     // 在线充值订单（含回跳订单号置顶逻辑交给客户端组件）
     // 这里不按 historyCutoff 裁剪：待支付/支付确认中的订单可以陈旧到任意久，而这张卡是
     // 用户唯一能自查并手动「查询」催单的地方，裁剪会把未到账订单从视野里抹掉。
@@ -64,6 +61,8 @@ export default async function WalletPage({
       .orderBy(desc(paymentOrders.createdAt))
       .limit(10),
     getLinuxdoConfig(),
+    // 充值流水的可见性条件（含近三个月裁剪 + 发放到期过滤）
+    visibleTopupWhere(userId, historyCutoff, now),
   ]);
 
   const permanentBalance = userRows[0]?.balanceCredits || 0;
@@ -82,33 +81,38 @@ export default async function WalletPage({
   // 1. 如果永久余额为负，计算每条临时余额的"已用于补正"部分
   // 2. 只显示剩余可用额度 > 0 的临时余额
   let remainingDeficit = permanentBalance < 0 ? Math.abs(permanentBalance) : 0;
-  const displayTempBalances = allValidTempBalances
-    .sort((a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime()) // 按过期时间排序
-    .map((tb) => {
-      if (remainingDeficit > 0) {
-        // 这条临时余额需要用于补正
-        const usedForCompensation = Math.min(tb.amount, remainingDeficit);
-        remainingDeficit -= usedForCompensation;
-        const availableAmount = tb.amount - usedForCompensation;
-        return {
-          ...tb,
-          displayAmount: availableAmount,
-          usedForCompensation,
-        };
-      }
-      // 无需补正，全部可用
-      return {
-        ...tb,
-        displayAmount: tb.amount,
-        usedForCompensation: 0,
-      };
-    })
-    .filter((tb) => tb.displayAmount >= 0.01); // 只显示剩余 >= 0.01 的
+  const displayTempBalances: Array<
+    (typeof allValidTempBalances)[number] & {
+      displayAmount: number;
+      usedForCompensation: number;
+    }
+  > = [];
+  for (const tb of allValidTempBalances.sort(
+    (a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime(), // 按过期时间排序
+  )) {
+    // 永久余额为负时，靠前的临时余额先用于补正
+    const usedForCompensation =
+      remainingDeficit > 0 ? Math.min(tb.amount, remainingDeficit) : 0;
+    remainingDeficit -= usedForCompensation;
+    const displayAmount = tb.amount - usedForCompensation;
+    if (displayAmount >= 0.01) {
+      displayTempBalances.push({ ...tb, displayAmount, usedForCompensation });
+    }
+  }
 
   const totalBalance = permanentBalance + temporaryTotal;
 
   // 签到奖励与兑换码发的是一次性临时余额，到期之后不再作为「可用余额来源」显示。
-  const topupRecords = await withoutExpiredGrants(recentTopups, now);
+  // 过期判定已下沉进 SQL，LIMIT 取到的就是可见行；多取一条判断是否还有下一页。
+  const recentTopups = await db
+    .select()
+    .from(topups)
+    .where(topupWhere)
+    .orderBy(desc(topups.createdAt))
+    .limit(TOPUP_PAGE_SIZE + 1)
+    .offset((page - 1) * TOPUP_PAGE_SIZE);
+  const hasMoreTopups = recentTopups.length > TOPUP_PAGE_SIZE;
+  const topupRecords = recentTopups.slice(0, TOPUP_PAGE_SIZE);
 
   const serializedOrders: SerializedPayOrder[] = payOrders.map((o) => ({
     orderNo: o.orderNo,
@@ -218,7 +222,9 @@ export default async function WalletPage({
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">充值记录</CardTitle>
-            <span className="text-xs text-muted-foreground">仅显示最近三个月</span>
+            <span className="text-xs text-muted-foreground">
+              仅显示最近三个月 · 每页 {TOPUP_PAGE_SIZE} 条
+            </span>
           </CardHeader>
           <CardContent>
             {topupRecords.length === 0 ? (
@@ -269,6 +275,7 @@ export default async function WalletPage({
                 ))}
               </div>
             )}
+            <Pagination page={page} hasNext={hasMoreTopups} basePath="/wallet" />
           </CardContent>
         </Card>
       </div>

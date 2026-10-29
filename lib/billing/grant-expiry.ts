@@ -1,22 +1,20 @@
 /**
- * 充值流水里「一次性临时发放」的到期推算，用于钱包页展示过滤。
+ * 钱包「充值记录」里的一次性临时发放到期过滤。
  *
  * 不能用「对应的 temporary_balance 行还在不在」判断是否过期：消费会删除/扣减
  * 临时余额行（`lib/usage/meter.ts`），当天就被花掉的奖励会立刻从流水里消失。
  * 这里按发放时刻 + 当时的有效天数推算到期时间，与发放时写入的 `expiresAt` 同口径。
+ *
+ * 过滤下沉到 SQL：分页的 LIMIT/OFFSET 要作用在「可见行」上，若先取一页再在内存里
+ * 剔除过期行，每页会不满 10 条。
  */
 
 import { db } from "@/lib/db/d1-http";
-import { options, redemptions } from "@/lib/db/schema";
+import { options, redemptions, topups } from "@/lib/db/schema";
 import { LOTTERY_CONFIG_KEY } from "@/lib/lottery/prize-math";
-import { eq, inArray } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** `topup.type`：1=兑换码、3=签到奖励、6=限时活动抽奖中奖，发的都是会过期的临时余额。 */
-const TYPE_REDEEM_CODE = 1;
-const TYPE_CHECKIN = 3;
-const TYPE_LOTTERY = 6;
 
 /**
  * 未配置有效天数时的默认值。兑换码走 `wallet/actions.ts` 的「null → 7 天」分支
@@ -24,14 +22,6 @@ const TYPE_LOTTERY = 6;
  * 该实现不一致，以实现为准），签到走 `checkin_valid_days` 缺省值。
  */
 const DEFAULT_VALID_DAYS = 7;
-
-interface GrantTopupRow {
-  type: number;
-  /** 抽奖的倒扣与买券都是负数流水，它们是永久账目，不参与「过期即隐藏」。 */
-  amount: number;
-  createdAt: Date | null;
-  redemptionId: string | null;
-}
 
 async function readValidDaysOption(key: string): Promise<number> {
   const [row] = await db
@@ -63,65 +53,25 @@ async function readLotteryPrizeValidDays(): Promise<number> {
   }
 }
 
-/** 过滤掉发放的临时余额已过期的流水行；永久余额型发放（管理员调整、在线充值）不受影响。 */
-export async function withoutExpiredGrants<T extends GrantTopupRow>(
-  rows: T[],
-  now: Date = new Date(),
-): Promise<T[]> {
-  const grantableRows = rows.filter(
-    (row) =>
-      row.type === TYPE_REDEEM_CODE ||
-      row.type === TYPE_CHECKIN ||
-      (row.type === TYPE_LOTTERY && row.amount > 0),
-  );
-  if (grantableRows.length === 0) {
-    return rows;
-  }
-
-  // 2026-10-17 性能：这三条互不依赖（两个有效天数配置 + 兑换码行），原先一条接一条打 D1，
-  // 串行 3 次往返 ≈ 1.2 秒；并发成一波后只剩最慢那条的时间。
-  const redemptionIds = [
-    ...new Set(
-      grantableRows
-        .map((row) => (row.type === TYPE_REDEEM_CODE ? row.redemptionId : null))
-        .filter((id): id is string => Boolean(id)),
-    ),
-  ];
-  const [checkinValidDays, lotteryValidDays, redemptionRows] = await Promise.all([
+/**
+ * 生成「只看未过期发放」的 WHERE 条件（已含 userId 与起始时间）。
+ *
+ * 会过期的只有发放行：兑换码、签到、抽奖中奖（type=6 的正数）。抽奖的倒扣与买券
+ * 是负数流水，管理员调整与在线充值是永久余额，它们一律保留。
+ */
+export async function visibleTopupWhere(
+  userId: string,
+  since: Date,
+  now: Date,
+): Promise<SQL> {
+  const [checkinValidDays, lotteryValidDays] = await Promise.all([
     readValidDaysOption("checkin_valid_days"),
     readLotteryPrizeValidDays(),
-    redemptionIds.length > 0
-      ? db
-          .select({
-            id: redemptions.id,
-            balanceValidDays: redemptions.balanceValidDays,
-          })
-          .from(redemptions)
-          .where(inArray(redemptions.id, redemptionIds))
-      : Promise.resolve([] as { id: string; balanceValidDays: number | null }[]),
   ]);
-  const validDaysByRedemption = new Map(
-    redemptionRows.map((row) => [row.id, row.balanceValidDays ?? DEFAULT_VALID_DAYS]),
-  );
 
-  const nowMs = now.getTime();
-  return rows.filter((row) => {
-    const isGrant =
-      row.type === TYPE_REDEEM_CODE ||
-      row.type === TYPE_CHECKIN ||
-      (row.type === TYPE_LOTTERY && row.amount > 0);
-    if (!isGrant) {
-      return true;
-    }
-    if (!row.createdAt) {
-      return true;
-    }
-    const validDays =
-      row.type === TYPE_CHECKIN
-        ? checkinValidDays
-        : row.type === TYPE_LOTTERY
-          ? lotteryValidDays
-          : validDaysByRedemption.get(row.redemptionId ?? "") ?? DEFAULT_VALID_DAYS;
-    return row.createdAt.getTime() + validDays * DAY_MS > nowMs;
-  });
+  const isGrant = sql`(${topups.type} IN (1, 3) OR (${topups.type} = 6 AND ${topups.amount} > 0))`;
+  const redemptionValidDays = sql`COALESCE((SELECT ${redemptions.balanceValidDays} FROM ${redemptions} WHERE ${redemptions.id} = ${topups.redemptionId}), ${DEFAULT_VALID_DAYS})`;
+  const validDays = sql`CASE ${topups.type} WHEN 1 THEN ${redemptionValidDays} WHEN 3 THEN ${checkinValidDays} ELSE ${lotteryValidDays} END`;
+
+  return sql`${topups.userId} = ${userId} AND ${topups.createdAt} >= ${since.getTime()} AND (NOT ${isGrant} OR ${topups.createdAt} > ${now.getTime()} - ${DAY_MS} * ${validDays})`;
 }
