@@ -20,7 +20,7 @@
 
 ### 架构改造（2026-06-13 起，参考 new-api）
 
-当前版本：**v0.9.0**（2026-10-30）—— 站内聊天 /chat（会话持久化 + 流式交互）
+当前版本：**v0.10.0**（2026-10-30）—— 三项 cr 流动活动（消费返利 + 用量冲榜 / 任务成就 / 充值阶梯赠送）
 
 | 阶段 | 说明 | 状态 |
 | --- | --- | --- |
@@ -78,7 +78,14 @@
 - ✅ 右侧区域布局优化：我的战绩移到顶部，卡片顺序调整为战绩→结果→中奖墙→规则；战绩卡片配色简化（数字用主题前景色 + 中性底，去掉渐变和三色，浅色主题下不再是白底白字）；左侧转盘区域间距收紧减少下方空白
 - ✅ 奖池模拟器 `scripts/lottery-sim.ts`：只读配置，支持单抽/十连批次、批前保底快照与赠券续抽；修复短周期伪随机及静默截断，输出有效返还、每券 cr 差额和按会话计算的抽样误差。`--soften/--target` 仅生成本地候选，不能将模拟值当历史返还保证（参数和回归测试见 `docs/features/lottery.md`）
 
-**最新更新（v0.9.0）**：
+**最新更新（v0.10.0）**：
+- ✅ 消费返利 `/cashback`：按北京自然日结算，用户手动领取近 N 天（默认 3 天）的消耗返现，默认比例 10%、满 20 cr 起返、单日封顶 200 cr，进临时余额 7 天过期；新表 `cashback_claim`（迁移 017 已在线上 D1 执行）以 `uq_cashback_claim(userId, periodDate)` 挡并发重复领取
+- ✅ 用量冲榜：同页展示窗口内按用户聚合的真实消耗（脱敏昵称、自己那行高亮），SQL 只 `GROUP BY`、排序放 JS（D1 不支持 `ORDER BY` 聚合表达式）；排行榜只读不发放
+- ✅ 任务成就 `/tasks`：7 个一次性任务（首次对话 / 跑通 API / 首次充值 / 累计签到 7 天 / 首次邀请 / 首次抽奖 / 首次领返利），进度**现场读业务表**不落库，`user_task`（迁移 018）只记「领过」；新表 + 后台可按任务 key 覆盖额度，默认合计 70 cr
+- ✅ 充值阶梯赠送：按订单实付取满足的最高一档送临时余额（默认 30 天有效），发放挂在 `settleRechargeOrder` 抢占成功分支且**失败绝不回滚主充值**；充值弹窗实时预告「本单额外赠送 X cr」
+- ✅ 三项活动**全部默认关闭**，比例 / 门槛 / 封顶 / 档位 / 有效期 / 每任务额度都在后台可调；钱包流水新增 `type=8 消费返利`、`type=9 任务奖励`、`type=10 充值赠送`，到期过滤同步登记进 `lib/billing/grant-expiry.ts`
+
+**上一版本（v0.9.0）**：
 - ✅ 站内聊天 `/chat`：多轮对话自动存进 `chat_session` / `chat_message`（迁移 016 已在线上 D1 执行），标题自动取首条消息摘要、可重命名 / 置顶 / 删除；回答走 markdown 渲染，代码块带语言标签与一键复制，推理模型的思考链可折叠
 - ✅ 流式交互：Enter 发送、「停止」中断（半截回答照旧落库并标注被中断）、「重新生成」替换旧回答不重复问题、「编辑重发」从那条消息起重建
 - ✅ 计费口径不变：`/chat` 复用 `/api/ai/text`（预检 → 扣费 → 用量日志），不另起一套；扣费仍按上游真实 usage 结算
@@ -318,6 +325,9 @@ MIT
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — Vercel + Cloudflare 部署
 - [`docs/features/checkin.md`](docs/features/checkin.md) — 签到功能设计文档
 - [`docs/features/lottery.md`](docs/features/lottery.md) — 限时活动·幸运转盘（玩法、账本口径与实现注意）
+- [`docs/features/cashback.md`](docs/features/cashback.md) — 消费返利与用量冲榜（结算口径、防重放、排行榜实现注意）
+- [`docs/features/task-achievements.md`](docs/features/task-achievements.md) — 任务成就一次性奖励（清单、判定与额度覆盖）
+- [`docs/features/recharge-bonus.md`](docs/features/recharge-bonus.md) — 充值阶梯赠送（档位口径与发放失败面）
 - [`docs/features/channel-management.md`](docs/features/channel-management.md) — AI 供应商渠道管理设计文档
 - [`CLAUDE.md`](CLAUDE.md) — 项目指令和改造路线图
 

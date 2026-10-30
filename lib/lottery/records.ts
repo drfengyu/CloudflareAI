@@ -2,6 +2,7 @@ import { and, desc, eq, gt, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { batchRows, db } from "@/lib/db/d1-http";
 import { lotteryDraws, lotteryTickets, lotteryUserStats, users } from "@/lib/db/schema";
+import { maskUserLabel } from "@/lib/mask";
 import { round2 } from "./prize-math";
 import { LOTTERY_STATS_ALL_SCOPE } from "./stats";
 
@@ -531,18 +532,4 @@ export async function listRecentBigWins(opts: {
     ...row,
     createdAt: row.createdAt === null ? null : new Date(row.createdAt),
   }));
-}
-
-/** 脱敏用户标识：邮箱首字符 + *** + 域名；无邮箱用昵称；都没有用用户 ID 前 8 位。 */
-function maskUserLabel(email: string | null, name: string | null, userId: string): string {
-  if (email) {
-    const [local, domain] = email.split("@");
-    if (local && domain) {
-      return `${local.charAt(0)}***@${domain}`;
-    }
-  }
-  if (name && name.trim()) {
-    return name.trim().slice(0, 1) + "***";
-  }
-  return `用户${userId.slice(0, 8)}`;
 }

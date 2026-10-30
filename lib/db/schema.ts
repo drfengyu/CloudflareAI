@@ -201,7 +201,7 @@ export const topups = sqliteTable("topup", {
     .references(() => users.id, { onDelete: "cascade" }),
   /** 变动金额（credits，可正可负，支持小数）。 */
   amount: real("amount").notNull(),
-  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励。 */
+  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励 / 8=消费返利 / 9=任务成就 / 10=充值赠送。 */
   type: integer("type").notNull(),
   /** 描述：如"兑换码 ABC123"、"管理员充值"、"后台调整"。 */
   description: text("description"),
@@ -399,6 +399,50 @@ export const inviteRecords = sqliteTable(
     unique("uq_invite_record_invitee").on(table.inviteeId),
     index("idx_invite_record_inviter").on(table.inviterId, table.createdAt),
   ],
+);
+
+/**
+ * 消费返利领取记录：一个自然日一行，`periodDate` 是北京时间口径的 `YYYY-MM-DD`。
+ * 当日消费与实发额度都在领取当时快照下来——之后改定价、改比例都不该让历史返利变数。
+ */
+export const cashbackClaims = sqliteTable(
+  "cashback_claim",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    periodDate: text("periodDate").notNull(),
+    /** 该日实际消费（credits），按 usage_log 汇总快照。 */
+    consumedCredits: real("consumedCredits").notNull().default(0),
+    /** 本次实发（credits），已按门槛与封顶裁过。 */
+    rewardCredits: real("rewardCredits").notNull().default(0),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [
+    // 一天只能领一次；并发重复领取由这条唯一索引挡（与签到同构）
+    unique("uq_cashback_claim").on(table.userId, table.periodDate),
+    index("idx_cashback_claim_period").on(table.periodDate),
+  ],
+);
+
+/**
+ * 任务成就领取记录：一行 = 一个用户领取过某个任务，之后不再重复发。
+ * 完成判定读的是各业务表的现场数据（见 `lib/tasks/tasks.ts`），这张表只记「领过」，不存进度。
+ */
+export const userTasks = sqliteTable(
+  "user_task",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    taskKey: text("taskKey").notNull(),
+    /** 领取当时实发的 credits；之后改后台奖励不影响历史。 */
+    rewardCredits: real("rewardCredits").notNull().default(0),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [unique("uq_user_task").on(table.userId, table.taskKey)],
 );
 
 /** 支付订单表：记录易支付（彩虹易支付）在线充值订单。 */

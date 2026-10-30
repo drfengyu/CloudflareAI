@@ -25,10 +25,15 @@ export function RedeemCodeDialog({
   linuxdoEnabled = false,
   linuxdoMin = 1,
   linuxdoMax = 1000,
+  bonusTiers = [],
+  bonusValidDays = 30,
 }: {
   linuxdoEnabled?: boolean;
   linuxdoMin?: number;
   linuxdoMax?: number;
+  /** 后台开启的充值阶梯赠送；空数组表示当前没有赠送活动。 */
+  bonusTiers?: { minCny: number; bonus: number }[];
+  bonusValidDays?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"online" | "redeem">("online");
@@ -37,6 +42,10 @@ export function RedeemCodeDialog({
   const [amount, setAmount] = useState<number>(PRESET_AMOUNTS[0]);
   const [customAmount, setCustomAmount] = useState("");
   const [channel, setChannel] = useState("alipay");
+
+  /** 取能满足的最高一档；与 lib/payment/bonus.ts 同口径（这里不能引服务端模块）。 */
+  const bonusFor = (amt: number) =>
+    bonusTiers.reduce((best, t) => (amt >= t.minCny && t.bonus > best ? t.bonus : best), 0);
 
   const channels = linuxdoEnabled ? [...CHANNELS, LINUXDO_CHANNEL] : CHANNELS;
   const isLinuxdo = channel === "linuxdo";
@@ -169,6 +178,26 @@ export function RedeemCodeDialog({
                   ? "使用 LinuxDO 积分充值，到账为永久余额，无有效期"
                   : "充值后到账为永久余额，无有效期"}
               </p>
+              {bonusTiers.length > 0 ? (
+                <div className="mt-2 rounded-lg border border-primary/20 bg-primary/5 p-2.5 text-xs">
+                  <p className="text-muted-foreground">
+                    {bonusFor(finalAmount) > 0 ? (
+                      <>
+                        本单额外赠送{" "}
+                        <strong className="text-foreground">{bonusFor(finalAmount).toLocaleString()}</strong> cr
+                        （临时余额，{bonusValidDays} 天内有效）
+                      </>
+                    ) : (
+                      <>当前金额未达到赠送门槛，凑到下面任一档即可获赠</>
+                    )}
+                  </p>
+                  <p className="mt-1 text-muted-foreground">
+                    {bonusTiers
+                      .map((t) => `${t.minCny} → +${t.bonus.toLocaleString()} cr`)
+                      .join("　·　")}
+                  </p>
+                </div>
+              ) : null}
             </div>
 
             <div>

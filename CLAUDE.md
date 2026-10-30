@@ -534,11 +534,16 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.9.0（2026-10-30，站内聊天 /chat + 渠道预检与 playground 限流补口）
-**下一版本**：v0.10.0（尚未选型，方向待确认；站内联网搜索因上游按次付费、没有合适免费方案已取消，见 `docs/features/chat.md` 同级记录）
+**当前版本**：v0.10.0（2026-10-30，三项 cr 流动活动：消费返利 + 用量冲榜 / 任务成就 / 充值阶梯赠送）
+**下一版本**：v0.11.0（尚未选型）
 
-- v0.9.0 未收口项：`/chat` 会话导出与公开分享页（`chat_session.shareToken` 已留列）、`chat_message.creditsUsed` 仍恒为 0。
-- 涉及生产迁移或线上奖池 / 余额调整时单独确认，不随代码推送自动执行。
+- v0.10.0 三项活动**全部默认关闭**：开与不开、比例 / 档位 / 每任务额度都在「后台 → 系统设置」由管理员决定。
+  本次发版**没有写任何 `option` 活动配置**，也没动线上奖池与任何真实用户余额。
+- 迁移 017（`cashback_claim`）与 018（`user_task`）是纯增量建表 DDL（`CREATE TABLE IF NOT EXISTS`），
+  2026-10-30 已在线上 D1 执行；两张表当时是空的，回退只需 `DROP TABLE`。
+- 顺延未做：`/chat` 会话导出与公开分享页（`chat_session.shareToken` 已留列）、`chat_message.creditsUsed` 仍恒为 0、
+  抽奖「翻牌夺宝」变体（券价 / 奖池 / 返还率三个数值要先定）。
+- 涉及线上奖池、真实用户余额与活动开关配置时仍然单独确认，不随代码推送自动执行。
 
 所有版本变更记录见根目录 [`CHANGELOG.md`](CHANGELOG.md)，遵循 [Keep a Changelog](https://keepachangelog.com/) 规范。
 

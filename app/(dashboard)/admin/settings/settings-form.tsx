@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
-import { updateBasicSettings, updatePricingSettings, updateCheckinSettings, updateInviteSettings, updateAuthChannels, updateEpaySettings, updateLinuxdoSettings } from "./actions";
+import { updateBasicSettings, updatePricingSettings, updateCheckinSettings, updateInviteSettings, updateCashbackSettings, updateRechargeBonusSettings, updateTaskSettings, updateAuthChannels, updateEpaySettings, updateLinuxdoSettings } from "./actions";
 import { toast } from "sonner";
 
 interface SettingsFormProps {
@@ -555,6 +555,353 @@ export function InviteSettingsForm({ initialSettings }: InviteSettingsFormProps)
           • 注册仍受 IP 频率限制（24 小时最多 3 个账号）
           <br />• 邀请码在用户首次打开「邀请好友」页时自动生成
         </p>
+      </div>
+
+      <Button type="submit" disabled={loading}>
+        {loading ? "保存中..." : "保存设置"}
+      </Button>
+    </form>
+  );
+}
+
+interface CashbackSettingsFormProps {
+  initialSettings: {
+    enabled: boolean;
+    rate: string;
+    minCredits: string;
+    cap: string;
+    validDays: string;
+    backfillDays: string;
+    leaderboardDays: string;
+  };
+}
+
+export function CashbackSettingsForm({ initialSettings }: CashbackSettingsFormProps) {
+  const [enabled, setEnabled] = useState(initialSettings.enabled);
+  const [rate, setRate] = useState(initialSettings.rate);
+  const [minCredits, setMinCredits] = useState(initialSettings.minCredits);
+  const [cap, setCap] = useState(initialSettings.cap);
+  const [validDays, setValidDays] = useState(initialSettings.validDays);
+  const [backfillDays, setBackfillDays] = useState(initialSettings.backfillDays);
+  const [leaderboardDays, setLeaderboardDays] = useState(initialSettings.leaderboardDays);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await updateCashbackSettings({
+        enabled,
+        rate,
+        minCredits,
+        cap,
+        validDays,
+        backfillDays,
+        leaderboardDays,
+      });
+      toast.success("消费返利设置已保存");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="cashback-enabled"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+          className="h-4 w-4 rounded border-border"
+        />
+        <span className="text-sm font-medium">启用消费返利（默认关闭）</span>
+      </label>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">返利比例（0–1）</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            max="1"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="0.1"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">0.1 表示按当日消费的 10% 返</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">单日封顶（credits）</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={cap}
+            onChange={(e) => setCap(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="200"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">每人每天最多返多少</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">起返门槛（credits）</label>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={minCredits}
+            onChange={(e) => setMinCredits(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="20"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">当日消费不满这个数不返</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">返利有效期（天）</label>
+          <input
+            type="number"
+            min="1"
+            value={validDays}
+            onChange={(e) => setValidDays(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="7"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">返到临时余额，过期作废</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">可补领天数</label>
+          <input
+            type="number"
+            min="1"
+            max="31"
+            value={backfillDays}
+            onChange={(e) => setBackfillDays(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="3"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">最多能往前补领几天的返利</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-1">冲榜窗口（天）</label>
+          <input
+            type="number"
+            min="1"
+            max="90"
+            value={leaderboardDays}
+            onChange={(e) => setLeaderboardDays(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="7"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">用量排行榜统计最近多少天</p>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+        <p className="text-xs text-muted-foreground">
+          <strong>口径：</strong>
+          <br />
+          • 按北京自然日结算，只算已经结束的日子；今天的消费次日才可领
+          <br />
+          • 消费取 <code className="font-mono">usage_log.creditsUsed</code> 的真实值，失败调用记 0，不参与返利
+          <br />
+          • 领取时把当日消费与实发额度快照进 <code className="font-mono">cashback_claim</code>，之后改比例/改价不影响历史
+          <br />
+          • 钱包流水记 type=8「消费返利」
+        </p>
+      </div>
+
+      <Button type="submit" disabled={loading}>
+        {loading ? "保存中..." : "保存设置"}
+      </Button>
+    </form>
+  );
+}
+
+interface RechargeBonusSettingsFormProps {
+  initialSettings: {
+    enabled: boolean;
+    validDays: string;
+    tiersJson: string;
+  };
+}
+
+export function RechargeBonusSettingsForm({ initialSettings }: RechargeBonusSettingsFormProps) {
+  const [enabled, setEnabled] = useState(initialSettings.enabled);
+  const [validDays, setValidDays] = useState(initialSettings.validDays);
+  const [tiersJson, setTiersJson] = useState(initialSettings.tiersJson);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await updateRechargeBonusSettings({ enabled, validDays, tiersJson });
+      toast.success("充值赠送设置已保存");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="recharge-bonus-enabled"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+          className="h-4 w-4 rounded border-border"
+        />
+        <span className="text-sm font-medium">启用充值阶梯赠送（默认关闭）</span>
+      </label>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">赠送有效期（天）</label>
+          <input
+            type="number"
+            min="1"
+            max="365"
+            value={validDays}
+            onChange={(e) => setValidDays(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="30"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">赠送进临时余额，到期作废</p>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">档位（JSON）</label>
+        <textarea
+          rows={5}
+          value={tiersJson}
+          onChange={(e) => setTiersJson(e.target.value)}
+          disabled={!enabled}
+          className="w-full resize-y rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs disabled:opacity-50"
+          placeholder='[{"minCny":50,"bonus":200},{"minCny":100,"bonus":600}]'
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          <code className="font-mono">minCny</code> 为实付金额下限（元；LinuxDO 通道按积分同口径），
+          <code className="font-mono">bonus</code> 为该档赠送的 credits；取能满足的最高一档，不叠加。
+        </p>
+      </div>
+
+      <Button type="submit" disabled={loading}>
+        {loading ? "保存中..." : "保存设置"}
+      </Button>
+    </form>
+  );
+}
+
+interface TaskSettingsFormProps {
+  initialSettings: {
+    enabled: boolean;
+    validDays: string;
+    rewardOverridesJson: string;
+  };
+  /** 代码里的任务清单，只用来给管理员看 key 和默认额度。 */
+  catalog: Array<{ key: string; title: string; target: number; defaultReward: number }>;
+}
+
+export function TaskSettingsForm({ initialSettings, catalog }: TaskSettingsFormProps) {
+  const [enabled, setEnabled] = useState(initialSettings.enabled);
+  const [validDays, setValidDays] = useState(initialSettings.validDays);
+  const [rewardOverridesJson, setRewardOverridesJson] = useState(initialSettings.rewardOverridesJson);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      await updateTaskSettings({ enabled, validDays, rewardOverridesJson });
+      toast.success("任务成就设置已保存");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <label className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          id="tasks-enabled"
+          checked={enabled}
+          onChange={(e) => setEnabled(e.target.checked)}
+          className="h-4 w-4 rounded border-border"
+        />
+        <span className="text-sm font-medium">启用任务成就奖励（默认关闭）</span>
+      </label>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">奖励有效期（天）</label>
+          <input
+            type="number"
+            min="1"
+            max="365"
+            value={validDays}
+            onChange={(e) => setValidDays(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+            placeholder="30"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">任务奖励进临时余额，到期作废</p>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">按任务覆盖奖励（JSON，可留空）</label>
+        <textarea
+          rows={4}
+          value={rewardOverridesJson}
+          onChange={(e) => setRewardOverridesJson(e.target.value)}
+          disabled={!enabled}
+          className="w-full resize-y rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs disabled:opacity-50"
+          placeholder='{"first_api":20,"checkin_streak":30}'
+        />
+        <p className="mt-1 text-xs text-muted-foreground">
+          键是下面列表里的 <code className="font-mono">key</code>，值是一次性发放的 credits；留空则用默认额度。
+          已领过的任务不受改数影响。
+        </p>
+        <div className="mt-2 overflow-hidden rounded-lg border border-border">
+          {catalog.map((task) => (
+            <div
+              key={task.key}
+              className="flex items-center justify-between gap-3 border-b border-border px-3 py-1.5 text-xs last:border-b-0"
+            >
+              <span className="truncate">
+                <span className="font-medium">{task.title}</span>
+                <span className="ml-2 font-mono text-muted-foreground">{task.key}</span>
+              </span>
+              <span className="shrink-0 tabular-nums text-muted-foreground">
+                {task.target > 1 ? `${task.target} 次 · ` : ""}默认 {task.defaultReward} cr
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <Button type="submit" disabled={loading}>

@@ -18,12 +18,17 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: {
-    command: "npm run dev",
-    url: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
-    reuseExistingServer: !process.env.CI,
-    // 换端口跑时要同时覆盖 NEXTAUTH_URL / NEXT_PUBLIC_APP_URL，
-    // 否则未登录请求会被重定向到 .env.local 里写死的 3000，探活打到别的应用上。
-    timeout: 240_000,
-  },
+  // PLAYWRIGHT_REUSE_DEV_SERVER=1：假定 dev 已经自己起好了，不要再让 Playwright 拉一份。
+  // 它 reuseExistingServer 只认「探活有响应」，冷编译那一下探活会超时，接着再起一个 next，
+  // 然后被同端口上已有的 dev 直接顶死（EADDRINUSE / "Another next dev server is already running"）。
+  webServer: process.env.PLAYWRIGHT_REUSE_DEV_SERVER
+    ? undefined
+    : {
+        command: "npm run dev",
+        url: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
+        reuseExistingServer: !process.env.CI,
+        // 换端口跑时要同时覆盖 NEXTAUTH_URL / NEXT_PUBLIC_APP_URL，
+        // 否则未登录请求会被重定向到 .env.local 里写死的 3000，探活打到别的应用上。
+        timeout: 240_000,
+      },
 });

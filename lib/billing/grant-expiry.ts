@@ -2,8 +2,10 @@
  * 钱包「充值记录」的可见性条件（含 userId 与起始时间）。
  *
  * 活动（抽奖）流水 type=6 整类不进钱包：买券/倒扣属于活动账目，中奖发放另有
- * 「我的活动记录」可查。剩下的发放里只有兑换码(type=1)与签到(type=3)会过期，
- * 管理员充值(type=2)、在线充值(type=5)等是永久余额，一律保留。
+ * 「我的活动记录」可查。剩下的发放里只有兑换码(type=1)、签到(type=3)、消费返利(type=8)、
+ * 任务成就(type=9)、充值赠送(type=10) 会过期，管理员充值(type=2)、在线充值(type=5)等是永久余额，一律保留。
+ * 新增「会过期的发放类型」时必须同时加进下面的 CASE 与 NOT IN 列表，
+ * 否则该流水要么永久挂着（到期了还显示），要么整类消失。
  *
  * 不能用「对应的 temporary_balance 行还在不在」判断是否过期：消费会删除/扣减
  * 临时余额行（`lib/usage/meter.ts`），当天就被花掉的奖励会立刻从流水里消失。
@@ -43,12 +45,18 @@ export async function walletTopupWhere(
   since: Date,
   now: Date,
 ): Promise<SQL> {
-  const checkinValidDays = await readValidDaysOption("checkin_valid_days");
+  const [checkinValidDays, cashbackValidDays, rechargeBonusValidDays, taskValidDays] =
+    await Promise.all([
+      readValidDaysOption("checkin_valid_days"),
+      readValidDaysOption("cashback_valid_days"),
+      readValidDaysOption("recharge_bonus_valid_days"),
+      readValidDaysOption("tasks_valid_days"),
+    ]);
 
   const redemptionValidDays = sql`COALESCE((SELECT ${redemptions.balanceValidDays} FROM ${redemptions} WHERE ${redemptions.id} = ${topups.redemptionId}), ${DEFAULT_VALID_DAYS})`;
-  const validDays = sql`CASE ${topups.type} WHEN 1 THEN ${redemptionValidDays} ELSE ${checkinValidDays} END`;
+  const validDays = sql`CASE ${topups.type} WHEN 1 THEN ${redemptionValidDays} WHEN 8 THEN ${cashbackValidDays} WHEN 9 THEN ${taskValidDays} WHEN 10 THEN ${rechargeBonusValidDays} ELSE ${checkinValidDays} END`;
 
-  return sql`${topups.userId} = ${userId} AND ${topups.type} <> 6 AND ${topups.createdAt} >= ${since.getTime()} AND (${topups.type} NOT IN (1, 3) OR ${topups.createdAt} > ${now.getTime()} - ${DAY_MS} * ${validDays})`;
+  return sql`${topups.userId} = ${userId} AND ${topups.type} <> 6 AND ${topups.createdAt} >= ${since.getTime()} AND (${topups.type} NOT IN (1, 3, 8, 9, 10) OR ${topups.createdAt} > ${now.getTime()} - ${DAY_MS} * ${validDays})`;
 }
 
 /**

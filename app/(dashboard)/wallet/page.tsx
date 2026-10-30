@@ -13,6 +13,7 @@ import { TopupRecordsCard } from "./topup-records-card";
 import { formatCredits } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 import { listWalletTopupPage, walletTopupWhere } from "@/lib/billing/grant-expiry";
+import { getRechargeBonusSettings } from "@/lib/payment/bonus";
 import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
 import { PAY_ORDER_PAGE_SIZE, serializePayOrder } from "@/lib/payment/pay-order-view";
 import { formatCnDate, cnDaysAgoStart } from "@/lib/date";
@@ -33,7 +34,7 @@ export default async function WalletPage({
 
   // 2026-10-17 性能：这些查询互不依赖（全都只按 userId 取数），原先是一条接一条 await，
   // 串行 5 次 D1 往返 ≈ 2 秒；并发成一波后只剩最慢那条的时间。取数口径一字未改。
-  const [userRows, tempBalances, payOrders, linuxdoConfig, topupWhere] = await Promise.all([
+  const [userRows, tempBalances, payOrders, linuxdoConfig, bonusConfig, topupWhere] = await Promise.all([
     // 获取用户永久余额
     db
       .select({ balanceCredits: users.balanceCredits })
@@ -56,6 +57,8 @@ export default async function WalletPage({
       .orderBy(desc(paymentOrders.createdAt))
       .limit(PAY_ORDER_PAGE_SIZE + 1),
     getLinuxdoConfig(),
+    // 充值阶梯赠送：只在充值弹窗里预告「本单额外赠送」，实际发放由订单结算路径负责
+    getRechargeBonusSettings(),
     // 充值流水的可见性条件（含近三个月裁剪 + 发放到期过滤，活动流水整类排除）
     walletTopupWhere(userId, historyCutoff, now),
   ]);
@@ -153,6 +156,8 @@ export default async function WalletPage({
               linuxdoEnabled={linuxdoConfig.enabled}
               linuxdoMin={linuxdoConfig.minCny}
               linuxdoMax={linuxdoConfig.maxCny}
+              bonusTiers={bonusConfig.enabled ? bonusConfig.tiers : []}
+              bonusValidDays={bonusConfig.validDays}
             />
           </CardContent>
         </Card>

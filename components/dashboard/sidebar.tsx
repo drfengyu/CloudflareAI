@@ -23,6 +23,8 @@ import {
   Gift,
   BookOpen,
   MessagesSquare,
+  PiggyBank,
+  ListChecks,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -47,6 +49,8 @@ const NAV: NavGroup[] = [
       { href: "/pricing", label: "定价", icon: DollarSign },
       { href: "/docs", label: "API 文档", icon: BookOpen },
       { href: "/lottery", label: "限时活动", icon: Sparkles },
+      { href: "/cashback", label: "消费返利", icon: PiggyBank },
+      { href: "/tasks", label: "任务成就", icon: ListChecks },
     ],
   },
   {

@@ -13,6 +13,9 @@ import {
   LOTTERY_CONFIG_KEY,
   type LotteryConfig,
 } from "@/lib/lottery/prize-math";
+import { setSetting } from "@/lib/settings";
+import { sanitizeBonusTiers } from "@/lib/payment/bonus";
+import { TASKS } from "@/lib/tasks/tasks";
 import {
   ANNOUNCEMENT_MAX,
   ANNOUNCEMENT_TYPES,
@@ -247,6 +250,176 @@ export async function updateInviteSettings(formData: {
   revalidatePath("/admin/settings");
   revalidatePath("/invite");
   revalidatePath("/register");
+
+  return { success: true };
+}
+
+export async function updateCashbackSettings(formData: {
+  enabled: boolean;
+  rate: string;
+  minCredits: string;
+  cap: string;
+  validDays: string;
+  backfillDays: string;
+  leaderboardDays: string;
+}) {
+  const currentUserId = await requireUser();
+
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const rate = parseFloat(formData.rate);
+  const minCredits = parseFloat(formData.minCredits);
+  const cap = parseFloat(formData.cap);
+  const validDays = parseInt(formData.validDays, 10);
+  const backfillDays = parseInt(formData.backfillDays, 10);
+  const leaderboardDays = parseInt(formData.leaderboardDays, 10);
+
+  if (!Number.isFinite(rate) || rate < 0 || rate > 1) {
+    throw new Error("返利比例需在 0 ~ 1 之间（0.1 表示 10%）");
+  }
+  if (!Number.isFinite(minCredits) || minCredits < 0 || minCredits > 1_000_000) {
+    throw new Error("起返门槛需在 0 ~ 1000000 credits 之间");
+  }
+  if (!Number.isFinite(cap) || cap < 0 || cap > 1_000_000) {
+    throw new Error("单日封顶需在 0 ~ 1000000 credits 之间");
+  }
+  if (!Number.isFinite(validDays) || validDays < 1 || validDays > 365) {
+    throw new Error("返利有效期需在 1 ~ 365 天之间");
+  }
+  if (!Number.isFinite(backfillDays) || backfillDays < 1 || backfillDays > 31) {
+    throw new Error("可补领天数需在 1 ~ 31 天之间");
+  }
+  if (!Number.isFinite(leaderboardDays) || leaderboardDays < 1 || leaderboardDays > 90) {
+    throw new Error("冲榜窗口需在 1 ~ 90 天之间");
+  }
+
+  // 七个键并发单条 upsert：走 upsertOption 会变成「每条先 SELECT 再写」共 14 次串行往返。
+  await Promise.all([
+    setSetting("cashback_enabled", formData.enabled),
+    setSetting("cashback_rate", rate),
+    setSetting("cashback_min_credits", minCredits),
+    setSetting("cashback_cap", cap),
+    setSetting("cashback_valid_days", validDays),
+    setSetting("cashback_backfill_days", backfillDays),
+    setSetting("cashback_leaderboard_days", leaderboardDays),
+  ]);
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/cashback");
+
+  return { success: true };
+}
+
+/** 充值阶梯赠送：档位是一段 JSON，写入前先裁一遍，避免把畸形配置发给结算链路。 */
+export async function updateRechargeBonusSettings(formData: {
+  enabled: boolean;
+  validDays: string;
+  tiersJson: string;
+}) {
+  const currentUserId = await requireUser();
+
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const validDays = parseInt(formData.validDays, 10);
+  if (!Number.isFinite(validDays) || validDays < 1 || validDays > 365) {
+    throw new Error("赠送有效期需在 1 ~ 365 天之间");
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(formData.tiersJson || "[]");
+  } catch {
+    throw new Error("档位不是合法 JSON，形如 [{\"minCny\":50,\"bonus\":200}]");
+  }
+  const tiers = sanitizeBonusTiers(parsed);
+  if (formData.enabled && tiers.length === 0) {
+    throw new Error("开启赠送需要至少一个有效档位");
+  }
+
+  await Promise.all([
+    setSetting("recharge_bonus_enabled", formData.enabled),
+    setSetting("recharge_bonus_valid_days", validDays),
+    setSetting("recharge_bonus_tiers", JSON.stringify(tiers)),
+  ]);
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/wallet");
+
+  return { success: true };
+}
+
+/**
+ * 任务成就配置：开关、临时余额有效期、按任务 key 覆盖的一次性额度。
+ * 未知的 key 直接报错而不是悄悄丢掉——写错一个字母就等于那条覆盖没生效。
+ */
+export async function updateTaskSettings(formData: {
+  enabled: boolean;
+  validDays: string;
+  rewardOverridesJson: string;
+}) {
+  const currentUserId = await requireUser();
+
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const validDays = parseInt(formData.validDays, 10);
+  if (!Number.isFinite(validDays) || validDays < 1 || validDays > 365) {
+    throw new Error("奖励有效期需在 1 ~ 365 天之间");
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(formData.rewardOverridesJson.trim() || "{}");
+  } catch {
+    throw new Error("奖励覆盖不是合法 JSON，形如 {\"first_api\":20}");
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error("奖励覆盖需要是一个对象，形如 {\"first_api\":20}");
+  }
+
+  const known = new Set(TASKS.map((t) => t.key));
+  const overrides: Record<string, number> = {};
+  for (const [key, raw] of Object.entries(parsed)) {
+    if (!known.has(key)) throw new Error(`未知任务 key：${key}`);
+    const reward = Number(raw);
+    if (!Number.isFinite(reward) || reward < 0 || reward > 100_000) {
+      throw new Error(`「${key}」的奖励需在 0 ~ 100000 credits 之间`);
+    }
+    overrides[key] = Math.round(reward * 100) / 100;
+  }
+
+  await Promise.all([
+    setSetting("tasks_enabled", formData.enabled),
+    setSetting("tasks_valid_days", validDays),
+    setSetting("task_reward_overrides", JSON.stringify(overrides)),
+  ]);
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/tasks");
+  revalidatePath("/wallet");
 
   return { success: true };
 }

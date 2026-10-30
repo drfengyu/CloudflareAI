@@ -2,6 +2,7 @@ import { db } from "@/lib/db/d1-http";
 import { paymentOrders, topups, users } from "@/lib/db/schema";
 import { and, desc, eq, lte, sql } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
+import { grantRechargeBonus } from "./bonus";
 import { getEpayConfig, queryEpayOrder } from "./epay";
 import { getLinuxdoConfig, queryLinuxdoOrder } from "./linuxdo";
 
@@ -160,7 +161,14 @@ export async function settleRechargeOrder(
   orderNo: string,
   tradeNo: string,
   notifyPayload: Record<string, unknown>,
-): Promise<{ settled: boolean; orderId?: string; credits?: number; userId?: string }> {
+): Promise<{
+  settled: boolean;
+  orderId?: string;
+  credits?: number;
+  userId?: string;
+  /** 本次阶梯赠送的 credits（未开启或不满足档位为 0）。 */
+  bonus?: number;
+}> {
   // 1. 原子抢占：仅当订单仍为「待支付」时置为「已支付」
   await db
     .update(paymentOrders)
@@ -204,13 +212,25 @@ export async function settleRechargeOrder(
     createdAt: new Date(),
   });
 
-  // 5. 完成订单
+  // 5. 阶梯赠送（后台开了才有）：赠送失败只记日志，绝不能把已到账的主充值一起带回滚。
+  let bonus = 0;
+  try {
+    bonus = await grantRechargeBonus({
+      userId: order.userId,
+      orderNo,
+      amountCny: order.amountCny,
+    });
+  } catch (err) {
+    console.error(`[settleOrder] 充值赠送发放失败 订单=${orderNo}:`, err);
+  }
+
+  // 6. 完成订单
   await db
     .update(paymentOrders)
     .set({ status: PAY_STATUS.COMPLETED })
     .where(eq(paymentOrders.orderNo, orderNo));
 
-  return { settled: true, orderId: order.id, credits: order.credits, userId: order.userId };
+  return { settled: true, orderId: order.id, credits: order.credits, userId: order.userId, bonus };
 }
 
 /** 关闭订单（超时/手动）。 */

@@ -5,10 +5,11 @@ import { users, options } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
-import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, InviteSettingsForm, AuthChannelsForm, EpaySettingsForm, LinuxdoSettingsForm } from "./settings-form";
+import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, InviteSettingsForm, CashbackSettingsForm, RechargeBonusSettingsForm, TaskSettingsForm, AuthChannelsForm, EpaySettingsForm, LinuxdoSettingsForm } from "./settings-form";
 import { DashboardInfoForm } from "./dashboard-info-form";
 import { LotteryForm } from "./lottery-form";
 import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
+import { TASKS } from "@/lib/tasks/tasks";
 import type { AnnouncementInput, FaqItem } from "@/lib/settings/dashboard-info";
 
 export const dynamic = "force-dynamic";
@@ -129,6 +130,61 @@ export default async function AdminSettingsPage() {
                 inviterReward: settings.invite_reward_inviter || "300",
                 inviteeReward: settings.invite_reward_invitee || "200",
               }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">消费返利</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CashbackSettingsForm
+              initialSettings={{
+                enabled: settings.cashback_enabled === "true" || settings.cashback_enabled === "1",
+                rate: settings.cashback_rate || "0.1",
+                minCredits: settings.cashback_min_credits || "20",
+                cap: settings.cashback_cap || "200",
+                validDays: settings.cashback_valid_days || "7",
+                backfillDays: settings.cashback_backfill_days || "3",
+                leaderboardDays: settings.cashback_leaderboard_days || "7",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">充值阶梯赠送</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RechargeBonusSettingsForm
+              initialSettings={{
+                enabled: settings.recharge_bonus_enabled === "true" || settings.recharge_bonus_enabled === "1",
+                validDays: settings.recharge_bonus_valid_days || "30",
+                tiersJson: settings.recharge_bonus_tiers || "[]",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">任务成就奖励</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TaskSettingsForm
+              initialSettings={{
+                enabled: settings.tasks_enabled === "true" || settings.tasks_enabled === "1",
+                validDays: settings.tasks_valid_days || "30",
+                rewardOverridesJson: settings.task_reward_overrides || "{}",
+              }}
+              catalog={TASKS.map((t) => ({
+                key: t.key,
+                title: t.title,
+                target: t.target,
+                defaultReward: t.defaultReward,
+              }))}
             />
           </CardContent>
         </Card>

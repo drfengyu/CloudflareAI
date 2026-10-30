@@ -5,6 +5,71 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.10.0] - 2026-10-30
+
+### 新增
+
+三项让 cr 流动起来的活动，**全部默认关闭**：部署本身不发一分钱，开与不开、比例多少都由后台决定。
+上线前的只读盘点是决策依据——全站真实 API 消耗约 863.91 cr / 22 次 / 3 个用户每月，而回收几乎只由抽奖转盘驱动，
+所以第一项直接挂在「真实消耗」上。
+
+- **消费返利 + 用量冲榜 `/cashback`**（`lib/db/schema.ts` + `migrations/017_cashback_claim.sql` + `lib/cashback/claims.ts`
+  + `app/(dashboard)/cashback/*` + `components/cashback/claim-panel.tsx` + `lib/settings/index.ts` + `admin/settings/*`）：
+  按北京自然日结算、用户手动领取，只有已结束的日子可领且最多往前补 `cashback_backfill_days`（默认 3）天，
+  攒很久一次性领走大额的路径被这个窗口堵死。单日返利 = `min(当日消费 × rate, cap)`，默认 `rate=0.1`、
+  满 `minCredits=20` cr 起返、封顶 `cap=200` cr；发放进**临时余额**（`cashback_valid_days` 默认 7 天），
+  记 `topup type=8`。当日消费取 `usage_log.creditsUsed` 汇总——失败调用记 0 cr，所以不用按 `status` 过滤。
+  领取时把当日消费与实发额度快照进 `cashback_claim`，之后改比例、改定价都不会让历史返利变数。
+  D1 没有事务，`claimCashback` 因此**先插占位行吃 `uq_cashback_claim(userId, periodDate)` 唯一索引，再发光，
+  发放失败删掉占位**；反过来先发光，连点两次就是真发两份。
+  同页的用量冲榜按窗口（默认 7 天）聚合 `usage_log`，SQL 只做 `GROUP BY`、排序放 JS
+  （D1 上 `ORDER BY` 聚合表达式或 SELECT 别名会解析失败），展示走 `lib/mask.ts` 的脱敏标签且**只读不发放**。
+  迁移 017 是纯增量 DDL（`CREATE TABLE IF NOT EXISTS` + 两条索引），2026-10-30 已在线上 D1 执行，既有表与数据未动。
+  详见 `docs/features/cashback.md`。
+- **任务成就一次性奖励 `/tasks`**（`migrations/018_user_task.sql` + `lib/tasks/tasks.ts` + `app/(dashboard)/tasks/*`
+  + `components/tasks/task-list.tsx` + `components/dashboard/sidebar.tsx` + `admin/settings/*`）：
+  7 个任务（首次站内对话 5 cr / 跑通一次 API 10 cr / 第一次充值 10 cr / 累计签到 7 天 15 cr / 邀到第一位朋友 20 cr
+  / 第一次抽奖 5 cr / 首次领到消费返利 5 cr，默认合计 70 cr）。任务清单**写在代码里**、后台只给开关 + 有效期 +
+  按 key 覆盖额度：完成判定本来就是读各业务表的现场数据，做成可配置就得连查询表达式一起配，收益为零还会配出
+  永远达不成的任务。**进度不落库**——`listTasks` 读一次 `user_task` 拿「领过哪些」，再并发 7 条 `COUNT` 取现场进度，
+  所以没有「状态同步」这件事，改任务口径也不需要回填历史。`first_api` 只算 `channel ∈ (openai, anthropic)` 且
+  `status=ok` 的调用，站内 `/chat` 与 playground 记的是 `channel='web'`，不计入这一项，否则目标形同虚设。
+  后三个任务刻意挂在签到 / 邀请 / 抽奖 / 返利上互相引流。
+  领取与消费返利同构（先插 `uq_user_task(userId, taskKey)` 占位再发光），服务端**重算一次进度**，
+  前端可领状态只是提示不是判据；实发额度快照进 `rewardCredits`，后台改数不影响历史。记 `topup type=9`。
+  迁移 018 同为纯增量 DDL，2026-10-30 已在线上 D1 执行。详见 `docs/features/task-achievements.md`。
+- **充值阶梯赠送**（`lib/payment/bonus.ts` + `lib/payment/order.ts` + `app/(dashboard)/wallet/*` + `admin/settings/*`）：
+  按订单实付取「满足的最高一档」发一次固定额度、**不叠加**，档位是后台的一段 JSON（最多 20 档，
+  `sanitizeBonusTiers` 统一裁剪非数字 / 去重 / 升序，管理员手填脏值不会算出可用数以外的结果）。
+  `minCny` 与订单 `amountCny` 同口径，所以支付宝 / 微信（元）与 LinuxDO 积分通道共用一张档位表。
+  赠送进**临时余额**（`recharge_bonus_valid_days` 默认 30 天）而非永久余额：主充值本来就是永久的，
+  赠送带期限既能促销又不让存量无限堆积；记 `topup type=10`。
+  发放挂在 `settleRechargeOrder` 的「抢占成功」分支（重复回调进不到这里，所以不需要额外幂等键），
+  整段包 `try/catch`——**赠送失败绝不回滚主充值**，用户的钱已到账，不能因少送一笔把充值也变成未到账。
+  充值弹窗按当前所选金额实时预告「本单额外赠送 X cr」并列出档位阶梯。
+  详见 `docs/features/recharge-bonus.md`。
+- **钱包账本识别新流水**（`lib/billing/grant-expiry.ts` + `wallet/topup-records-card.tsx`）：
+  `type=8 消费返利` / `type=9 任务奖励` / `type=10 充值赠送` 全部登记进到期过滤的 CASE 与 `NOT IN` 列表
+  （新增「会过期的发放类型」漏登记，该流水要么到期还挂着、要么整类消失），有效天数各读自己的 option 键。
+- **端到端可以在 dev 已起好的情况下跑**（`playwright.config.ts`）：新增 `PLAYWRIGHT_REUSE_DEV_SERVER=1` 跳过
+  `webServer`。`reuseExistingServer` 只认「探活有响应」，冷编译那一下探活超时后它会再 spawn 一个 `next dev`，
+  撞上同目录锁直接 `Another next dev server is already running` 把整轮测试带崩。
+
+### 验证
+
+- `npm run typecheck` / `npx eslint` / `npm run build` 全绿（build 路由表已含 `/cashback`、`/tasks`）。
+- **一次性脚本对 `test@example.com` 走完整领取链路并逐项还原**：`first_api` 进度 1/1 → 领取 → 新增 1 行临时余额
+  （10 cr、30 天到期）+ 1 行 `topup type=9` + 1 行 `user_task`；紧接着重复领取被服务端挡下（`该任务奖励已领取`）；
+  按 id 删掉这 3 行后与基线逐表对齐，**残留 0 行**。脚本只在进程内把 `enabled` 当作 true，
+  **没有写 `option` 表**，线上三项活动仍是关闭态。
+- `tests/e2e/v010-activities.spec.ts`（1 passed，14.6s，全程只读）：侧栏出现「消费返利」「任务成就」；
+  `/cashback`、`/tasks` 在关闭态各自给出「当前未开启」横幅、逐日/逐任务标注「活动未开启」且**没有任何可点的领取按钮**；
+  `/wallet` 充值弹窗在赠送关闭时不出现「本单额外赠送」提示。
+- 未做（如实记录）：`grantRechargeBonus` 没在真实订单上端到端跑过——那需要临时把 `recharge_bonus_enabled` 写成
+  true，属于线上活动配置改动，按约定留给管理员在后台自行开启；其写库形状与已验证的任务奖励发放同构。
+- 过程中踩到 `.next/dev` 缓存脏导致 `/dashboard`、`/tasks` 对已登录用户返回 404（未登录却是 302），
+  清掉 `.next/dev` 重启即恢复——遇到「页面明明存在却 404」先怀疑缓存，别去翻代码。
+
 ## [0.9.0] - 2026-10-30
 
 ### 新增
