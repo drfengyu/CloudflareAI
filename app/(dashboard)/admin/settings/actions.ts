@@ -13,6 +13,11 @@ import {
   LOTTERY_CONFIG_KEY,
   type LotteryConfig,
 } from "@/lib/lottery/prize-math";
+import {
+  RAIDEN_CONFIG_KEY,
+  sanitizeRaidenConfig,
+  type RaidenConfig,
+} from "@/lib/raiden/config";
 import { setSetting } from "@/lib/settings";
 import { sanitizeBonusTiers } from "@/lib/payment/bonus";
 import { TASKS } from "@/lib/tasks/tasks";
@@ -770,6 +775,113 @@ export async function updateLotterySettings(formData: {
 
   revalidatePath("/admin/settings");
   revalidatePath("/lottery");
+
+  return { success: true };
+}
+
+/** 雷电行动四个可购买道具的键，顺序与配置结构一致。 */
+const RAIDEN_ITEM_KEYS = ["weapon", "bomb", "shield", "life"] as const;
+const RAIDEN_ITEM_LABEL: Record<(typeof RAIDEN_ITEM_KEYS)[number], string> = {
+  weapon: "火力强化",
+  bomb: "炸弹补给",
+  shield: "能量护盾",
+  life: "备用机体",
+};
+/** 单局上限：与 sanitizeRaidenConfig 的裁剪范围保持一致，配大了读回来也会被裁。 */
+const RAIDEN_ITEM_MAX_CAP: Record<(typeof RAIDEN_ITEM_KEYS)[number], number> = {
+  weapon: 2,
+  bomb: 5,
+  shield: 1,
+  life: 5,
+};
+
+/** 限时活动（雷电行动）配置的保存入口 */
+export async function updateRaidenSettings(formData: {
+  enabled: boolean;
+  startAt: string;
+  endAt: string;
+  dailyRuns: number;
+  rewardValidDays: number;
+  repeatDailyCap: number;
+  revivePriceCredits: number;
+  maxRevives: number;
+  minStageSeconds: number;
+  maxStageSeconds: number;
+  items: Record<(typeof RAIDEN_ITEM_KEYS)[number], { price: number; max: number }>;
+  stages: { stage: number; firstClear: number; repeat: number }[];
+}) {
+  const currentUserId = await requireUser();
+
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const startAt = formData.startAt.trim();
+  const endAt = formData.endAt.trim();
+  const startMs = parseCnWallClock(startAt);
+  const endMs = parseCnWallClock(endAt);
+  if (formData.enabled) {
+    if (startMs === null) throw new Error("开始时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs === null) throw new Error("结束时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs <= startMs) throw new Error("结束时间必须晚于开始时间");
+  }
+
+  const minStageSeconds = Math.trunc(
+    requireNumber(formData.minStageSeconds, "单关最短用时", 5, 600),
+  );
+  const maxStageSeconds = Math.trunc(
+    requireNumber(formData.maxStageSeconds, "单关最长用时", 120, 7200),
+  );
+  if (minStageSeconds >= maxStageSeconds) {
+    throw new Error("单关最长用时应大于最短用时");
+  }
+
+  const items = {} as RaidenConfig["items"];
+  for (const key of RAIDEN_ITEM_KEYS) {
+    const label = RAIDEN_ITEM_LABEL[key];
+    items[key] = {
+      price: requireNumber(formData.items?.[key]?.price, `${label}单价`, 1, 1_000_000),
+      max: Math.trunc(
+        requireNumber(formData.items?.[key]?.max, `${label}单局上限`, 0, RAIDEN_ITEM_MAX_CAP[key]),
+      ),
+    };
+  }
+
+  const stages = [1, 2, 3].map((no) => {
+    const row = formData.stages?.find((s) => Number(s?.stage) === no);
+    return {
+      stage: no,
+      firstClear: requireNumber(row?.firstClear, `第 ${no} 关首通奖励`, 0, 1_000_000),
+      repeat: requireNumber(row?.repeat, `第 ${no} 关重复通关奖励`, 0, 1_000_000),
+    };
+  });
+
+  const config = sanitizeRaidenConfig({
+    enabled: formData.enabled === true,
+    startAt,
+    endAt,
+    dailyRuns: Math.trunc(requireNumber(formData.dailyRuns, "每日出击次数", 1, 100)),
+    rewardValidDays: Math.trunc(requireNumber(formData.rewardValidDays, "奖励有效期", 1, 3650)),
+    repeatDailyCap: requireNumber(formData.repeatDailyCap, "重复奖励每日封顶", 0, 1_000_000),
+    revivePriceCredits: requireNumber(formData.revivePriceCredits, "复活价格", 1, 1_000_000),
+    maxRevives: Math.trunc(requireNumber(formData.maxRevives, "单局复活次数", 0, 10)),
+    minStageSeconds,
+    maxStageSeconds,
+    items,
+    stages,
+  });
+
+  await upsertOption(RAIDEN_CONFIG_KEY, JSON.stringify(config));
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin/raiden");
+  revalidatePath("/raiden");
 
   return { success: true };
 }

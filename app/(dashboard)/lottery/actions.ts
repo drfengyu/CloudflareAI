@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/usage/meter";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { spendCredits } from "@/lib/billing/spend";
 import { getLotteryConfig } from "@/lib/lottery/config";
 import {
   activityWindow,
@@ -38,7 +39,6 @@ import {
   pickUnusedTickets,
   refundClawback,
   revertDrawStats,
-  spendCredits,
   unlockTickets,
   type ClawbackReceipt,
   type UnusedTicketPick,

@@ -201,7 +201,7 @@ export const topups = sqliteTable("topup", {
     .references(() => users.id, { onDelete: "cascade" }),
   /** 变动金额（credits，可正可负，支持小数）。 */
   amount: real("amount").notNull(),
-  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励 / 8=消费返利 / 9=任务成就 / 10=充值赠送。 */
+  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励 / 8=消费返利 / 9=任务成就 / 10=充值赠送 / 11=雷电行动（装备/复活为负、通关奖励为正）。 */
   type: integer("type").notNull(),
   /** 描述：如"兑换码 ABC123"、"管理员充值"、"后台调整"。 */
   description: text("description"),
@@ -605,6 +605,110 @@ export const lotteryUserStats = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.userId, table.scope] })],
 );
+
+/**
+ * 限时活动·雷电行动：一次出击一行。
+ *
+ * 客户端是游戏权威，服务端只认「这一局确实开了这么久、关卡顺序对」再发奖；
+ * 每笔 CR 花费（出击装备、复活）都在这张表和 `topup` 流水里各留一份。
+ */
+export const raidenRuns = sqliteTable(
+  "raiden_run",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 活动轮次标识（活动 startAt 字符串）。 */
+    activityKey: text("activityKey"),
+    /** active=进行中 / cleared=通关 / failed=阵亡结束 / abandoned=主动放弃。 */
+    status: text("status").$type<"active" | "cleared" | "failed" | "abandoned">().notNull().default("active"),
+    /** 出击装备快照（JSON，审计用）。 */
+    loadout: text("loadout"),
+    /** 起始火力等级（1-3）。 */
+    power: integer("power").notNull().default(1),
+    /** 起始炸弹数。 */
+    bombs: integer("bombs").notNull().default(3),
+    /** 起始生命数。 */
+    lives: integer("lives").notNull().default(3),
+    /** 本局付费复活次数。 */
+    revives: integer("revives").notNull().default(0),
+    /** 本局装备 + 复活共花掉的 cr。 */
+    creditsSpent: real("creditsSpent").notNull().default(0),
+    /** 已结算通过的最高关数（0 = 尚未通关）。 */
+    stage: integer("stage").notNull().default(0),
+    /** 已结算关卡分数之和。 */
+    score: integer("score").notNull().default(0),
+    startedAt: integer("startedAt", { mode: "timestamp_ms" }).notNull(),
+    /** 上一关结算时间；下一关的最短时长校验从这里起算。 */
+    lastSettleAt: integer("lastSettleAt", { mode: "timestamp_ms" }).notNull(),
+    endedAt: integer("endedAt", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    index("idx_raiden_run_user").on(table.userId, table.activityKey, table.startedAt),
+    index("idx_raiden_run_board").on(table.activityKey, table.score),
+  ],
+);
+
+export type RaidenRun = typeof raidenRuns.$inferSelect;
+
+/**
+ * 每一关的结算流水：`(runId, stageNo)` 唯一，重复提交不会重复发奖。
+ * 重复通关奖励的每日封顶按这张表的 `createdAt` 汇总。
+ */
+export const raidenClears = sqliteTable(
+  "raiden_clear",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    runId: text("runId").notNull(),
+    activityKey: text("activityKey").notNull(),
+    stageNo: integer("stageNo").notNull(),
+    score: integer("score").notNull().default(0),
+    /** first=本活动首次通关该关 / repeat=重复通关。 */
+    kind: text("kind").$type<"first" | "repeat">().notNull(),
+    /** 本次实发 cr（重复奖励可能被日封顶裁成 0）。 */
+    rewardCredits: real("rewardCredits").notNull().default(0),
+    durationMs: integer("durationMs").notNull().default(0),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [
+    unique("uq_raiden_clear_run_stage").on(table.runId, table.stageNo),
+    index("idx_raiden_clear_user").on(table.userId, table.activityKey, table.createdAt),
+    index("idx_raiden_clear_stage").on(table.activityKey, table.stageNo),
+  ],
+);
+
+export type RaidenClear = typeof raidenClears.$inferSelect;
+
+/**
+ * 每用户 × 活动轮次 × 关卡的累计进度。第一次 INSERT 命中即为首通：
+ * 并发两个请求同时通关同一关时，只有一个能插进去，另一个按重复通关处理。
+ */
+export const raidenProgress = sqliteTable(
+  "raiden_progress",
+  {
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    activityKey: text("activityKey").notNull(),
+    stageNo: integer("stageNo").notNull(),
+    firstClearedAt: integer("firstClearedAt", { mode: "timestamp_ms" }).notNull(),
+    clears: integer("clears").notNull().default(1),
+    bestScore: integer("bestScore").notNull().default(0),
+    /** 该关最快通关用时（毫秒）；用于展示个人最佳。 */
+    bestDurationMs: integer("bestDurationMs"),
+    updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.activityKey, table.stageNo] }),
+    index("idx_raiden_progress_activity").on(table.activityKey, table.stageNo),
+  ],
+);
+
+export type RaidenProgressRow = typeof raidenProgress.$inferSelect;
 
 /**
  * 2026-10-17 新增：跨实例的固定窗口限流计数。

@@ -8,7 +8,9 @@ import { redirect } from "next/navigation";
 import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, InviteSettingsForm, CashbackSettingsForm, RechargeBonusSettingsForm, TaskSettingsForm, AuthChannelsForm, EpaySettingsForm, LinuxdoSettingsForm } from "./settings-form";
 import { DashboardInfoForm } from "./dashboard-info-form";
 import { LotteryForm } from "./lottery-form";
+import { RaidenForm } from "./raiden-form";
 import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
+import { sanitizeRaidenConfig } from "@/lib/raiden/config";
 import { TASKS } from "@/lib/tasks/tasks";
 import type { AnnouncementInput, FaqItem } from "@/lib/settings/dashboard-info";
 
@@ -57,6 +59,17 @@ export default async function AdminSettingsPage() {
       return sanitizeLotteryConfig(JSON.parse(raw));
     } catch {
       return sanitizeLotteryConfig(null);
+    }
+  })();
+
+  // 雷电行动配置同理，直接从 allSettings 解析
+  const raidenConfig = (() => {
+    const raw = settings.raiden_config;
+    if (!raw) return sanitizeRaidenConfig(null);
+    try {
+      return sanitizeRaidenConfig(JSON.parse(raw));
+    } catch {
+      return sanitizeRaidenConfig(null);
     }
   })();
 
@@ -264,6 +277,15 @@ export default async function AdminSettingsPage() {
           </CardHeader>
           <CardContent>
             <LotteryForm initialConfig={lotteryConfig} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">限时活动（雷电行动）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RaidenForm initialConfig={raidenConfig} />
           </CardContent>
         </Card>
       </div>

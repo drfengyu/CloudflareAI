@@ -20,6 +20,7 @@ const TYPE_LABEL: Record<number, string> = {
   8: "消费返利",
   9: "任务奖励",
   10: "充值赠送",
+  11: "雷电行动",
 };
 
 export function TopupRecordsCard({

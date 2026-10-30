@@ -25,6 +25,8 @@ import {
   MessagesSquare,
   PiggyBank,
   ListChecks,
+  Gamepad2,
+  Crosshair,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -49,6 +51,7 @@ const NAV: NavGroup[] = [
       { href: "/pricing", label: "定价", icon: DollarSign },
       { href: "/docs", label: "API 文档", icon: BookOpen },
       { href: "/lottery", label: "限时活动", icon: Sparkles },
+      { href: "/raiden", label: "雷电行动", icon: Gamepad2 },
       { href: "/cashback", label: "消费返利", icon: PiggyBank },
       { href: "/tasks", label: "任务成就", icon: ListChecks },
     ],
@@ -83,6 +86,7 @@ const NAV: NavGroup[] = [
       { href: "/admin/redemptions", label: "兑换码", icon: Ticket },
       { href: "/admin/orders", label: "订单管理", icon: Receipt },
       { href: "/admin/lottery", label: "活动记录", icon: Sparkles },
+      { href: "/admin/raiden", label: "雷电记录", icon: Crosshair },
       { href: "/admin/pricing", label: "定价管理", icon: Settings },
       { href: "/admin/settings", label: "系统设置", icon: Settings },
     ],
