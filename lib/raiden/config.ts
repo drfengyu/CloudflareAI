@@ -266,6 +266,17 @@ function sanitizeStages(raw: unknown): RaidenStageReward[] {
   });
 }
 
+/**
+ * 单局可购份数的硬上限（护盾是开关，只有 0 / 1）。
+ * 后台表单、保存校验与 `sanitizeRaidenConfig` 共用，避免三处各写一份数字。
+ */
+export const RAIDEN_ITEM_MAX_CAP: Record<RaidenItemKey, number> = {
+  weapon: 10,
+  bomb: 10,
+  shield: 1,
+  life: 10,
+};
+
 /** 脏配置（缺字段、负价格、起止时间写错）一律退回可用默认值，不让活动页 500。 */
 export function sanitizeRaidenConfig(raw: unknown): RaidenConfig {
   const d = DEFAULT_RAIDEN_CONFIG;
@@ -285,10 +296,10 @@ export function sanitizeRaidenConfig(raw: unknown): RaidenConfig {
     minStageSeconds: boundedInteger(it.minStageSeconds, d.minStageSeconds, 5, 600),
     maxStageSeconds: boundedInteger(it.maxStageSeconds, d.maxStageSeconds, 120, 7200),
     items: {
-      weapon: sanitizeItem(items.weapon, d.items.weapon, 1_000_000, 10),
-      bomb: sanitizeItem(items.bomb, d.items.bomb, 1_000_000, 10),
-      shield: sanitizeItem(items.shield, d.items.shield, 1_000_000, 1),
-      life: sanitizeItem(items.life, d.items.life, 1_000_000, 10),
+      weapon: sanitizeItem(items.weapon, d.items.weapon, 1_000_000, RAIDEN_ITEM_MAX_CAP.weapon),
+      bomb: sanitizeItem(items.bomb, d.items.bomb, 1_000_000, RAIDEN_ITEM_MAX_CAP.bomb),
+      shield: sanitizeItem(items.shield, d.items.shield, 1_000_000, RAIDEN_ITEM_MAX_CAP.shield),
+      life: sanitizeItem(items.life, d.items.life, 1_000_000, RAIDEN_ITEM_MAX_CAP.life),
     },
     stages: sanitizeStages(it.stages),
   };

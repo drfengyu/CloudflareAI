@@ -15,6 +15,7 @@ import {
 } from "@/lib/lottery/prize-math";
 import {
   RAIDEN_CONFIG_KEY,
+  RAIDEN_ITEM_MAX_CAP,
   sanitizeRaidenConfig,
   type RaidenConfig,
 } from "@/lib/raiden/config";
@@ -786,13 +787,6 @@ const RAIDEN_ITEM_LABEL: Record<(typeof RAIDEN_ITEM_KEYS)[number], string> = {
   bomb: "炸弹补给",
   shield: "能量护盾",
   life: "备用机体",
-};
-/** 单局上限：与 sanitizeRaidenConfig 的裁剪范围保持一致，配大了读回来也会被裁。 */
-const RAIDEN_ITEM_MAX_CAP: Record<(typeof RAIDEN_ITEM_KEYS)[number], number> = {
-  weapon: 2,
-  bomb: 5,
-  shield: 1,
-  life: 5,
 };
 
 /** 限时活动（雷电行动）配置的保存入口 */

@@ -5,6 +5,24 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.13.1] - 2026-10-30
+
+### 修复
+
+- **后台保存雷电配置报错**：`updateRaidenSettings` 里的装备单局上限还写着旧值（火力 2 / 炸弹 5 / 备用机体 5），
+  表单已放开到 10，于是把上限填成 10 保存时被 `requireNumber` 判成「单局上限应不超过 2」。
+  现在上限的唯一来源改为 `lib/raiden/config.ts` 导出的 `RAIDEN_ITEM_MAX_CAP`（10 / 10 / 1 / 10），
+  保存校验、`sanitizeRaidenConfig` 与表单的 `max` 输入、说明文案全部读它，不会再各写一份数字互相打架。
+
+### 文档
+
+- `docs/features/raiden.md` 的后台配置一节改写明装备上限的唯一来源；README 与 `package.json` 版本号更新为 v0.13.1。
+
+### 验证
+
+- `npm run typecheck` / 定向 ESLint / `npm run build` 通过；按后台表单的入参逐项复核：
+  装备上限 10 现在落在 `requireNumber(0, RAIDEN_ITEM_MAX_CAP[key])` 与 `sanitizeRaidenConfig` 的同一区间内。
+
 ## [0.13.0] - 2026-10-30
 
 ### 新增
