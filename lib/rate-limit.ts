@@ -63,6 +63,19 @@ setInterval(() => {
 }, 60_000).unref?.();
 
 /**
+ * 站内 playground（`/api/ai/*`，含 `/chat`）的护栏。和 `/v1` 一样用进程内计数：
+ * 这些端点每次调用都要先读余额、打上游，再塞一次 D1 写不值。
+ * 超限直接给 429，未超限返回 null，调用方 `if (limited) return limited;`。
+ */
+export function playgroundRateLimitResponse(userId: string, task: string): Response | null {
+  const allowed = checkInProcessRateLimit(`playground:${task}:${userId}`, {
+    window: 60_000,
+    limit: 30,
+  });
+  return allowed ? null : Response.json({ error: "请求过于频繁，请 1 分钟后再试" }, { status: 429 });
+}
+
+/**
  * 跨实例的固定窗口限流：一条 UPSERT 完成「开窗 / 计数 / 判上限」。
  *
  * 语义拆开看：

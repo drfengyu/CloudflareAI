@@ -5,6 +5,48 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.9.0] - 2026-10-30
+
+### 新增
+
+- **站内聊天 `/chat`**（`lib/db/schema.ts` + `migrations/016_chat_tables.sql` + `lib/chat/{store,models,stream-accumulator}.ts` + `app/(dashboard)/chat/*` + `components/chat/*` + `components/dashboard/sidebar.tsx`）：
+  把原来只能「一次一问」的 Playground 做成有历史的对话产品。新表 `chat_session`（标题 / 默认模型 / 系统提示词 / 置顶 /
+  预留 `shareToken`）与 `chat_message`（会话内唯一的 `seq`、正文与思考链分列、`creditsUsed` 用 real 不再重犯
+  `conversation_history` 的 integer 写小数），迁移 016 是纯增量 DDL，已在线上 D1 执行，既有表与数据未动。
+  首条用户消息自动把「新对话」换成内容摘要，手动改过名就不再覆盖；`seq` 先 `MAX(seq)+1` 读再写，D1 没有事务，
+  并发撞车由 `uq_chat_message_seq` 拒绝后重算重试（最多 3 次）。
+  推理仍走 `/api/ai/text`（`stream:true`），扣费、预检、渠道路由、限流全部沿用现有链路，不另起一套计费；
+  SSE 由 `lib/chat/stream-accumulator.ts` 跨 chunk 攒出 `{ content, reasoning }`，流完（或用户点停止）才由
+  `persistTurnAction` 落一问一答。发送 / 重新生成 / 编辑重发共用一条 `runTurn`，靠 `userContent` 与 `truncateFromSeq`
+  区分；点「停止」时 `read()` 抛 `AbortError`，已生成的半截回答照旧落库并标 `partial`，按实际收到的 token 结算。
+  回答用 react-markdown + remark-gfm 渲染，代码块自绘（语言标签 + 复制按钮），思考链可折叠。侧栏「在线体验」新增「AI 对话」。
+  实测（`tests/e2e/v090-chat.spec.ts`，1 passed，整轮扣费 4.44 cr，跑完残留 `sessions/messages/keys` 均为 0）：
+  首轮落库 `seq=1 user / seq=2 assistant` 且标题自动变成「用一句话介绍北京。」；刷新回看从库里渲染；
+  重新生成后仍是一问一答且回答换了新行 id；编辑重发把用户消息替换成新内容；停止生成留下 4 条消息（含半截回答）
+  并显示「内容在生成中被中断」；markdown 探针会话验证标题 / 列表 / 代码块 / 链接与复制按钮。
+- **端到端跑在非 3000 端口**（`playwright.config.ts`）：`baseURL` 与 `webServer.url` 改读 `PLAYWRIGHT_BASE_URL`
+  （本机 3000 被另一个项目长期占用），并把 webServer 超时提到 240s。注释写明坑：换端口必须同时覆盖
+  `NEXTAUTH_URL` / `NEXT_PUBLIC_APP_URL`，否则未登录请求会被重定向到 `.env.local` 里写死的 3000，探活打到别的应用上。
+  另记一条：dev 服务只监听 IPv4，Playwright 探活把 `localhost` 解析成 `::1` 会一直 ECONNREFUSED，而用
+  `http://127.0.0.1:3100` 虽然探活通过，Next dev 又会以「cross-origin」为由拒绝下发客户端运行时（页面不 hydration，
+  输入框能填但按钮全死），所以本地跑测只能用 `localhost` + 覆盖过的那两个 URL。
+
+### 修复
+
+- **站内 playground 走第三方渠道时绕过余额预检**（`app/api/ai/text/route.ts`）：渠道分支自己 `return`，
+  旧顺序把余额预检留在分支之后，等于 0 额度也能从站内打外部渠道。预检与 `effectiveMaxTokens` 计算整体上移到
+  渠道路由之前。实测：额度 0 的 key 请求挂在启用 deepseek 渠道上的模型直接 `402 API key quota exhausted：本次预检需要
+  153.65 cr，当前可用 0.00 cr`，`usage_log` 无 `status=ok` 行（请求确实没出站到上游）。
+- **`/api/ai/*` 五个端点此前完全没有请求频次护栏**（`lib/rate-limit.ts` + text/image/vision/embeddings/translate）：
+  新增 `playgroundRateLimitResponse`，每用户每类任务 30 次/分钟，超限 429「请求过于频繁，请 1 分钟后再试」。
+  与 `/v1` 一样用进程内计数（这些端点每次都要先读余额再打上游，不值得为限流多插一次 D1 写）。
+  实测：同一分钟内连续 40 次请求，前 30 次正常走到各自业务状态码、第 31 次起全部 429。
+- **流式期间点「重新生成 / 编辑重发」没有反应**（`components/chat/*`）：`runTurn` 开头就 `if (streaming) return`，
+  但按钮照旧渲染。现在按 `busy` 隐藏动作行，不给点了没反应的假象。
+- **落库失败变成静默丢历史**（`components/chat/chat-shell.tsx`）：`persistTurnAction` 抛错时异常会从 `catch` 里再逃出去，
+  只留一个未捕获 rejection，界面上看着有回答、刷新就没了。改为 `saveTurn` 区分「没有内容」（`null`）与「保存失败」
+  （`undefined`），后者显式 toast。
+
 ## [0.8.0] - 2026-10-29
 
 ### 新增

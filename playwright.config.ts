@@ -20,7 +20,10 @@ export default defineConfig({
   ],
   webServer: {
     command: "npm run dev",
-    url: "http://localhost:3000",
+    url: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
     reuseExistingServer: !process.env.CI,
+    // 换端口跑时要同时覆盖 NEXTAUTH_URL / NEXT_PUBLIC_APP_URL，
+    // 否则未登录请求会被重定向到 .env.local 里写死的 3000，探活打到别的应用上。
+    timeout: 240_000,
   },
 });

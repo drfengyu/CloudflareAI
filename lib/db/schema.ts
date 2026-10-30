@@ -258,6 +258,56 @@ export const conversationHistory = sqliteTable("conversation_history", {
   createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
 });
 
+/**
+ * 聊天会话：站内 `/chat` 的一级容器。
+ * `conversation_history` 一次调用一行的快照，承担不了标题/置顶/分享，故另起表。
+ */
+export const chatSessions = sqliteTable(
+  "chat_session",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull().default("新对话"),
+    /** 会话默认模型；单条消息上另有 model，中途换模型也能追溯。 */
+    model: text("model").notNull(),
+    systemPrompt: text("systemPrompt"),
+    /** 1=置顶，列表排在前面。 */
+    pinned: integer("pinned").notNull().default(0),
+    /** 分享令牌；null=未分享。公开页 /s/[token] 按它只读渲染。 */
+    shareToken: text("shareToken").unique(),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+    lastMessageAt: integer("lastMessageAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [
+    index("idx_chat_session_user_list").on(table.userId, table.pinned, table.lastMessageAt),
+  ],
+);
+
+/** 聊天消息：一行一条消息，`seq` 在会话内递增且唯一，用于稳定排序与「重新生成」截断。 */
+export const chatMessages = sqliteTable(
+  "chat_message",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    sessionId: text("sessionId")
+      .notNull()
+      .references(() => chatSessions.id, { onDelete: "cascade" }),
+    seq: integer("seq").notNull(),
+    role: text("role").$type<"system" | "user" | "assistant">().notNull(),
+    model: text("model"),
+    content: text("content").notNull(),
+    /** 推理模型的思考内容；null=无。 */
+    reasoning: text("reasoning"),
+    creditsUsed: real("creditsUsed").notNull().default(0),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [
+    unique("uq_chat_message_seq").on(table.sessionId, table.seq),
+    index("idx_chat_message_session").on(table.sessionId, table.seq),
+  ],
+);
+
 /** 临时余额表：有过期时间的余额（兑换码充值到此）。 */
 export const temporaryBalances = sqliteTable("temporary_balance", {
   id: text("id").primaryKey().$defaultFn(uuid),
@@ -388,6 +438,8 @@ export type ModelPricing = typeof modelPricing.$inferSelect;
 export type RegistrationLog = typeof registrationLog.$inferSelect;
 export type PaymentOrder = typeof paymentOrders.$inferSelect;
 export type InviteRecord = typeof inviteRecords.$inferSelect;
+export type ChatSession = typeof chatSessions.$inferSelect;
+export type ChatMessage = typeof chatMessages.$inferSelect;
 
 /**
  * 限时活动·抽奖券。一行 = 一张券，消耗方式是回填 `usedDrawId`：

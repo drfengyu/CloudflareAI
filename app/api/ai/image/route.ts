@@ -6,6 +6,7 @@ import { requireUser, logUsage, verifyBalance, getDefaultApiKey } from "@/lib/us
 import { calculateCredits } from "@/lib/billing/pricing";
 import { lookupChannel } from "@/lib/channels/lookup";
 import { routeToChannel } from "@/lib/channels/router";
+import { playgroundRateLimitResponse } from "@/lib/rate-limit";
 
 const schema = z.object({
   model: z.string(),
@@ -21,6 +22,8 @@ const schema = z.object({
 export async function POST(req: NextRequest) {
   const start = Date.now();
   const userId = await requireUser();
+  const limited = playgroundRateLimitResponse(userId, "image");
+  if (limited) return limited;
   const apiKeyId = await getDefaultApiKey(userId);
 
   // 必须有 API Key 才能调用

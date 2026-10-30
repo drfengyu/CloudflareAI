@@ -300,6 +300,10 @@ POST   /api/ai/translate           # 翻译 Playground
 - 自动使用用户的默认 API Key
 - 无 API Key 时返回 403 提示创建
 - 流式响应支持对话历史保存
+- 每用户每类任务 30 次/分钟的进程内护栏（`playgroundRateLimitResponse`），超限 429；
+  与 `/v1` 同理，不为限流写 D1，多实例各自计数
+- 余额预检在渠道路由**之前**（含 `/api/ai/text` 的第三方渠道分支），额度不足直接 402，请求不会出站到上游
+- 站内聊天 `/chat` 的推理也走 `POST /api/ai/text`，不另起端点（见 `docs/features/chat.md`）
 
 ---
 

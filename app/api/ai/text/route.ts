@@ -8,6 +8,7 @@ import { estimateTokens } from "@/lib/usage/tokens";
 import { saveConversation } from "@/lib/usage/conversation";
 import { interceptOpenAIStream } from "@/lib/usage/stream-intercept";
 import { routeToChannel, getChannelConfig } from "@/lib/channels/router";
+import { playgroundRateLimitResponse } from "@/lib/rate-limit";
 import { db } from "@/lib/db/d1-http";
 import { apiKeys, modelPricing } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
@@ -32,6 +33,8 @@ const schema = z.object({
 export async function POST(req: NextRequest) {
   const start = Date.now();
   const userId = await requireUser();
+  const limited = playgroundRateLimitResponse(userId, "text");
+  if (limited) return limited;
   const apiKeyId = await getDefaultApiKey(userId);
 
   // 必须有 API Key 才能调用
@@ -69,6 +72,47 @@ export async function POST(req: NextRequest) {
   const catalog = await import("@/lib/cloudflare/catalog").then((m) => m.fetchModelCatalog());
   const modelInfo = catalog.find((m) => m.id === model);
   const contextWindow = modelInfo?.contextWindow;
+
+  // 余额预检：输入按文本实估（CJK 1 字≈1 token），输出按模型预留档位封顶；
+  // 实际发给上游的仍是 effectiveMaxTokens。
+  // 放在渠道路由之前：第三方渠道分支直接 return，曾经的顺序让它完全绕过了闸门，
+  // 0 余额账号照样能靠站内 playground 打外部渠道。
+  const inputText = messages.map((m) => m.content).join("\n");
+  const estimatedInput = estimateTokens(inputText);
+  // 计算实际可用的 max_tokens：
+  // 1. 用户显式传入则优先使用
+  // 2. 否则使用 contextWindow - estimatedInput（留 20% buffer）
+  // 3. 最小 512，最大 32768
+  const effectiveMaxTokens = max_tokens || (
+    contextWindow
+      ? Math.min(32768, Math.max(512, Math.floor((contextWindow - estimatedInput) * 0.8)))
+      : 4096
+  );
+  const precheck = await estimateRequestCredits({
+    model,
+    inputText,
+    requestedMaxTokens: effectiveMaxTokens,
+    task: "Text Generation",
+  });
+
+  const balanceCheck = await verifyBalance(userId, apiKeyId, precheck.credits);
+  if (!balanceCheck.ok) {
+    const detail = `${balanceCheck.reason}：本次预检需要 ${precheck.credits.toFixed(2)} cr，当前可用 ${balanceCheck.availableCredits.toFixed(2)} cr`;
+    after(() => {
+      void logUsage({
+        userId,
+        apiKeyId,
+        model,
+        task: "Text Generation",
+        channel: "web",
+        inputTokens: precheck.inputTokens,
+        outputTokens: precheck.outputTokens,
+        status: "error",
+        errorReason: detail,
+      });
+    });
+    return Response.json({ error: detail }, { status: 402 });
+  }
 
   // 渠道路由：优先按所选模型查 model_pricing.channelId（模型归属哪个渠道），
   // 找不到再回退到 API Key 绑定的 channelId（适用于 key 强制锁渠道的场景）。
@@ -278,45 +322,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // 余额预检：输入按文本实估（CJK 1 字≈1 token），输出按模型预留档位封顶；
-  // 实际发给上游的仍是 effectiveMaxTokens。
-  const inputText = messages.map((m) => m.content).join("\n");
-  const estimatedInput = estimateTokens(inputText);
-  // 计算实际可用的 max_tokens：
-  // 1. 用户显式传入则优先使用
-  // 2. 否则使用 contextWindow - estimatedInput（留 20% buffer）
-  // 3. 最小 512，最大 32768
-  const effectiveMaxTokens = max_tokens || (
-    contextWindow
-      ? Math.min(32768, Math.max(512, Math.floor((contextWindow - estimatedInput) * 0.8)))
-      : 4096
-  );
-  const precheck = await estimateRequestCredits({
-    model,
-    inputText,
-    requestedMaxTokens: effectiveMaxTokens,
-    task: "Text Generation",
-  });
-
-  const balanceCheck = await verifyBalance(userId, apiKeyId, precheck.credits);
-  if (!balanceCheck.ok) {
-    const detail = `${balanceCheck.reason}：本次预检需要 ${precheck.credits.toFixed(2)} cr，当前可用 ${balanceCheck.availableCredits.toFixed(2)} cr`;
-    after(() => {
-      void logUsage({
-        userId,
-        apiKeyId,
-        model,
-        task: "Text Generation",
-        channel: "web",
-        inputTokens: precheck.inputTokens,
-        outputTokens: precheck.outputTokens,
-        status: "error",
-        errorReason: detail,
-      });
-    });
-    return Response.json({ error: detail }, { status: 402 });
-  }
-
+  // 余额预检与 effectiveMaxTokens 已算在渠道路由之前，这里直接打上游。
   try {
     const res = await openaiCompatible(
       "chat/completions",

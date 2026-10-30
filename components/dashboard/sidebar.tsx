@@ -22,6 +22,7 @@ import {
   Sparkles,
   Gift,
   BookOpen,
+  MessagesSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +52,7 @@ const NAV: NavGroup[] = [
   {
     title: "在线体验",
     items: [
+      { href: "/chat", label: "AI 对话", icon: MessagesSquare },
       { href: "/playground/text", label: "文本生成", icon: MessageSquare },
       { href: "/playground/image", label: "文生图", icon: ImageIcon },
       { href: "/playground/vision", label: "图像理解", icon: Eye },
