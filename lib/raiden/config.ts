@@ -104,10 +104,10 @@ export const DEFAULT_RAIDEN_CONFIG: RaidenConfig = {
   minStageSeconds: 30,
   maxStageSeconds: 1800,
   items: {
-    weapon: { price: 25, max: 2 },
-    bomb: { price: 12, max: 2 },
+    weapon: { price: 25, max: 10 },
+    bomb: { price: 12, max: 10 },
     shield: { price: 20, max: 1 },
-    life: { price: 45, max: 2 },
+    life: { price: 45, max: 10 },
   },
   stages: [
     { stage: 1, firstClear: 60, repeat: 6 },
@@ -143,7 +143,7 @@ export const RAIDEN_ITEMS: RaidenItemMeta[] = [
   {
     key: "weapon",
     title: "火力强化",
-    hint: "主炮火力 +1 级，最高 3 级；升级后弹幕更宽、射速更快。",
+    hint: "主炮火力 +1 级，最高 Lv11；升级后弹幕更宽、威力更高。",
     kind: "count",
   },
   {
@@ -155,7 +155,7 @@ export const RAIDEN_ITEMS: RaidenItemMeta[] = [
   {
     key: "shield",
     title: "能量护盾",
-    hint: "出击后获得 8 秒无敌护盾，用来躲过开局的火力压制。",
+    hint: "出击后获得 16 秒无敌护盾，用来躲过开局的火力压制。",
     kind: "toggle",
   },
   {
@@ -285,10 +285,10 @@ export function sanitizeRaidenConfig(raw: unknown): RaidenConfig {
     minStageSeconds: boundedInteger(it.minStageSeconds, d.minStageSeconds, 5, 600),
     maxStageSeconds: boundedInteger(it.maxStageSeconds, d.maxStageSeconds, 120, 7200),
     items: {
-      weapon: sanitizeItem(items.weapon, d.items.weapon, 1_000_000, 2),
-      bomb: sanitizeItem(items.bomb, d.items.bomb, 1_000_000, 5),
+      weapon: sanitizeItem(items.weapon, d.items.weapon, 1_000_000, 10),
+      bomb: sanitizeItem(items.bomb, d.items.bomb, 1_000_000, 10),
       shield: sanitizeItem(items.shield, d.items.shield, 1_000_000, 1),
-      life: sanitizeItem(items.life, d.items.life, 1_000_000, 5),
+      life: sanitizeItem(items.life, d.items.life, 1_000_000, 10),
     },
     stages: sanitizeStages(it.stages),
   };
@@ -333,4 +333,11 @@ export const STAGE_SCORE_CAP: Record<number, number> = {
   1: 300_000,
   2: 400_000,
   3: 600_000,
+};
+
+/** 单关战利品上限（cr）：服务端对客户端上报的掉落额做量级封顶。 */
+export const STAGE_LOOT_CAP: Record<number, number> = {
+  1: 20,
+  2: 24,
+  3: 28,
 };

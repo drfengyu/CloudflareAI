@@ -132,7 +132,10 @@ export function LoadoutShop({
           <span className="text-white/70">触屏：</span>画面内拖动移动 · 右下角按钮放炸弹 · 自动射击
         </p>
         <p className="mt-0.5">
-          <span className="text-white/70">掉落：</span>W 火力 · S 散射 · M 追踪导弹 · B 炸弹
+          <span className="text-white/70">掉落：</span>W 火力 · S 散射 · M 追踪导弹 · B 炸弹 · 金色 cr 战利品
+        </p>
+        <p className="mt-0.5">
+          <span className="text-white/70">战机：</span>100 HP 起，受击扣血；每击破 25 架或进入新关卡 HP 回满。
         </p>
       </div>
     </div>

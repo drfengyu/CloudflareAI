@@ -47,6 +47,7 @@ export async function settleRaidenStage(input: {
   stageNo: number;
   score: number;
   durationMs: number;
+  loot: number;
 }): Promise<ActionResult<StageSettlement>> {
   try {
     const userId = await requireUser();
@@ -60,6 +61,7 @@ export async function settleRaidenStage(input: {
       stageNo: Number(input.stageNo),
       score: Number(input.score),
       durationMs: Number(input.durationMs),
+      loot: Number(input.loot),
       config,
     });
     revalidatePath("/raiden");

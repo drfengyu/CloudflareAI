@@ -277,8 +277,8 @@ export function RaidenForm({ initialConfig }: { initialConfig: RaidenConfig }) {
       <div className="space-y-3">
         <p className="text-sm font-medium">道具商店（cr）</p>
         <p className="text-xs text-muted-foreground">
-          用户在出击前用 cr 购买装备，服务端按同一份配置计价。超过引擎上限（火力 2 / 炸弹 5 /
-          护盾 1 / 备用机体 5）的值会被自动裁剪。
+          用户在出击前用 cr 购买装备，服务端按同一份配置计价。超过引擎上限（火力 10 / 炸弹 10 /
+          护盾 1 / 备用机体 10）的值会被自动裁剪。
         </p>
         {RAIDEN_ITEMS.map((item) => (
           <div key={item.key} className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-3">
@@ -302,7 +302,7 @@ export function RaidenForm({ initialConfig }: { initialConfig: RaidenConfig }) {
               <input
                 type="number"
                 min={0}
-                max={5}
+                max={item.kind === "toggle" ? 1 : 10}
                 step="1"
                 value={items[item.key].max}
                 onChange={(e) => patchItem(item.key, { max: e.target.value })}

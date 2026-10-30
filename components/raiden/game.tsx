@@ -40,7 +40,16 @@ import {
   settleRaidenStage as settleRaidenStageAction,
   startRaidenRun as startRaidenRunAction,
 } from "@/app/(dashboard)/raiden/actions";
-import { RaidenEngine, type GameOverResult, type HudSnapshot, type StageClearResult } from "./engine";
+import {
+  MAX_POWER,
+  PLAYER_MAX_HP,
+  RaidenEngine,
+  type GameOverResult,
+  type HudSnapshot,
+  type StageClearResult,
+} from "./engine";
+import { formatStageTime, scoreText } from "@/lib/raiden/format";
+import { ConsolePanel } from "./console-panel";
 import { StartScreen } from "./start-screen";
 
 type SessionPhase = "idle" | "playing" | "stageclear" | "gameover" | "finished";
@@ -64,15 +73,6 @@ interface FinalState {
   stage: number;
   rewards: number;
   firstClears: number;
-}
-
-function formatStageTime(seconds: number): string {
-  const total = Math.max(0, Math.floor(seconds));
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-}
-
-function scoreText(score: number): string {
-  return String(Math.max(0, Math.round(score))).padStart(7, "0");
 }
 
 const REASON_LABEL: Record<FinalState["reason"], { title: string; hint: string }> = {
@@ -131,15 +131,6 @@ export function RaidenGame({
     }
   }, []);
 
-  // 全屏游戏页：锁住背景滚动，退出时恢复原值。
-  useEffect(() => {
-    const previous = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previous;
-    };
-  }, []);
-
   const finishRun = useCallback(
     (reason: FinalState["reason"], score: number, stage: number) => {
       setFinal({
@@ -174,6 +165,7 @@ export function RaidenGame({
           stageNo: result.stage,
           score: result.stageScore,
           durationMs: result.durationMs,
+          loot: result.loot,
         });
         if (!res.success) {
           setClear((prev) => (prev ? { ...prev, settling: false, error: res.error } : prev));
@@ -341,7 +333,7 @@ export function RaidenGame({
     lives: run?.starting.lives ?? 3,
     bombs: run?.starting.bombs ?? 3,
     power: run?.starting.power ?? 1,
-    maxPower: 5,
+    maxPower: MAX_POWER,
     stage: 1,
     stageCount: 3,
     stageTime: 0,
@@ -354,20 +346,20 @@ export function RaidenGame({
     spread: 0,
     missiles: 0,
     readyIn: 0,
+    hp: PLAYER_MAX_HP,
+    maxHp: PLAYER_MAX_HP,
+    shipLevel: 1,
+    kills: 0,
+    healAt: 25,
+    loot: 0,
   };
 
   const revivesLeft = Math.max(0, config.maxRevives - revivesUsed);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden overscroll-none bg-black">
-      <div
-        className="relative overflow-hidden bg-[#04070d]"
-        style={{
-          width: "min(100vw, calc(100dvh * 2 / 3))",
-          height: "min(100dvh, calc(100vw * 3 / 2))",
-          boxShadow: "0 0 140px -40px rgba(34, 211, 238, 0.55)",
-        }}
-      >
+    <div className="min-h-[calc(100dvh-3rem)] bg-background p-2 sm:p-3">
+      <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-2.5 xl:h-[calc(100dvh-4.5rem)] xl:flex-row xl:gap-3">
+        <div className="relative mx-auto aspect-[2/3] w-full max-w-[520px] shrink-0 overflow-hidden rounded-xl border border-white/10 bg-[#04070d] shadow-[0_24px_80px_-40px_rgba(34,211,238,0.6)] sm:max-w-[560px] xl:mx-0 xl:w-[min(52%,calc((100dvh-4.5rem)*2/3))] xl:max-w-none xl:self-center">
         {run ? (
           <>
             <canvas
@@ -379,6 +371,7 @@ export function RaidenGame({
             <HudBar
               hud={battleHud}
               paused={paused}
+              showBossBar={phase === "playing"}
               muted={muted}
               rewards={rewardTotal}
               revivesLeft={revivesLeft}
@@ -386,21 +379,6 @@ export function RaidenGame({
               onPause={() => engineRef.current?.togglePause()}
               onMute={toggleMute}
             />
-
-            {battleHud.bossHp !== null && phase === "playing" && !paused ? (
-              <div className="pointer-events-none absolute inset-x-4 top-[86px] z-10">
-                <div className="mb-1 flex items-center justify-between text-[10px] font-medium tracking-wider text-rose-300">
-                  <span>{battleHud.bossName ?? "BOSS"}</span>
-                  <span>{Math.ceil(battleHud.bossHp * 100)}%</span>
-                </div>
-                <div className="h-1.5 overflow-hidden rounded-full bg-white/15">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-rose-500 to-orange-400 transition-[width] duration-150"
-                    style={{ width: `${Math.max(0, battleHud.bossHp * 100)}%` }}
-                  />
-                </div>
-              </div>
-            ) : null}
 
             <div className="pointer-events-none absolute bottom-2.5 left-2.5 z-10 text-[9px] leading-relaxed text-white/30">
               拖动画面移动 · 自动射击
@@ -517,6 +495,11 @@ export function RaidenGame({
                         </span>
                         {clear.settlement.firstClear ? <Badge tone="warning">首通</Badge> : null}
                       </div>
+                      {clear.settlement.loot > 0 ? (
+                        <p className="mt-1 text-center text-[10px] text-amber-300/80">
+                          其中精英 / Boss 战利品 +{formatCredits(clear.settlement.loot)} cr
+                        </p>
+                      ) : null}
                       <p className="mt-1 text-center text-[11px] text-white/55">
                         {clear.settlement.firstClear
                           ? "首通奖励已发放到临时余额"
@@ -654,17 +637,32 @@ export function RaidenGame({
             status={status}
             balance={balance}
             runsLeft={runsLeft}
-            summary={summary}
-            leaderboard={leaderboard}
-            firstClears={firstClears}
             loadout={loadout}
-            onLoadoutChange={setLoadout}
             starting={starting}
             onStart={handleStart}
             muted={muted}
             onToggleMute={toggleMute}
           />
         )}
+        </div>
+
+        <ConsolePanel
+          config={config}
+          status={status}
+          balance={balance}
+          runsLeft={runsLeft}
+          summary={summary}
+          leaderboard={leaderboard}
+          firstClears={firstClears}
+          loadout={loadout}
+          onLoadoutChange={setLoadout}
+          inRun={Boolean(run)}
+          paused={paused}
+          hud={battleHud}
+          runCost={run?.cost ?? null}
+          rewardTotal={rewardTotal}
+          revivesUsed={revivesUsed}
+        />
       </div>
     </div>
   );
@@ -683,6 +681,7 @@ function Overlay({ children }: { children: React.ReactNode }) {
 function HudBar({
   hud,
   paused,
+  showBossBar,
   muted,
   rewards,
   revivesLeft,
@@ -692,6 +691,7 @@ function HudBar({
 }: {
   hud: HudSnapshot;
   paused: boolean;
+  showBossBar: boolean;
   muted: boolean;
   rewards: number;
   revivesLeft: number;
@@ -699,8 +699,17 @@ function HudBar({
   onPause: () => void;
   onMute: () => void;
 }) {
+  const hpPct = Math.max(0, Math.min(100, (hud.hp / Math.max(1, hud.maxHp)) * 100));
+  const hpTone =
+    hpPct > 50
+      ? "from-emerald-400 to-cyan-400"
+      : hpPct > 25
+        ? "from-amber-400 to-yellow-300"
+        : "from-rose-500 to-orange-400";
+  const healIn = Math.max(0, hud.healAt - hud.kills);
+
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 bg-gradient-to-b from-black/85 via-black/45 to-transparent px-2.5 pb-8 pt-2.5">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 bg-gradient-to-b from-black/85 via-black/45 to-transparent px-2.5 pb-3 pt-2.5">
       <div className="min-w-0">
         <div className="flex items-baseline gap-2">
           <p className="font-mono text-lg font-bold leading-none tracking-widest text-white drop-shadow">
@@ -717,6 +726,19 @@ function HudBar({
           <span className="text-white/25">|</span>
           <span className="font-mono">{formatStageTime(hud.stageTime)}</span>
         </div>
+        <div className="mt-1.5 flex items-center gap-1.5 text-[10px]">
+          <span className="font-mono text-[9px] font-semibold tracking-widest text-rose-300/90">HP</span>
+          <div className="h-1.5 w-20 overflow-hidden rounded-full border border-white/15 bg-black/55 sm:w-24">
+            <div
+              className={`h-full rounded-full bg-gradient-to-r ${hpTone} transition-[width] duration-150`}
+              style={{ width: `${hpPct}%` }}
+            />
+          </div>
+          <span className="font-mono text-[10px] tabular-nums text-white/90">
+            {hud.hp}/{hud.maxHp}
+          </span>
+          <span className="font-mono text-[9px] text-emerald-300/70">回满 {healIn}</span>
+        </div>
         <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-white/85">
           <span className="flex items-center gap-0.5">
             <Heart className="h-3 w-3 fill-rose-500 text-rose-500" />
@@ -728,7 +750,11 @@ function HudBar({
           </span>
           <span className="flex items-center gap-0.5">
             <Zap className="h-3 w-3 text-cyan-300" />
-            <span className="font-mono">Lv{hud.power}</span>
+            <span className="font-mono">Lv{hud.shipLevel}</span>
+          </span>
+          <span className="flex items-center gap-0.5 text-amber-300/90">
+            <Coins className="h-3 w-3" />
+            <span className="font-mono">{formatCredits(hud.loot)}</span>
           </span>
           {hud.spread > 0 ? (
             <span className="flex items-center gap-0.5 text-fuchsia-300">
@@ -755,6 +781,21 @@ function HudBar({
             </span>
           ) : null}
         </div>
+
+        {showBossBar && hud.bossHp !== null ? (
+          <div className="mt-2 max-w-[320px]">
+            <div className="mb-1 flex items-center justify-between text-[10px] font-medium tracking-wider text-rose-300">
+              <span>{hud.bossName ?? "BOSS"}</span>
+              <span>{Math.ceil(hud.bossHp * 100)}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-white/15">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-rose-500 to-orange-400 transition-[width] duration-150"
+                style={{ width: `${Math.max(0, hud.bossHp * 100)}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
       <div className="pointer-events-auto flex shrink-0 items-center gap-1">
         <button

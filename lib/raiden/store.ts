@@ -14,6 +14,7 @@ import {
   stageDurationBounds,
   stageRewardFor,
   startingStats,
+  STAGE_LOOT_CAP,
   STAGE_SCORE_CAP,
   TOPUP_TYPE_RAIDEN,
   type RaidenConfig,
@@ -147,6 +148,8 @@ export interface StageSettlement {
   firstClear: boolean;
   stageNo: number;
   reward: number;
+  /** 本次奖励里包含的战利品 cr（已按关卡上限封顶）。 */
+  loot: number;
   complete: boolean;
   nextStage: number | null;
   /** 重复奖励被每日封顶裁掉的部分（用于界面提示）。 */
@@ -175,6 +178,7 @@ export async function completeStage(input: {
   stageNo: number;
   score: number;
   durationMs: number;
+  loot: number;
   config: RaidenConfig;
 }): Promise<StageSettlement> {
   const { userId, runId, score, config } = input;
@@ -188,6 +192,9 @@ export async function completeStage(input: {
   if (!Number.isFinite(safeScore) || safeScore < 0 || safeScore > (STAGE_SCORE_CAP[stageNo] ?? 600_000)) {
     throw new RaidenError("分数异常，无法结算");
   }
+  const rawLoot = Math.trunc(Number(input.loot));
+  const lootCap = STAGE_LOOT_CAP[stageNo] ?? 0;
+  const loot = Number.isFinite(rawLoot) ? Math.max(0, Math.min(lootCap, rawLoot)) : 0;
 
   const rows = await db
     .select()
@@ -225,6 +232,7 @@ export async function completeStage(input: {
       firstClear: existing[0]?.kind === "first",
       stageNo,
       reward: Number(existing[0]?.rewardCredits ?? 0),
+      loot: 0,
       complete: stageNo === RAIDEN_STAGES.length,
       nextStage: stageNo < RAIDEN_STAGES.length ? stageNo + 1 : null,
       cappedRepeat: false,
@@ -250,7 +258,7 @@ export async function completeStage(input: {
   }
 
   const stageReward = stageRewardFor(config, stageNo);
-  let reward = firstClear ? stageReward.firstClear : stageReward.repeat;
+  let reward = (firstClear ? stageReward.firstClear : stageReward.repeat) + loot;
   let cappedRepeat = false;
   if (!firstClear && reward > 0) {
     const usedRows = await db
@@ -299,12 +307,13 @@ export async function completeStage(input: {
     if (reward > 0) {
       const expiresAt = new Date(now.getTime() + config.rewardValidDays * DAY_MS);
       const meta = RAIDEN_STAGES[stageNo - 1];
+      const lootText = loot > 0 ? `，含战利品 ${loot} cr` : "";
       await db.insert(temporaryBalances).values({
         id: tempRowId,
         userId,
         amount: reward,
         expiresAt,
-        description: `雷电行动 ${meta.code}「${meta.name}」${firstClear ? "首通" : "重复通关"}奖励 ${reward} cr（有效期 ${config.rewardValidDays} 天）`,
+        description: `雷电行动 ${meta.code}「${meta.name}」${firstClear ? "首通" : "重复通关"}奖励 ${reward} cr（有效期 ${config.rewardValidDays} 天）${lootText}`,
         createdAt: now,
       });
       await db.insert(topups).values({
@@ -312,7 +321,7 @@ export async function completeStage(input: {
         userId,
         amount: reward,
         type: TOPUP_TYPE_RAIDEN,
-        description: `雷电行动 ${meta.code} ${firstClear ? "首通" : "重复通关"}奖励 ${reward} cr`,
+        description: `雷电行动 ${meta.code} ${firstClear ? "首通" : "重复通关"}奖励 ${reward} cr${lootText}`,
         createdAt: now,
       });
     }
@@ -344,6 +353,7 @@ export async function completeStage(input: {
     firstClear,
     stageNo,
     reward,
+    loot,
     complete: finalStage,
     nextStage: finalStage ? null : stageNo + 1,
     cappedRepeat,

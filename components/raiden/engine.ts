@@ -11,18 +11,24 @@ import { stageDef, type EnemyKind, type EnemySpawn, type PowerType, type StageDe
 
 export const FIELD_W = 480;
 export const FIELD_H = 720;
-export const MAX_POWER = 5;
-export const MAX_BOMBS = 6;
+/** 火力上限：出击买满 10 份后是 Lv11。 */
+export const MAX_POWER = 11;
+/** 炸弹上限：基础 3 颗 + 买满 10 份。 */
+export const MAX_BOMBS = 13;
 export const MAX_SPREAD_LEVEL = 3;
 export const MAX_MISSILE_LEVEL = 3;
 
-/** 出击商店买到的护盾只持续 8 秒；S 掉落补 6 秒。 */
-export const SHIELD_PURCHASE_SECONDS = 8;
+/** 战机 HP 与「击杀回满」节奏。 */
+export const PLAYER_MAX_HP = 100;
+export const HP_HEAL_KILLS = 25;
+
+/** 出击商店买到的护盾持续 16 秒；S 掉落补 6 秒。 */
+export const SHIELD_PURCHASE_SECONDS = 16;
 export const SHIELD_PICKUP_SECONDS = 6;
 
 const PLAYER_R = 5;
 const PLAYER_SPEED = 330;
-const ENEMY_BULLET_R = 5;
+const ENEMY_BULLET_R = 4;
 const READY_SECONDS = 3.2;
 
 export type GameState = "ready" | "playing" | "stageclear" | "gameover" | "ended";
@@ -45,6 +51,16 @@ export interface HudSnapshot {
   spread: number;
   missiles: number;
   readyIn: number;
+  /** 当前/最大机体 HP。 */
+  hp: number;
+  maxHp: number;
+  /** 战机总等级（火力 + 散射 + 导弹）。 */
+  shipLevel: number;
+  kills: number;
+  /** 下一档击杀回满的门槛。 */
+  healAt: number;
+  /** 本关拾取到的战利品（cr），通关时并入结算。 */
+  loot: number;
 }
 
 export interface StageClearResult {
@@ -52,6 +68,8 @@ export interface StageClearResult {
   stageScore: number;
   totalScore: number;
   durationMs: number;
+  /** 本关精英/Boss 掉落的战利品 cr。 */
+  loot: number;
 }
 
 export interface GameOverResult {
@@ -123,12 +141,16 @@ interface Enemy {
   dead: boolean;
 }
 
+type PickupType = PowerType | "C";
+
 interface PowerUp {
   x: number;
   y: number;
   vy: number;
   t: number;
-  type: PowerType;
+  type: PickupType;
+  /** 战利品（C）的 cr 面额；其它补给为 0。 */
+  value: number;
 }
 
 type ObstacleKind = "mine" | "barrier" | "barricade" | "container" | "asteroid" | "debris";
@@ -249,6 +271,11 @@ export class RaidenEngine {
   private missileLevel = 0;
   private missileCooldown = 0;
   private invincible = 2;
+  /** 受击后的短暂硬直无敌，和护盾的长时间无敌分开。 */
+  private hurtInvuln = 0;
+  private hp = PLAYER_MAX_HP;
+  private stageLoot = 0;
+  private nextHealAt = HP_HEAL_KILLS;
   private readyIn = 0;
   private respawn = 0;
   private killCount = 0;
@@ -309,6 +336,7 @@ export class RaidenEngine {
     this.bombs = clamp(Math.trunc(options.starting.bombs), 0, MAX_BOMBS);
     this.power = clamp(Math.trunc(options.starting.power), 1, MAX_POWER);
     this.invincible = options.starting.shield ? SHIELD_PURCHASE_SECONDS : 2;
+    this.hp = PLAYER_MAX_HP;
 
     this.vignette = this.createVignette();
     this.backdrop = createBackdrop(this.def.theme);
@@ -397,6 +425,9 @@ export class RaidenEngine {
     this.fireCooldown = 0;
     this.missileCooldown = 0.6;
     this.invincible = Math.max(this.invincible, 1.2);
+    this.hurtInvuln = 0;
+    this.hp = PLAYER_MAX_HP;
+    this.stageLoot = 0;
     this.emitHud(true);
   }
 
@@ -408,6 +439,8 @@ export class RaidenEngine {
     this.lives = 1;
     this.respawn = 0;
     this.invincible = 3;
+    this.hurtInvuln = 0;
+    this.hp = PLAYER_MAX_HP;
     this.playerX = FIELD_W / 2;
     this.playerY = FIELD_H - 100;
     this.clearBulletsAround(this.playerX, this.playerY, 200);
@@ -472,6 +505,7 @@ export class RaidenEngine {
     this.explodeSfxT = Math.max(0, this.explodeSfxT - dt);
     this.toastT = Math.max(0, this.toastT - dt);
     if (this.invincible > 0) this.invincible = Math.max(0, this.invincible - dt);
+    if (this.hurtInvuln > 0) this.hurtInvuln = Math.max(0, this.hurtInvuln - dt);
 
     this.updatePlayer(dt);
     this.spawnDueWaves();
@@ -528,6 +562,12 @@ export class RaidenEngine {
       spread: this.spread,
       missiles: this.missileLevel,
       readyIn: Math.max(0, this.readyIn),
+      hp: Math.max(0, Math.round(this.hp)),
+      maxHp: PLAYER_MAX_HP,
+      shipLevel: 1 + (this.power - 1) + this.spread + this.missileLevel,
+      kills: this.killCount,
+      healAt: this.nextHealAt,
+      loot: this.stageLoot,
     });
   }
 
@@ -604,7 +644,7 @@ export class RaidenEngine {
 
   private fireVolley(): void {
     // Lv1 只发两发窄角机炮，随火力等级逐步加宽加量；散射由 S 掉落单独解锁。
-    const n = Math.min(5, 1 + this.power);
+    const n = Math.min(7, 1 + Math.ceil(this.power / 2));
     const gap = 0.03 + this.power * 0.008;
     const speed = 900;
     const dmg = 1.7 + this.power * 0.12;
@@ -669,14 +709,33 @@ export class RaidenEngine {
     this.audio.play("shoot");
   }
 
+  /** 扣血；HP 见底才损失一条命。护盾与受击硬直期间不生效。 */
+  private damagePlayer(amount: number): void {
+    if (this.state !== "playing" || this.invincible > 0 || this.respawn > 0 || this.hurtInvuln > 0) {
+      return;
+    }
+    this.hp = Math.max(0, this.hp - amount);
+    this.hurtInvuln = 0.9;
+    this.shake = Math.max(this.shake, 5);
+    this.audio.play("hit");
+    this.spawnSpark(this.playerX, this.playerY, "#ff8a8a", 8);
+    if (this.hp <= 0) {
+      this.killPlayer();
+    } else {
+      this.emitHud(true);
+    }
+  }
+
   private killPlayer(): void {
-    if (this.state !== "playing" || this.invincible > 0 || this.respawn > 0) return;
+    if (this.state !== "playing" || this.respawn > 0) return;
     this.explode(this.playerX, this.playerY, 1.5, "#ffcf7a");
     this.audio.play("bigExplode");
     this.shake = Math.max(this.shake, 15);
     this.flash = Math.max(this.flash, 0.28);
     this.lives -= 1;
     this.invincible = 0;
+    this.hurtInvuln = 0;
+    this.hp = 0;
     this.clearBulletsAround(this.playerX, this.playerY, 150);
 
     if (this.lives <= 0) {
@@ -690,6 +749,7 @@ export class RaidenEngine {
       this.emitHud(true);
     } else {
       this.respawn = 1.3;
+      this.hp = PLAYER_MAX_HP;
       this.playerX = FIELD_W / 2;
       this.playerY = FIELD_H - 100;
       this.emitHud(true);
@@ -817,12 +877,12 @@ export class RaidenEngine {
         e.shots += 1;
         e.fireT =
           e.kind === "turret"
-            ? 2.0
+            ? 2.6
             : e.kind === "gunship"
-              ? 1.7
+              ? 2.2
               : e.kind === "heli"
-                ? 1.5
-                : rand(1.5, 2.2);
+                ? 2.0
+                : rand(2.0, 2.8);
       }
 
       if (e.y > FIELD_H + 50 || e.x < -80 || e.x > FIELD_W + 80) e.dead = true;
@@ -832,26 +892,26 @@ export class RaidenEngine {
   private enemyFire(e: Enemy): void {
     switch (e.kind) {
       case "drone":
-        this.shootAimed(e.x, e.y + 12, 215, 0, 1, "#ff6f9d");
-        if (e.shots % 4 === 3) this.shootFanDown(e.x, e.y + 10, 2, 0.24, 175, "#ff9db9");
+        this.shootAimed(e.x, e.y + 12, 195, 0, 1, "#ff6f9d");
+        if (e.shots % 5 === 4) this.shootFanDown(e.x, e.y + 10, 2, 0.24, 160, "#ff9db9");
         break;
       case "heli":
-        this.shootAimed(e.x, e.y + 12, 190, 0.2, 3, "#ffa35e");
-        if (e.shots % 3 === 2) this.shootFanDown(e.x, e.y + 16, 5, 0.22, 160, "#ffc37e");
+        this.shootAimed(e.x, e.y + 12, 175, 0.2, 2, "#ffa35e");
+        if (e.shots % 4 === 3) this.shootFanDown(e.x, e.y + 16, 3, 0.22, 150, "#ffc37e");
         break;
       case "turret":
-        this.shootAimed(e.x, e.y, 220, 0.15, 3, "#ffb35e");
-        if (e.shots % 2 === 1) this.shootFanDown(e.x, e.y + 4, 3, 0.26, 185, "#ffd08a");
+        this.shootAimed(e.x, e.y, 200, 0.15, 2, "#ffb35e");
+        if (e.shots % 3 === 2) this.shootFanDown(e.x, e.y + 4, 2, 0.26, 170, "#ffd08a");
         break;
       case "tank":
-        this.shootAimed(e.x, e.y, 238, 0.1, 3, "#ff7f9f");
-        if (e.shots % 3 === 2) this.shootFanDown(e.x, e.y + 6, 4, 0.2, 190, "#ffb0c4");
+        this.shootAimed(e.x, e.y, 215, 0.1, 2, "#ff7f9f");
+        if (e.shots % 3 === 2) this.shootFanDown(e.x, e.y + 6, 3, 0.2, 175, "#ffb0c4");
         break;
       case "gunship": {
-        const extra = e.elite ? 2 : 0;
-        this.shootAimed(e.x, e.y + 18, 205, 0.18, 4 + extra, "#c77bff");
-        if (e.elite) this.shootFanDown(e.x, e.y + 20, 7, 0.26, 165, "#e08bff");
-        if (e.shots % 3 === 2) this.shootFanDown(e.x, e.y + 12, 5, 0.3, 145, "#b06bff");
+        const extra = e.elite ? 1 : 0;
+        this.shootAimed(e.x, e.y + 18, 190, 0.18, 3 + extra, "#c77bff");
+        if (e.elite) this.shootFanDown(e.x, e.y + 20, 5, 0.26, 155, "#e08bff");
+        if (e.shots % 4 === 3) this.shootFanDown(e.x, e.y + 12, 3, 0.3, 140, "#b06bff");
         break;
       }
     }
@@ -942,7 +1002,19 @@ export class RaidenEngine {
       this.explodeSfxT = e.kind === "gunship" || e.kind === "tank" ? 0.13 : 0.07;
     }
     if (e.drop) this.spawnPowerUp(e.x, e.y, e.drop);
+    // 精英怪随机掉落战利品（1~3 cr），和常规补给互不冲突。
+    if (e.elite && Math.random() < 0.6) {
+      this.spawnLoot(e.x, e.y, 1 + Math.floor(rand(0, 3)));
+    }
     this.killCount += 1;
+    if (this.killCount >= this.nextHealAt) {
+      this.nextHealAt += HP_HEAL_KILLS;
+      this.hp = PLAYER_MAX_HP;
+      this.hurtInvuln = Math.max(this.hurtInvuln, 0.4);
+      this.spawnRing(this.playerX, this.playerY, "#8effc4", 110, 0.5);
+      this.toast(`击破 ${HP_HEAL_KILLS} 架 · 机体修复 HP 回满`);
+      this.audio.play("powerup");
+    }
     // 常规击破也保留少量补给机会，避免非精英波次完全没有成长。
     if (!e.drop && this.power < MAX_POWER && Math.random() < 0.04) {
       this.spawnPowerUp(e.x, e.y, "W");
@@ -952,8 +1024,13 @@ export class RaidenEngine {
   }
 
   private spawnPowerUp(x: number, y: number, type: PowerType): void {
-    if (this.powerups.length >= 6) this.powerups.shift();
-    this.powerups.push({ x, y, vy: 78, t: rand(0, 3), type });
+    if (this.powerups.length >= 8) this.powerups.shift();
+    this.powerups.push({ x, y, vy: 78, t: rand(0, 3), type, value: 0 });
+  }
+
+  private spawnLoot(x: number, y: number, value: number): void {
+    if (this.powerups.length >= 10) this.powerups.shift();
+    this.powerups.push({ x, y, vy: 70, t: rand(0, 3), type: "C", value });
   }
 
   private updatePowerups(dt: number): void {
@@ -1011,6 +1088,12 @@ export class RaidenEngine {
           this.toast("导弹已满 · +1500");
           this.audio.play("coin");
         }
+        break;
+      case "C":
+        this.stageLoot += p.value;
+        this.toast(`战利品 +${p.value} cr · 通关结算`);
+        this.audio.play("coin");
+        this.spawnSpark(p.x, p.y, "#ffd75e", 8);
         break;
     }
     this.emitHud(true);
@@ -1220,24 +1303,24 @@ export class RaidenEngine {
 
     b.fireA -= dt;
     if (b.fireA <= 0) {
-      this.shootAimed(b.x - 82, b.y + 18, 205, 0, 1, "#ff6f9d");
-      this.shootAimed(b.x + 82, b.y + 18, 205, 0, 1, "#ff6f9d");
-      b.fireA = b.phase >= 3 ? 0.95 : 1.45;
+      this.shootAimed(b.x - 82, b.y + 18, 195, 0, 1, "#ff6f9d");
+      this.shootAimed(b.x + 82, b.y + 18, 195, 0, 1, "#ff6f9d");
+      b.fireA = b.phase >= 3 ? 1.4 : 1.9;
     }
     b.fireB -= dt;
     if (b.fireB <= 0) {
-      this.shootFanDown(b.x, b.y + 34, 9 + b.phase * 2, 0.16, 165, "#ff9d5c");
-      b.fireB = b.phase >= 3 ? 2.4 : 3.2;
+      this.shootFanDown(b.x, b.y + 34, 7 + b.phase, 0.18, 155, "#ff9d5c");
+      b.fireB = b.phase >= 3 ? 3.0 : 3.8;
     }
     b.fireC -= dt;
     if (b.phase >= 2 && b.fireC <= 0) {
-      this.shootRing(b.x, b.y + 10, 14 + b.phase * 2, 120, b.t * 1.4, "#ff7ac8");
-      b.fireC = b.phase >= 3 ? 3 : 3.9;
+      this.shootRing(b.x, b.y + 10, 12 + b.phase, 110, b.t * 1.4, "#ff7ac8");
+      b.fireC = b.phase >= 3 ? 3.6 : 4.6;
     }
     b.auxT -= dt;
     if (b.phase >= 2 && b.auxT <= 0) {
       this.launchEscorts(b);
-      b.auxT = b.phase >= 3 ? 6.5 : 9;
+      b.auxT = b.phase >= 3 ? 8 : 11;
     }
   }
 
@@ -1282,25 +1365,25 @@ export class RaidenEngine {
     b.fireA -= dt;
     if (b.fireA <= 0) {
       const seg = b.segments[1 + Math.floor(Math.random() * Math.max(1, b.segments.length - 2))] ?? b;
-      this.shootAimed(seg.x, seg.y, 205, 0.13, 3, "#d47bff");
-      b.fireA = b.phase >= 3 ? 0.78 : 1.12;
+      this.shootAimed(seg.x, seg.y, 195, 0.13, 2, "#d47bff");
+      b.fireA = b.phase >= 3 ? 1.15 : 1.55;
     }
     b.fireB -= dt;
     if (b.fireB <= 0) {
-      this.shootRing(b.x, b.y, b.phase >= 2 ? 20 : 14, 132, b.t, "#ff7ac8");
-      b.fireB = b.phase >= 3 ? 2.4 : 3.4;
+      this.shootRing(b.x, b.y, b.phase >= 2 ? 16 : 12, 122, b.t, "#ff7ac8");
+      b.fireB = b.phase >= 3 ? 3.2 : 4.2;
     }
     b.fireC -= dt;
     if (b.phase >= 3 && b.fireC <= 0) {
-      this.shootFanDown(b.x, b.y + 20, 11, 0.2, 155, "#ffb35e");
-      b.fireC = 1.8;
+      this.shootFanDown(b.x, b.y + 20, 9, 0.22, 145, "#ffb35e");
+      b.fireC = 2.4;
     }
     b.auxT -= dt;
     if (b.phase >= 2 && b.auxT <= 0) {
       const tail = b.segments[b.segments.length - 1] ?? b;
-      this.shootAimed(tail.x, tail.y + 12, 210, 0.1, 3, "#ff9ad8");
-      this.shootFanDown(tail.x, tail.y + 14, 6 + b.phase, 0.24, 168, "#e08bff");
-      b.auxT = b.phase >= 3 ? 4.4 : 6.2;
+      this.shootAimed(tail.x, tail.y + 12, 195, 0.1, 2, "#ff9ad8");
+      this.shootFanDown(tail.x, tail.y + 14, 5 + b.phase, 0.26, 155, "#e08bff");
+      b.auxT = b.phase >= 3 ? 5.6 : 7.4;
     }
   }
 
@@ -1311,32 +1394,32 @@ export class RaidenEngine {
 
     b.fireA -= dt;
     if (b.fireA <= 0) {
-      this.shootRing(b.x, b.y, 20, 138, b.t * 0.9, "#8fd3ff");
-      b.fireA = b.phase >= 2 ? 1.9 : 2.5;
+      this.shootRing(b.x, b.y, 16, 128, b.t * 0.9, "#8fd3ff");
+      b.fireA = b.phase >= 2 ? 2.3 : 3.0;
     }
     b.fireB -= dt;
     if (b.fireB <= 0) {
-      this.shootAimed(b.x, b.y + 16, 225, 0.12, 3, "#ff7ac8");
-      b.fireB = b.phase >= 3 ? 1.0 : 1.5;
+      this.shootAimed(b.x, b.y + 16, 210, 0.12, 2, "#ff7ac8");
+      b.fireB = b.phase >= 3 ? 1.4 : 2.0;
     }
     b.fireC -= dt;
     if (b.phase >= 2 && b.fireC <= 0) {
       this.spawnBeams(b);
-      b.fireC = b.phase >= 3 ? 3.6 : 5;
+      b.fireC = b.phase >= 3 ? 4.6 : 6.2;
     }
     if (b.phase >= 3) {
       b.spiralT -= dt;
       if (b.spiralT <= 0) {
-        b.spiralT = 0.1;
+        b.spiralT = 0.16;
         const base = b.t * 4.4;
         for (const offset of [0, Math.PI]) {
           const angle = base + offset;
           this.enemyBullets.push({
             x: b.x,
             y: b.y,
-            vx: Math.cos(angle) * 135,
-            vy: Math.sin(angle) * 135,
-            r: 5,
+            vx: Math.cos(angle) * 120,
+            vy: Math.sin(angle) * 120,
+            r: 4,
             color: "#9fe8ff",
             dead: false,
           });
@@ -1351,14 +1434,14 @@ export class RaidenEngine {
         this.shootAimed(
           b.x + Math.cos(angle) * 74,
           b.y + Math.sin(angle) * 74,
-          205,
+          195,
           0.1,
-          b.phase >= 3 ? 3 : 2,
+          2,
           "#9fe8ff",
         );
       }
       this.audio.play("warning");
-      b.auxT = b.phase >= 3 ? 6.8 : 9.5;
+      b.auxT = b.phase >= 3 ? 8 : 11;
     }
 
     for (const beam of b.beams) {
@@ -1375,11 +1458,12 @@ export class RaidenEngine {
           beam.active > 0 &&
           !beam.hit &&
           this.invincible <= 0 &&
+          this.hurtInvuln <= 0 &&
           this.respawn <= 0 &&
           Math.abs(this.playerX - beam.x) < 15
         ) {
           beam.hit = true;
-          this.killPlayer();
+          this.damagePlayer(34);
         }
       }
     }
@@ -1432,6 +1516,10 @@ export class RaidenEngine {
       this.shake = Math.max(this.shake, 22);
       this.flash = Math.max(this.flash, 0.5);
       for (const bullet of this.enemyBullets) bullet.dead = true;
+      // Boss 必掉一箱战利品；结算前没捡到的会在通关瞬间自动回收。
+      for (let i = 0; i < 4; i += 1) {
+        this.spawnLoot(b.x + rand(-80, 80), b.y + rand(-16, 26), 2 + Math.floor(rand(0, 3)));
+      }
       this.emitHud(true);
     }
   }
@@ -1442,6 +1530,9 @@ export class RaidenEngine {
     this.state = "stageclear";
     this.addScore(10000);
     this.enemyBullets = [];
+    for (const p of this.powerups) {
+      if (p.type === "C") this.stageLoot += p.value;
+    }
     this.powerups = [];
     this.audio.play("stageClear");
     this.emitHud(true);
@@ -1450,6 +1541,7 @@ export class RaidenEngine {
       stageScore: this.stageScore,
       totalScore: this.score,
       durationMs: Math.round(this.stageTime * 1000),
+      loot: this.stageLoot,
     });
   }
 
@@ -1626,33 +1718,33 @@ export class RaidenEngine {
 
     if (this.state !== "playing" || this.paused) return;
 
-    // 敌弹 → 自机
-    if (this.invincible <= 0 && this.respawn <= 0) {
+    // 敌弹 → 自机：扣 10 HP，不再一击坠机
+    if (this.invincible <= 0 && this.hurtInvuln <= 0 && this.respawn <= 0) {
       for (const b of this.enemyBullets) {
         if (b.dead) continue;
         if (distance(b.x, b.y, this.playerX, this.playerY) < PLAYER_R + b.r * 0.8) {
           b.dead = true;
-          this.killPlayer();
+          this.damagePlayer(10);
           break;
         }
       }
     }
 
     // 机体碰撞 → 自机
-    if (this.state === "playing" && this.invincible <= 0 && this.respawn <= 0) {
+    if (this.state === "playing" && this.invincible <= 0 && this.hurtInvuln <= 0 && this.respawn <= 0) {
       for (const e of this.enemies) {
         if (e.dead) continue;
         if (distance(e.x, e.y, this.playerX, this.playerY) < e.r + 12) {
+          this.damagePlayer(e.kind === "gunship" || e.kind === "tank" ? 50 : 38);
           this.damageEnemy(e, 999);
-          this.killPlayer();
           break;
         }
       }
       for (const o of this.obstacles) {
         if (o.dead) continue;
         if (distance(o.x, o.y, this.playerX, this.playerY) < o.r + 10) {
+          this.damagePlayer(34);
           this.destroyObstacle(o, false);
-          this.killPlayer();
           break;
         }
       }
@@ -1662,7 +1754,7 @@ export class RaidenEngine {
         const hitSeg =
           boss.stage === 2 &&
           boss.segments.some((seg, i) => i > 0 && distance(seg.x, seg.y, this.playerX, this.playerY) < 34);
-        if (hitHead || hitSeg) this.killPlayer();
+        if (hitHead || hitSeg) this.damagePlayer(50);
       }
     }
 
@@ -2081,12 +2173,12 @@ export class RaidenEngine {
     }
     ctx.restore();
 
-    if (o.hp < o.maxHp) {
+    {
       const width = Math.max(18, o.r * 1.5);
       const y = o.y - o.r - 10;
+      const frac = clamp(o.hp / o.maxHp, 0, 1);
       ctx.fillStyle = "rgba(8, 12, 18, 0.7)";
       ctx.fillRect(o.x - width / 2, y, width, 3);
-      const frac = clamp(o.hp / o.maxHp, 0, 1);
       ctx.fillStyle = frac > 0.5 ? "#8ee7a0" : frac > 0.25 ? "#ffc857" : "#ff6b5c";
       ctx.fillRect(o.x - width / 2, y, width * frac, 3);
     }
@@ -2096,12 +2188,14 @@ export class RaidenEngine {
     const ctx = this.ctx;
     const tilt = clamp(this.playerVX * 0.00055, -0.22, 0.22);
     const tier = clamp(this.power, 1, MAX_POWER);
-    const span = 22 + (tier - 1) * 2.2;
+    const span = Math.min(34, 22 + (tier - 1) * 1.8);
     const maxed = tier >= MAX_POWER;
     ctx.save();
+    // 受击硬直期间闪烁，给玩家“刚挨打”的即时反馈。
+    if (this.hurtInvuln > 0 && Math.sin(this.time * 55) > 0) ctx.globalAlpha = 0.42;
     ctx.translate(this.playerX, this.playerY);
     ctx.rotate(tilt);
-    ctx.scale(0.97 + tier * 0.012, 0.97 + tier * 0.012);
+    ctx.scale(0.97 + Math.min(7, tier) * 0.012, 0.97 + Math.min(7, tier) * 0.012);
 
     // 尾焰：Lv3 起换成双发，满级带金色
     const flame = 13 + Math.sin(this.time * 42) * 4;
@@ -2224,6 +2318,25 @@ export class RaidenEngine {
       ctx.arc(span - 1, 6, 1.8, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.restore();
+
+    // 机体血条：常显在机身上方，HUD 里另有精确数值。
+    const hpFrac = clamp(this.hp / PLAYER_MAX_HP, 0, 1);
+    const barW = 46;
+    const barY = this.playerY - 38;
+    ctx.save();
+    ctx.fillStyle = "rgba(5, 10, 16, 0.72)";
+    ctx.fillRect(this.playerX - barW / 2 - 1, barY - 1, barW + 2, 6);
+    ctx.fillStyle = hpFrac > 0.5 ? "#6ef0a8" : hpFrac > 0.25 ? "#ffc857" : "#ff6b5c";
+    ctx.fillRect(this.playerX - barW / 2, barY, barW * hpFrac, 4);
+    ctx.strokeStyle = "rgba(160, 230, 255, 0.35)";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(this.playerX - barW / 2 - 1, barY - 1, barW + 2, 6);
+    ctx.fillStyle = "rgba(225, 248, 255, 0.72)";
+    ctx.font = "700 8px ui-monospace, SFMono-Regular, Menlo, monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "bottom";
+    ctx.fillText(`${Math.round(this.hp)}`, this.playerX, barY - 2);
     ctx.restore();
 
     if (this.invincible > 0) {
@@ -2625,21 +2738,68 @@ export class RaidenEngine {
       ctx.stroke();
       ctx.restore();
     }
+
+    // 敌方血条：始终显示，精英加金边，颜色随剩余比例变化。
+    const barOffset: Record<EnemyKind, number> = {
+      drone: 24,
+      heli: 37,
+      turret: 30,
+      tank: 25,
+      gunship: 37,
+    };
+    const barY = e.y - barOffset[e.kind];
+    if (barY > 4) {
+      const width = Math.max(22, e.r * 1.9) + (e.elite ? 8 : 0);
+      const frac = clamp(e.hp / e.maxHp, 0, 1);
+      ctx.save();
+      ctx.fillStyle = "rgba(5, 10, 16, 0.72)";
+      ctx.fillRect(e.x - width / 2 - 1, barY - 1, width + 2, 5);
+      ctx.fillStyle = e.elite ? "#ffd75e" : frac > 0.5 ? "#8ee7a0" : frac > 0.25 ? "#ffc857" : "#ff6b5c";
+      ctx.fillRect(e.x - width / 2, barY, width * frac, 3);
+      if (e.elite) {
+        ctx.strokeStyle = "rgba(255, 205, 110, 0.8)";
+        ctx.lineWidth = 0.8;
+        ctx.strokeRect(e.x - width / 2 - 1, barY - 1, width + 2, 5);
+      }
+      ctx.restore();
+    }
   }
 
   private drawPowerUp(p: PowerUp): void {
     const ctx = this.ctx;
-    const colors: Record<PowerType, string> = {
+    const colors: Record<PickupType, string> = {
       W: "#ff5d6c",
       B: "#ffb03a",
       S: "#4fd6ff",
       M: "#ffd75e",
+      C: "#ffcf4a",
     };
     const color = colors[p.type];
     ctx.save();
     ctx.translate(p.x, p.y);
     const pulse = 1 + Math.sin(p.t * 5) * 0.08;
     ctx.scale(pulse, pulse);
+    if (p.type === "C") {
+      // 战利品：金色菱形箱 + 面额，和其他补给一眼区分。
+      ctx.fillStyle = "rgba(16, 12, 4, 0.88)";
+      ctx.beginPath();
+      ctx.moveTo(0, -14);
+      ctx.lineTo(14, 0);
+      ctx.lineTo(0, 14);
+      ctx.lineTo(-14, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+      ctx.fillStyle = color;
+      ctx.font = "bold 10px ui-monospace, SFMono-Regular, Menlo, monospace";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(`${p.value}cr`, 0, 0.5);
+      ctx.restore();
+      return;
+    }
     ctx.fillStyle = "rgba(10, 16, 26, 0.85)";
     ctx.beginPath();
     ctx.arc(0, 0, 13, 0, Math.PI * 2);
@@ -2651,7 +2811,7 @@ export class RaidenEngine {
     ctx.font = "bold 12px ui-monospace, SFMono-Regular, Menlo, monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(p.type === "M" ? "M" : p.type, 0, 0.5);
+    ctx.fillText(p.type, 0, 0.5);
     ctx.restore();
   }
 
