@@ -10,7 +10,6 @@ import {
   Heart,
   LifeBuoy,
   ListOrdered,
-  Rocket,
   ScrollText,
   ShieldCheck,
   Swords,
@@ -35,6 +34,7 @@ import type {
   MyRaidenSummary,
 } from "@/lib/raiden/records";
 import { HP_HEAL_KILLS, type HudSnapshot } from "./engine";
+import { BULLET_TYPES, describeWeapon, MAX_WEAPON_LEVEL, WEAPONS } from "./weapons";
 import { formatStageTime, scoreText } from "@/lib/raiden/format";
 import { LoadoutShop } from "./loadout-shop";
 
@@ -257,7 +257,11 @@ function LivePanel({
           icon={Heart}
           tone={hpPct > 50 ? "text-emerald-300" : hpPct > 25 ? "text-amber-300" : "text-rose-300"}
         />
-        <LiveStat label="战机等级" value={`Lv ${hud.shipLevel}`} icon={Zap} />
+        <LiveStat
+          label={`武器 · ${WEAPONS[hud.weapon].name}`}
+          value={`Lv ${hud.weaponLevel} / ${hud.maxWeaponLevel}`}
+          icon={Zap}
+        />
         <LiveStat label="剩余生命" value={`× ${hud.lives}`} icon={Heart} />
         <LiveStat label="炸弹存量" value={`× ${hud.bombs}`} icon={Bomb} />
       </div>
@@ -302,9 +306,10 @@ function LivePanel({
       </div>
 
       <div className="flex flex-wrap gap-1.5 text-[10px]">
-        <Chip icon={Zap} text={`火力 Lv${hud.power}`} />
-        <Chip icon={Crosshair} text={`散射 S${hud.spread}`} muted={hud.spread === 0} />
-        <Chip icon={Rocket} text={`导弹 M${hud.missiles}`} muted={hud.missiles === 0} />
+        <Chip
+          icon={Crosshair}
+          text={`${WEAPONS[hud.weapon].name} ${hud.weapon} Lv${hud.weaponLevel}`}
+        />
         <Chip
           icon={Coins}
           text={`战利品 ${formatCredits(hud.loot)} cr`}
@@ -338,8 +343,16 @@ function LivePanel({
           <span className="text-white/70">拖动画面</span> 移动 · 自动射击 ·{" "}
           <span className="text-white/70">X / K / 空格</span> 炸弹 · <span className="text-white/70">P</span> 暂停
         </p>
-        <p className="mt-0.5">掉落：W 火力 · S 散射 · M 追踪导弹 · B 炸弹 · 金色 cr 战利品</p>
-        <p className="mt-0.5">精英机与 Boss 会掉落战利品，通关时自动并入本关奖励。</p>
+        <p className="mt-0.5">
+          <span className="text-white/70">当前武器</span> {WEAPONS[hud.weapon].name}（{hud.weapon}）Lv
+          {hud.weaponLevel} · {describeWeapon(hud.weapon, hud.weaponLevel)}
+        </p>
+        <p className="mt-0.5 text-white/35">{WEAPONS[hud.weapon].hint}</p>
+        <p className="mt-0.5">
+          <span className="text-white/70">掉落</span> {BULLET_TYPES.map((t) => `${t} ${WEAPONS[t].name}`).join(" · ")}{" "}
+          · B 炸弹 · 金色 cr 战利品
+        </p>
+        <p className="mt-0.5">同字母升级，别的字母切换并清空等级；打掉补给箱可重掷字母。</p>
       </div>
     </div>
   );
@@ -622,8 +635,10 @@ function RulesPanel({ config }: { config: RaidenConfig }) {
           · 阵亡后可花 {formatCredits(config.revivePriceCredits)} cr 原地复活，单局最多{" "}
           {config.maxRevives} 次。
         </li>
-        <li>· 掉落 W 提升火力，S 增加散射，M 增加追踪导弹，B 补充炸弹。</li>
-        <li>· 精英敌机与 Boss 会掉落金色 cr 战利品，通关时并入本关奖励（有单关上限）。</li>
+        <li>· 五种子弹同时只能装备一种：{BULLET_TYPES.map((t) => `${t} ${WEAPONS[t].name}`).join(" · ")}。</li>
+        <li>· 吃到同字母 → 升到最高 Lv{MAX_WEAPON_LEVEL}，威力、弹数与范围一起涨；吃到别的字母 → 等级清空并切换成它。</li>
+        <li>· 开火打掉漂浮的补给箱会让它重新随机字母，可以先洗掉不想要的类型（金色战利品箱不受影响）。</li>
+        <li>· B 补充炸弹，金色 cr 是战利品；精英敌机与 Boss 的战利品在通关时并入本关奖励（有单关上限）。</li>
         <li>· 机体基础 100 HP：敌弹 -10，撞机/障碍 -34~50，HP 归零才损失一条命。</li>
         <li>· 每击破 25 架敌机 HP 回满；进入新关卡与复活同样回满。</li>
         <li>· 关卡顺序与用时由服务端校验；切到后台会自动暂停。</li>

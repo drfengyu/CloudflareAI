@@ -354,7 +354,7 @@ export function RaidenForm({ initialConfig }: { initialConfig: RaidenConfig }) {
 
       <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
         <p className="font-medium">
-          满配出击 {fullCost} cr · 三关首通合计 {firstClearTotal} cr · 三关重复通关合计 {repeatTotal} cr
+          满配出击 {fullCost} cr · {RAIDEN_STAGES.length} 关首通合计 {firstClearTotal} cr · 全关重复通关合计 {repeatTotal} cr
         </p>
         <p className="mt-1 text-muted-foreground">
           每日 {preview.dailyRuns} 次出击 × 满配 {fullCost} cr = 最多回收 {preview.dailyRuns * fullCost} cr

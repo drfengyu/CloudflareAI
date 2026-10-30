@@ -68,6 +68,61 @@ function makeBase(theme: StageTheme): HTMLCanvasElement {
       ctx.lineTo(x + 22, H);
       ctx.stroke();
     }
+  } else if (theme === "lunar") {
+    // 月面：浅灰月壤 + 大块暗色月海，整体比轨道关更亮，方便看出敌人轮廓。
+    const regolith = ctx.createLinearGradient(0, 0, 0, H);
+    regolith.addColorStop(0, "#2a2e39");
+    regolith.addColorStop(0.5, "#3a4050");
+    regolith.addColorStop(1, "#262b36");
+    ctx.fillStyle = regolith;
+    ctx.fillRect(0, 0, W, H);
+    const rand = mulberry32(4477);
+    ctx.fillStyle = "rgba(12, 14, 20, 0.18)";
+    for (let i = 0; i < 7; i += 1) {
+      ctx.beginPath();
+      ctx.ellipse(rand() * W, rand() * H, 60 + rand() * 90, 34 + rand() * 52, rand() * 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // 月壤细碎高光：静态噪点，滚动时不会闪烁。
+    for (let i = 0; i < 1400; i += 1) {
+      const x = rand() * W;
+      const y = rand() * H;
+      ctx.fillStyle = rand() < 0.5 ? "rgba(210, 218, 230, 0.05)" : "rgba(0, 0, 0, 0.07)";
+      ctx.fillRect(x, y, 1.3, 1.3);
+    }
+    const earthGlow = ctx.createRadialGradient(W * 0.82, H * 0.1, 8, W * 0.82, H * 0.1, 210);
+    earthGlow.addColorStop(0, "rgba(120, 190, 255, 0.22)");
+    earthGlow.addColorStop(1, "rgba(120, 190, 255, 0)");
+    ctx.fillStyle = earthGlow;
+    ctx.fillRect(0, 0, W, H);
+  } else if (theme === "void") {
+    // 深空：几乎纯黑 + 暗红星云，最后一关的压迫感靠「看不到底」。
+    const space = ctx.createLinearGradient(0, 0, 0, H);
+    space.addColorStop(0, "#05030a");
+    space.addColorStop(0.55, "#0b0512");
+    space.addColorStop(1, "#04030a");
+    ctx.fillStyle = space;
+    ctx.fillRect(0, 0, W, H);
+    const rand = mulberry32(8821);
+    for (let i = 0; i < 300; i += 1) {
+      const x = rand() * W;
+      const y = rand() * H;
+      const r = rand() < 0.9 ? 0.5 + rand() * 0.8 : 1.3 + rand() * 1.3;
+      ctx.fillStyle = `rgba(255, ${210 + Math.floor(rand() * 45)}, ${220 + Math.floor(rand() * 35)}, ${0.2 + rand() * 0.7})`;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    for (const [cx, cy, rad, tint] of [
+      [W * 0.2, H * 0.24, 280, "rgba(190, 60, 90, 0.16)"],
+      [W * 0.85, H * 0.66, 240, "rgba(120, 50, 160, 0.14)"],
+    ] as [number, number, number, string][]) {
+      const nebula = ctx.createRadialGradient(cx, cy, 10, cx, cy, rad);
+      nebula.addColorStop(0, tint);
+      nebula.addColorStop(1, "rgba(0, 0, 0, 0)");
+      ctx.fillStyle = nebula;
+      ctx.fillRect(0, 0, W, H);
+    }
   } else {
     const space = ctx.createLinearGradient(0, 0, 0, H);
     space.addColorStop(0, "#03040c");
@@ -496,6 +551,136 @@ function drawOrbit(ctx: CanvasRenderingContext2D, scroll: number, time: number):
   }
 }
 
+function drawLunar(ctx: CanvasRenderingContext2D, scroll: number, time: number): void {
+  // 远处的小坑用 0.55 视差，近处的大坑跟着卷轴走，滚动时才有「贴着月面飞」的速度感。
+  const rand = mulberry32(2026);
+  for (let i = -1; i < 7; i += 1) {
+    const y = ((i * 150 + scroll * 0.55) % (H + 150)) - 75;
+    const x = 40 + rand() * (W - 80);
+    const r = 9 + rand() * 13;
+    ctx.fillStyle = "rgba(9, 11, 16, 0.34)";
+    ctx.beginPath();
+    ctx.ellipse(x, y, r, r * 0.62, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(216, 226, 242, 0.24)";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.ellipse(x, y - 1.5, r, r * 0.62, 0, Math.PI * 1.05, Math.PI * 1.95);
+    ctx.stroke();
+  }
+
+  for (let i = -1; i < 4; i += 1) {
+    const y = ((i * 260 + scroll) % (H + 260)) - 130;
+    const seed = i * 97;
+    const x = 60 + ((seed * 53) % (W - 120));
+    const r = 34 + ((seed * 17) % 26);
+    ctx.fillStyle = "rgba(8, 10, 15, 0.4)";
+    ctx.beginPath();
+    ctx.ellipse(x, y, r, r * 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // 坑沿高光 + 放射状溅射纹，撞击坑读起来才像月面而不是水坑。
+    ctx.strokeStyle = "rgba(224, 234, 248, 0.3)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(x, y - 2, r, r * 0.6, 0, Math.PI * 1.02, Math.PI * 1.98);
+    ctx.stroke();
+    ctx.strokeStyle = "rgba(198, 208, 226, 0.07)";
+    ctx.lineWidth = 1.2;
+    for (let k = 0; k < 7; k += 1) {
+      const angle = (k / 7) * Math.PI * 2 + seed;
+      ctx.beginPath();
+      ctx.moveTo(x + Math.cos(angle) * (r + 3), y + Math.sin(angle) * (r * 0.6 + 3));
+      ctx.lineTo(x + Math.cos(angle) * (r + 26), y + Math.sin(angle) * (r * 0.6 + 22));
+      ctx.stroke();
+    }
+  }
+
+  // 月溪与车辙：横向长条，随卷轴下移。
+  ctx.strokeStyle = "rgba(160, 176, 200, 0.10)";
+  ctx.lineWidth = 3;
+  for (let i = -1; i < 5; i += 1) {
+    const y = ((i * 190 + scroll * 0.85) % (H + 190)) - 95;
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 26) {
+      const offset = Math.sin((x + y) * 0.02) * 9;
+      if (x === 0) ctx.moveTo(x, y + offset);
+      else ctx.lineTo(x, y + offset);
+    }
+    ctx.stroke();
+  }
+
+  // 采矿灯标：固定的冷亮点，给纯灰画面一点节奏。
+  for (let i = -1; i < 6; i += 1) {
+    const y = ((i * 168 + scroll) % (H + 168)) - 84;
+    const x = i % 2 === 0 ? 92 : 388;
+    const pulse = 0.35 + Math.max(0, Math.sin(time * 2.2 + i)) * 0.5;
+    ctx.fillStyle = `rgba(120, 220, 255, ${pulse * 0.5})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 3.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = `rgba(120, 220, 255, ${pulse * 0.12})`;
+    ctx.beginPath();
+    ctx.arc(x, y, 13, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawVoid(ctx: CanvasRenderingContext2D, scroll: number, time: number): void {
+  // 顶部远处的恒星强光：最后一关的光源，只留一条窄辉光避免盖住敌人。
+  const star = ctx.createRadialGradient(W / 2, -60, 10, W / 2, -60, 340);
+  star.addColorStop(0, "rgba(255, 170, 130, 0.3)");
+  star.addColorStop(0.5, "rgba(220, 90, 90, 0.12)");
+  star.addColorStop(1, "rgba(0, 0, 0, 0)");
+  ctx.fillStyle = star;
+  ctx.fillRect(0, 0, W, 360);
+
+  // 两侧破损的巨型环带桁架，尺度比轨道关更大，压出「要塞外壳」的感觉。
+  for (const side of [-1, 1]) {
+    const baseX = side < 0 ? 20 : W - 20;
+    ctx.fillStyle = "rgba(30, 20, 28, 0.92)";
+    ctx.fillRect(baseX - 16, 0, 32, H);
+    ctx.fillStyle = "rgba(96, 58, 70, 0.5)";
+    ctx.fillRect(baseX - 16, 0, 5, H);
+    for (let k = -1; k < 6; k += 1) {
+      const y = ((k * 146 + scroll * 0.7) % (H + 146)) - 73;
+      const broken = ((k % 3) + 3) % 3 === 2;
+      ctx.fillStyle = "rgba(44, 28, 38, 0.95)";
+      ctx.fillRect(baseX - (broken ? 26 : 58), y, broken ? 52 : 116, 18);
+      ctx.fillStyle = "rgba(126, 76, 92, 0.45)";
+      ctx.fillRect(baseX - (broken ? 26 : 58), y, broken ? 52 : 116, 3);
+      if (!broken) {
+        ctx.fillStyle = "rgba(255, 120, 90, 0.16)";
+        for (let p = 0; p < 4; p += 1) ctx.fillRect(baseX - 44 + p * 24, y + 6, 14, 6);
+      }
+      const blink = Math.sin(time * 3.4 + k + side * 2) > 0.4;
+      ctx.fillStyle = blink ? "rgba(255, 98, 110, 0.95)" : "rgba(90, 30, 40, 0.9)";
+      ctx.beginPath();
+      ctx.arc(baseX + side * 26, y + 9, 2.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // 缓慢上浮的余烬与漂移碎块，方向反着卷轴走，画面不会显得呆板。
+  for (let i = 0; i < 26; i += 1) {
+    const x = ((i * 149 + time * 9) % W + W) % W;
+    const y = H - (((i * 97 + time * 22 + scroll * 0.2) % (H + 40)) - 20);
+    const size = 1 + (i % 3);
+    ctx.fillStyle = `rgba(255, ${130 + (i % 4) * 22}, ${90 + (i % 5) * 16}, ${0.1 + (i % 3) * 0.06})`;
+    ctx.fillRect(x, y, size, size * 4);
+  }
+
+  // 能量弧：横跨航道底色的两道暗红辉光，提示「这里已经是核心」。
+  for (let i = -1; i < 4; i += 1) {
+    const y = ((i * 236 + scroll * 0.45) % (H + 236)) - 118;
+    ctx.strokeStyle = `rgba(255, 96, 110, ${0.05 + Math.max(0, Math.sin(time * 1.6 + i)) * 0.05})`;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.quadraticCurveTo(W / 2, y + 42, W, y);
+    ctx.stroke();
+  }
+}
+
 export interface Backdrop {
   speed: number;
   draw(ctx: CanvasRenderingContext2D, scroll: number, time: number): void;
@@ -503,20 +688,22 @@ export interface Backdrop {
 
 export function createBackdrop(theme: StageTheme): Backdrop {
   const base = makeBase(theme);
-  const speed = theme === "coast" ? 74 : theme === "city" ? 92 : 112;
+  const speed = theme === "coast" ? 74 : theme === "city" ? 92 : theme === "orbit" ? 112 : theme === "lunar" ? 124 : 138;
   return {
     speed,
     draw(ctx, scroll, time) {
-      if (theme === "orbit") {
+      if (theme === "orbit" || theme === "void") {
         // 星空整体缓慢下移，用循环绘制两份避免接缝。
         const drift = (scroll * 0.18) % H;
         ctx.drawImage(base, 0, drift);
         ctx.drawImage(base, 0, drift - H);
-        drawOrbit(ctx, scroll, time);
+        if (theme === "orbit") drawOrbit(ctx, scroll, time);
+        else drawVoid(ctx, scroll, time);
       } else {
         ctx.drawImage(base, 0, 0);
         if (theme === "coast") drawCoast(ctx, scroll, time);
-        else drawCity(ctx, scroll, time);
+        else if (theme === "city") drawCity(ctx, scroll, time);
+        else drawLunar(ctx, scroll, time);
       }
     },
   };

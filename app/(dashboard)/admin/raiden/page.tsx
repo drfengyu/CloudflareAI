@@ -241,7 +241,7 @@ export default async function AdminRaidenPage({
                     </table>
                   </div>
                   <p className="mt-2 text-[11px] text-muted-foreground">
-                    第 3 关通关即全关通关；首通每人每轮每关只发一次。
+                    第 {RAIDEN_STAGES.length} 关通关即全关通关；首通每人每轮每关只发一次。
                   </p>
                 </CardContent>
               </Card>

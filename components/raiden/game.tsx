@@ -15,18 +15,17 @@ import {
   Loader2,
   Pause,
   Play,
-  Rocket,
   ShieldCheck,
   Trophy,
   Volume2,
   VolumeX,
-  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCredits } from "@/lib/billing/credits";
 import {
   EMPTY_LOADOUT,
+  RAIDEN_STAGES,
   stageMeta,
   type RaidenActivityStatus,
   type RaidenConfig,
@@ -41,13 +40,13 @@ import {
   startRaidenRun as startRaidenRunAction,
 } from "@/app/(dashboard)/raiden/actions";
 import {
-  MAX_POWER,
   PLAYER_MAX_HP,
   RaidenEngine,
   type GameOverResult,
   type HudSnapshot,
   type StageClearResult,
 } from "./engine";
+import { MAX_WEAPON_LEVEL, WEAPONS } from "./weapons";
 import { formatStageTime, scoreText } from "@/lib/raiden/format";
 import { ConsolePanel } from "./console-panel";
 import { StartScreen } from "./start-screen";
@@ -76,7 +75,7 @@ interface FinalState {
 }
 
 const REASON_LABEL: Record<FinalState["reason"], { title: string; hint: string }> = {
-  cleared: { title: "MISSION COMPLETE", hint: "三关全部通关，行动成功。" },
+  cleared: { title: "MISSION COMPLETE", hint: "全部关卡通关，行动成功。" },
   failed: { title: "MISSION FAILED", hint: "机体全灭，行动终止。" },
   abandoned: { title: "行动中止", hint: "你主动退出了本次出击，未通关的得分不结算奖励。" },
 };
@@ -332,10 +331,11 @@ export function RaidenGame({
     score: 0,
     lives: run?.starting.lives ?? 3,
     bombs: run?.starting.bombs ?? 3,
-    power: run?.starting.power ?? 1,
-    maxPower: MAX_POWER,
+    weapon: "W" as const,
+    weaponLevel: run?.starting.power ?? 1,
+    maxWeaponLevel: MAX_WEAPON_LEVEL,
     stage: 1,
-    stageCount: 3,
+    stageCount: RAIDEN_STAGES.length,
     stageTime: 0,
     bossHp: null,
     bossName: null,
@@ -343,12 +343,9 @@ export function RaidenGame({
     state: "playing" as const,
     shield: false,
     shieldTime: 0,
-    spread: 0,
-    missiles: 0,
     readyIn: 0,
     hp: PLAYER_MAX_HP,
     maxHp: PLAYER_MAX_HP,
-    shipLevel: 1,
     kills: 0,
     healAt: 25,
     loot: 0,
@@ -748,26 +745,16 @@ function HudBar({
             <Bomb className="h-3 w-3 text-amber-300" />
             <span className="font-mono">×{hud.bombs}</span>
           </span>
-          <span className="flex items-center gap-0.5">
-            <Zap className="h-3 w-3 text-cyan-300" />
-            <span className="font-mono">Lv{hud.shipLevel}</span>
+          <span className="flex items-center gap-0.5" style={{ color: WEAPONS[hud.weapon].color }}>
+            <Crosshair className="h-3 w-3" />
+            <span className="font-mono">
+              {WEAPONS[hud.weapon].name} {hud.weapon} Lv{hud.weaponLevel}
+            </span>
           </span>
           <span className="flex items-center gap-0.5 text-amber-300/90">
             <Coins className="h-3 w-3" />
             <span className="font-mono">{formatCredits(hud.loot)}</span>
           </span>
-          {hud.spread > 0 ? (
-            <span className="flex items-center gap-0.5 text-fuchsia-300">
-              <Crosshair className="h-3 w-3" />
-              <span className="font-mono">S{hud.spread}</span>
-            </span>
-          ) : null}
-          {hud.missiles > 0 ? (
-            <span className="flex items-center gap-0.5 text-orange-300">
-              <Rocket className="h-3 w-3" />
-              <span className="font-mono">M{hud.missiles}</span>
-            </span>
-          ) : null}
           {hud.shield ? (
             <span className="flex items-center gap-0.5 text-cyan-300">
               <ShieldCheck className="h-3 w-3" />

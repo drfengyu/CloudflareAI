@@ -110,7 +110,7 @@ export function StartScreen({
               <Bomb className="h-3 w-3 text-amber-300/80" /> {initial.bombs} 弹
             </span>
             <span className="flex items-center gap-1">
-              <Zap className="h-3 w-3 text-cyan-300/80" /> 火力 Lv{initial.power}
+              <Zap className="h-3 w-3 text-cyan-300/80" /> 机炮（W）Lv{initial.power}
             </span>
           </div>
         </div>

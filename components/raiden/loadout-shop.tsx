@@ -132,7 +132,12 @@ export function LoadoutShop({
           <span className="text-white/70">触屏：</span>画面内拖动移动 · 右下角按钮放炸弹 · 自动射击
         </p>
         <p className="mt-0.5">
-          <span className="text-white/70">掉落：</span>W 火力 · S 散射 · M 追踪导弹 · B 炸弹 · 金色 cr 战利品
+          <span className="text-white/70">掉落：</span>W 机炮 · S 散射 · M 导弹 · L 激光 · P 榴弹 · B 炸弹 ·
+          金色 cr 战利品
+        </p>
+        <p className="mt-0.5">
+          <span className="text-white/70">子弹：</span>同时只用一种；吃同字母升级，吃别的字母切换并把等级清空，
+          打掉补给箱可重掷字母。
         </p>
         <p className="mt-0.5">
           <span className="text-white/70">战机：</span>100 HP 起，受击扣血；每击破 25 架或进入新关卡 HP 回满。

@@ -1,6 +1,20 @@
 import { createBackdrop, type Backdrop } from "./background";
 import { RaidenAudio } from "./audio";
-import { stageDef, type EnemyKind, type EnemySpawn, type PowerType, type StageDef } from "./stages";
+import {
+  ballistics,
+  BOMB_PICKUP_COLOR,
+  clampWeaponLevel,
+  isBulletType,
+  LOOT_PICKUP_COLOR,
+  MAX_LEVEL_SCORE,
+  MAX_WEAPON_LEVEL,
+  randomBulletType,
+  rollSupplyDrop,
+  WEAPONS,
+  type Ballistics,
+  type BulletType,
+} from "./weapons";
+import { STAGE_DEFS, stageDef, type EnemyKind, type EnemySpawn, type PowerType, type StageDef } from "./stages";
 
 /**
  * 雷电行动的游戏引擎：纯 Canvas 2D + 自绘矢量机体，不依赖任何图片/音频资源。
@@ -9,27 +23,27 @@ import { stageDef, type EnemyKind, type EnemySpawn, type PowerType, type StageDe
  * 通关/阵亡时通过回调把结算交给 React 层，由它调 server action。
  */
 
+export type { BulletType } from "./weapons";
+export { MAX_WEAPON_LEVEL, WEAPONS } from "./weapons";
+
 export const FIELD_W = 480;
 export const FIELD_H = 720;
-/** 火力上限：出击买满 10 份后是 Lv11。 */
-export const MAX_POWER = 11;
 /** 炸弹上限：基础 3 颗 + 买满 10 份。 */
 export const MAX_BOMBS = 13;
-export const MAX_SPREAD_LEVEL = 3;
-export const MAX_MISSILE_LEVEL = 3;
 
 /** 战机 HP 与「击杀回满」节奏。 */
 export const PLAYER_MAX_HP = 100;
 export const HP_HEAL_KILLS = 25;
 
-/** 出击商店买到的护盾持续 16 秒；S 掉落补 6 秒。 */
+/** 出击商店买到的护盾持续 16 秒。 */
 export const SHIELD_PURCHASE_SECONDS = 16;
-export const SHIELD_PICKUP_SECONDS = 6;
 
 const PLAYER_R = 5;
 const PLAYER_SPEED = 330;
 const ENEMY_BULLET_R = 4;
 const READY_SECONDS = 3.2;
+/** 补给箱的判定半径：捡到 / 被打到改写字母都用它，视觉和手感一致。 */
+const PICKUP_R = 13;
 
 export type GameState = "ready" | "playing" | "stageclear" | "gameover" | "ended";
 
@@ -37,8 +51,11 @@ export interface HudSnapshot {
   score: number;
   lives: number;
   bombs: number;
-  power: number;
-  maxPower: number;
+  /** 当前子弹类型（唯一激活的一种）。 */
+  weapon: BulletType;
+  /** 当前类型的等级；切换类型会掉回 1。 */
+  weaponLevel: number;
+  maxWeaponLevel: number;
   stage: number;
   stageCount: number;
   stageTime: number;
@@ -48,14 +65,10 @@ export interface HudSnapshot {
   state: GameState;
   shield: boolean;
   shieldTime: number;
-  spread: number;
-  missiles: number;
   readyIn: number;
   /** 当前/最大机体 HP。 */
   hp: number;
   maxHp: number;
-  /** 战机总等级（火力 + 散射 + 导弹）。 */
-  shipLevel: number;
   kills: number;
   /** 下一档击杀回满的门槛。 */
   healAt: number;
@@ -87,21 +100,30 @@ export interface EngineCallbacks {
 
 export interface EngineOptions {
   canvas: HTMLCanvasElement;
+  /** `power` 是出击商店买出来的初始机炮等级（1~11），初始类型固定 W。 */
   starting: { power: number; bombs: number; lives: number; shield: boolean };
   muted?: boolean;
   callbacks: EngineCallbacks;
 }
 
 interface PlayerBullet {
-  kind: "cannon" | "missile";
+  kind: "cannon" | "missile" | "laser" | "shell";
+  /** 发射时的武器类型，绘制与音效按它取色。 */
+  weapon: BulletType;
   x: number;
   y: number;
   vx: number;
   vy: number;
   r: number;
   dmg: number;
-  /** 导弹存活时间；炮弹恒为 0。 */
+  /** 导弹 / 榴弹的存活时间；机炮与激光恒为 0。 */
   ttl: number;
+  /** 激光剩余穿透次数（0 表示不穿透）。 */
+  pierce: number;
+  /** 命中后的溅射半径（榴弹、导弹用；0 表示不溅射）。 */
+  blastR: number;
+  /** 激光两次命中之间的冷却。 */
+  hitGap: number;
   dead: boolean;
 }
 
@@ -151,6 +173,8 @@ interface PowerUp {
   type: PickupType;
   /** 战利品（C）的 cr 面额；其它补给为 0。 */
   value: number;
+  /** 被子弹打中后字母闪烁的剩余时间。 */
+  shuffle: number;
 }
 
 type ObstacleKind = "mine" | "barrier" | "barricade" | "container" | "asteroid" | "debris";
@@ -214,8 +238,10 @@ interface BossState {
   fireC: number;
   spiralT: number;
   ringAngle: number;
-  /** 副武器/召唤计时（三关各自使用）。 */
+  /** 副武器/召唤计时（各关 Boss 自行使用）。 */
   auxT: number;
+  /** 炮塔 / 光环的自转角（第四、五关使用）。 */
+  spin: number;
   trail: { x: number; y: number }[];
   segments: { x: number; y: number }[];
   beams: Beam[];
@@ -266,10 +292,8 @@ export class RaidenEngine {
 
   private lives: number;
   private bombs: number;
-  private power: number;
-  private spread = 0;
-  private missileLevel = 0;
-  private missileCooldown = 0;
+  private weaponType: BulletType = "W";
+  private weaponLevel: number;
   private invincible = 2;
   /** 受击后的短暂硬直无敌，和护盾的长时间无敌分开。 */
   private hurtInvuln = 0;
@@ -318,6 +342,7 @@ export class RaidenEngine {
   private stageClearFired = false;
   private gameOverFired = false;
   private explodeSfxT = 0;
+  private shuffleSfxT = 0;
   private toastT = 0;
   private vignette: HTMLCanvasElement | null = null;
 
@@ -334,7 +359,7 @@ export class RaidenEngine {
 
     this.lives = Math.max(1, options.starting.lives);
     this.bombs = clamp(Math.trunc(options.starting.bombs), 0, MAX_BOMBS);
-    this.power = clamp(Math.trunc(options.starting.power), 1, MAX_POWER);
+    this.weaponLevel = clampWeaponLevel(options.starting.power);
     this.invincible = options.starting.shield ? SHIELD_PURCHASE_SECONDS : 2;
     this.hp = PLAYER_MAX_HP;
 
@@ -423,7 +448,6 @@ export class RaidenEngine {
     this.playerY = FIELD_H - 100;
     this.playerVX = 0;
     this.fireCooldown = 0;
-    this.missileCooldown = 0.6;
     this.invincible = Math.max(this.invincible, 1.2);
     this.hurtInvuln = 0;
     this.hp = PLAYER_MAX_HP;
@@ -503,6 +527,7 @@ export class RaidenEngine {
     this.scroll += this.backdrop.speed * dt;
     this.stageTime += dt;
     this.explodeSfxT = Math.max(0, this.explodeSfxT - dt);
+    this.shuffleSfxT = Math.max(0, this.shuffleSfxT - dt);
     this.toastT = Math.max(0, this.toastT - dt);
     if (this.invincible > 0) this.invincible = Math.max(0, this.invincible - dt);
     if (this.hurtInvuln > 0) this.hurtInvuln = Math.max(0, this.hurtInvuln - dt);
@@ -548,10 +573,11 @@ export class RaidenEngine {
       score: this.score,
       lives: this.lives,
       bombs: this.bombs,
-      power: this.power,
-      maxPower: MAX_POWER,
+      weapon: this.weaponType,
+      weaponLevel: this.weaponLevel,
+      maxWeaponLevel: MAX_WEAPON_LEVEL,
       stage: this.stage,
-      stageCount: 3,
+      stageCount: STAGE_DEFS.length,
       stageTime: this.stageTime,
       bossHp: this.boss ? (this.boss.dying === null ? this.boss.hp / this.boss.maxHp : 0) : null,
       bossName: this.boss ? this.def.boss.name : null,
@@ -559,12 +585,9 @@ export class RaidenEngine {
       state: this.state,
       shield: this.invincible > 0,
       shieldTime: Math.max(0, this.invincible),
-      spread: this.spread,
-      missiles: this.missileLevel,
       readyIn: Math.max(0, this.readyIn),
       hp: Math.max(0, Math.round(this.hp)),
       maxHp: PLAYER_MAX_HP,
-      shipLevel: 1 + (this.power - 1) + this.spread + this.missileLevel,
       kills: this.killCount,
       healAt: this.nextHealAt,
       loot: this.stageLoot,
@@ -614,14 +637,8 @@ export class RaidenEngine {
 
     this.fireCooldown -= dt;
     if (this.fireCooldown <= 0) {
-      this.fireCooldown = 0.118;
+      this.fireCooldown = ballistics(this.weaponType, this.weaponLevel).interval;
       this.fireVolley();
-    }
-
-    this.missileCooldown -= dt;
-    if (this.missileCooldown <= 0 && this.missileLevel > 0) {
-      this.missileCooldown = Math.max(0.38, 0.92 - this.missileLevel * 0.16);
-      this.fireMissiles();
     }
 
     // 尾焰粒子
@@ -642,71 +659,148 @@ export class RaidenEngine {
     }
   }
 
-  private fireVolley(): void {
-    // Lv1 只发两发窄角机炮，随火力等级逐步加宽加量；散射由 S 掉落单独解锁。
-    const n = Math.min(7, 1 + Math.ceil(this.power / 2));
-    const gap = 0.03 + this.power * 0.008;
-    const speed = 900;
-    const dmg = 1.7 + this.power * 0.12;
-    for (let i = 0; i < n; i += 1) {
-      const angle = -Math.PI / 2 + (i - (n - 1) / 2) * gap;
-      this.bullets.push({
-        kind: "cannon",
-        x: this.playerX,
-        y: this.playerY - 20,
-        vx: Math.cos(angle) * speed,
-        vy: Math.sin(angle) * speed,
-        r: 3.6,
-        dmg,
-        ttl: 0,
-        dead: false,
-      });
-    }
+  /** 统一补齐子弹字段：五种弹道各自只描述差异部分。 */
+  private addBullet(part: {
+    kind: PlayerBullet["kind"];
+    x: number;
+    y: number;
+    vx: number;
+    vy: number;
+    dmg: number;
+    r?: number;
+    ttl?: number;
+    pierce?: number;
+    blastR?: number;
+  }): void {
+    this.bullets.push({
+      kind: part.kind,
+      weapon: this.weaponType,
+      x: part.x,
+      y: part.y,
+      vx: part.vx,
+      vy: part.vy,
+      r: part.r ?? 3.4,
+      dmg: part.dmg,
+      ttl: part.ttl ?? 0,
+      pierce: part.pierce ?? 0,
+      blastR: part.blastR ?? 0,
+      hitGap: 0,
+      dead: false,
+    });
+  }
 
-    // S 掉落：每级追加一对侧向散弹，直接改变机炮弹幕形状。
-    if (this.spread > 0) {
-      const angles = [0.22, 0.42, 0.62].slice(0, this.spread);
-      const sideDmg = 1.2 + this.spread * 0.35;
-      for (const angle of angles) {
-        for (const side of [-1, 1]) {
-          this.bullets.push({
-            kind: "cannon",
-            x: this.playerX + side * 11,
-            y: this.playerY - 8,
-            vx: Math.sin(angle) * speed * side,
-            vy: -Math.cos(angle) * speed,
-            r: 3.2,
-            dmg: sideDmg,
-            ttl: 0,
-            dead: false,
-          });
-        }
-      }
+  /** 按当前类型与等级打出一轮齐射；弹道参数全部来自 `weapons.ts` 的弹道表。 */
+  private fireVolley(): void {
+    const spec = ballistics(this.weaponType, this.weaponLevel);
+    switch (this.weaponType) {
+      case "W":
+        this.fireCannon(spec);
+        break;
+      case "S":
+        this.fireScatter(spec);
+        break;
+      case "M":
+        this.fireMissiles(spec);
+        break;
+      case "L":
+        this.fireLaser(spec);
+        break;
+      case "P":
+        this.fireShells(spec);
+        break;
+    }
+  }
+
+  /** W 机炮：窄角直射，等级提升枪管数与射速，单体输出最稳。 */
+  private fireCannon(spec: Ballistics): void {
+    for (let i = 0; i < spec.streams; i += 1) {
+      const angle = -Math.PI / 2 + (i - (spec.streams - 1) / 2) * spec.arc;
+      this.addBullet({
+        kind: "cannon",
+        x: this.playerX + (i - (spec.streams - 1) / 2) * 4,
+        y: this.playerY - 20,
+        vx: Math.cos(angle) * spec.speed,
+        vy: Math.sin(angle) * spec.speed,
+        r: 3.4,
+        dmg: spec.dmg,
+      });
     }
     this.audio.play("shoot");
   }
 
-  /** M 掉落：从翼下发射追踪导弹，数量与等级一致。 */
-  private fireMissiles(): void {
-    const count = this.missileLevel;
-    const speed = 300 + this.missileLevel * 22;
-    for (let i = 0; i < count; i += 1) {
-      const side = count === 1 ? 1 : i % 2 === 0 ? -1 : 1;
-      const offset = count === 1 ? 0 : (i - (count - 1) / 2) * 16;
-      this.bullets.push({
+  /** S 散射：一整个扇面的弹片，贴脸命中时总伤最高。 */
+  private fireScatter(spec: Ballistics): void {
+    for (let i = 0; i < spec.streams; i += 1) {
+      const angle = -Math.PI / 2 + (i - (spec.streams - 1) / 2) * (spec.arc / Math.max(1, spec.streams - 1));
+      this.addBullet({
+        kind: "cannon",
+        x: this.playerX + Math.cos(angle) * 9,
+        y: this.playerY - 12 + Math.sin(angle) * 6,
+        vx: Math.cos(angle) * spec.speed,
+        vy: Math.sin(angle) * spec.speed,
+        r: 3,
+        dmg: spec.dmg,
+      });
+    }
+    this.audio.play("shoot");
+  }
+
+  /** M 导弹：升空后散开并追踪最近目标，命中带小范围爆炸。 */
+  private fireMissiles(spec: Ballistics): void {
+    for (let i = 0; i < spec.streams; i += 1) {
+      const side = spec.streams === 1 ? 1 : i % 2 === 0 ? -1 : 1;
+      const offset = spec.streams === 1 ? 0 : (i - (spec.streams - 1) / 2) * 16;
+      this.addBullet({
         kind: "missile",
         x: this.playerX + offset,
         y: this.playerY + 3,
         vx: side * 62,
-        vy: -speed,
+        vy: -spec.speed,
         r: 6,
-        dmg: 16 + this.missileLevel * 5,
+        dmg: spec.dmg,
         ttl: 3.6,
-        dead: false,
+        blastR: spec.blastR,
       });
       this.spawnSpark(this.playerX + offset, this.playerY + 10, "#ffd27a", 2);
     }
-    this.audio.play("shoot");
+    this.audio.play("missile");
+  }
+
+  /** L 激光：高速穿透光束，等级提升光束数与穿透次数。 */
+  private fireLaser(spec: Ballistics): void {
+    for (let i = 0; i < spec.streams; i += 1) {
+      const offset = (i - (spec.streams - 1) / 2) * 13;
+      this.addBullet({
+        kind: "laser",
+        x: this.playerX + offset,
+        y: this.playerY - 26,
+        vx: 0,
+        vy: -spec.speed,
+        r: 5,
+        dmg: spec.dmg,
+        pierce: spec.pierce,
+      });
+    }
+    this.audio.play("laser");
+  }
+
+  /** P 榴弹：慢速弹体，命中即炸，靠溅射覆盖一群目标。 */
+  private fireShells(spec: Ballistics): void {
+    for (let i = 0; i < spec.streams; i += 1) {
+      const angle = -Math.PI / 2 + (i - (spec.streams - 1) / 2) * spec.arc;
+      this.addBullet({
+        kind: "shell",
+        x: this.playerX,
+        y: this.playerY - 16,
+        vx: Math.cos(angle) * spec.speed,
+        vy: Math.sin(angle) * spec.speed,
+        r: 6,
+        dmg: spec.dmg,
+        ttl: 4,
+        blastR: spec.blastR,
+      });
+    }
+    this.audio.play("shell");
   }
 
   /** 扣血；HP 见底才损失一条命。护盾与受击硬直期间不生效。 */
@@ -772,7 +866,7 @@ export class RaidenEngine {
     }
   }
 
-  private spawnEnemy(spawn: EnemySpawn): void {
+  private spawnEnemy(spawn: EnemySpawn, entryY = -34): void {
     const elite = spawn.elite === true;
     const config: Record<EnemyKind, { hp: number; r: number; score: number; vy: number; sway: number }> = {
       drone: { hp: 20, r: 13, score: 140, vy: 112, sway: 40 },
@@ -786,7 +880,7 @@ export class RaidenEngine {
     this.enemies.push({
       kind: spawn.kind,
       x: spawn.x,
-      y: -34,
+      y: entryY,
       baseX: spawn.x,
       vy: base.vy + rand(0, 18),
       vx: 0,
@@ -801,7 +895,7 @@ export class RaidenEngine {
       seed: rand(0, Math.PI * 2),
       hoverY: spawn.kind === "gunship" ? rand(90, 150) : 0,
       activeT: 0,
-      state: spawn.kind === "gunship" ? "enter" : "active",
+      state: entryY < 0 && spawn.kind === "gunship" ? "enter" : "active",
       elite,
       drop: spawn.drop ?? null,
       dir: spawn.dir ?? 1,
@@ -1016,87 +1110,95 @@ export class RaidenEngine {
       this.audio.play("powerup");
     }
     // 常规击破也保留少量补给机会，避免非精英波次完全没有成长。
-    if (!e.drop && this.power < MAX_POWER && Math.random() < 0.04) {
-      this.spawnPowerUp(e.x, e.y, "W");
-    } else if (this.killCount % 12 === 0) {
-      this.spawnPowerUp(e.x, e.y, this.power < MAX_POWER ? "W" : "M");
+    if (!e.drop && (this.killCount % 14 === 0 || Math.random() < 0.05)) {
+      this.spawnPowerUp(e.x, e.y, rollSupplyDrop(this.weaponType, this.bombs < MAX_BOMBS));
     }
   }
 
   private spawnPowerUp(x: number, y: number, type: PowerType): void {
     if (this.powerups.length >= 8) this.powerups.shift();
-    this.powerups.push({ x, y, vy: 78, t: rand(0, 3), type, value: 0 });
+    this.powerups.push({ x, y, vy: 78, t: rand(0, 3), type, value: 0, shuffle: 0 });
   }
 
   private spawnLoot(x: number, y: number, value: number): void {
     if (this.powerups.length >= 10) this.powerups.shift();
-    this.powerups.push({ x, y, vy: 70, t: rand(0, 3), type: "C", value });
+    this.powerups.push({ x, y, vy: 70, t: rand(0, 3), type: "C", value, shuffle: 0 });
   }
 
   private updatePowerups(dt: number): void {
     for (const p of this.powerups) {
       p.t += dt;
+      p.shuffle = Math.max(0, p.shuffle - dt);
       p.y += p.vy * dt;
       p.x += Math.sin(p.t * 2.4) * 14 * dt;
     }
     this.powerups = this.powerups.filter((p) => p.y < FIELD_H + 30);
   }
 
+  /** 被子弹打中的补给：随机换成另一种字母，让玩家能「先打再捡」挑想要的类型。 */
+  private shufflePickup(p: PowerUp): void {
+    if (p.type === "C") return;
+    p.type = p.type === "B" ? randomBulletType() : randomBulletType(p.type);
+    p.shuffle = 0.32;
+    this.spawnSpark(p.x, p.y, WEAPONS[isBulletType(p.type) ? p.type : "W"].color, 3);
+    if (this.shuffleSfxT <= 0) {
+      this.audio.play("shuffle");
+      this.shuffleSfxT = 0.06;
+    }
+  }
+
   private collectPowerUp(p: PowerUp): void {
     const index = this.powerups.indexOf(p);
     if (index >= 0) this.powerups.splice(index, 1);
-    switch (p.type) {
-      case "W":
-        if (this.power < MAX_POWER) {
-          this.power += 1;
-          this.toast(`火力提升 · Lv${this.power}`);
-          this.audio.play("powerup");
-        } else {
-          this.addScore(1500);
-          this.toast("火力已满 · +1500");
-          this.audio.play("coin");
-        }
-        break;
-      case "B":
-        if (this.bombs < MAX_BOMBS) {
-          this.bombs += 1;
-          this.toast("炸弹补给 +1");
-          this.audio.play("powerup");
-        } else {
-          this.addScore(1000);
-          this.audio.play("coin");
-        }
-        break;
-      case "S":
-        if (this.spread < MAX_SPREAD_LEVEL) {
-          this.spread += 1;
-          this.toast(`散射弹幕 · Lv${this.spread}`);
-          this.audio.play("powerup");
-        } else {
-          this.invincible = Math.max(this.invincible, SHIELD_PICKUP_SECONDS);
-          this.toast("散射已满 · 补充 6 秒护盾");
-          this.audio.play("powerup");
-        }
-        break;
-      case "M":
-        if (this.missileLevel < MAX_MISSILE_LEVEL) {
-          this.missileLevel += 1;
-          this.toast(`追踪导弹 · Lv${this.missileLevel}`);
-          this.audio.play("powerup");
-        } else {
-          this.addScore(1500);
-          this.toast("导弹已满 · +1500");
-          this.audio.play("coin");
-        }
-        break;
-      case "C":
-        this.stageLoot += p.value;
-        this.toast(`战利品 +${p.value} cr · 通关结算`);
-        this.audio.play("coin");
-        this.spawnSpark(p.x, p.y, "#ffd75e", 8);
-        break;
+    if (p.type === "C") {
+      this.stageLoot += p.value;
+      this.toast(`战利品 +${p.value} cr · 通关结算`);
+      this.audio.play("coin");
+      this.spawnSpark(p.x, p.y, "#ffd75e", 8);
+      this.emitHud(true);
+      return;
     }
+    if (p.type === "B") {
+      if (this.bombs < MAX_BOMBS) {
+        this.bombs += 1;
+        this.toast("炸弹补给 +1");
+        this.audio.play("powerup");
+      } else {
+        this.addScore(1000);
+        this.audio.play("coin");
+      }
+      this.emitHud(true);
+      return;
+    }
+    this.applyWeaponPickup(p.type);
     this.emitHud(true);
+  }
+
+  /**
+   * 武器补给的核心规则：不同字母清空等级并切换，相同字母升一级。
+   * 满级后再吃同字母不涨等级，折算成分数，避免补给白白消失。
+   */
+  private applyWeaponPickup(type: BulletType): void {
+    const label = `${WEAPONS[type].name} ${type}`;
+    if (type !== this.weaponType) {
+      const lost = this.weaponLevel > 1 ? ` · 原 ${WEAPONS[this.weaponType].name} Lv${this.weaponLevel} 清空` : "";
+      this.weaponType = type;
+      this.weaponLevel = 1;
+      this.fireCooldown = Math.min(this.fireCooldown, 0.08);
+      this.toast(`切换 ${label} · Lv1${lost}`);
+      this.audio.play("powerup");
+      this.spawnRing(this.playerX, this.playerY, WEAPONS[type].color, 96, 0.4);
+      return;
+    }
+    if (this.weaponLevel < MAX_WEAPON_LEVEL) {
+      this.weaponLevel += 1;
+      this.toast(`${label} 提升 · Lv${this.weaponLevel}`);
+      this.audio.play("powerup");
+      return;
+    }
+    this.addScore(MAX_LEVEL_SCORE);
+    this.toast(`${label} 已满级 · +${MAX_LEVEL_SCORE}`);
+    this.audio.play("coin");
   }
 
   /* ----------------------------- 障碍物 ----------------------------- */
@@ -1144,9 +1246,13 @@ export class RaidenEngine {
           ? Math.random() < 0.5
             ? "barricade"
             : "container"
-          : Math.random() < 0.55
-            ? "asteroid"
-            : "debris";
+          : this.stage === 3 || this.stage === 4
+            ? Math.random() < 0.55
+              ? "asteroid"
+              : "debris"
+            : Math.random() < 0.5
+              ? "container"
+              : "debris";
     const stats: Record<ObstacleKind, { r: number; hp: number; score: number }> = {
       mine: { r: 13, hp: 16, score: 400 },
       barrier: { r: 23, hp: 52, score: 800 },
@@ -1156,6 +1262,9 @@ export class RaidenEngine {
       debris: { r: 16, hp: 44, score: 550 },
     };
     const base = stats[kind];
+    // 后期关卡的残骸更耐打，靠数值而不是新模型拉开难度。
+    const tough = this.stage >= 4 ? (this.stage === 5 ? 1.35 : 1.15) : 1;
+    const hp = Math.round(base.hp * tough);
     const x = rand(52, FIELD_W - 52);
     const push = (px: number, py: number) => {
       this.obstacles.push({
@@ -1163,9 +1272,9 @@ export class RaidenEngine {
         x: clamp(px, 40, FIELD_W - 40),
         y: py,
         r: base.r,
-        hp: base.hp,
-        maxHp: base.hp,
-        score: base.score,
+        hp,
+        maxHp: hp,
+        score: Math.round(base.score * tough),
         t: rand(0, 3),
         drift: rand(0, Math.PI * 2),
         flash: 0,
@@ -1203,13 +1312,7 @@ export class RaidenEngine {
 
   private rollObstacleDrop(o: Obstacle): void {
     if (Math.random() > 0.2) return;
-    const pool: PowerType[] = [];
-    if (this.power < MAX_POWER) pool.push("W", "W");
-    if (this.spread < MAX_SPREAD_LEVEL) pool.push("S");
-    if (this.missileLevel < MAX_MISSILE_LEVEL) pool.push("M");
-    if (this.bombs < MAX_BOMBS) pool.push("B");
-    if (pool.length === 0) return;
-    this.spawnPowerUp(o.x, o.y, pool[Math.floor(Math.random() * pool.length)]);
+    this.spawnPowerUp(o.x, o.y, rollSupplyDrop(this.weaponType, this.bombs < MAX_BOMBS));
   }
 
   /* ----------------------------- Boss ----------------------------- */
@@ -1232,6 +1335,7 @@ export class RaidenEngine {
       spiralT: 0,
       ringAngle: 0,
       auxT: this.def.no === 1 ? 5.5 : 2.4,
+      spin: 0,
       trail: [],
       segments: [],
       beams: [],
@@ -1294,7 +1398,9 @@ export class RaidenEngine {
 
     if (b.stage === 1) this.updateCarrier(b, dt);
     else if (b.stage === 2) this.updateCentipede(b, dt);
-    else this.updateCore(b, dt);
+    else if (b.stage === 3) this.updateCore(b, dt);
+    else if (b.stage === 4) this.updateMassDriver(b, dt);
+    else this.updateOmega(b, dt);
   }
 
   private updateCarrier(b: BossState, dt: number): void {
@@ -1444,6 +1550,126 @@ export class RaidenEngine {
       b.auxT = b.phase >= 3 ? 8 : 11;
     }
 
+    this.updateBeams(b, dt);
+  }
+
+  /** 「猎户座」质量投射器：轨道炮直射 + 电磁弹扇形 + 月面无人机。 */
+  private updateMassDriver(b: BossState, dt: number): void {
+    b.x = FIELD_W / 2 + Math.sin(b.t * 0.42) * 128;
+    b.y = 142 + Math.sin(b.t * 1.05) * 14;
+    b.spin += dt * 0.9;
+    b.ringAngle += dt * 0.7;
+
+    b.fireA -= dt;
+    if (b.fireA <= 0) {
+      // 主炮充能完成后沿炮口方向连射三发高速直射弹。
+      this.shootAimed(b.x, b.y + 42, 300, 0.04, 3, "#ffe27a");
+      if (b.phase >= 2) this.shootAimed(b.x - 92, b.y + 8, 230, 0.09, 2, "#ffb15e");
+      b.fireA = b.phase >= 3 ? 1.5 : 2.2;
+    }
+    b.fireB -= dt;
+    if (b.fireB <= 0) {
+      this.shootFanDown(b.x, b.y + 30, 8 + b.phase * 2, 0.2, 168, "#ffd06a");
+      b.fireB = b.phase >= 3 ? 2.6 : 3.6;
+    }
+    b.fireC -= dt;
+    if (b.phase >= 2 && b.fireC <= 0) {
+      this.shootRing(b.x, b.y + 6, 14 + b.phase, 118, b.spin, "#ff9d5c");
+      b.fireC = b.phase >= 3 ? 3.4 : 4.8;
+    }
+    b.auxT -= dt;
+    if (b.auxT <= 0) {
+      if (b.phase >= 2) {
+        this.spawnBeamsSweep(b, b.phase >= 3 ? 3 : 2);
+      } else {
+        this.spawnBeams(b);
+      }
+      this.summonMinions(b, b.phase >= 3 ? 3 : 2);
+      b.auxT = b.phase >= 3 ? 6.4 : 8.6;
+    }
+
+    if (b.phase >= 3) {
+      b.spiralT -= dt;
+      if (b.spiralT <= 0) {
+        b.spiralT = 0.14;
+        const base = -b.spin * 2.6;
+        for (const offset of [0, Math.PI / 2, Math.PI, (Math.PI * 3) / 2]) {
+          const angle = base + offset;
+          this.enemyBullets.push({
+            x: b.x,
+            y: b.y + 20,
+            vx: Math.cos(angle) * 138,
+            vy: Math.sin(angle) * 138,
+            r: 4,
+            color: "#ffe27a",
+            dead: false,
+          });
+        }
+      }
+    }
+
+    this.updateBeams(b, dt);
+  }
+
+  /** 天穹要塞「欧米伽」：浮游炮环 + 双重激光 + 追踪蜂群，最后阶段的复合弹幕。 */
+  private updateOmega(b: BossState, dt: number): void {
+    b.x = FIELD_W / 2 + Math.sin(b.t * 0.3) * 96;
+    b.y = 138 + Math.sin(b.t * 0.78) * 18;
+    b.ringAngle += dt * 1.15;
+    b.spin -= dt * 0.55;
+
+    b.fireA -= dt;
+    if (b.fireA <= 0) {
+      this.shootRing(b.x, b.y, 18 + b.phase * 2, 132, b.ringAngle, "#b98cff");
+      this.shootRing(b.x, b.y, 12, 96, -b.spin, "#7fe3ff");
+      b.fireA = b.phase >= 2 ? 2.4 : 3.2;
+    }
+    b.fireB -= dt;
+    if (b.fireB <= 0) {
+      for (let i = 0; i < 8; i += 1) {
+        const angle = b.ringAngle + (i * Math.PI) / 4;
+        this.shootAimed(b.x + Math.cos(angle) * 86, b.y + Math.sin(angle) * 86, 215, 0.1, 2, "#ff8fd0");
+      }
+      b.fireB = b.phase >= 3 ? 2.2 : 3.0;
+    }
+    b.fireC -= dt;
+    if (b.phase >= 2 && b.fireC <= 0) {
+      this.spawnBeamsSweep(b, b.phase >= 3 ? 3 : 2);
+      b.fireC = b.phase >= 3 ? 4.2 : 5.8;
+    }
+
+    b.auxT -= dt;
+    if (b.auxT <= 0) {
+      this.spawnHomingSwarm(b, b.phase >= 3 ? 5 : 3);
+      this.summonMinions(b, b.phase >= 3 ? 2 : 1);
+      this.audio.play("warning");
+      b.auxT = b.phase >= 3 ? 7.2 : 9.6;
+    }
+
+    if (b.phase >= 3) {
+      b.spiralT -= dt;
+      if (b.spiralT <= 0) {
+        b.spiralT = 0.12;
+        const base = b.ringAngle * 3.2;
+        for (const offset of [0, Math.PI]) {
+          const angle = base + offset;
+          this.enemyBullets.push({
+            x: b.x,
+            y: b.y,
+            vx: Math.cos(angle) * 126,
+            vy: Math.sin(angle) * 126,
+            r: 4,
+            color: "#d9b6ff",
+            dead: false,
+          });
+        }
+      }
+    }
+
+    this.updateBeams(b, dt);
+  }
+
+  private updateBeams(b: BossState, dt: number): void {
     for (const beam of b.beams) {
       if (beam.warn > 0) {
         beam.warn -= dt;
@@ -1470,6 +1696,41 @@ export class RaidenEngine {
     b.beams = b.beams.filter((beam) => beam.warn > 0 || beam.active > 0);
   }
 
+  /** 多条竖直光束排成一道带缺口的墙，预警更长、缺口必须可走。 */
+  private spawnBeamsSweep(b: BossState, count: number): void {
+    const target = clamp(this.playerX, 70, FIELD_W - 70);
+    const step = 124;
+    const xs = new Set<number>();
+    for (let i = 0; i < count; i += 1) {
+      const slot = i - Math.floor((count - 1) / 2);
+      xs.add(Math.round(clamp(target + slot * step, 46, FIELD_W - 46)));
+    }
+    // 玩家所在列一定不开火，留出躲藏位。
+    for (const x of xs) {
+      if (Math.abs(x - target) < step * 0.6) continue;
+      b.beams.push({ x, warn: 1.35, active: 0, hit: false });
+    }
+  }
+
+  /** Boss 在自身两侧召唤杂兵，进场位置就在战场内，不会从顶部落下叠加压力。 */
+  private summonMinions(b: BossState, count: number): void {
+    this.audio.play("warning");
+    this.toast("Boss 释放护卫单位");
+    for (let i = 0; i < count; i += 1) {
+      const side = i % 2 === 0 ? -1 : 1;
+      const x = clamp(b.x + side * rand(96, 150), 42, FIELD_W - 42);
+      this.spawnEnemy({ at: 0, kind: "heli", x }, Math.min(b.y + 40, FIELD_H - 220));
+    }
+  }
+
+  /** 从炮位射出的低速瞄准弹群：慢所以可绕，密所以要走位。 */
+  private spawnHomingSwarm(b: BossState, count: number): void {
+    for (let i = 0; i < count; i += 1) {
+      const angle = b.ringAngle + (i * Math.PI * 2) / count;
+      this.shootAimed(b.x + Math.cos(angle) * 70, b.y + Math.sin(angle) * 70, 96, 0.26, 3, "#c9a3ff");
+    }
+  }
+
   private updateTrail(b: BossState): void {
     const last = b.trail[0];
     if (!last || distance(last.x, last.y, b.x, b.y) > 3.5) {
@@ -1491,6 +1752,22 @@ export class RaidenEngine {
     for (const x of xs) b.beams.push({ x, warn: 1.15, active: 0, hit: false });
   }
 
+  /** Boss 沿弹道方向的半宽：激光穿过整个躯体只算一发。 */
+  private bossLaserSpan(): number {
+    const b = this.boss;
+    if (!b) return 46;
+    if (b.stage === 1) return 116;
+    if (b.stage === 2) return 34;
+    if (b.stage === 4) return 104;
+    if (b.stage === 5) return 58;
+    return 46;
+  }
+
+  private laserGap(bullet: PlayerBullet, span: number): number {
+    const speed = Math.hypot(bullet.vx, bullet.vy) || 1;
+    return Math.max(0.05, (span * 2) / speed);
+  }
+
   private bossHitTest(x: number, y: number, r: number): boolean {
     const b = this.boss;
     if (!b || b.dying !== null) return false;
@@ -1499,7 +1776,22 @@ export class RaidenEngine {
       return b.segments.some((seg, i) => i > 0 && distance(x, y, seg.x, seg.y) < 20 + r);
     }
     if (b.stage === 1) return Math.abs(x - b.x) < 116 + r && Math.abs(y - b.y) < 46 + r;
+    if (b.stage === 4) return Math.abs(x - b.x) < 104 + r && Math.abs(y - b.y) < 52 + r;
+    if (b.stage === 5) {
+      if (distance(x, y, b.x, b.y) < 52 + r) return true;
+      return this.bossPodPoints(b).some((p) => distance(x, y, p.x, p.y) < 15 + r);
+    }
     return distance(x, y, b.x, b.y) < 46 + r;
+  }
+
+  /** 要塞 5 的六座浮游炮坐标，命中判定与绘制共用。 */
+  private bossPodPoints(b: BossState): { x: number; y: number }[] {
+    const list: { x: number; y: number }[] = [];
+    for (let i = 0; i < 6; i += 1) {
+      const a = b.ringAngle * 0.5 + (i * Math.PI) / 3;
+      list.push({ x: b.x + Math.cos(a) * 92, y: b.y + Math.sin(a) * 92 });
+    }
+    return list;
   }
 
   private damageBoss(dmg: number): void {
@@ -1610,6 +1902,7 @@ export class RaidenEngine {
   private updateBullets(dt: number): void {
     for (const b of this.bullets) {
       if (b.dead) continue;
+      b.hitGap = Math.max(0, b.hitGap - dt);
       if (b.kind === "missile") {
         b.ttl -= dt;
         const target = this.nearestTarget(b.x, b.y);
@@ -1636,7 +1929,18 @@ export class RaidenEngine {
             color: "#ffb066",
           });
         }
-        if (b.ttl <= 0) b.dead = true;
+        // 导弹没追上目标就自爆，仍然造成一次溅射。
+        if (b.ttl <= 0) {
+          b.dead = true;
+          this.detonate(b);
+        }
+      }
+      if (b.kind === "shell") {
+        b.ttl -= dt;
+        if (b.ttl <= 0) {
+          b.dead = true;
+          this.detonate(b);
+        }
       }
       b.x += b.vx * dt;
       b.y += b.vy * dt;
@@ -1677,42 +1981,102 @@ export class RaidenEngine {
     return best;
   }
 
+  /**
+   * 一次命中的统一收尾：非穿透弹立刻消失，激光按剩余穿透次数递减；
+   * 带溅射半径的弹种（导弹 / 榴弹）在落点再补一次范围伤害。
+   */
+  private impact(
+    bullet: PlayerBullet,
+    hit: () => void,
+    opts: { skip?: { x: number; y: number }; bossBody?: boolean; span?: number } = {},
+  ): void {
+    if (bullet.kind === "laser") {
+      if (bullet.hitGap > 0) return;
+      // 冷却按目标沿弹道方向的尺寸换算：同一个目标穿过去只算一发，
+      // 但编队里前后两架小机仍然能各吃一发。
+      bullet.hitGap = this.laserGap(bullet, opts.span ?? 24);
+      // Boss 是一个整体：一次穿过只算一发，不扣穿透次数。
+      if (!opts.bossBody) {
+        bullet.pierce -= 1;
+        if (bullet.pierce < 0) bullet.dead = true;
+      }
+    } else {
+      bullet.dead = true;
+    }
+    this.spawnSpark(
+      bullet.x,
+      bullet.y,
+      WEAPONS[bullet.weapon].color,
+      bullet.kind === "missile" || bullet.kind === "shell" ? 6 : 3,
+    );
+    hit();
+    if (bullet.blastR > 0) this.detonate(bullet, opts.skip);
+    if (bullet.kind !== "cannon" && this.explodeSfxT <= 0) {
+      this.audio.play("hit");
+      this.explodeSfxT = 0.05;
+    }
+  }
+
+  /** 导弹 / 榴弹的落点爆炸：半径内的敌机、障碍与 Boss 都会吃到溅射。 */
+  private detonate(bullet: PlayerBullet, skip?: { x: number; y: number }): void {
+    if (bullet.blastR <= 0) return;
+    this.explode(bullet.x, bullet.y, bullet.kind === "shell" ? 0.42 : 0.28, bullet.kind === "shell" ? "#ff8f6a" : "#ffb066");
+    const splash = bullet.dmg * (bullet.kind === "shell" ? 0.55 : 0.4);
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      if (skip && distance(e.x, e.y, skip.x, skip.y) < 1) continue;
+      if (distance(e.x, e.y, bullet.x, bullet.y) < bullet.blastR + e.r) this.damageEnemy(e, splash);
+    }
+    for (const o of this.obstacles) {
+      if (o.dead) continue;
+      if (skip && distance(o.x, o.y, skip.x, skip.y) < 1) continue;
+      if (distance(o.x, o.y, bullet.x, bullet.y) < bullet.blastR + o.r) this.damageObstacle(o, splash);
+    }
+    if (this.boss && this.bossHitTest(bullet.x, bullet.y, bullet.blastR)) this.damageBoss(splash);
+  }
+
   private resolveCollisions(): void {
     // 自机子弹 → 敌机
     for (const bullet of this.bullets) {
       if (bullet.dead) continue;
+
+      // 先撞上补给：打一下就随机改写它的字母，这是「凑同一种类型刷等级」的核心操作。
+      for (const p of this.powerups) {
+        if (p.type === "C") continue;
+        if (bullet.kind === "laser" && bullet.hitGap > 0) break;
+        if (distance(bullet.x, bullet.y, p.x, p.y) < PICKUP_R + bullet.r) {
+          this.shufflePickup(p);
+          if (bullet.kind === "laser") bullet.hitGap = this.laserGap(bullet, PICKUP_R);
+          else bullet.dead = true;
+          break;
+        }
+      }
+      if (bullet.dead) continue;
+
       for (const e of this.enemies) {
         if (e.dead) continue;
         if (distance(bullet.x, bullet.y, e.x, e.y) < e.r + bullet.r) {
-          bullet.dead = true;
-          this.spawnSpark(bullet.x, bullet.y, bullet.kind === "missile" ? "#ffc46a" : "#fff1b0", bullet.kind === "missile" ? 7 : 3);
-          if (bullet.kind === "missile") this.explode(bullet.x, bullet.y, 0.28, "#ffb066");
-          this.damageEnemy(e, bullet.dmg);
+          this.impact(bullet, () => this.damageEnemy(e, bullet.dmg), { skip: e, span: e.r });
           break;
         }
       }
       if (bullet.dead) continue;
+
       for (const o of this.obstacles) {
         if (o.dead) continue;
         if (distance(bullet.x, bullet.y, o.x, o.y) < o.r + bullet.r) {
-          bullet.dead = true;
-          this.spawnSpark(bullet.x, bullet.y, bullet.kind === "missile" ? "#ffc46a" : "#ffe6a8", bullet.kind === "missile" ? 7 : 3);
-          if (bullet.kind === "missile") this.explode(bullet.x, bullet.y, 0.24, "#ffb066");
-          this.damageObstacle(o, bullet.dmg);
+          this.impact(bullet, () => this.damageObstacle(o, bullet.dmg), { skip: o, span: o.r });
           break;
         }
       }
       if (bullet.dead) continue;
+
       if (this.bossHitTest(bullet.x, bullet.y, bullet.r)) {
-        bullet.dead = true;
         this.boss!.flash = 1;
-        this.spawnSpark(bullet.x, bullet.y, bullet.kind === "missile" ? "#ffc46a" : "#ffe0a0", bullet.kind === "missile" ? 7 : 3);
-        if (bullet.kind === "missile") this.explode(bullet.x, bullet.y, 0.3, "#ffb066");
-        this.damageBoss(bullet.dmg);
-        if (this.explodeSfxT <= 0) {
-          this.audio.play("hit");
-          this.explodeSfxT = 0.05;
-        }
+        this.impact(bullet, () => this.damageBoss(bullet.dmg), {
+          bossBody: true,
+          span: this.bossLaserSpan(),
+        });
       }
     }
 
@@ -1750,11 +2114,15 @@ export class RaidenEngine {
       }
       const boss = this.boss;
       if (boss && boss.dying === null) {
-        const hitHead = distance(boss.x, boss.y, this.playerX, this.playerY) < (boss.stage === 1 ? 60 : 40);
+        const bodyR = boss.stage === 1 ? 60 : boss.stage === 4 ? 62 : boss.stage === 5 ? 56 : 40;
+        const hitHead = distance(boss.x, boss.y, this.playerX, this.playerY) < bodyR;
         const hitSeg =
           boss.stage === 2 &&
           boss.segments.some((seg, i) => i > 0 && distance(seg.x, seg.y, this.playerX, this.playerY) < 34);
-        if (hitHead || hitSeg) this.damagePlayer(50);
+        const hitPod =
+          boss.stage === 5 &&
+          this.bossPodPoints(boss).some((p) => distance(p.x, p.y, this.playerX, this.playerY) < 26);
+        if (hitHead || hitSeg || hitPod) this.damagePlayer(50);
       }
     }
 
@@ -1972,7 +2340,7 @@ export class RaidenEngine {
     ctx.fillStyle = "rgba(255, 255, 255, 0.32)";
     ctx.font = "500 10px ui-sans-serif, system-ui, sans-serif";
     ctx.fillText("拖动画面 / 方向键移动 · 自动射击 · X / K / 空格 炸弹", FIELD_W / 2, 512);
-    ctx.fillText("P / Esc 暂停 · 护盾与导弹会显示在顶部状态栏", FIELD_W / 2, 530);
+    ctx.fillText("P / Esc 暂停 · 顶部状态栏显示当前子弹类型与等级", FIELD_W / 2, 530);
 
     ctx.fillStyle = "rgba(125, 230, 255, 0.2)";
     ctx.fillRect(140, 550, 200, 2);
@@ -2187,9 +2555,12 @@ export class RaidenEngine {
   private drawPlayer(): void {
     const ctx = this.ctx;
     const tilt = clamp(this.playerVX * 0.00055, -0.22, 0.22);
-    const tier = clamp(this.power, 1, MAX_POWER);
+    const tier = this.weaponLevel;
+    const spec = ballistics(this.weaponType, tier);
+    const maxed = tier >= MAX_WEAPON_LEVEL;
+    const accent = WEAPONS[this.weaponType].color;
+    // 机翼随等级展宽；不同弹种在翼下挂不同的武器舱。
     const span = Math.min(34, 22 + (tier - 1) * 1.8);
-    const maxed = tier >= MAX_POWER;
     ctx.save();
     // 受击硬直期间闪烁，给玩家“刚挨打”的即时反馈。
     if (this.hurtInvuln > 0 && Math.sin(this.time * 55) > 0) ctx.globalAlpha = 0.42;
@@ -2239,11 +2610,11 @@ export class RaidenEngine {
     ctx.lineTo(-5, -8);
     ctx.closePath();
     ctx.fill();
-    ctx.strokeStyle = maxed ? "rgba(255, 214, 120, 0.95)" : "rgba(140, 230, 255, 0.9)";
+    ctx.strokeStyle = maxed ? "rgba(255, 214, 120, 0.95)" : accent;
     ctx.lineWidth = maxed ? 1.6 : 1.2;
     ctx.stroke();
 
-    // Lv2 起加装机炮，Lv4 起翼下再补一对
+    // 机炮与散射都在翼面装机炮管，等级越高越多
     if (tier >= 2) {
       for (const side of [-1, 1]) {
         ctx.fillStyle = "#25313b";
@@ -2275,29 +2646,11 @@ export class RaidenEngine {
       }
     }
 
-    // S 掉落：翼装散射荚舱
-    for (let i = 0; i < this.spread; i += 1) {
-      for (const side of [-1, 1]) {
-        const px = side * (span - 3 - i * 3.5);
-        ctx.fillStyle = "#1e2b33";
-        ctx.fillRect(px - 2, 1 + i * 2, 4, 5.5);
-        ctx.fillStyle = `rgba(90, 230, 255, ${0.6 + Math.sin(this.time * 8 + i + side) * 0.2})`;
-        ctx.fillRect(px - 1, 2 + i * 2, 2, 3);
-      }
-    }
+    // 弹种专属挂载：一眼看出当前用的是哪一种子弹。
+    this.drawWeaponMounts(span, spec, accent);
 
-    // M 掉落：翼下挂载导弹
-    for (let i = 0; i < this.missileLevel; i += 1) {
-      const side = i % 2 === 0 ? -1 : 1;
-      const px = side * (span - 6 - Math.floor(i / 2) * 3);
-      ctx.fillStyle = "#e7eef5";
-      ctx.fillRect(px - 1.2, 4, 2.4, 9);
-      ctx.fillStyle = "#ff9d5c";
-      ctx.fillRect(px - 1.2, 11, 2.4, 2);
-    }
-
-    // 座舱
-    ctx.fillStyle = maxed ? "#8ef4ff" : "#42e0ff";
+    // 座舱：辉光跟当前弹种同色
+    ctx.fillStyle = accent;
     ctx.beginPath();
     ctx.ellipse(0, -8, 3.4, 7, 0, 0, Math.PI * 2);
     ctx.fill();
@@ -2356,6 +2709,83 @@ export class RaidenEngine {
       ctx.fill();
       ctx.restore();
     }
+  }
+
+  /**
+   * 翼下挂载：五种子弹类型各有各的 silhouette，等级改变数量与尺寸。
+   * 在自机的旋转/缩放坐标系内调用，所以局部坐标就是机身坐标。
+   */
+  private drawWeaponMounts(span: number, spec: Ballistics, accent: string): void {
+    const ctx = this.ctx;
+    ctx.save();
+    switch (this.weaponType) {
+      case "S": {
+        const pods = Math.min(4, Math.ceil(spec.streams / 4));
+        for (let i = 0; i < pods; i += 1) {
+          for (const side of [-1, 1]) {
+            const px = side * (span - 3 - i * 3.5);
+            ctx.fillStyle = "#1e2b33";
+            ctx.fillRect(px - 2, 1 + i * 2, 4, 5.5);
+            ctx.fillStyle = accent;
+            ctx.globalAlpha = 0.6 + Math.sin(this.time * 8 + i + side) * 0.2;
+            ctx.fillRect(px - 1, 2 + i * 2, 2, 3);
+            ctx.globalAlpha = 1;
+          }
+        }
+        break;
+      }
+      case "M": {
+        for (let i = 0; i < spec.streams; i += 1) {
+          const side = i % 2 === 0 ? -1 : 1;
+          const px = side * (span - 6 - Math.floor(i / 2) * 3);
+          ctx.fillStyle = "#e7eef5";
+          ctx.fillRect(px - 1.2, 4, 2.4, 9);
+          ctx.fillStyle = accent;
+          ctx.fillRect(px - 1.2, 11, 2.4, 2);
+        }
+        break;
+      }
+      case "L": {
+        ctx.fillStyle = "#1a2230";
+        ctx.fillRect(-4, -22, 8, 6);
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = 0.55 + Math.sin(this.time * 12) * 0.3;
+        ctx.fillRect(-2.4, -25, 4.8, 5);
+        ctx.globalAlpha = 1;
+        for (const side of [-1, 1]) {
+          ctx.fillStyle = "#2b3646";
+          ctx.fillRect(side * 10 - 1, -12, 2, 14);
+        }
+        break;
+      }
+      case "P": {
+        for (const side of [-1, 1]) {
+          ctx.fillStyle = "#3a2a2a";
+          ctx.beginPath();
+          ctx.arc(side * (span - 8), 4, 5, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = accent;
+          ctx.beginPath();
+          ctx.arc(side * (span - 8), 4, 2.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (spec.streams >= 2) {
+          ctx.fillStyle = "#4a3327";
+          ctx.fillRect(-3, 6, 6, 8);
+        }
+        break;
+      }
+      case "W": {
+        if (spec.streams >= 5) {
+          ctx.fillStyle = "#2a3a44";
+          ctx.fillRect(-1.6, -23, 3.2, 12);
+          ctx.fillStyle = accent;
+          ctx.fillRect(-1.6, -24, 3.2, 2.4);
+        }
+        break;
+      }
+    }
+    ctx.restore();
   }
 
   private drawEnemy(e: Enemy): void {
@@ -2767,18 +3197,12 @@ export class RaidenEngine {
 
   private drawPowerUp(p: PowerUp): void {
     const ctx = this.ctx;
-    const colors: Record<PickupType, string> = {
-      W: "#ff5d6c",
-      B: "#ffb03a",
-      S: "#4fd6ff",
-      M: "#ffd75e",
-      C: "#ffcf4a",
-    };
-    const color = colors[p.type];
+    const color =
+      p.type === "C" ? LOOT_PICKUP_COLOR : p.type === "B" ? BOMB_PICKUP_COLOR : WEAPONS[p.type].color;
     ctx.save();
     ctx.translate(p.x, p.y);
-    const pulse = 1 + Math.sin(p.t * 5) * 0.08;
-    ctx.scale(pulse, pulse);
+    const pop = p.shuffle > 0 ? 1 + p.shuffle * 0.9 : 1;
+    ctx.scale((1 + Math.sin(p.t * 5) * 0.08) * pop, (1 + Math.sin(p.t * 5) * 0.08) * pop);
     if (p.type === "C") {
       // 战利品：金色菱形箱 + 面额，和其他补给一眼区分。
       ctx.fillStyle = "rgba(16, 12, 4, 0.88)";
@@ -2800,11 +3224,21 @@ export class RaidenEngine {
       ctx.restore();
       return;
     }
+    // 与自己当前子弹同字母的补给加一圈光环：一眼能认出「这个吃了是升级，不是切换」。
+    if (p.type === this.weaponType) {
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = 0.35 + Math.sin(p.t * 7) * 0.2;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(0, 0, 18, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     ctx.fillStyle = "rgba(10, 16, 26, 0.85)";
     ctx.beginPath();
-    ctx.arc(0, 0, 13, 0, Math.PI * 2);
+    ctx.arc(0, 0, PICKUP_R, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = color;
+    ctx.strokeStyle = p.shuffle > 0 ? "#ffffff" : color;
     ctx.lineWidth = 2.4;
     ctx.stroke();
     ctx.fillStyle = color;
@@ -2849,15 +3283,59 @@ export class RaidenEngine {
       ctx.restore();
       return;
     }
-    ctx.strokeStyle = "rgba(255, 235, 140, 0.55)";
-    ctx.lineWidth = 3.4;
+    if (b.kind === "laser") {
+      // 激光：细长的双层光束，长度由速度决定，穿透时不会消失。
+      const len = 58;
+      const glow = ctx.createLinearGradient(b.x, b.y + len, b.x, b.y - len * 0.2);
+      glow.addColorStop(0, "rgba(255, 255, 255, 0)");
+      glow.addColorStop(0.35, `${WEAPONS[b.weapon].color}99`);
+      glow.addColorStop(1, "rgba(255, 255, 255, 0.9)");
+      ctx.strokeStyle = glow;
+      ctx.lineWidth = 8;
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y + len);
+      ctx.lineTo(b.x, b.y - 8);
+      ctx.stroke();
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y + len * 0.75);
+      ctx.lineTo(b.x, b.y - 6);
+      ctx.stroke();
+      return;
+    }
+    if (b.kind === "shell") {
+      // 榴弹：旋转的矮胖弹体 + 引信火花
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(Math.sin(this.time * 12 + b.y * 0.05) * 0.35);
+      ctx.fillStyle = "rgba(255, 150, 90, 0.5)";
+      ctx.beginPath();
+      ctx.arc(0, 6, 4.6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#3a2f2b";
+      ctx.beginPath();
+      ctx.arc(0, 0, 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = WEAPONS[b.weapon].color;
+      ctx.beginPath();
+      ctx.arc(0, -2.4, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+      ctx.fillRect(-1, 2, 2, 5);
+      ctx.restore();
+      return;
+    }
+    const color = WEAPONS[b.weapon].color;
+    ctx.strokeStyle = `${color}88`;
+    ctx.lineWidth = b.kind === "cannon" && b.weapon === "S" ? 2.6 : 3.4;
     ctx.beginPath();
     ctx.moveTo(b.x, b.y);
     ctx.lineTo(b.x - b.vx * 0.014, b.y - b.vy * 0.014);
     ctx.stroke();
-    ctx.fillStyle = "#fff8cf";
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(b.x, b.y, 2.4, 0, Math.PI * 2);
+    ctx.arc(b.x, b.y, b.weapon === "S" ? 2.1 : 2.4, 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -3210,7 +3688,7 @@ export class RaidenEngine {
         }
         ctx.restore();
       }
-    } else {
+    } else if (b.stage === 3) {
       // 雷神核心：六座浮游炮 + 旋转环 + 虹膜核心
       for (let i = 0; i < 6; i += 1) {
         const podAngle = b.ringAngle * 0.32 + (i * Math.PI) / 3;
@@ -3347,11 +3825,302 @@ export class RaidenEngine {
           ctx.stroke();
         }
       }
+    } else if (b.stage === 4) {
+      // 「猎户座」质量投射器：月面环形山里的轨道炮平台，两条电磁导轨 + 旋转炮塔。
+      ctx.save();
+      ctx.rotate(Math.sin(b.t * 0.7) * 0.02);
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+      ctx.beginPath();
+      ctx.ellipse(8, 20, 118, 54, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 底盘：采矿平台的六边形装甲板
+      const plate = ctx.createLinearGradient(0, -46, 0, 52);
+      plate.addColorStop(0, "#8f8574");
+      plate.addColorStop(0.4, "#5d5648");
+      plate.addColorStop(1, "#2b2721");
+      ctx.fillStyle = plate;
+      ctx.beginPath();
+      ctx.moveTo(-104, -6);
+      ctx.lineTo(-72, -40);
+      ctx.lineTo(72, -40);
+      ctx.lineTo(104, -6);
+      ctx.lineTo(84, 42);
+      ctx.lineTo(-84, 42);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 226, 122, 0.45)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // 履带行走机构
+      for (const side of [-1, 1]) {
+        ctx.fillStyle = "#211f1b";
+        ctx.beginPath();
+        ctx.roundRect(side * 66 - 26, 18, 52, 26, 12);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(150, 142, 126, 0.35)";
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        for (let i = 0; i < 5; i += 1) {
+          ctx.fillStyle = "rgba(160, 150, 130, 0.22)";
+          ctx.fillRect(side * 66 - 22 + i * 10, 24, 5, 14);
+        }
+      }
+
+      // 电磁导轨：两条加速轨道朝玩家方向伸出，充电时逐段亮起
+      const charge = b.phase >= 3 ? 0.9 : b.phase >= 2 ? 0.6 : 0.35;
+      for (const side of [-1, 1]) {
+        ctx.save();
+        ctx.translate(side * 20, 2);
+        ctx.fillStyle = "#3b3831";
+        ctx.beginPath();
+        ctx.moveTo(-8, 0);
+        ctx.lineTo(8, 0);
+        ctx.lineTo(6, 70);
+        ctx.lineTo(-6, 70);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "rgba(255, 226, 122, 0.55)";
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        for (let i = 0; i < 6; i += 1) {
+          const lit = ((Math.floor(b.t * 6) + i) % 6) / 6 < charge;
+          ctx.fillStyle = lit ? "rgba(255, 236, 150, 0.95)" : "rgba(120, 110, 80, 0.5)";
+          ctx.fillRect(-5.5, 10 + i * 9, 11, 5);
+        }
+        const muzzle = ctx.createRadialGradient(0, 72, 1, 0, 72, 13);
+        muzzle.addColorStop(0, `rgba(255, 240, 180, ${0.35 + charge * 0.5})`);
+        muzzle.addColorStop(1, "rgba(255, 190, 60, 0)");
+        ctx.fillStyle = muzzle;
+        ctx.beginPath();
+        ctx.arc(0, 72, 13, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 中央炮塔：随机型号 + 瞄准到玩家
+      const turretAngle = Math.atan2(this.playerY - (b.y - 6), this.playerX - b.x) - Math.PI / 2;
+      ctx.save();
+      ctx.translate(0, -6);
+      ctx.fillStyle = "#4a453c";
+      ctx.beginPath();
+      ctx.arc(0, 0, 30, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255, 210, 120, 0.5)";
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+      ctx.rotate(turretAngle);
+      ctx.fillStyle = "#2e2b25";
+      ctx.fillRect(-14, -8, 30, 16);
+      ctx.fillStyle = "#6d6659";
+      ctx.fillRect(8, -4.5, 26, 4);
+      ctx.fillRect(8, 1.5, 26, 4);
+      ctx.fillStyle = b.phase >= 2 ? "#ffe27a" : "#a08a4a";
+      ctx.beginPath();
+      ctx.arc(-2, 0, 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+
+      // 侧面储能环：随自旋转动，相位越高转得越快
+      ctx.save();
+      ctx.rotate(b.spin);
+      ctx.strokeStyle = "rgba(255, 190, 90, 0.6)";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([20, 16]);
+      ctx.beginPath();
+      ctx.arc(0, 2, 74, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      for (let i = 0; i < 4; i += 1) {
+        const a = (i * Math.PI) / 2;
+        ctx.fillStyle = "#554f42";
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * 74, 2 + Math.sin(a) * 74, 8, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = "rgba(255, 220, 140, 0.85)";
+        ctx.beginPath();
+        ctx.arc(Math.cos(a) * 74, 2 + Math.sin(a) * 74, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+
+      // 散热鳍片与警示灯
+      for (let i = 0; i < 5; i += 1) {
+        ctx.fillStyle = i % 2 === 0 ? "#3e3a33" : "#4f4a40";
+        ctx.fillRect(-58 + i * 26, -34, 16, 10);
+      }
+      const blink = Math.sin(b.t * 4.2) > 0.2;
+      ctx.fillStyle = blink ? "rgba(255, 120, 70, 0.95)" : "rgba(110, 60, 30, 0.6)";
+      ctx.beginPath();
+      ctx.arc(0, 34, 3.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (b.phase >= 2) {
+        for (let i = 0; i < (b.phase >= 3 ? 4 : 2); i += 1) {
+          const sx = Math.sin(b.t * 2.6 + i * 1.7) * 70;
+          const sy = 30 + Math.cos(b.t * 2 + i) * 8;
+          const spark = ctx.createRadialGradient(sx, sy, 1, sx, sy, 12);
+          spark.addColorStop(0, "rgba(255, 240, 180, 0.6)");
+          spark.addColorStop(1, "rgba(255, 180, 60, 0)");
+          ctx.fillStyle = spark;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 12, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      ctx.restore();
+    } else {
+      // 天穹要塞「欧米伽」：三层装甲环 + 六座浮游炮 + 中央王座晶核
+      ctx.save();
+      ctx.rotate(b.spin * 0.4);
+      ctx.strokeStyle = "rgba(215, 160, 255, 0.5)";
+      ctx.lineWidth = 2.4;
+      ctx.setLineDash([34, 20]);
+      ctx.beginPath();
+      ctx.arc(0, 0, 116, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      for (let i = 0; i < 6; i += 1) {
+        const podAngle = b.ringAngle * 0.5 + (i * Math.PI) / 3;
+        const px = Math.cos(podAngle) * 92;
+        const py = Math.sin(podAngle) * 92;
+        ctx.save();
+        ctx.translate(px, py);
+        ctx.rotate(podAngle + Math.PI / 2);
+        ctx.fillStyle = "rgba(0, 0, 0, 0.35)";
+        ctx.fillRect(-12, -6, 26, 20);
+        const pod = ctx.createLinearGradient(0, -12, 0, 12);
+        pod.addColorStop(0, "#7b5f9d");
+        pod.addColorStop(0.5, "#3d2c56");
+        pod.addColorStop(1, "#1c1430");
+        ctx.fillStyle = pod;
+        ctx.beginPath();
+        ctx.moveTo(-13, -9);
+        ctx.lineTo(9, -12);
+        ctx.lineTo(18, 0);
+        ctx.lineTo(9, 12);
+        ctx.lineTo(-13, 9);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "rgba(215, 170, 255, 0.6)";
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.fillStyle = "#221634";
+        ctx.fillRect(9, -5, 17, 3.4);
+        ctx.fillRect(9, 1.6, 17, 3.4);
+        const glow = b.phase >= 2 ? 0.95 : 0.5;
+        ctx.fillStyle = `rgba(255, 150, 220, ${glow})`;
+        ctx.beginPath();
+        ctx.arc(-3, 0, 3.6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 要塞主体：八边形堡垒 + 内圈旋转装甲
+      const hull = ctx.createLinearGradient(0, -60, 0, 60);
+      hull.addColorStop(0, "#6a5a8c");
+      hull.addColorStop(0.45, "#3a2b52");
+      hull.addColorStop(1, "#150f26");
+      ctx.fillStyle = hull;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i += 1) {
+        const a = (i * Math.PI) / 4 + Math.PI / 8;
+        const rx = Math.cos(a) * 58;
+        const ry = Math.sin(a) * 58;
+        if (i === 0) ctx.moveTo(rx, ry);
+        else ctx.lineTo(rx, ry);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = "rgba(190, 150, 255, 0.6)";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.save();
+      ctx.rotate(-b.ringAngle * 0.8);
+      ctx.strokeStyle = "rgba(150, 230, 255, 0.55)";
+      ctx.lineWidth = 2.6;
+      ctx.setLineDash([18, 14]);
+      ctx.beginPath();
+      ctx.arc(0, 0, 42, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      for (let i = 0; i < 8; i += 1) {
+        const a = (i * Math.PI) / 4;
+        ctx.fillStyle = "#2a1f42";
+        ctx.save();
+        ctx.translate(Math.cos(a) * 42, Math.sin(a) * 42);
+        ctx.rotate(a);
+        ctx.fillRect(-5, -7, 10, 14);
+        ctx.restore();
+      }
+      ctx.restore();
+
+      // 王座晶核：随相位张开的光瞳
+      const iris = b.phase >= 3 ? 0.85 : b.phase >= 2 ? 0.55 : 0.3;
+      for (let i = 0; i < 8; i += 1) {
+        const a = (i * Math.PI) / 4 + b.ringAngle * 0.2;
+        ctx.save();
+        ctx.rotate(a);
+        ctx.fillStyle = i % 2 === 0 ? "#3b2a5c" : "#28203f";
+        ctx.beginPath();
+        ctx.moveTo(12, -6);
+        ctx.lineTo(34, -22 + (1 - iris) * 22);
+        ctx.lineTo(37, 16 - (1 - iris) * 16);
+        ctx.lineTo(12, 7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = "rgba(180, 140, 240, 0.35)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      const throne = ctx.createRadialGradient(0, 0, 3, 0, 0, 50);
+      throne.addColorStop(0, "rgba(255, 255, 255, 0.98)");
+      throne.addColorStop(0.28, "rgba(214, 170, 255, 0.95)");
+      throne.addColorStop(0.65, "rgba(120, 70, 220, 0.55)");
+      throne.addColorStop(1, "rgba(60, 20, 120, 0)");
+      ctx.fillStyle = throne;
+      ctx.beginPath();
+      ctx.arc(0, 0, (30 + Math.sin(b.t * 3.4) * 2.4) * (0.85 + iris * 0.35), 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#1a0f2e";
+      ctx.beginPath();
+      ctx.arc(0, 0, 12, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(215, 170, 255, 0.7)";
+      ctx.lineWidth = 1.4;
+      ctx.stroke();
+      ctx.fillStyle = "#ffe9ff";
+      ctx.beginPath();
+      ctx.arc(-3, -3, 3.6, 0, Math.PI * 2);
+      ctx.fill();
+
+      if (b.phase >= 2) {
+        // 要塞表面的能量裂纹，相位越高越多
+        ctx.strokeStyle = "rgba(255, 170, 235, 0.6)";
+        ctx.lineWidth = 1.2;
+        const cracks = b.phase >= 3 ? 6 : 3;
+        for (let i = 0; i < cracks; i += 1) {
+          const a = (i * Math.PI * 2) / cracks + b.spin;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(a) * 18, Math.sin(a) * 18);
+          ctx.lineTo(Math.cos(a + 0.3) * 40, Math.sin(a + 0.3) * 40);
+          ctx.lineTo(Math.cos(a - 0.15) * 56, Math.sin(a - 0.15) * 56);
+          ctx.stroke();
+        }
+      }
     }
 
     if (b.flash > 0) {
       // 命中闪白用软边辉光，避免在大体积 Boss 上出现突兀的白色圆盘。
-      const radius = b.stage === 1 ? 132 : b.stage === 2 ? 46 : 72;
+      const radius = b.stage === 1 ? 132 : b.stage === 2 ? 46 : b.stage === 3 ? 72 : b.stage === 4 ? 108 : 120;
       const glow = ctx.createRadialGradient(0, 0, 4, 0, 0, radius);
       glow.addColorStop(0, `rgba(255, 255, 255, ${b.flash * 0.3})`);
       glow.addColorStop(0.45, `rgba(210, 245, 255, ${b.flash * 0.14})`);

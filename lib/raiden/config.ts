@@ -12,7 +12,7 @@ export const RAIDEN_CONFIG_KEY = "raiden_config";
 /** `topup.type`：11=雷电行动（装备/复活为负、通关奖励为正）。 */
 export const TOPUP_TYPE_RAIDEN = 11;
 
-/** 固定三关；关卡编号从 1 开始，也写进数据库。 */
+/** 行动关卡表；关卡编号从 1 开始，也写进数据库。 */
 export interface RaidenStageMeta {
   no: number;
   code: string;
@@ -45,7 +45,23 @@ export const RAIDEN_STAGES: RaidenStageMeta[] = [
     name: "轨道要塞",
     subtitle: "ORBITAL FORTRESS",
     boss: "雷神核心",
-    brief: "冲入近地轨道，终结整场行动的指挥中枢。",
+    brief: "突破近地轨道封锁，摧毁环带上的指挥中枢。",
+  },
+  {
+    no: 4,
+    code: "STAGE 4",
+    name: "月面环形山",
+    subtitle: "LUNAR CRATERS",
+    boss: "「猎户座」质量投射器",
+    brief: "低重力月面推进，端掉环形山里的电磁炮阵地。",
+  },
+  {
+    no: 5,
+    code: "STAGE 5",
+    name: "深空王座",
+    subtitle: "DEEP SPACE THRONE",
+    boss: "天穹要塞「欧米伽」",
+    brief: "突入深空，击毁敌方旗舰要塞，终结整场行动。",
   },
 ];
 
@@ -113,6 +129,8 @@ export const DEFAULT_RAIDEN_CONFIG: RaidenConfig = {
     { stage: 1, firstClear: 60, repeat: 6 },
     { stage: 2, firstClear: 100, repeat: 8 },
     { stage: 3, firstClear: 240, repeat: 12 },
+    { stage: 4, firstClear: 360, repeat: 16 },
+    { stage: 5, firstClear: 520, repeat: 20 },
   ],
 };
 
@@ -143,7 +161,7 @@ export const RAIDEN_ITEMS: RaidenItemMeta[] = [
   {
     key: "weapon",
     title: "火力强化",
-    hint: "主炮火力 +1 级，最高 Lv11；升级后弹幕更宽、威力更高。",
+    hint: "出击时机炮（W）+1 级，最高 Lv11；等级越高枪管越多、射速越快。吃下别的字母会切类型并掉回 Lv1。",
     kind: "count",
   },
   {
@@ -166,8 +184,9 @@ export const RAIDEN_ITEMS: RaidenItemMeta[] = [
   },
 ];
 
-/** 游戏内的起始数值：基础 3 命 / 3 弹 / 1 级火力。 */
+/** 游戏内的起始数值：基础 3 命 / 3 弹 / 机炮 Lv1。 */
 export function startingStats(loadout: RaidenLoadout): {
+  /** 出击时的初始子弹等级（机炮 W）；字段名沿用历史，落库列也是 power。 */
   power: number;
   bombs: number;
   lives: number;
@@ -207,7 +226,7 @@ export function loadoutCost(config: RaidenConfig, loadout: RaidenLoadout): numbe
 
 export function describeLoadout(config: RaidenConfig, loadout: RaidenLoadout): string {
   const parts: string[] = [];
-  if (loadout.weapon > 0) parts.push(`火力 Lv${1 + loadout.weapon}`);
+  if (loadout.weapon > 0) parts.push(`机炮 Lv${1 + loadout.weapon}`);
   if (loadout.bomb > 0) parts.push(`炸弹 +${loadout.bomb}`);
   if (loadout.shield) parts.push("护盾");
   if (loadout.life > 0) parts.push(`生命 +${loadout.life}`);
@@ -253,7 +272,7 @@ function sanitizeItem(
 function sanitizeStages(raw: unknown): RaidenStageReward[] {
   const fallback = DEFAULT_RAIDEN_CONFIG.stages;
   const arr = Array.isArray(raw) ? raw : [];
-  return [1, 2, 3].map((no) => {
+  return RAIDEN_STAGES.map(({ no }) => {
     const source = arr.find((item) => Number((item as { stage?: unknown })?.stage) === no) as
       | Partial<RaidenStageReward>
       | undefined;
@@ -339,11 +358,13 @@ export function stageDurationBounds(config: RaidenConfig): { minMs: number; maxM
   };
 }
 
-/** 每关的分数上限：只做量级防作弊（正常满关约 3~8 万分）。 */
+/** 每关的分数上限：只做量级防作弊（正常满关约 3~12 万分，随关卡递增）。 */
 export const STAGE_SCORE_CAP: Record<number, number> = {
   1: 300_000,
   2: 400_000,
   3: 600_000,
+  4: 800_000,
+  5: 1_000_000,
 };
 
 /** 单关战利品上限（cr）：服务端对客户端上报的掉落额做量级封顶。 */
@@ -351,4 +372,6 @@ export const STAGE_LOOT_CAP: Record<number, number> = {
   1: 20,
   2: 24,
   3: 28,
+  4: 32,
+  5: 36,
 };

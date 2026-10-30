@@ -5,6 +5,10 @@
 
 export type SfxName =
   | "shoot"
+  | "laser"
+  | "shell"
+  | "missile"
+  | "shuffle"
   | "hit"
   | "explode"
   | "bigExplode"
@@ -64,6 +68,20 @@ export class RaidenAudio {
         if (now - this.lastShot < 0.085) return;
         this.lastShot = now;
         this.tone(ctx, master, "square", 980, 320, 0.055, 0.045, now);
+        break;
+      case "laser":
+        this.tone(ctx, master, "sawtooth", 1500, 520, 0.11, 0.035, now);
+        break;
+      case "shell":
+        this.noise(ctx, master, 0.13, 0.07, 1200, 260, now);
+        this.tone(ctx, master, "square", 260, 120, 0.12, 0.04, now);
+        break;
+      case "missile":
+        this.noise(ctx, master, 0.24, 0.05, 600, 2600, now);
+        this.tone(ctx, master, "sine", 300, 700, 0.2, 0.03, now);
+        break;
+      case "shuffle":
+        this.tone(ctx, master, "triangle", 640, 1180, 0.06, 0.045, now);
         break;
       case "hit":
         this.tone(ctx, master, "triangle", 320, 180, 0.04, 0.03, now);
