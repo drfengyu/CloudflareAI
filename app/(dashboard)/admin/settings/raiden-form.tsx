@@ -126,8 +126,9 @@ export function RaidenForm({ initialConfig }: { initialConfig: RaidenConfig }) {
       },
     }),
   );
+  // 行数据按 RAIDEN_STAGES 派生：关卡数只有一处真相，加关不必再记得改这里
   const [stages, setStages] = useState(() =>
-    [1, 2, 3].map((no) => {
+    RAIDEN_STAGES.map(({ no }) => {
       const row = initialConfig.stages.find((s) => s.stage === no);
       return {
         firstClear: String(row?.firstClear ?? 0),
