@@ -27,6 +27,7 @@ import {
   ListChecks,
   Gamepad2,
   Crosshair,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -52,6 +53,7 @@ const NAV: NavGroup[] = [
       { href: "/docs", label: "API 文档", icon: BookOpen },
       { href: "/lottery", label: "限时活动", icon: Sparkles },
       { href: "/raiden", label: "雷电行动", icon: Gamepad2 },
+      { href: "/flip", label: "翻牌夺宝", icon: Layers },
       { href: "/cashback", label: "消费返利", icon: PiggyBank },
       { href: "/tasks", label: "任务成就", icon: ListChecks },
     ],

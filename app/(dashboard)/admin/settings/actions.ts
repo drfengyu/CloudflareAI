@@ -16,9 +16,16 @@ import {
 import {
   RAIDEN_CONFIG_KEY,
   RAIDEN_ITEM_MAX_CAP,
+  RAIDEN_STAGES,
   sanitizeRaidenConfig,
   type RaidenConfig,
 } from "@/lib/raiden/config";
+import {
+  FLIP_CARD_COUNT,
+  FLIP_CONFIG_KEY,
+  FLIP_MAX_REWARD,
+  sanitizeFlipConfig,
+} from "@/lib/flip/config";
 import { setSetting } from "@/lib/settings";
 import { sanitizeBonusTiers } from "@/lib/payment/bonus";
 import { TASKS } from "@/lib/tasks/tasks";
@@ -853,7 +860,9 @@ export async function updateRaidenSettings(formData: {
     };
   }
 
-  const stages = [1, 2, 3].map((no) => {
+  // 关卡列表按 RAIDEN_STAGES 派生：早先写死 1~3 时，加到 5 关之后保存一次配置就会把 4、5 关
+  // 的奖励悄悄重置成默认值。
+  const stages = RAIDEN_STAGES.map(({ no }) => {
     const row = formData.stages?.find((s) => Number(s?.stage) === no);
     return {
       stage: no,
@@ -882,6 +891,69 @@ export async function updateRaidenSettings(formData: {
   revalidatePath("/admin/settings");
   revalidatePath("/admin/raiden");
   revalidatePath("/raiden");
+
+  return { success: true };
+}
+
+/** 限时活动（翻牌夺宝）配置的保存入口 */
+export async function updateFlipSettings(formData: {
+  enabled: boolean;
+  startAt: string;
+  endAt: string;
+  roundPriceCredits: number;
+  rewardValidDays: number;
+  dailyRounds: number;
+  /** 12 张牌各自的 cr；0 = 空牌。 */
+  cardRewards: number[];
+}) {
+  const currentUserId = await requireUser();
+
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const startAt = formData.startAt.trim();
+  const endAt = formData.endAt.trim();
+  if (formData.enabled) {
+    const startMs = parseCnWallClock(startAt);
+    const endMs = parseCnWallClock(endAt);
+    if (startMs === null) throw new Error("开始时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs === null) throw new Error("结束时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs <= startMs) throw new Error("结束时间必须晚于开始时间");
+  }
+
+  // 张数是玩法的一部分，少一格就多一张「永远翻不到」的牌，所以整表长度必须正好 12。
+  const cardRewards = formData.cardRewards ?? [];
+  if (cardRewards.length !== FLIP_CARD_COUNT) {
+    throw new Error(`牌桌需要正好 ${FLIP_CARD_COUNT} 张牌`);
+  }
+  const rewards = cardRewards.map((value, index) =>
+    requireNumber(value, `第 ${index + 1} 张牌的奖励`, 0, FLIP_MAX_REWARD),
+  );
+  if (formData.enabled && rewards.every((value) => value === 0)) {
+    throw new Error("开启活动需要牌桌上至少有一张有奖");
+  }
+
+  const config = sanitizeFlipConfig({
+    enabled: formData.enabled === true,
+    startAt,
+    endAt,
+    roundPriceCredits: requireNumber(formData.roundPriceCredits, "每局票价", 1, 1_000_000),
+    rewardValidDays: Math.trunc(requireNumber(formData.rewardValidDays, "奖励有效期", 1, 3650)),
+    dailyRounds: Math.trunc(requireNumber(formData.dailyRounds, "每日开局上限", 1, 1000)),
+    cardRewards: rewards,
+  });
+
+  await upsertOption(FLIP_CONFIG_KEY, JSON.stringify(config));
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/flip");
 
   return { success: true };
 }

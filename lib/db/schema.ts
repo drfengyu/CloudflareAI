@@ -201,7 +201,7 @@ export const topups = sqliteTable("topup", {
     .references(() => users.id, { onDelete: "cascade" }),
   /** 变动金额（credits，可正可负，支持小数）。 */
   amount: real("amount").notNull(),
-  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励 / 8=消费返利 / 9=任务成就 / 10=充值赠送 / 11=雷电行动（装备/复活为负、通关奖励为正）。 */
+  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励 / 8=消费返利 / 9=任务成就 / 10=充值赠送 / 11=雷电行动（装备/复活为负、通关奖励为正） / 12=翻牌夺宝（票价为负、中奖为正）。 */
   type: integer("type").notNull(),
   /** 描述：如"兑换码 ABC123"、"管理员充值"、"后台调整"。 */
   description: text("description"),
@@ -709,6 +709,43 @@ export const raidenProgress = sqliteTable(
 );
 
 export type RaidenProgressRow = typeof raidenProgress.$inferSelect;
+
+/**
+ * 限时活动·翻牌夺宝：一局一行。
+ *
+ * 开局就把洗好的 12 格奖项写进 `board`，用户翻第几张都只认这一行——牌桌在扣钱那一刻
+ * 就已经定死了，之后的结算只是查表，不存在「翻的时候再摇一次随机数」那种可以被
+ * 并发重试利用的余地。`board` 在完成前绝不进任何响应体。
+ */
+export const flipRounds = sqliteTable(
+  "flip_round",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 活动轮次标识（活动 startAt 字符串）。 */
+    activityKey: text("activityKey"),
+    /** open=牌还没翻 / settled=已翻开结算。 */
+    status: text("status").$type<"open" | "settled">().notNull().default("open"),
+    /** 本局票价（cr），按开局当时的配置定格。 */
+    priceCredits: real("priceCredits").notNull(),
+    /** 洗牌后的 12 格奖项（JSON 数组）。 */
+    board: text("board").notNull(),
+    /** 翻开的位置 0..11；未翻为 null。 */
+    position: integer("position"),
+    /** 该位置的实发 cr；未翻为 null。 */
+    rewardCredits: real("rewardCredits"),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+    settledAt: integer("settledAt", { mode: "timestamp_ms" }),
+  },
+  (table) => [
+    index("idx_flip_round_user").on(table.userId, table.activityKey, table.createdAt),
+    index("idx_flip_round_open").on(table.userId, table.status),
+  ],
+);
+
+export type FlipRound = typeof flipRounds.$inferSelect;
 
 /**
  * 2026-10-17 新增：跨实例的固定窗口限流计数。

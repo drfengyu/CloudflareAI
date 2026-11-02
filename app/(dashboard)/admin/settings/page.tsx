@@ -9,8 +9,10 @@ import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, InviteSettingsF
 import { DashboardInfoForm } from "./dashboard-info-form";
 import { LotteryForm } from "./lottery-form";
 import { RaidenForm } from "./raiden-form";
+import { FlipForm } from "./flip-form";
 import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
 import { sanitizeRaidenConfig } from "@/lib/raiden/config";
+import { sanitizeFlipConfig } from "@/lib/flip/config";
 import { TASKS } from "@/lib/tasks/tasks";
 import { sanitizeBonusTiers } from "@/lib/payment/bonus";
 import type { AnnouncementInput, FaqItem } from "@/lib/settings/dashboard-info";
@@ -52,27 +54,19 @@ export default async function AdminSettingsPage() {
     settings[opt.key] = opt.value;
   });
 
-  // 从 allSettings 里直接解析 lotteryConfig，避免额外一次 getSetting 查询
-  const lotteryConfig = (() => {
-    const raw = settings.lottery_config;
-    if (!raw) return sanitizeLotteryConfig(null);
+  // 三个活动的配置在库里各是一段 JSON，直接从 allSettings 解析，省掉各自的 getSetting 往返。
+  // 脏值一律由 sanitize* 兜回可用默认值，不让设置页因为一行坏 JSON 报错。
+  const parseConfig = <T,>(raw: string | undefined, sanitize: (value: unknown) => T): T => {
+    if (!raw) return sanitize(null);
     try {
-      return sanitizeLotteryConfig(JSON.parse(raw));
+      return sanitize(JSON.parse(raw));
     } catch {
-      return sanitizeLotteryConfig(null);
+      return sanitize(null);
     }
-  })();
-
-  // 雷电行动配置同理，直接从 allSettings 解析
-  const raidenConfig = (() => {
-    const raw = settings.raiden_config;
-    if (!raw) return sanitizeRaidenConfig(null);
-    try {
-      return sanitizeRaidenConfig(JSON.parse(raw));
-    } catch {
-      return sanitizeRaidenConfig(null);
-    }
-  })();
+  };
+  const lotteryConfig = parseConfig(settings.lottery_config, sanitizeLotteryConfig);
+  const raidenConfig = parseConfig(settings.raiden_config, sanitizeRaidenConfig);
+  const flipConfig = parseConfig(settings.flip_config, sanitizeFlipConfig);
 
   // 充值赠送档位与任务奖励覆盖在库里是 JSON，交给表单前先还原成结构化值：
   // 表单按行/按任务显示数字，管理员不需要也不应该看到 JSON 文本。
@@ -308,6 +302,15 @@ export default async function AdminSettingsPage() {
           </CardHeader>
           <CardContent>
             <RaidenForm initialConfig={raidenConfig} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">限时活动（翻牌夺宝）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FlipForm initialConfig={flipConfig} />
           </CardContent>
         </Card>
       </div>
