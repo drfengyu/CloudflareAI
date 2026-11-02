@@ -324,11 +324,11 @@ export async function updateCashbackSettings(formData: {
   return { success: true };
 }
 
-/** 充值阶梯赠送：档位是一段 JSON，写入前先裁一遍，避免把畸形配置发给结算链路。 */
+/** 充值阶梯赠送：表单按行提交（每档「实付满 / 赠送」两个数字），写入前统一裁剪。 */
 export async function updateRechargeBonusSettings(formData: {
   enabled: boolean;
   validDays: string;
-  tiersJson: string;
+  tiers: Array<{ minCny: string; bonus: string }>;
 }) {
   const currentUserId = await requireUser();
 
@@ -347,13 +347,26 @@ export async function updateRechargeBonusSettings(formData: {
     throw new Error("赠送有效期需在 1 ~ 365 天之间");
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(formData.tiersJson || "[]");
-  } catch {
-    throw new Error("档位不是合法 JSON，形如 [{\"minCny\":50,\"bonus\":200}]");
+  const rows: Array<{ minCny: number; bonus: number }> = [];
+  for (const [i, row] of formData.tiers.entries()) {
+    // 两个格子都没填 = 这一档还没配，直接跳过（新加一行的默认状态）
+    if (!row.minCny.trim() && !row.bonus.trim()) continue;
+    const minCny = Number(row.minCny);
+    const bonus = Number(row.bonus);
+    if (!row.minCny.trim() || !Number.isFinite(minCny) || minCny <= 0) {
+      throw new Error(`第 ${i + 1} 档的「实付满」需要填一个大于 0 的金额`);
+    }
+    if (!row.bonus.trim() || !Number.isFinite(bonus) || bonus <= 0) {
+      throw new Error(`第 ${i + 1} 档的「赠送」需要填一个大于 0 的 credits`);
+    }
+    rows.push({ minCny, bonus });
   }
-  const tiers = sanitizeBonusTiers(parsed);
+
+  const tiers = sanitizeBonusTiers(rows);
+  // 裁剪会按门槛去重：条数对不上就说明两档写了同一个金额，让用户改而不是悄悄丢一档
+  if (tiers.length !== rows.length) {
+    throw new Error("有两档的「实付满」金额相同，请改成不同金额");
+  }
   if (formData.enabled && tiers.length === 0) {
     throw new Error("开启赠送需要至少一个有效档位");
   }
@@ -371,13 +384,13 @@ export async function updateRechargeBonusSettings(formData: {
 }
 
 /**
- * 任务成就配置：开关、临时余额有效期、按任务 key 覆盖的一次性额度。
- * 未知的 key 直接报错而不是悄悄丢掉——写错一个字母就等于那条覆盖没生效。
+ * 任务成就配置：开关、临时余额有效期、每个任务的一次性额度。
+ * 额度按任务 key 逐项提交，留空表示用代码默认值；出现未知 key 直接报错而不是悄悄丢掉。
  */
 export async function updateTaskSettings(formData: {
   enabled: boolean;
   validDays: string;
-  rewardOverridesJson: string;
+  rewards: Record<string, string>;
 }) {
   const currentUserId = await requireUser();
 
@@ -396,23 +409,16 @@ export async function updateTaskSettings(formData: {
     throw new Error("奖励有效期需在 1 ~ 365 天之间");
   }
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(formData.rewardOverridesJson.trim() || "{}");
-  } catch {
-    throw new Error("奖励覆盖不是合法 JSON，形如 {\"first_api\":20}");
-  }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("奖励覆盖需要是一个对象，形如 {\"first_api\":20}");
-  }
-
-  const known = new Set(TASKS.map((t) => t.key));
+  const known = new Map(TASKS.map((t) => [t.key, t]));
   const overrides: Record<string, number> = {};
-  for (const [key, raw] of Object.entries(parsed)) {
-    if (!known.has(key)) throw new Error(`未知任务 key：${key}`);
-    const reward = Number(raw);
+  for (const [key, raw] of Object.entries(formData.rewards)) {
+    const text = String(raw ?? "").trim();
+    if (!text) continue;
+    const task = known.get(key);
+    if (!task) throw new Error(`未知任务：${key}`);
+    const reward = Number(text);
     if (!Number.isFinite(reward) || reward < 0 || reward > 100_000) {
-      throw new Error(`「${key}」的奖励需在 0 ~ 100000 credits 之间`);
+      throw new Error(`「${task.title}」的奖励需在 0 ~ 100000 credits 之间`);
     }
     overrides[key] = Math.round(reward * 100) / 100;
   }

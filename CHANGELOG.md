@@ -5,6 +5,34 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.14.2] - 2026-11-02
+
+### 改动
+
+- **后台系统设置不再要求管理员手写 JSON**（`app/(dashboard)/admin/settings/{settings-form,actions,page}.tsx`）：
+  - 充值阶梯赠送的「档位（JSON）」文本框改成**逐档行编辑**——每档两个数字（实付满 / 赠送 cr）+ 添加档位 / 删除，
+    与看板信息卡的行编辑器同一套样式；顺序不用管，保存时仍按门槛升序重排。
+  - 任务成就的「按任务覆盖奖励（JSON）」文本框改成**每个任务一行数字输入**，左边显示默认额度，右边留空即用默认。
+  - 校验从「JSON 能不能 parse」变成按行报错：`第 2 档的「赠送」需要填一个大于 0 的 credits`、
+    `有两档的「实付满」金额相同，请改成不同金额`、`「跑通一次 API」的奖励需在 0 ~ 100000 credits 之间`。
+    门槛去重靠 `sanitizeBonusTiers` 的裁剪条数比对——静默丢一档比报错更糟。
+  - 库里存的仍是 JSON（`recharge_bonus_tiers` / `task_reward_overrides`），只是不再暴露给界面；
+    `page.tsx` 读出来时先还原成结构化值再交给表单，脏值按「无档位 / 留空」处理。
+  - 雷电行动与抽奖的奖池表单本来就是结构化输入，未受影响；`dashboard-info-form.tsx` 里剩下的两个 `textarea`
+    是公告正文与答案的纯文本，不是 JSON。
+
+## [0.14.1] - 2026-11-02
+
+### 修复
+
+- **后台系统设置整页 500**（`app/(dashboard)/admin/settings/raiden-form.tsx`）：v0.14.0 把关卡扩到 5 关后，
+  表单的 `stages` state 仍按 `[1, 2, 3]` 初始化，而渲染循环按 `RAIDEN_STAGES.map` 取 `stages[3] / stages[4]`
+  得到 `undefined`，SSR 抛 `TypeError: Cannot read properties of undefined (reading 'firstClear')`，
+  `/admin/settings` 对管理员完全打不开。改为从 `RAIDEN_STAGES` 派生行数据——关卡数只留一处真相，
+  下次再加关不会又漏一处；顺带修正底部「N 关首通合计」此前只统计前 3 关。
+  线上复验：临时提权后 `/admin/settings` 200，`STAGE 5`、关卡奖励、任务成就、消费返利、充值阶梯赠送各卡齐全，
+  验证完把测试账号 role 改回 1。
+
 ## [0.14.0] - 2026-10-31
 
 ### 新增

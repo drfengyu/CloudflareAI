@@ -12,6 +12,7 @@ import { RaidenForm } from "./raiden-form";
 import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
 import { sanitizeRaidenConfig } from "@/lib/raiden/config";
 import { TASKS } from "@/lib/tasks/tasks";
+import { sanitizeBonusTiers } from "@/lib/payment/bonus";
 import type { AnnouncementInput, FaqItem } from "@/lib/settings/dashboard-info";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,27 @@ export default async function AdminSettingsPage() {
     } catch {
       return sanitizeRaidenConfig(null);
     }
+  })();
+
+  // 充值赠送档位与任务奖励覆盖在库里是 JSON，交给表单前先还原成结构化值：
+  // 表单按行/按任务显示数字，管理员不需要也不应该看到 JSON 文本。
+  const bonusTiers = sanitizeBonusTiers(parseArray<unknown>(settings.recharge_bonus_tiers));
+  const taskRewardOverrides = (() => {
+    const raw = settings.task_reward_overrides;
+    if (!raw) return {};
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return {};
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, number> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      const n = Number(value);
+      if (Number.isFinite(n)) out[key] = n;
+    }
+    return out;
   })();
 
   return (
@@ -175,7 +197,7 @@ export default async function AdminSettingsPage() {
               initialSettings={{
                 enabled: settings.recharge_bonus_enabled === "true" || settings.recharge_bonus_enabled === "1",
                 validDays: settings.recharge_bonus_valid_days || "30",
-                tiersJson: settings.recharge_bonus_tiers || "[]",
+                tiers: bonusTiers,
               }}
             />
           </CardContent>
@@ -190,7 +212,7 @@ export default async function AdminSettingsPage() {
               initialSettings={{
                 enabled: settings.tasks_enabled === "true" || settings.tasks_enabled === "1",
                 validDays: settings.tasks_valid_days || "30",
-                rewardOverridesJson: settings.task_reward_overrides || "{}",
+                rewards: taskRewardOverrides,
               }}
               catalog={TASKS.map((t) => ({
                 key: t.key,

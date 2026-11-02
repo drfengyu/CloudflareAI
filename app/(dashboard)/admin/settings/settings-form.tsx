@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { updateBasicSettings, updatePricingSettings, updateCheckinSettings, updateInviteSettings, updateCashbackSettings, updateRechargeBonusSettings, updateTaskSettings, updateAuthChannels, updateEpaySettings, updateLinuxdoSettings } from "./actions";
 import { toast } from "sonner";
@@ -733,25 +734,41 @@ export function CashbackSettingsForm({ initialSettings }: CashbackSettingsFormPr
   );
 }
 
+/**
+ * 行编辑里窄输入框与删除按钮的公共样式（与看板信息卡表单同一套）。
+ * 注意：这些数字框**故意不写 min/max**——HTML5 的范围校验会在提交非法值时静默挡住 submit，
+ * 表现成「点了保存没反应」；范围一律交给服务端校验，管理员能看到具体是哪一行不对。
+ */
+const ROW_INPUT =
+  "min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-2 text-sm tabular-nums disabled:opacity-50";
+const ROW_DELETE =
+  "shrink-0 rounded-lg border border-border p-2 text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground disabled:opacity-50";
+
 interface RechargeBonusSettingsFormProps {
   initialSettings: {
     enabled: boolean;
     validDays: string;
-    tiersJson: string;
+    /** 已配好的档位；表单按行编辑，不让管理员手写 JSON。 */
+    tiers: Array<{ minCny: number; bonus: number }>;
   };
 }
 
 export function RechargeBonusSettingsForm({ initialSettings }: RechargeBonusSettingsFormProps) {
   const [enabled, setEnabled] = useState(initialSettings.enabled);
   const [validDays, setValidDays] = useState(initialSettings.validDays);
-  const [tiersJson, setTiersJson] = useState(initialSettings.tiersJson);
+  const [tiers, setTiers] = useState(() =>
+    initialSettings.tiers.map((t) => ({ minCny: String(t.minCny), bonus: String(t.bonus) })),
+  );
   const [loading, setLoading] = useState(false);
+
+  const patchTier = (index: number, next: Partial<{ minCny: string; bonus: string }>) =>
+    setTiers((prev) => prev.map((row, i) => (i === index ? { ...row, ...next } : row)));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await updateRechargeBonusSettings({ enabled, validDays, tiersJson });
+      await updateRechargeBonusSettings({ enabled, validDays, tiers });
       toast.success("充值赠送设置已保存");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "保存失败");
@@ -791,18 +808,69 @@ export function RechargeBonusSettingsForm({ initialSettings }: RechargeBonusSett
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">档位（JSON）</label>
-        <textarea
-          rows={5}
-          value={tiersJson}
-          onChange={(e) => setTiersJson(e.target.value)}
-          disabled={!enabled}
-          className="w-full resize-y rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs disabled:opacity-50"
-          placeholder='[{"minCny":50,"bonus":200},{"minCny":100,"bonus":600}]'
-        />
-        <p className="mt-1 text-xs text-muted-foreground">
-          <code className="font-mono">minCny</code> 为实付金额下限（元；LinuxDO 通道按积分同口径），
-          <code className="font-mono">bonus</code> 为该档赠送的 credits；取能满足的最高一档，不叠加。
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <label className="block text-sm font-medium">赠送档位</label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!enabled}
+            onClick={() => setTiers((prev) => [...prev, { minCny: "", bonus: "" }])}
+          >
+            <Plus className="mr-1 h-3.5 w-3.5" />
+            添加档位
+          </Button>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="w-14 shrink-0">档位</span>
+          <span className="flex-1">实付满（元，LinuxDO 按积分）</span>
+          <span className="flex-1">赠送（cr）</span>
+          <span className="w-10 shrink-0" />
+        </div>
+        {tiers.length === 0 ? (
+          <p className="mt-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+            还没有档位。开启赠送需要至少一档：实付满 X 送 Y cr。
+          </p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {tiers.map((row, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="w-14 shrink-0 text-xs text-muted-foreground tabular-nums">
+                  第 {i + 1} 档
+                </span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={row.minCny}
+                  onChange={(e) => patchTier(i, { minCny: e.target.value })}
+                  disabled={!enabled}
+                  className={ROW_INPUT}
+                  placeholder="50"
+                />
+                <input
+                  type="number"
+                  step="1"
+                  value={row.bonus}
+                  onChange={(e) => patchTier(i, { bonus: e.target.value })}
+                  disabled={!enabled}
+                  className={ROW_INPUT}
+                  placeholder="200"
+                />
+                <button
+                  type="button"
+                  onClick={() => setTiers((prev) => prev.filter((_, idx) => idx !== i))}
+                  disabled={!enabled}
+                  className={ROW_DELETE}
+                  title="删除这一档"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="mt-2 text-xs text-muted-foreground">
+          取实付能满足的<b>最高一档</b>赠送，不叠加；顺序不用管，保存时按门槛从小到大重排。
         </p>
       </div>
 
@@ -817,23 +885,31 @@ interface TaskSettingsFormProps {
   initialSettings: {
     enabled: boolean;
     validDays: string;
-    rewardOverridesJson: string;
+    /** 已覆盖的任务额度（key → cr）；没覆盖的任务留空，表示用代码默认值。 */
+    rewards: Record<string, number>;
   };
-  /** 代码里的任务清单，只用来给管理员看 key 和默认额度。 */
+  /** 代码里的任务清单：决定表单里有几行、默认额度是多少。 */
   catalog: Array<{ key: string; title: string; target: number; defaultReward: number }>;
 }
 
 export function TaskSettingsForm({ initialSettings, catalog }: TaskSettingsFormProps) {
   const [enabled, setEnabled] = useState(initialSettings.enabled);
   const [validDays, setValidDays] = useState(initialSettings.validDays);
-  const [rewardOverridesJson, setRewardOverridesJson] = useState(initialSettings.rewardOverridesJson);
+  const [rewards, setRewards] = useState<Record<string, string>>(() => {
+    const rows: Record<string, string> = {};
+    for (const task of catalog) {
+      const override = initialSettings.rewards[task.key];
+      rows[task.key] = override === undefined ? "" : String(override);
+    }
+    return rows;
+  });
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await updateTaskSettings({ enabled, validDays, rewardOverridesJson });
+      await updateTaskSettings({ enabled, validDays, rewards });
       toast.success("任务成就设置已保存");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "保存失败");
@@ -873,35 +949,39 @@ export function TaskSettingsForm({ initialSettings, catalog }: TaskSettingsFormP
       </div>
 
       <div>
-        <label className="block text-sm font-medium mb-1">按任务覆盖奖励（JSON，可留空）</label>
-        <textarea
-          rows={4}
-          value={rewardOverridesJson}
-          onChange={(e) => setRewardOverridesJson(e.target.value)}
-          disabled={!enabled}
-          className="w-full resize-y rounded-lg border border-border bg-card px-3 py-2 font-mono text-xs disabled:opacity-50"
-          placeholder='{"first_api":20,"checkin_streak":30}'
-        />
-        <p className="mt-1 text-xs text-muted-foreground">
-          键是下面列表里的 <code className="font-mono">key</code>，值是一次性发放的 credits；留空则用默认额度。
-          已领过的任务不受改数影响。
-        </p>
-        <div className="mt-2 overflow-hidden rounded-lg border border-border">
+        <label className="block text-sm font-medium mb-2">每个任务的一次性奖励（cr）</label>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="flex-1">任务</span>
+          <span className="w-24 shrink-0 text-right">默认</span>
+          <span className="w-28 shrink-0 text-right">改成</span>
+        </div>
+        <div className="mt-2 space-y-2">
           {catalog.map((task) => (
-            <div
-              key={task.key}
-              className="flex items-center justify-between gap-3 border-b border-border px-3 py-1.5 text-xs last:border-b-0"
-            >
-              <span className="truncate">
-                <span className="font-medium">{task.title}</span>
-                <span className="ml-2 font-mono text-muted-foreground">{task.key}</span>
+            <div key={task.key} className="flex items-center gap-2">
+              <span className="min-w-0 flex-1 truncate text-sm">
+                {task.title}
+                {task.target > 1 ? (
+                  <span className="ml-1 text-xs text-muted-foreground">（{task.target} 次）</span>
+                ) : null}
               </span>
-              <span className="shrink-0 tabular-nums text-muted-foreground">
-                {task.target > 1 ? `${task.target} 次 · ` : ""}默认 {task.defaultReward} cr
+              <span className="w-24 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
+                {task.defaultReward} cr
               </span>
+              <input
+                type="number"
+                step="1"
+                value={rewards[task.key] ?? ""}
+                onChange={(e) => setRewards((prev) => ({ ...prev, [task.key]: e.target.value }))}
+                disabled={!enabled}
+                className="w-28 shrink-0 rounded-lg border border-border bg-card px-2 py-1.5 text-right text-sm tabular-nums disabled:opacity-50"
+                placeholder="留空"
+              />
             </div>
           ))}
         </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          「改成」留空即用默认额度；已领过的任务不受改数影响。
+        </p>
       </div>
 
       <Button type="submit" disabled={loading}>
