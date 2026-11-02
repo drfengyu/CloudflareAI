@@ -538,6 +538,8 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 **下一版本**：v0.16.0（尚未选型）
 
 - v0.12.0 ~ v0.14.0 是「雷电行动」小游戏（前台 `/raiden`、后台 `raiden_config`，设计文档 `docs/features/raiden.md`）。
+- v0.15.0「翻牌夺宝」（前台 `/flip`、后台 `flip_config`、`topup.type=12`，设计文档 `docs/features/flip-cards.md`）
+  发版当天由管理员自行开启并定数值（票价 100 cr / 牌桌合计 1010 cr → 返还率 84.17%），迁移 020 同日在线上执行。
 - v0.10.0 三项活动**全部默认关闭**：开与不开、比例 / 档位 / 每任务额度都在「后台 → 系统设置」由管理员决定。
   本次发版**没有写任何 `option` 活动配置**，也没动线上奖池与任何真实用户余额。
 - 迁移 017（`cashback_claim`）与 018（`user_task`）是纯增量建表 DDL（`CREATE TABLE IF NOT EXISTS`），
