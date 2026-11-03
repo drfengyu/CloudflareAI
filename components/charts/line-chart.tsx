@@ -37,7 +37,7 @@ export function LineChart<T extends Record<string, any>>({
   emptyMessage,
 }: LineChartProps<T>) {
   if (data.length === 0) {
-    return <ChartEmpty message={emptyMessage} />
+    return <ChartEmpty message={emptyMessage} height={height} />
   }
 
   return (

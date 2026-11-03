@@ -60,6 +60,11 @@ export function ModelAnalyticsCard({
 }) {
   const [tab, setTab] = useState<TabKey>("credits");
 
+  // 按小时打点的序列即使没调用也会有整排 0 值，画出来只是一张空网格，这里先折叠成无数据。
+  const creditsSeries = series.some((p) => p.credits > 0) ? series : [];
+  const callsSeries = series.some((p) => p.calls > 0) ? series : [];
+  const channelRows = channels.filter((c) => c.credits > 0);
+
   const modelBars = models.map((m) => ({
     ...m,
     modelLabel: shortModel(m.model),
@@ -100,7 +105,7 @@ export function ModelAnalyticsCard({
 
         {tab === "credits" ? (
           <AreaChart
-            data={series}
+            data={creditsSeries}
             dataKey="credits"
             xAxisKey="label"
             height={280}
@@ -112,7 +117,7 @@ export function ModelAnalyticsCard({
 
         {tab === "trend" ? (
           <LineChart
-            data={series}
+            data={callsSeries}
             dataKey="calls"
             xAxisKey="label"
             height={280}
@@ -180,7 +185,7 @@ export function ModelAnalyticsCard({
 
         {tab === "channel" ? (
           <PieChart
-            data={channels}
+            data={channelRows}
             dataKey="credits"
             nameKey="name"
             height={280}

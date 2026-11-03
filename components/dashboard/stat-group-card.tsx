@@ -25,7 +25,7 @@ export interface StatItem {
   actionLabel?: string;
 }
 
-// 2026-10-28 修复：行渲染抽成可导出组件，账户数据卡（同样式但两行布局）复用，避免拷贝图标/色调模板。
+// 行渲染抽成可导出组件，方便卡片之外的地方（如账户数据卡）复用同一套图标/色调模板。
 export function StatItemRow({ item }: { item: StatItem }) {
   return (
     <div className="flex items-center gap-3">
@@ -36,11 +36,9 @@ export function StatItemRow({ item }: { item: StatItem }) {
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-xs text-muted-foreground">{item.label}</p>
-        <p className="truncate text-base font-semibold text-foreground">
-          {item.value}
-        </p>
+        <p className="text-base font-semibold tabular-nums text-foreground">{item.value}</p>
         {item.sub ? (
-          <p className="truncate text-[11px] text-muted-foreground">{item.sub}</p>
+          <p className="text-[11px] leading-snug text-muted-foreground">{item.sub}</p>
         ) : null}
       </div>
       {item.href && item.actionLabel ? (
@@ -55,7 +53,8 @@ export function StatItemRow({ item }: { item: StatItem }) {
   );
 }
 
-/** 分组统计卡：一个标题带两行指标，对齐 new-api 控制台的卡片密度。 */
+/** 分组统计卡：一个标题带若干行指标，对齐 new-api 控制台的卡片密度。
+ *  同一行的卡片靠 grid 拉伸等高，行内容垂直居中，避免指标少的卡片底部留空。 */
 export function StatGroupCard({
   icon,
   title,
@@ -66,12 +65,12 @@ export function StatGroupCard({
   items: StatItem[];
 }) {
   return (
-    <Card>
+    <Card className="flex h-full flex-col">
       <CardHeader className="flex items-center gap-2 border-b border-border">
         <span className="text-muted-foreground">{icon}</span>
         <CardTitle>{title}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3 pt-4">
+      <CardContent className="flex flex-1 flex-col justify-center gap-3 pt-4">
         {items.map((item) => (
           <StatItemRow key={item.label} item={item} />
         ))}

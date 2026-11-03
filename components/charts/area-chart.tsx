@@ -37,7 +37,7 @@ export function AreaChart<T extends Record<string, any>>({
   emptyMessage,
 }: AreaChartProps<T>) {
   if (data.length === 0) {
-    return <ChartEmpty message={emptyMessage} />
+    return <ChartEmpty message={emptyMessage} height={height} />
   }
 
   return (

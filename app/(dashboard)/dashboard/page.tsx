@@ -1,4 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { db } from "@/lib/db/d1-http";
 import { users, temporaryBalances } from "@/lib/db/schema";
 import { and, eq, gt } from "drizzle-orm";
@@ -38,7 +38,7 @@ import {
   Wallet,
   Zap,
 } from "lucide-react";
-import { StatGroupCard, StatItemRow, type StatItem } from "@/components/dashboard/stat-group-card";
+import { StatGroupCard, type StatItem } from "@/components/dashboard/stat-group-card";
 import { ModelAnalyticsCard, type AnalyticsPoint } from "@/components/dashboard/model-analytics-card";
 import { DashboardToolbar } from "@/components/dashboard/dashboard-toolbar";
 import { AnnouncementCard } from "@/components/dashboard/announcement-card";
@@ -339,23 +339,10 @@ export default async function DashboardPage({
       </div>
 
       <div className="space-y-6 p-8">
-        {/* 四组核心指标。2026-10-28 修复：大屏四卡一行（xl:grid-cols-4），窄屏退 2×2 / 单列 */}
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <Card className="flex flex-col">
-            <CardHeader className="flex items-center gap-2 border-b border-border">
-              <span className="text-muted-foreground"><BarChart3 className="h-4 w-4" /></span>
-              <CardTitle>账户数据</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-1 flex-col justify-center gap-3 pt-4">
-              {/* 2026-10-28 修复：卡内两行——余额（含充值入口）独占一行，消耗/抽奖并排一行 */}
-              <StatItemRow item={accountItems[0]} />
-              <div className="grid grid-cols-2 gap-3">
-                {accountItems.slice(1).map((item) => (
-                  <StatItemRow key={item.label} item={item} />
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+        {/* 四组核心指标：大屏四卡一行（xl:grid-cols-4），窄屏退 2×2 / 单列。
+            卡内不要再套多列网格，金额会被挤到截断。 */}
+        <div className="grid items-stretch gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <StatGroupCard icon={<BarChart3 className="h-4 w-4" />} title="账户数据" items={accountItems} />
           <StatGroupCard icon={<Activity className="h-4 w-4" />} title="使用统计" items={usageItems} />
           <StatGroupCard icon={<Clock className="h-4 w-4" />} title="资源消耗" items={resourceItems} />
           <StatGroupCard icon={<Timer className="h-4 w-4" />} title="性能指标" items={perfItems} />

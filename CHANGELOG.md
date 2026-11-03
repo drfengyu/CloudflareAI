@@ -5,6 +5,41 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.16.0] - 2026-11-03
+
+### 优化（界面 UI 第一批：数字与密度 / 侧栏信息架构 / 视觉一致性）
+
+- **看板金额不再被截断**（`components/dashboard/stat-group-card.tsx`）：值与次要说明两行原本都带 `truncate`，
+  窄列里渲染成「5092…」「累计 207 …」「-5313…」——金额和调用数被吃掉是这页最糟的缺陷。改成不截断、允许换行，
+  数字统一加 `tabular-nums` 让小数位对齐。
+- **账户数据卡并入通用分组卡**（`app/(dashboard)/dashboard/page.tsx`）：这张卡是页内手写的特例，卡内又套了一层
+  `grid-cols-2` 两列窄布局，正是上面截断的来源。现在四张卡都走 `StatGroupCard` 单列渲染；卡片靠 grid 拉伸等高，
+  行内容垂直居中，指标少的卡不再在底部留一块空白。
+- **图表零数据不再画一张空坐标系**（`components/dashboard/model-analytics-card.tsx`）：按小时打点的序列即使整个窗口
+  没有一次调用，也会有 24 个 0 值点，`data.length === 0` 的空状态永远走不到，新账号一进看板就撞上 280px 的空白网格。
+  现在先把全零序列折叠成无数据，直接显示「该时段暂无消耗数据」；`ChartEmpty` 跟随图表高度，切 tab 不再跳版。
+- **侧栏信息架构**（`components/dashboard/sidebar.tsx`）：「通用」组已经堆到 9 项，活动入口和日常入口混在一起。
+  拆成 通用(4) / 活动中心(5) / 在线体验(6) / 个人(5) / 管理(8)，其中活动中心、在线体验、管理三组的标题可点击折叠，
+  并显示条数。**当前页所在的那一组不允许收起**（收起后用户会以为入口没了）。行高 `py-2` → `py-1.5`、组间距
+  `space-y-6` → `space-y-4`。移动端抽屉共用同一份 `SidebarNav`，行为与桌面一致。
+- **钱包签到日历压成紧凑条**（`app/(dashboard)/wallet/checkin-calendar-card.tsx`）：7 列 × 5 行的月历（每格 `h-10`）
+  外加前后月的补位灰格，一张卡吃掉整屏，而签到真正要看的只有「这个月哪几天签过」。改成只排当月日期的小方格
+  （1440 宽一行排开、375 宽 4 行），已签到与今天各给底色/描边并配图例，悬停仍显示当天发放额度；头部与统计条内边距
+  同步收紧。卡片高度实测 700+ → 394px。
+- **模型库破图与名称**（`components/models/model-browser.tsx`）：BAAI 等上游 logo 链接 404 时会显示浏览器破图占位，
+  现在 `onError` 退回首字母方块；模型名由 `truncate` 改 `line-clamp-2`，窄屏不再把「Llama 3.3 70b Instruct Fp8 Fast」
+  切掉半截。
+- **其余按宽度截断的文本**：看板常见问答的问题、服务可用性的端点名（`faq-card.tsx`、`uptime-card.tsx`）与钱包充值
+  订单号（`recharge-orders-card.tsx`）都改成换行显示——这三处都是标识符或问句，省略号等于丢信息。
+
+### 验证
+
+- `npx tsc --noEmit` 干净；本轮改动文件的 `eslint` 只剩 `components/charts/*.tsx` 里 3 处存量 `any`（留给 #61 清理）
+  与 `<img>` 的既有告警。
+- Playwright 在 1440×900 与 375×812 双宽度实测（本地 dev + `test@example.com`，全程只读，不写任何数据）：
+  看板 `scrollWidth > clientWidth` 的截断元素 4 → 0，四张分组卡均为 272×261 完全等高；模型库 75 张卡同行等高、
+  破图 0 张；钱包签到卡 394px；侧栏折叠「活动中心」后链接数 28 → 23，而在 `/flip` 点同一个标题不收起。
+
 ## [0.15.0] - 2026-11-02
 
 ### 新增

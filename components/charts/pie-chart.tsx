@@ -30,7 +30,7 @@ export function PieChart<T extends Record<string, unknown>>({
   emptyMessage,
 }: PieChartProps<T>) {
   if (data.length === 0) {
-    return <ChartEmpty message={emptyMessage} />
+    return <ChartEmpty message={emptyMessage} height={height} />
   }
 
   return (

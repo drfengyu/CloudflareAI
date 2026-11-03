@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -28,6 +29,7 @@ import {
   Gamepad2,
   Crosshair,
   Layers,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +43,8 @@ interface NavGroup {
   title: string;
   items: NavItem[];
   adminOnly?: boolean;
+  /** 可折叠：组内没有当前页时标题变成按钮，点了才收起 */
+  collapsible?: boolean;
 }
 
 const NAV: NavGroup[] = [
@@ -51,6 +55,12 @@ const NAV: NavGroup[] = [
       { href: "/models", label: "模型库", icon: Boxes },
       { href: "/pricing", label: "定价", icon: DollarSign },
       { href: "/docs", label: "API 文档", icon: BookOpen },
+    ],
+  },
+  {
+    title: "活动中心",
+    collapsible: true,
+    items: [
       { href: "/lottery", label: "限时活动", icon: Sparkles },
       { href: "/raiden", label: "雷电行动", icon: Gamepad2 },
       { href: "/flip", label: "翻牌夺宝", icon: Layers },
@@ -60,6 +70,7 @@ const NAV: NavGroup[] = [
   },
   {
     title: "在线体验",
+    collapsible: true,
     items: [
       { href: "/chat", label: "AI 对话", icon: MessagesSquare },
       { href: "/playground/text", label: "文本生成", icon: MessageSquare },
@@ -82,6 +93,7 @@ const NAV: NavGroup[] = [
   {
     title: "管理",
     adminOnly: true,
+    collapsible: true,
     items: [
       { href: "/admin/channels", label: "渠道管理", icon: Radio },
       { href: "/admin/users", label: "用户管理", icon: Users },
@@ -109,9 +121,13 @@ export function SidebarNav({
   onNavigate?: () => void;
 }) {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const visibleGroups = NAV.filter(
     (group) => !group.adminOnly || userRole >= 10,
   );
+
+  const isActive = (href: string) =>
+    pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
 
   return (
     <>
@@ -126,39 +142,72 @@ export function SidebarNav({
         <span>{siteName}</span>
       </Link>
 
-      <nav className="flex-1 space-y-6 overflow-y-auto px-3 py-2">
-        {visibleGroups.map((group) => (
-          <div key={group.title}>
-            <p className="px-2 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+      <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-2">
+        {visibleGroups.map((group) => {
+          // 组里有当前页时强制展开，否则尊重用户的折叠选择
+          const open =
+            !group.collapsible ||
+            group.items.some((item) => isActive(item.href)) ||
+            collapsed[group.title] !== true;
+
+          const groupLabel = (
+            <span className="px-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               {group.title}
-            </p>
-            <ul className="space-y-0.5">
-              {group.items.map((item) => {
-                const active =
-                  pathname === item.href ||
-                  (item.href !== "/dashboard" && pathname.startsWith(item.href));
-                const Icon = item.icon;
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      onClick={onNavigate}
-                      className={cn(
-                        "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
-                        active
-                          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-                          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                      {item.label}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
+            </span>
+          );
+
+          return (
+            <div key={group.title}>
+              {group.collapsible ? (
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  onClick={() =>
+                    setCollapsed((prev) => ({ ...prev, [group.title]: open }))
+                  }
+                  className="flex w-full items-center gap-1.5 px-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  {groupLabel}
+                  <span className="tabular-nums opacity-60">{group.items.length}</span>
+                  <ChevronRight
+                    className={cn(
+                      "ml-auto h-3.5 w-3.5 transition-transform",
+                      open && "rotate-90",
+                    )}
+                  />
+                </button>
+              ) : (
+                groupLabel
+              )}
+
+              {open ? (
+                <ul className="mt-1 space-y-0.5">
+                  {group.items.map((item) => {
+                    const active = isActive(item.href);
+                    const Icon = item.icon;
+                    return (
+                      <li key={item.href}>
+                        <Link
+                          href={item.href}
+                          onClick={onNavigate}
+                          className={cn(
+                            "flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                            active
+                              ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                              : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                          )}
+                        >
+                          <Icon className="h-4 w-4" />
+                          {item.label}
+                        </Link>
+                      </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
+            </div>
+          );
+        })}
       </nav>
     </>
   );

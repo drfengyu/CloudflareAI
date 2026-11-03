@@ -190,7 +190,7 @@ function ModelCard({
           <div className="flex min-w-0 items-start gap-2.5">
             <VendorLogo author={model.author} name={model.name} logo={model.logo} />
             <div className="min-w-0">
-              <p className="truncate text-sm font-semibold leading-tight">
+              <p className="line-clamp-2 text-sm font-semibold leading-tight">
                 {model.name}
               </p>
               {model.author && (
@@ -255,13 +255,17 @@ function VendorLogo({
   name: string;
   logo?: string;
 }) {
-  if (logo) {
+  // 上游 logo 链接经常 404（如 BAAI 的图标），加载失败就退回首字母，避免出现破图占位
+  const [broken, setBroken] = useState(false);
+
+  if (logo && !broken) {
     return (
       <img
         src={logo}
         alt={author ?? name}
         className="mt-0.5 h-6 w-6 shrink-0 rounded object-contain"
         loading="lazy"
+        onError={() => setBroken(true)}
       />
     );
   }

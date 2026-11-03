@@ -152,8 +152,8 @@ export function RechargeOrdersCard({ orders, initialHasNext, highlightOrderNo, j
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="truncate text-sm font-mono text-muted-foreground">{order.orderNo}</p>
-                    <Badge tone={meta.tone}>{meta.label}</Badge>
+                    <p className="min-w-0 flex-1 break-all font-mono text-sm text-muted-foreground">{order.orderNo}</p>
+                    <Badge tone={meta.tone} className="shrink-0">{meta.label}</Badge>
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {order.channel === "alipay" ? "支付宝" : order.channel === "wechat" ? "微信支付" : order.channel === "linuxdo" ? "LinuxDO 积分" : order.channel}

@@ -152,40 +152,17 @@ export function CheckinCalendarCard() {
     );
   };
 
-  // 构建日历网格
-  const calendarDays = useMemo(() => {
+  // 紧凑签到条：只列当月日期，前后月的补位格子对签到没有信息量
+  const monthDays = useMemo(() => {
     const year = currentMonth.getFullYear();
     const month = currentMonth.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startDayOfWeek = firstDay.getDay(); // 0 = Sunday
-
-    const days: Array<{ date: Date; isCurrentMonth: boolean }> = [];
-
-    // 填充前置空白天
-    for (let i = 0; i < startDayOfWeek; i++) {
-      const d = new Date(year, month, -startDayOfWeek + i + 1);
-      days.push({ date: d, isCurrentMonth: false });
-    }
-
-    // 填充当前月天数
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push({ date: new Date(year, month, i), isCurrentMonth: true });
-    }
-
-    // 填充后置空白天（补齐 7 的倍数）
-    const remaining = 7 - (days.length % 7);
-    if (remaining < 7) {
-      for (let i = 1; i <= remaining; i++) {
-        days.push({ date: new Date(year, month + 1, i), isCurrentMonth: false });
-      }
-    }
-
-    return days;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const monthStr = `${year}-${String(month + 1).padStart(2, "0")}`;
+    return Array.from({ length: daysInMonth }, (_, i) => ({
+      day: i + 1,
+      dateStr: `${monthStr}-${String(i + 1).padStart(2, "0")}`,
+    }));
   }, [currentMonth]);
-
-  const weekDays = ["日", "一", "二", "三", "四", "五", "六"];
 
   if (!data || !data.enabled) {
     return null;
@@ -214,7 +191,7 @@ export function CheckinCalendarCard() {
   return (
     <Card className="overflow-hidden">
       {/* Header */}
-      <CardContent className="border-b py-6">
+      <CardContent className="border-b px-5 py-4">
         <div className="flex items-center justify-between gap-4">
           <button
             type="button"
@@ -265,32 +242,32 @@ export function CheckinCalendarCard() {
         <>
           {/* Stats */}
           <div className="grid grid-cols-2 gap-px border-b bg-border sm:grid-cols-4">
-            <div className="bg-card p-5 text-center">
-              <div className="text-2xl font-semibold tabular-nums">
+            <div className="bg-card px-3 py-4 text-center">
+              <div className="text-xl font-semibold tabular-nums">
                 {data.stats.totalCheckins}
               </div>
               <div className="text-xs font-medium text-muted-foreground mt-1">
                 累计签到
               </div>
             </div>
-            <div className="bg-card p-5 text-center">
-              <div className="text-2xl font-semibold tabular-nums text-primary">
+            <div className="bg-card px-3 py-4 text-center">
+              <div className="text-xl font-semibold tabular-nums text-primary">
                 {data.stats.streak}
               </div>
               <div className="text-xs font-medium text-muted-foreground mt-1">
                 连续签到
               </div>
             </div>
-            <div className="bg-card p-5 text-center">
-              <div className="text-2xl font-semibold tabular-nums">
+            <div className="bg-card px-3 py-4 text-center">
+              <div className="text-xl font-semibold tabular-nums">
                 {formatCredits(monthlyQuota)}
               </div>
               <div className="text-xs font-medium text-muted-foreground mt-1">
                 本月获得
               </div>
             </div>
-            <div className="bg-card p-5 text-center">
-              <div className="text-2xl font-semibold tabular-nums">
+            <div className="bg-card px-3 py-4 text-center">
+              <div className="text-xl font-semibold tabular-nums">
                 {formatCredits(data.stats.totalQuota)}
               </div>
               <div className="text-xs font-medium text-muted-foreground mt-1">
@@ -300,93 +277,75 @@ export function CheckinCalendarCard() {
           </div>
 
           {/* Calendar */}
-          <CardContent className="p-6 space-y-4">
-            {/* Month navigation */}
+          <CardContent className="space-y-3 p-4 sm:p-5">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold">{currentMonthStr}</h4>
               <div className="flex items-center gap-1">
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handlePrevMonth}>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handlePrevMonth}>
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleNextMonth}>
+                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleNextMonth}>
                   <ChevronRight className="h-4 w-4" />
                 </Button>
               </div>
             </div>
 
-            {/* Calendar grid */}
             <TooltipProvider delayDuration={100}>
-              <div className="grid grid-cols-7 gap-1">
-                {/* Week day headers */}
-                {weekDays.map((day) => (
-                  <div
-                    key={day}
-                    className="flex h-8 items-center justify-center text-xs font-medium text-muted-foreground"
-                  >
-                    {day}
-                  </div>
-                ))}
-
-                {/* Calendar days */}
-                {calendarDays.map((dayObj, idx) => {
-                  const dateStr = `${dayObj.date.getFullYear()}-${String(
-                    dayObj.date.getMonth() + 1
-                  ).padStart(2, "0")}-${String(dayObj.date.getDate()).padStart(2, "0")}`;
+              <div className="flex flex-wrap gap-1.5">
+                {monthDays.map(({ day, dateStr }) => {
                   const isToday = dateStr === todayString;
                   const quotaAwarded = checkinRecordsMap[dateStr];
                   const isCheckedIn = quotaAwarded !== undefined;
-                  const dayNum = dayObj.date.getDate();
 
-                  const dayButton = (
-                    <button
-                      key={idx}
-                      disabled={!dayObj.isCurrentMonth}
+                  const chip = (
+                    <span
                       className={cn(
-                        "relative flex h-10 w-full flex-col items-center justify-center rounded-lg text-sm font-medium transition-colors",
-                        !dayObj.isCurrentMonth && "text-muted-foreground/40 cursor-default",
-                        isToday && isCheckedIn && "bg-primary text-primary-foreground hover:bg-primary/90",
-                        isToday && !isCheckedIn && "ring-2 ring-primary ring-inset",
-                        !isToday && dayObj.isCurrentMonth && "hover:bg-card",
-                        !isToday && isCheckedIn && "font-semibold"
+                        "flex h-7 w-7 items-center justify-center rounded-md text-[11px] font-medium tabular-nums",
+                        !isCheckedIn && "bg-secondary/70 text-muted-foreground",
+                        isCheckedIn && !isToday && "bg-primary/15 font-semibold text-primary",
+                        isCheckedIn && isToday && "bg-primary text-primary-foreground",
+                        isToday && !isCheckedIn && "bg-secondary/70 text-foreground ring-2 ring-primary ring-inset"
                       )}
                     >
-                      <span className="tabular-nums">{dayNum}</span>
-                      {isCheckedIn && !isToday && (
-                        <span className="absolute bottom-1 h-1 w-1 rounded-full bg-emerald-500" />
-                      )}
-                      {isToday && isCheckedIn && (
-                        <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-primary" />
-                      )}
-                    </button>
+                      {day}
+                    </span>
                   );
 
-                  // Add tooltip for checked-in days
-                  if (isCheckedIn && dayObj.isCurrentMonth) {
-                    return (
-                      <Tooltip key={idx}>
-                        <TooltipTrigger asChild>
-                          {dayButton}
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <div className="text-xs">
-                            <div className="font-medium">已签到</div>
-                            <div className="text-muted-foreground mt-0.5">
-                              +{formatCredits(quotaAwarded)}
-                            </div>
-                          </div>
-                        </TooltipContent>
-                      </Tooltip>
-                    );
+                  if (!isCheckedIn) {
+                    return <span key={dateStr}>{chip}</span>;
                   }
 
-                  return dayButton;
+                  return (
+                    <Tooltip key={dateStr}>
+                      <TooltipTrigger asChild>{chip}</TooltipTrigger>
+                      <TooltipContent>
+                        <div className="text-xs">
+                          <div className="font-medium">{day} 日已签到</div>
+                          <div className="mt-0.5 text-muted-foreground">
+                            +{formatCredits(quotaAwarded)}
+                          </div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  );
                 })}
               </div>
             </TooltipProvider>
 
-            {/* Footer hint */}
-            <div className="border-t pt-4 text-center text-xs text-muted-foreground">
-              每天只能签到一次
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span>
+                本月已签到 {data.stats.checkinCount} / {monthDays.length} 天，每天只能签到一次
+              </span>
+              <span className="flex items-center gap-3">
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded bg-primary/15 ring-1 ring-primary/40" />
+                  已签到
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="h-2.5 w-2.5 rounded bg-primary" />
+                  今天
+                </span>
+              </span>
             </div>
 
             <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
@@ -401,7 +360,6 @@ export function CheckinCalendarCard() {
                   </li>
                 )}
                 <li>奖励将直接充值到账户余额</li>
-                <li>已签到日期显示绿点标记</li>
               </ul>
             </div>
           </CardContent>

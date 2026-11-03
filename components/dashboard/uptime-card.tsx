@@ -103,7 +103,7 @@ export function UptimeCard({
                 className="flex items-center gap-2 text-sm"
               >
                 <span className={`h-2 w-2 shrink-0 rounded-full ${DOT_CLASS[m.status]}`} />
-                <span className="min-w-0 flex-1 truncate text-foreground" title={STATUS_LABEL[m.status]}>
+                <span className="min-w-0 flex-1 text-foreground" title={STATUS_LABEL[m.status]}>
                   {m.name}
                 </span>
                 <span className="shrink-0 text-xs text-muted-foreground">{m.uptime}</span>

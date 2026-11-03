@@ -43,7 +43,7 @@ export function FaqCard({
                     aria-expanded={open}
                     className="flex w-full items-center gap-2 text-left"
                   >
-                    <span className="min-w-0 flex-1 truncate text-sm text-foreground">
+                    <span className="min-w-0 flex-1 text-sm leading-snug text-foreground">
                       {item.question}
                     </span>
                     <ChevronDown

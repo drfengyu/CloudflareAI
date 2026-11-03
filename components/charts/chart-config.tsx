@@ -32,9 +32,18 @@ export const chartConfig = {
 } as const
 
 // Empty state component
-export function ChartEmpty({ message = "暂无数据" }: { message?: string }) {
+export function ChartEmpty({
+  message = "暂无数据",
+  height = 250,
+}: {
+  message?: string;
+  height?: number;
+}) {
   return (
-    <div className="flex h-[250px] items-center justify-center text-sm text-muted-foreground">
+    <div
+      className="flex items-center justify-center text-sm text-muted-foreground"
+      style={{ height }}
+    >
       {message}
     </div>
   )
