@@ -1,1 +1,144 @@
-aW1wb3J0IHsgUGFnZUhlYWRlciB9IGZyb20gIkAvY29tcG9uZW50cy9kYXNoYm9hcmQvcGFnZS1oZWFkZXIiOwppbXBvcnQgeyBDYXJkLCBDYXJkQ29udGVudCB9IGZyb20gIkAvY29tcG9uZW50cy91aS9jYXJkIjsKaW1wb3J0IHsgQmFkZ2UgfSBmcm9tICJAL2NvbXBvbmVudHMvdWkvYmFkZ2UiOwppbXBvcnQgeyBQYWdpbmF0aW9uIH0gZnJvbSAiQC9jb21wb25lbnRzL2Rhc2hib2FyZC9wYWdpbmF0aW9uIjsKaW1wb3J0IHsgcmVxdWlyZVVzZXIgfSBmcm9tICJAL2xpYi91c2FnZS9tZXRlciI7CmltcG9ydCB7IHF1ZXJ5VXNhZ2UgfSBmcm9tICJAL2xpYi91c2FnZS9xdWVyaWVzIjsKaW1wb3J0IHsgZm9ybWF0Q25EYXRlVGltZSB9IGZyb20gIkAvbGliL2RhdGUiOwoKaW1wb3J0IHsgUGFnZUJvZHkgfSBmcm9tICJAL2NvbXBvbmVudHMvZGFzaGJvYXJkL3NlY3Rpb24iOwoKZXhwb3J0IGNvbnN0IGR5bmFtaWMgPSAiZm9yY2UtZHluYW1pYyI7Cgpjb25zdCBQQUdFX1NJWkUgPSAxMDsKCmV4cG9ydCBkZWZhdWx0IGFzeW5jIGZ1bmN0aW9uIEhpc3RvcnlQYWdlKHsKICBzZWFyY2hQYXJhbXMsCn06IHsKICBzZWFyY2hQYXJhbXM6IFByb21pc2U8eyBwYWdlPzogc3RyaW5nOyBtb2RlbD86IHN0cmluZzsgdGFzaz86IHN0cmluZyB9PjsKfSkgewogIGNvbnN0IHVzZXJJZCA9IGF3YWl0IHJlcXVpcmVVc2VyKCk7CiAgY29uc3QgcGFyYW1zID0gYXdhaXQgc2VhcmNoUGFyYW1zOwogIGNvbnN0IHBhZ2UgPSBNYXRoLm1heCgxLCBwYXJzZUludChwYXJhbXMucGFnZSB8fCAiMSIsIDEwKSB8fCAxKTsKICBjb25zdCB7IGxvZ3MsIHRvdGFsIH0gPSBhd2FpdCBxdWVyeVVzYWdlKHsKICAgIHVzZXJJZCwKICAgIHBhZ2UsCiAgICBwYWdlU2l6ZTogUEFHRV9TSVpFLAogICAgbW9kZWw6IHBhcmFtcy5tb2RlbCwKICAgIHRhc2s6IHBhcmFtcy50YXNrLAogIH0pOwoKICBjb25zdCB0b3RhbFBhZ2VzID0gTWF0aC5jZWlsKHRvdGFsIC8gUEFHRV9TSVpFKTsKCiAgcmV0dXJuICgKICAgIDw+CiAgICAgIDxQYWdlSGVhZGVyCiAgICAgICAgdGl0bGU9IuS9v+eUqOWOhuWPsiIKICAgICAgICBkZXNjcmlwdGlvbj0i5p+l55yL5omA5pyJIEFJIOiwg+eUqOiusOW9le+8iOWIhumhte+8jOWPr+etm+mAie+8iSIKICAgICAgLz4KICAgICAgPFBhZ2VCb2R5IGNsYXNzTmFtZT0ic3BhY2UteS00Ij4KICAgICAgICA8Q2FyZD4KICAgICAgICAgIDxDYXJkQ29udGVudCBjbGFzc05hbWU9InB0LTUiPgogICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0ibWItNCBmbGV4IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWJldHdlZW4iPgogICAgICAgICAgICAgIDxwIGNsYXNzTmFtZT0idGV4dC1zbSB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICAgICAgICAgICAg5YWxIHt0b3RhbH0g5p2h6K6w5b2V77yM5b2T5YmN56ysIHtwYWdlfS97dG90YWxQYWdlcyB8fCAxfSDpobUKICAgICAgICAgICAgICA8L3A+CiAgICAgICAgICAgICAgeyhwYXJhbXMubW9kZWwgfHwgcGFyYW1zLnRhc2spICYmICgKICAgICAgICAgICAgICAgIDxhCiAgICAgICAgICAgICAgICAgIGhyZWY9Ii9oaXN0b3J5IgogICAgICAgICAgICAgICAgICBjbGFzc05hbWU9InRleHQteHMgdGV4dC1wcmltYXJ5IGhvdmVyOnVuZGVybGluZSIKICAgICAgICAgICAgICAgID4KICAgICAgICAgICAgICAgICAg5riF6Zmk562b6YCJCiAgICAgICAgICAgICAgICA8L2E+CiAgICAgICAgICAgICAgKX0KICAgICAgICAgICAgPC9kaXY+CgogICAgICAgICAgICB7bG9ncy5sZW5ndGggPT09IDAgPyAoCiAgICAgICAgICAgICAgPHAgY2xhc3NOYW1lPSJ0ZXh0LWNlbnRlciB0ZXh0LXNtIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+5peg6LCD55So6K6w5b2VPC9wPgogICAgICAgICAgICApIDogKAogICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJzcGFjZS15LTIiPgogICAgICAgICAgICAgICAge2xvZ3MubWFwKChsb2cpID0+IHsKICAgICAgICAgICAgICAgICAgY29uc3QgY2hhbm5lbExhYmVsID0KICAgICAgICAgICAgICAgICAgICBsb2cuY2hhbm5lbCA9PT0gIndlYiIgPyAi56uZ5YaFIiA6CiAgICAgICAgICAgICAgICAgICAgbG9nLmNoYW5uZWwgPT09ICJvcGVuYWkiID8gIk9wZW5BSSIgOgogICAgICAgICAgICAgICAgICAgIGxvZy5jaGFubmVsID09PSAiYW50aHJvcGljIiA/ICJBbnRocm9waWMiIDoKICAgICAgICAgICAgICAgICAgICBsb2cuY2hhbm5lbDsKCiAgICAgICAgICAgICAgICAgIHJldHVybiAoCiAgICAgICAgICAgICAgICAgICAgPGRpdgogICAgICAgICAgICAgICAgICAgICAga2V5PXtsb2cuaWR9CiAgICAgICAgICAgICAgICAgICAgICBjbGFzc05hbWU9ImdyaWQgZ3JpZC1jb2xzLVthdXRvXzFmcl9hdXRvXSBpdGVtcy1jZW50ZXIgZ2FwLXgtNCBnYXAteS0yIHJvdW5kZWQtbGcgYm9yZGVyIGJvcmRlci1ib3JkZXIgYmctY2FyZCBwLTMgdGV4dC14cyIKICAgICAgICAgICAgICAgICAgICA+CiAgICAgICAgICAgICAgICAgICAgICB7Lyog5bem5L6n77ya54q25oCBICsg5L+h5oGvICovfQogICAgICAgICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9ImZsZXggaXRlbXMtY2VudGVyIGdhcC0yIG1pbi13LTAiPgogICAgICAgICAgICAgICAgICAgICAgICA8QmFkZ2UgdG9uZT17bG9nLnN0YXR1cyA9PT0gIm9rIiA/ICJzdWNjZXNzIiA6ICJkYW5nZXIifT4KICAgICAgICAgICAgICAgICAgICAgICAgICB7bG9nLnN0YXR1c30KICAgICAgICAgICAgICAgICAgICAgICAgPC9CYWRnZT4KICAgICAgICAgICAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPSJ0ZXh0LW11dGVkLWZvcmVncm91bmQgd2hpdGVzcGFjZS1ub3dyYXAiPntsb2cudGFzayB8fCAi5pyq55+lIn08L3NwYW4+CiAgICAgICAgICAgICAgICAgICAgICA8L2Rpdj4KCiAgICAgICAgICAgICAgICAgICAgICB7Lyog5Lit6Ze077ya5qih5Z6LICsg5rig6YGTICsgS2V5ICovfQogICAgICAgICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9ImZsZXggZmxleC13cmFwIGl0ZW1zLWNlbnRlciBnYXAtMiBtaW4tdy0wIj4KICAgICAgICAgICAgICAgICAgICAgICAgPGEKICAgICAgICAgICAgICAgICAgICAgICAgICBocmVmPXtgL2hpc3Rvcnk/bW9kZWw9JHtlbmNvZGVVUklDb21wb25lbnQobG9nLm1vZGVsKX1gfQogICAgICAgICAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT0iYnJlYWstYWxsIGZvbnQtbW9ubyB0ZXh0LVsxMXB4XSB0ZXh0LXByaW1hcnkgaG92ZXI6dW5kZXJsaW5lIgogICAgICAgICAgICAgICAgICAgICAgICAgIHRpdGxlPXtsb2cubW9kZWx9CiAgICAgICAgICAgICAgICAgICAgICAgID4KICAgICAgICAgICAgICAgICAgICAgICAgICB7bG9nLm1vZGVsfQogICAgICAgICAgICAgICAgICAgICAgICA8L2E+CiAgICAgICAgICAgICAgICAgICAgICAgIDxCYWRnZSB0b25lPSJtdXRlZCI+e2NoYW5uZWxMYWJlbH08L0JhZGdlPgogICAgICAgICAgICAgICAgICAgICAgICB7bG9nLmFwaUtleU5hbWUgPyAoCiAgICAgICAgICAgICAgICAgICAgICAgICAgPEJhZGdlIHRvbmU9Im11dGVkIj7wn5SRIHtsb2cuYXBpS2V5TmFtZX08L0JhZGdlPgogICAgICAgICAgICAgICAgICAgICAgICApIDogbG9nLmNoYW5uZWwgPT09ICJ3ZWIiID8gKAogICAgICAgICAgICAgICAgICAgICAgICAgIDxCYWRnZSB0b25lPSJtdXRlZCI+5Y6G5Y+y5pWw5o2uPC9CYWRnZT4KICAgICAgICAgICAgICAgICAgICAgICAgKSA6IG51bGx9CiAgICAgICAgICAgICAgICAgICAgICAgIHtsb2cuc3RhdHVzID09PSAiZXJyb3IiICYmIGxvZy5lcnJvclJlYXNvbiAmJiAoCiAgICAgICAgICAgICAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPSJtYXgtdy1mdWxsIGJyZWFrLWFsbCB0ZXh0LXhzIHRleHQtZGVzdHJ1Y3RpdmUiIHRpdGxlPXtsb2cuZXJyb3JSZWFzb259PgogICAgICAgICAgICAgICAgICAgICAgICAgICAg4pqg77iPIHtsb2cuZXJyb3JSZWFzb259CiAgICAgICAgICAgICAgICAgICAgICAgICAgPC9zcGFuPgogICAgICAgICAgICAgICAgICAgICAgICApfQogICAgICAgICAgICAgICAgICAgICAgPC9kaXY+CgogICAgICAgICAgICAgICAgICAgICAgey8qIOWPs+S+p++8muaMh+aghyAqL30KICAgICAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJmbGV4IGl0ZW1zLWNlbnRlciBnYXAtMyB0ZXh0LW11dGVkLWZvcmVncm91bmQgd2hpdGVzcGFjZS1ub3dyYXAiPgogICAgICAgICAgICAgICAgICAgICAgICB7LyogVG9rZW4g5pWw6YePICovfQogICAgICAgICAgICAgICAgICAgICAgICB7bG9nLmlucHV0VG9rZW5zIHx8IGxvZy5vdXRwdXRUb2tlbnMgPyAoCiAgICAgICAgICAgICAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPSJ3LVsxMDBweF0gdGV4dC1yaWdodCB0ZXh0LVsxMXB4XSIgdGl0bGU9Iui+k+WFpSAvIOi+k+WHuiB0b2tlbnMiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAge2xvZy5pbnB1dFRva2Vucz8udG9Mb2NhbGVTdHJpbmcoKSB8fCAwfSAvIHtsb2cub3V0cHV0VG9rZW5zPy50b0xvY2FsZVN0cmluZygpIHx8IDB9CiAgICAgICAgICAgICAgICAgICAgICAgICAgPC9zcGFuPgogICAgICAgICAgICAgICAgICAgICAgICApIDogKAogICAgICAgICAgICAgICAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT0idy1bMTAwcHhdIHRleHQtcmlnaHQiPuKAlDwvc3Bhbj4KICAgICAgICAgICAgICAgICAgICAgICAgKX0KICAgICAgICAgICAgICAgICAgICAgICAge2xvZy5jcmVkaXRzVXNlZCA/ICgKICAgICAgICAgICAgICAgICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9ImZvbnQtbWVkaXVtIHctWzgwcHhdIHRleHQtcmlnaHQiPntsb2cuY3JlZGl0c1VzZWQudG9Mb2NhbGVTdHJpbmcoKX0gY3I8L3NwYW4+CiAgICAgICAgICAgICAgICAgICAgICAgICkgOiAoCiAgICAgICAgICAgICAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPSJ3LVs4MHB4XSB0ZXh0LXJpZ2h0Ij7igJQ8L3NwYW4+CiAgICAgICAgICAgICAgICAgICAgICAgICl9CiAgICAgICAgICAgICAgICAgICAgICAgIHtsb2cubGF0ZW5jeU1zID8gKAogICAgICAgICAgICAgICAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT0idy1bNTBweF0gdGV4dC1yaWdodCI+eyhsb2cubGF0ZW5jeU1zIC8gMTAwMCkudG9GaXhlZCgyKX1zPC9zcGFuPgogICAgICAgICAgICAgICAgICAgICAgICApIDogKAogICAgICAgICAgICAgICAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT0idy1bNTBweF0gdGV4dC1yaWdodCI+4oCUPC9zcGFuPgogICAgICAgICAgICAgICAgICAgICAgICApfQogICAgICAgICAgICAgICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9InctWzEyMHB4XSB0ZXh0LXJpZ2h0Ij4KICAgICAgICAgICAgICAgICAgICAgICAgICB7Zm9ybWF0Q25EYXRlVGltZShsb2cuY3JlYXRlZEF0ISl9CiAgICAgICAgICAgICAgICAgICAgICAgIDwvc3Bhbj4KICAgICAgICAgICAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICAgICAgICApOwogICAgICAgICAgICAgICAgfSl9CiAgICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgICl9CgogICAgICAgICAgICB7Lyog5YiG6aG1ICovfQogICAgICAgICAgICA8UGFnaW5hdGlvbgogICAgICAgICAgICAgIHBhZ2U9e3BhZ2V9CiAgICAgICAgICAgICAgdG90YWxQYWdlcz17dG90YWxQYWdlc30KICAgICAgICAgICAgICBiYXNlUGF0aD0iL2hpc3RvcnkiCiAgICAgICAgICAgICAgcGFyYW1zPXt7IG1vZGVsOiBwYXJhbXMubW9kZWwsIHRhc2s6IHBhcmFtcy50YXNrIH19CiAgICAgICAgICAgIC8+CiAgICAgICAgICA8L0NhcmRDb250ZW50PgogICAgICAgIDwvQ2FyZD4KICAgICAgPC9QYWdlQm9keT4KICAgIDwvPgogICk7Cn0K
+import { PageHeader } from "@/components/dashboard/page-header";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/dashboard/pagination";
+import { requireUser } from "@/lib/usage/meter";
+import { queryUsage } from "@/lib/usage/queries";
+import { formatCnDateTime } from "@/lib/date";
+
+import { PageBody } from "@/components/dashboard/section";
+
+export const dynamic = "force-dynamic";
+
+const PAGE_SIZE = 10;
+
+export default async function HistoryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string; model?: string; task?: string }>;
+}) {
+  const userId = await requireUser();
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page || "1", 10) || 1);
+  const { logs, total } = await queryUsage({
+    userId,
+    page,
+    pageSize: PAGE_SIZE,
+    model: params.model,
+    task: params.task,
+  });
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  return (
+    <>
+      <PageHeader
+        title="使用历史"
+        description="查看所有 AI 调用记录（分页，可筛选）"
+      />
+      <PageBody className="space-y-4">
+        <Card>
+          <CardContent className="pt-5">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                共 {total} 条记录，当前第 {page}/{totalPages || 1} 页
+              </p>
+              {(params.model || params.task) && (
+                <a
+                  href="/history"
+                  className="text-xs text-primary hover:underline"
+                >
+                  清除筛选
+                </a>
+              )}
+            </div>
+
+            {logs.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground">无调用记录</p>
+            ) : (
+              <div className="space-y-2">
+                {logs.map((log) => {
+                  const channelLabel =
+                    log.channel === "web" ? "站内" :
+                    log.channel === "openai" ? "OpenAI" :
+                    log.channel === "anthropic" ? "Anthropic" :
+                    log.channel;
+
+                  return (
+                    <div
+                      key={log.id}
+                      className="grid grid-cols-[auto_1fr_auto] items-center gap-x-4 gap-y-2 rounded-lg border border-border bg-card p-3 text-xs"
+                    >
+                      {/* 左侧：状态 + 信息 */}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Badge tone={log.status === "ok" ? "success" : "danger"}>
+                          {log.status}
+                        </Badge>
+                        <span className="text-muted-foreground whitespace-nowrap">{log.task || "未知"}</span>
+                      </div>
+
+                      {/* 中间：模型 + 渠道 + Key */}
+                      <div className="flex flex-wrap items-center gap-2 min-w-0">
+                        <a
+                          href={`/history?model=${encodeURIComponent(log.model)}`}
+                          className="break-all font-mono text-[11px] text-primary hover:underline"
+                          title={log.model}
+                        >
+                          {log.model}
+                        </a>
+                        <Badge tone="muted">{channelLabel}</Badge>
+                        {log.apiKeyName ? (
+                          <Badge tone="muted">🔑 {log.apiKeyName}</Badge>
+                        ) : log.channel === "web" ? (
+                          <Badge tone="muted">历史数据</Badge>
+                        ) : null}
+                        {log.status === "error" && log.errorReason && (
+                          <span className="max-w-full break-all text-xs text-destructive" title={log.errorReason}>
+                            ⚠️ {log.errorReason}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* 右侧：指标 */}
+                      <div className="flex items-center gap-3 text-muted-foreground whitespace-nowrap">
+                        {/* Token 数量 */}
+                        {log.inputTokens || log.outputTokens ? (
+                          <span className="w-[100px] text-right text-[11px]" title="输入 / 输出 tokens">
+                            {log.inputTokens?.toLocaleString() || 0} / {log.outputTokens?.toLocaleString() || 0}
+                          </span>
+                        ) : (
+                          <span className="w-[100px] text-right">—</span>
+                        )}
+                        {log.creditsUsed ? (
+                          <span className="font-medium w-[80px] text-right">{log.creditsUsed.toLocaleString()} cr</span>
+                        ) : (
+                          <span className="w-[80px] text-right">—</span>
+                        )}
+                        {log.latencyMs ? (
+                          <span className="w-[50px] text-right">{(log.latencyMs / 1000).toFixed(2)}s</span>
+                        ) : (
+                          <span className="w-[50px] text-right">—</span>
+                        )}
+                        <span className="w-[120px] text-right">
+                          {formatCnDateTime(log.createdAt!)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 分页 */}
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              basePath="/history"
+              params={{ model: params.model, task: params.task }}
+            />
+          </CardContent>
+        </Card>
+      </PageBody>
+    </>
+  );
+}

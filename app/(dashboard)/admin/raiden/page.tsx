@@ -1,1 +1,360 @@
-aW1wb3J0IHsgUGFnZUhlYWRlciB9IGZyb20gIkAvY29tcG9uZW50cy9kYXNoYm9hcmQvcGFnZS1oZWFkZXIiOwppbXBvcnQgeyBDYXJkLCBDYXJkQ29udGVudCwgQ2FyZEhlYWRlciwgQ2FyZFRpdGxlIH0gZnJvbSAiQC9jb21wb25lbnRzL3VpL2NhcmQiOwppbXBvcnQgeyBCYWRnZSB9IGZyb20gIkAvY29tcG9uZW50cy91aS9iYWRnZSI7CmltcG9ydCB7IGRiIH0gZnJvbSAiQC9saWIvZGIvZDEtaHR0cCI7CmltcG9ydCB7IHVzZXJzIH0gZnJvbSAiQC9saWIvZGIvc2NoZW1hIjsKaW1wb3J0IHsgZXEgfSBmcm9tICJkcml6emxlLW9ybSI7CmltcG9ydCB7IHJlcXVpcmVVc2VyIH0gZnJvbSAiQC9saWIvdXNhZ2UvbWV0ZXIiOwppbXBvcnQgeyByZWRpcmVjdCB9IGZyb20gIm5leHQvbmF2aWdhdGlvbiI7CmltcG9ydCB7IGZvcm1hdENyZWRpdHMgfSBmcm9tICJAL2xpYi9iaWxsaW5nL2NyZWRpdHMiOwppbXBvcnQgewogIGNuTGFzdE5EYXlzU3RhcnQsCiAgY25TdGFydE9mVG9kYXksCiAgY25TdGFydE9mVG9tb3Jyb3csCiAgZm9ybWF0Q25XYWxsQ2xvY2ssCn0gZnJvbSAiQC9saWIvZGF0ZSI7CmltcG9ydCB7CiAgUkFJREVOX1NUQUdFUywKICByYWlkZW5BY3Rpdml0eUtleSwKICByYWlkZW5BY3Rpdml0eVdpbmRvdywKfSBmcm9tICJAL2xpYi9yYWlkZW4vY29uZmlnIjsKaW1wb3J0IHsgZ2V0UmFpZGVuQ29uZmlnIH0gZnJvbSAiQC9saWIvcmFpZGVuL3NldHRpbmdzIjsKaW1wb3J0IHsKICBnZXRBZG1pblJhaWRlblJlcG9ydCwKICBsaXN0UmFpZGVuTGVhZGVyYm9hcmQsCiAgcnVuU3RhdHVzTGFiZWwsCn0gZnJvbSAiQC9saWIvcmFpZGVuL3JlY29yZHMiOwppbXBvcnQgeyBjbiB9IGZyb20gIkAvbGliL3V0aWxzIjsKCmltcG9ydCB7IFBhZ2VCb2R5IH0gZnJvbSAiQC9jb21wb25lbnRzL2Rhc2hib2FyZC9zZWN0aW9uIjsKCmV4cG9ydCBjb25zdCBkeW5hbWljID0gImZvcmNlLWR5bmFtaWMiOwoKY29uc3QgUkFOR0VfVEFCUzogeyB2YWx1ZTogc3RyaW5nOyBsYWJlbDogc3RyaW5nIH1bXSA9IFsKICB7IHZhbHVlOiAidG9kYXkiLCBsYWJlbDogIuS7iuaXpSIgfSwKICB7IHZhbHVlOiAiN2QiLCBsYWJlbDogIui/kSA3IOaXpSIgfSwKICB7IHZhbHVlOiAiMzBkIiwgbGFiZWw6ICLov5EgMzAg5pelIiB9LAogIHsgdmFsdWU6ICJhbGwiLCBsYWJlbDogIuWFqOmDqCIgfSwKXTsKCi8qKiDml7bpl7TnqpfmjInljJfkuqzml7bpl7TnrpfvvIzkuI7ovaznm5jorrDlvZXpobXkuIDoh7TjgIIgKi8KZnVuY3Rpb24gcmVzb2x2ZVdpbmRvdyhyYW5nZTogc3RyaW5nKTogeyBzdGFydDogRGF0ZTsgZW5kOiBEYXRlIH0gewogIGNvbnN0IGVuZCA9IGNuU3RhcnRPZlRvbW9ycm93KCk7CiAgaWYgKHJhbmdlID09PSAidG9kYXkiKSByZXR1cm4geyBzdGFydDogY25TdGFydE9mVG9kYXkoKSwgZW5kIH07CiAgaWYgKHJhbmdlID09PSAiN2QiKSByZXR1cm4geyBzdGFydDogY25MYXN0TkRheXNTdGFydCg3KSwgZW5kIH07CiAgaWYgKHJhbmdlID09PSAiMzBkIikgcmV0dXJuIHsgc3RhcnQ6IGNuTGFzdE5EYXlzU3RhcnQoMzApLCBlbmQgfTsKICByZXR1cm4geyBzdGFydDogbmV3IERhdGUoMCksIGVuZCB9Owp9Cgpjb25zdCBTVEFUVVNfVE9ORTogUmVjb3JkPHN0cmluZywgInN1Y2Nlc3MiIHwgImRhbmdlciIgfCAibXV0ZWQiIHwgImluZm8iPiA9IHsKICBjbGVhcmVkOiAic3VjY2VzcyIsCiAgZmFpbGVkOiAiZGFuZ2VyIiwKICBhYmFuZG9uZWQ6ICJtdXRlZCIsCiAgYWN0aXZlOiAiaW5mbyIsCn07CgpmdW5jdGlvbiBNZXRyaWMoewogIGxhYmVsLAogIHZhbHVlLAogIGhpbnQsCiAgdG9uZSwKfTogewogIGxhYmVsOiBzdHJpbmc7CiAgdmFsdWU6IHN0cmluZzsKICBoaW50Pzogc3RyaW5nOwogIHRvbmU/OiAicG9zaXRpdmUiIHwgIm5lZ2F0aXZlIjsKfSkgewogIHJldHVybiAoCiAgICA8ZGl2IGNsYXNzTmFtZT0icm91bmRlZC1sZyBib3JkZXIgYm9yZGVyLWJvcmRlciBweC0zIHB5LTIuNSI+CiAgICAgIDxwIGNsYXNzTmFtZT0idGV4dC14cyB0ZXh0LW11dGVkLWZvcmVncm91bmQiPntsYWJlbH08L3A+CiAgICAgIDxwCiAgICAgICAgY2xhc3NOYW1lPXtjbigKICAgICAgICAgICJtdC0xIHRleHQtbGcgZm9udC1zZW1pYm9sZCB0YWJ1bGFyLW51bXMiLAogICAgICAgICAgdG9uZSA9PT0gInBvc2l0aXZlIiAmJiAidGV4dC1bY29sb3I6dmFyKC0tcHJpbWFyeSldIiwKICAgICAgICAgIHRvbmUgPT09ICJuZWdhdGl2ZSIgJiYgInRleHQtW2NvbG9yOnZhcigtLWRlc3RydWN0aXZlKV0iLAogICAgICAgICl9CiAgICAgID4KICAgICAgICB7dmFsdWV9CiAgICAgIDwvcD4KICAgICAge2hpbnQgJiYgPHAgY2xhc3NOYW1lPSJtdC0wLjUgdGV4dC1bMTFweF0gdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj57aGludH08L3A+fQogICAgPC9kaXY+CiAgKTsKfQoKZXhwb3J0IGRlZmF1bHQgYXN5bmMgZnVuY3Rpb24gQWRtaW5SYWlkZW5QYWdlKHsKICBzZWFyY2hQYXJhbXMsCn06IHsKICBzZWFyY2hQYXJhbXM6IFByb21pc2U8eyByYW5nZT86IHN0cmluZyB9PjsKfSkgewogIGNvbnN0IGN1cnJlbnRVc2VySWQgPSBhd2FpdCByZXF1aXJlVXNlcigpOwogIGNvbnN0IHBhcmFtcyA9IGF3YWl0IHNlYXJjaFBhcmFtczsKCiAgY29uc3QgY3VycmVudFVzZXIgPSBhd2FpdCBkYgogICAgLnNlbGVjdCgpCiAgICAuZnJvbSh1c2VycykKICAgIC53aGVyZShlcSh1c2Vycy5pZCwgY3VycmVudFVzZXJJZCkpCiAgICAubGltaXQoMSk7CgogIGlmICghY3VycmVudFVzZXJbMF0gfHwgY3VycmVudFVzZXJbMF0ucm9sZSA8IDEwKSB7CiAgICByZWRpcmVjdCgiL2Rhc2hib2FyZCIpOwogIH0KCiAgY29uc3QgcmF3UmFuZ2UgPSBwYXJhbXMucmFuZ2UgPz8gImFsbCI7CiAgY29uc3QgcmFuZ2UgPSBSQU5HRV9UQUJTLnNvbWUoKHQpID0+IHQudmFsdWUgPT09IHJhd1JhbmdlKSA/IHJhd1JhbmdlIDogImFsbCI7CiAgY29uc3Qgd2luID0gcmVzb2x2ZVdpbmRvdyhyYW5nZSk7CgogIGNvbnN0IGNvbmZpZyA9IGF3YWl0IGdldFJhaWRlbkNvbmZpZygpOwogIGNvbnN0IGFjdGl2aXR5ID0gcmFpZGVuQWN0aXZpdHlXaW5kb3coY29uZmlnKTsKICBjb25zdCBhY3Rpdml0eUtleSA9IHJhaWRlbkFjdGl2aXR5S2V5KGNvbmZpZyk7CgogIGNvbnN0IFtyZXBvcnQsIGxlYWRlcmJvYXJkXSA9IGFjdGl2aXR5S2V5CiAgICA/IGF3YWl0IFByb21pc2UuYWxsKFsKICAgICAgICBnZXRBZG1pblJhaWRlblJlcG9ydChhY3Rpdml0eUtleSwgd2luLnN0YXJ0LCB3aW4uZW5kKSwKICAgICAgICBsaXN0UmFpZGVuTGVhZGVyYm9hcmQoYWN0aXZpdHlLZXksIGN1cnJlbnRVc2VySWQsIDEwKSwKICAgICAgXSkKICAgIDogW251bGwsIFtdXTsKCiAgY29uc3QgbmV0ID0gcmVwb3J0ID8gTnVtYmVyKChyZXBvcnQuc3BlbnRDcmVkaXRzIC0gcmVwb3J0LnJld2FyZHNQYWlkKS50b0ZpeGVkKDIpKSA6IDA7CgogIHJldHVybiAoCiAgICA8PgogICAgICA8UGFnZUhlYWRlcgogICAgICAgIHRpdGxlPSLpm7fnlLXorrDlvZUiCiAgICAgICAgZGVzY3JpcHRpb249IumZkOaXtua0u+WKqCDCtyDnurXniYjlsITlh7vnmoToo4XlpIfmtojogJfkuI7pgJrlhbPlpZblirEiCiAgICAgIC8+CgogICAgICA8UGFnZUJvZHkgY2xhc3NOYW1lPSJzcGFjZS15LTYiPgogICAgICAgIDxDYXJkPgogICAgICAgICAgPENhcmRIZWFkZXIgY2xhc3NOYW1lPSJmbGV4LXJvdyBpdGVtcy1jZW50ZXIganVzdGlmeS1iZXR3ZWVuIHNwYWNlLXktMCI+CiAgICAgICAgICAgIDxDYXJkVGl0bGUgY2xhc3NOYW1lPSJ0ZXh0LWJhc2UiPgogICAgICAgICAgICAgIOaUtuebiuamguiniAogICAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT0ibWwtMiB0ZXh0LXhzIGZvbnQtbm9ybWFsIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICAgICAgICB7YWN0aXZpdHkuc3RhdHVzID09PSAiZGlzYWJsZWQiCiAgICAgICAgICAgICAgICAgID8gIua0u+WKqOW9k+WJjeacquW8gOWQryIKICAgICAgICAgICAgICAgICAgOiBgJHthY3Rpdml0eS5zdGF0dXMgPT09ICJhY3RpdmUiID8gIui/m+ihjOS4rSIgOiBhY3Rpdml0eS5zdGF0dXMgPT09ICJwZW5kaW5nIiA/ICLmnKrlvIDlp4siIDogIuW3sue7k+adnyJ9IMK3ICR7Y29uZmlnLnN0YXJ0QXQgfHwgIuKAlCJ9IH4gJHtjb25maWcuZW5kQXQgfHwgIuKAlCJ9IMK3IOavj+aXpSAke2NvbmZpZy5kYWlseVJ1bnN9IOasoSDCtyDlpI3mtLsgJHtmb3JtYXRDcmVkaXRzKGNvbmZpZy5yZXZpdmVQcmljZUNyZWRpdHMpfSBjci/mrKFgfQogICAgICAgICAgICAgIDwvc3Bhbj4KICAgICAgICAgICAgPC9DYXJkVGl0bGU+CiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJmbGV4IGdhcC0xIHJvdW5kZWQtbGcgYmctbXV0ZWQgcC0xIj4KICAgICAgICAgICAgICB7UkFOR0VfVEFCUy5tYXAoKHRhYikgPT4gKAogICAgICAgICAgICAgICAgPGEKICAgICAgICAgICAgICAgICAga2V5PXt0YWIudmFsdWV9CiAgICAgICAgICAgICAgICAgIGhyZWY9e2AvYWRtaW4vcmFpZGVuJHt0YWIudmFsdWUgPT09ICJhbGwiID8gIiIgOiBgP3JhbmdlPSR7dGFiLnZhbHVlfWB9YH0KICAgICAgICAgICAgICAgICAgY2xhc3NOYW1lPXtjbigKICAgICAgICAgICAgICAgICAgICAicm91bmRlZC1tZCBweC0zIHB5LTEuNSB0ZXh0LXNtIGZvbnQtbWVkaXVtIHRyYW5zaXRpb24tY29sb3JzIiwKICAgICAgICAgICAgICAgICAgICByYW5nZSA9PT0gdGFiLnZhbHVlCiAgICAgICAgICAgICAgICAgICAgICA/ICJiZy1jYXJkIHRleHQtZm9yZWdyb3VuZCBzaGFkb3ctc20iCiAgICAgICAgICAgICAgICAgICAgICA6ICJ0ZXh0LW11dGVkLWZvcmVncm91bmQgaG92ZXI6dGV4dC1mb3JlZ3JvdW5kIiwKICAgICAgICAgICAgICAgICAgKX0KICAgICAgICAgICAgICAgID4KICAgICAgICAgICAgICAgICAge3RhYi5sYWJlbH0KICAgICAgICAgICAgICAgIDwvYT4KICAgICAgICAgICAgICApKX0KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICA8L0NhcmRIZWFkZXI+CiAgICAgICAgICA8Q2FyZENvbnRlbnQgY2xhc3NOYW1lPSJzcGFjZS15LTMiPgogICAgICAgICAgICB7IXJlcG9ydCB8fCAhYWN0aXZpdHlLZXkgPyAoCiAgICAgICAgICAgICAgPHAgY2xhc3NOYW1lPSJ0ZXh0LXNtIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICAgICAgICDmtLvliqjmnKrlvIDlkK/miJbmnKrorr7nva7lvIDlp4vml7bpl7TvvIzmmoLml6DorrDlvZXjgILlvIDlkK/lkI7ov5nph4zkvJrmjInmtLvliqjova7mrKHnu5/orqHlh7rlh7vjgIEKICAgICAgICAgICAgICAgIOijheWkh+a2iOiAl+S4juWlluWKseWPkeaUvuOAggogICAgICAgICAgICAgIDwvcD4KICAgICAgICAgICAgKSA6ICgKICAgICAgICAgICAgICA8PgogICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9ImdyaWQgZ3JpZC1jb2xzLTIgZ2FwLTIgc206Z3JpZC1jb2xzLTMgbGc6Z3JpZC1jb2xzLTYiPgogICAgICAgICAgICAgICAgICA8TWV0cmljCiAgICAgICAgICAgICAgICAgICAgbGFiZWw9IuermeeCueWHgOaUtuebiiIKICAgICAgICAgICAgICAgICAgICB2YWx1ZT17YCR7Zm9ybWF0Q3JlZGl0cyhuZXQpfSBjcmB9CiAgICAgICAgICAgICAgICAgICAgdG9uZT17bmV0ID49IDAgPyAicG9zaXRpdmUiIDogIm5lZ2F0aXZlIn0KICAgICAgICAgICAgICAgICAgICBoaW50PSLoo4XlpIcv5aSN5rS75raI6ICXIOKIkiDpgJrlhbPlpZblirEiCiAgICAgICAgICAgICAgICAgIC8+CiAgICAgICAgICAgICAgICAgIDxNZXRyaWMKICAgICAgICAgICAgICAgICAgICBsYWJlbD0i6KOF5aSH5raI6ICXIgogICAgICAgICAgICAgICAgICAgIHZhbHVlPXtgJHtmb3JtYXRDcmVkaXRzKHJlcG9ydC5zcGVudENyZWRpdHMpfSBjcmB9CiAgICAgICAgICAgICAgICAgICAgaGludD0i6LSt5Lmw6KOF5aSHICsg5LuY6LS55aSN5rS7IgogICAgICAgICAgICAgICAgICAvPgogICAgICAgICAgICAgICAgICA8TWV0cmljCiAgICAgICAgICAgICAgICAgICAgbGFiZWw9IuWlluWKseWPkeaUviIKICAgICAgICAgICAgICAgICAgICB2YWx1ZT17YCR7Zm9ybWF0Q3JlZGl0cyhyZXBvcnQucmV3YXJkc1BhaWQpfSBjcmB9CiAgICAgICAgICAgICAgICAgICAgdG9uZT0ibmVnYXRpdmUiCiAgICAgICAgICAgICAgICAgICAgaGludD0i6K6h5YWl5Li05pe25L2Z6aKdIgogICAgICAgICAgICAgICAgICAvPgogICAgICAgICAgICAgICAgICA8TWV0cmljCiAgICAgICAgICAgICAgICAgICAgbGFiZWw9IuWHuuWHu+asoeaVsCIKICAgICAgICAgICAgICAgICAgICB2YWx1ZT17YCR7cmVwb3J0LnJ1bnN9YH0KICAgICAgICAgICAgICAgICAgICBoaW50PXtgJHtyZXBvcnQucGxheWVyc30g5L2N546p5a625Y+C5LiOYH0KICAgICAgICAgICAgICAgICAgLz4KICAgICAgICAgICAgICAgICAgPE1ldHJpYwogICAgICAgICAgICAgICAgICAgIGxhYmVsPSLpppbpgJogLyDph43lpI0iCiAgICAgICAgICAgICAgICAgICAgdmFsdWU9e2Ake3JlcG9ydC5maXJzdENsZWFyc30gLyAke3JlcG9ydC5yZXBlYXRDbGVhcnN9YH0KICAgICAgICAgICAgICAgICAgICBoaW50PXtg6YeN5aSN5aWW5Yqx5q+P5pel5bCB6aG2ICR7Zm9ybWF0Q3JlZGl0cyhjb25maWcucmVwZWF0RGFpbHlDYXApfSBjcmB9CiAgICAgICAgICAgICAgICAgIC8+CiAgICAgICAgICAgICAgICAgIDxNZXRyaWMKICAgICAgICAgICAgICAgICAgICBsYWJlbD0i5aWW5Yqx5pyJ5pWI5pyfIgogICAgICAgICAgICAgICAgICAgIHZhbHVlPXtgJHtjb25maWcucmV3YXJkVmFsaWREYXlzfSDlpKlgfQogICAgICAgICAgICAgICAgICAgIGhpbnQ9e2Dmu6HphY3oo4XlpIcgJHtmb3JtYXRDcmVkaXRzKAogICAgICAgICAgICAgICAgICAgICAgY29uZmlnLml0ZW1zLndlYXBvbi5wcmljZSAqIGNvbmZpZy5pdGVtcy53ZWFwb24ubWF4ICsKICAgICAgICAgICAgICAgICAgICAgICAgY29uZmlnLml0ZW1zLmJvbWIucHJpY2UgKiBjb25maWcuaXRlbXMuYm9tYi5tYXggKwogICAgICAgICAgICAgICAgICAgICAgICBjb25maWcuaXRlbXMuc2hpZWxkLnByaWNlICsKICAgICAgICAgICAgICAgICAgICAgICAgY29uZmlnLml0ZW1zLmxpZmUucHJpY2UgKiBjb25maWcuaXRlbXMubGlmZS5tYXgsCiAgICAgICAgICAgICAgICAgICAgKX0gY3JgfQogICAgICAgICAgICAgICAgICAvPgogICAgICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgICAgICA8cCBjbGFzc05hbWU9InRleHQtWzExcHhdIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICAgICAgICAgIOe7n+iuoeiMg+WbtOaYr+W9k+WJjea0u+WKqOi9ruasoe+8iOS7peW8gOWni+aXtumXtOWMuuWIhu+8ie+8jOS4i+S4gOi9rua0u+WKqOS8muS7jumbtumHjeaWsOe7n+iuoeOAggogICAgICAgICAgICAgICAgICDlpZblirHlhajpg6jlj5HmlL7liLDkuLTml7bkvZnpop3vvIzov4fmnJ/mnKrkvb/nlKjkuI3kvJrlrp7pmYXku5jlh7rvvJvov5nph4znmoTlh4DlgLzmmK8gY3Ig5Y+j5b6E77yMCiAgICAgICAgICAgICAgICAgIOS4jeS7o+ihqOecn+Wunui1hOmHkeOAggogICAgICAgICAgICAgICAgPC9wPgogICAgICAgICAgICAgIDwvPgogICAgICAgICAgICApfQogICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICA8L0NhcmQ+CgogICAgICAgIHtyZXBvcnQgJiYgYWN0aXZpdHlLZXkgJiYgKAogICAgICAgICAgPD4KICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9ImdyaWQgZ2FwLTYgbGc6Z3JpZC1jb2xzLTIiPgogICAgICAgICAgICAgIDxDYXJkPgogICAgICAgICAgICAgICAgPENhcmRIZWFkZXIgY2xhc3NOYW1lPSJwYi0yIj4KICAgICAgICAgICAgICAgICAgPENhcmRUaXRsZSBjbGFzc05hbWU9InRleHQtYmFzZSI+5YWz5Y2h5pWw5o2uPC9DYXJkVGl0bGU+CiAgICAgICAgICAgICAgICA8L0NhcmRIZWFkZXI+CiAgICAgICAgICAgICAgICA8Q2FyZENvbnRlbnQ+CiAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJvdmVyZmxvdy14LWF1dG8gcm91bmRlZC1sZyBib3JkZXIgYm9yZGVyLWJvcmRlciI+CiAgICAgICAgICAgICAgICAgICAgPHRhYmxlIGNsYXNzTmFtZT0idy1mdWxsIHRleHQtbGVmdCB0ZXh0LXNtIj4KICAgICAgICAgICAgICAgICAgICAgIDx0aGVhZCBjbGFzc05hbWU9ImJnLXNlY29uZGFyeS81MCB0ZXh0LXhzIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICAgICAgICAgICAgICAgIDx0cj4KICAgICAgICAgICAgICAgICAgICAgICAgICA8dGggY2xhc3NOYW1lPSJweC0zIHB5LTIgZm9udC1tZWRpdW0iPuWFs+WNoTwvdGg+CiAgICAgICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj7pgJrlhbM8L3RoPgogICAgICAgICAgICAgICAgICAgICAgICAgIDx0aCBjbGFzc05hbWU9InB4LTMgcHktMiBmb250LW1lZGl1bSI+6aaW6YCaPC90aD4KICAgICAgICAgICAgICAgICAgICAgICAgICA8dGggY2xhc3NOYW1lPSJweC0zIHB5LTIgZm9udC1tZWRpdW0iPuWlluWKsTwvdGg+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvdHI+CiAgICAgICAgICAgICAgICAgICAgICA8L3RoZWFkPgogICAgICAgICAgICAgICAgICAgICAgPHRib2R5IGNsYXNzTmFtZT0iZGl2aWRlLXkgZGl2aWRlLWJvcmRlciI+CiAgICAgICAgICAgICAgICAgICAgICAgIHtyZXBvcnQuc3RhZ2VzLm1hcCgocm93KSA9PiAoCiAgICAgICAgICAgICAgICAgICAgICAgICAgPHRyIGtleT17cm93LnN0YWdlTm99IGNsYXNzTmFtZT0iaG92ZXI6Ymctc2Vjb25kYXJ5LzMwIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB4LTMgcHktMiI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHtyb3cuc3RhZ2VOb30uIHtyb3cubmFtZX0KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvdGQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweC0zIHB5LTIgdGFidWxhci1udW1zIj57cm93LmNsZWFyc308L3RkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHgtMyBweS0yIHRhYnVsYXItbnVtcyI+e3Jvdy5maXJzdENsZWFyc308L3RkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHgtMyBweS0yIHRhYnVsYXItbnVtcyI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHtmb3JtYXRDcmVkaXRzKHJvdy5yZXdhcmRzKX0gY3IKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvdGQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgPC90cj4KICAgICAgICAgICAgICAgICAgICAgICAgKSl9CiAgICAgICAgICAgICAgICAgICAgICA8L3Rib2R5PgogICAgICAgICAgICAgICAgICAgIDwvdGFibGU+CiAgICAgICAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICAgICAgICA8cCBjbGFzc05hbWU9Im10LTIgdGV4dC1bMTFweF0gdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICAgICAgICDnrKwge1JBSURFTl9TVEFHRVMubGVuZ3RofSDlhbPpgJrlhbPljbPlhajlhbPpgJrlhbPvvJvpppbpgJrmr4/kurrmr4/ova7mr4/lhbPlj6rlj5HkuIDmrKHjgIIKICAgICAgICAgICAgICAgICAgPC9wPgogICAgICAgICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICAgICAgICA8L0NhcmQ+CgogICAgICAgICAgICAgIDxDYXJkPgogICAgICAgICAgICAgICAgPENhcmRIZWFkZXIgY2xhc3NOYW1lPSJwYi0yIj4KICAgICAgICAgICAgICAgICAgPENhcmRUaXRsZSBjbGFzc05hbWU9InRleHQtYmFzZSI+CiAgICAgICAgICAgICAgICAgICAg5rS75Yqo5o6S6KGM5qacCiAgICAgICAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPSJtbC0yIHRleHQteHMgZm9udC1ub3JtYWwgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICAgICAgICAgIOW9k+WJjei9ruasoSDCtyDmr4/kurrlj5bmnIDpq5jliIYgwrcg5LiN5Y+X5pe26Ze0562b6YCJ5b2x5ZONCiAgICAgICAgICAgICAgICAgICAgPC9zcGFuPgogICAgICAgICAgICAgICAgICA8L0NhcmRUaXRsZT4KICAgICAgICAgICAgICAgIDwvQ2FyZEhlYWRlcj4KICAgICAgICAgICAgICAgIDxDYXJkQ29udGVudD4KICAgICAgICAgICAgICAgICAge2xlYWRlcmJvYXJkLmxlbmd0aCA9PT0gMCA/ICgKICAgICAgICAgICAgICAgICAgICA8cCBjbGFzc05hbWU9InRleHQtc20gdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj7mnKzova7ov5jmsqHmnInkuIrmppzorrDlvZXjgII8L3A+CiAgICAgICAgICAgICAgICAgICkgOiAoCiAgICAgICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9Im92ZXJmbG93LXgtYXV0byByb3VuZGVkLWxnIGJvcmRlciBib3JkZXItYm9yZGVyIj4KICAgICAgICAgICAgICAgICAgICAgIDx0YWJsZSBjbGFzc05hbWU9InctZnVsbCB0ZXh0LWxlZnQgdGV4dC1zbSI+CiAgICAgICAgICAgICAgICAgICAgICAgIDx0aGVhZCBjbGFzc05hbWU9ImJnLXNlY29uZGFyeS81MCB0ZXh0LXhzIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgPHRyPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj4jPC90aD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDx0aCBjbGFzc05hbWU9InB4LTMgcHktMiBmb250LW1lZGl1bSI+546p5a62PC90aD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDx0aCBjbGFzc05hbWU9InB4LTMgcHktMiBmb250LW1lZGl1bSI+5pyA6auY5YiGPC90aD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDx0aCBjbGFzc05hbWU9InB4LTMgcHktMiBmb250LW1lZGl1bSI+5YWz5Y2hPC90aD4KICAgICAgICAgICAgICAgICAgICAgICAgICA8L3RyPgogICAgICAgICAgICAgICAgICAgICAgICA8L3RoZWFkPgogICAgICAgICAgICAgICAgICAgICAgICA8dGJvZHkgY2xhc3NOYW1lPSJkaXZpZGUteSBkaXZpZGUtYm9yZGVyIj4KICAgICAgICAgICAgICAgICAgICAgICAgICB7bGVhZGVyYm9hcmQubWFwKChyb3cpID0+ICgKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDx0ciBrZXk9e3Jvdy51c2VySWR9IGNsYXNzTmFtZT0iaG92ZXI6Ymctc2Vjb25kYXJ5LzMwIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHgtMyBweS0yIHRhYnVsYXItbnVtcyB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHtyb3cucmFua30KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC90ZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHgtMyBweS0yIj57cm93LmxhYmVsfTwvdGQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB4LTMgcHktMiB0YWJ1bGFyLW51bXMiPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHtyb3cuc2NvcmUudG9Mb2NhbGVTdHJpbmcoInpoLUNOIil9CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvdGQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB4LTMgcHktMiB0ZXh0LXhzIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAge3Jvdy5jbGVhcmVkQWxsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA/ICLlhajlhbPpgJrlhbMiCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA6IHJvdy5zdGFnZSA+IDAKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPyAoUkFJREVOX1NUQUdFU1tyb3cuc3RhZ2UgLSAxXT8uY29kZSA/PyBgU1RBR0UgJHtyb3cuc3RhZ2V9YCkKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgOiAi5pyq6YCa5YWzIn0KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgPC90ZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvdHI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgKSl9CiAgICAgICAgICAgICAgICAgICAgICAgIDwvdGJvZHk+CiAgICAgICAgICAgICAgICAgICAgICA8L3RhYmxlPgogICAgICAgICAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICAgICAgICApfQogICAgICAgICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICAgICAgICA8L0NhcmQ+CiAgICAgICAgICAgIDwvZGl2PgoKICAgICAgICAgICAgPENhcmQ+CiAgICAgICAgICAgICAgPENhcmRIZWFkZXIgY2xhc3NOYW1lPSJwYi0yIj4KICAgICAgICAgICAgICAgIDxDYXJkVGl0bGUgY2xhc3NOYW1lPSJ0ZXh0LWJhc2UiPgogICAgICAgICAgICAgICAgICDmnIDov5Hlr7nlsYAKICAgICAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPSJtbC0yIHRleHQteHMgZm9udC1ub3JtYWwgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICAgICAgICDml7bpl7TnqpflhoXmnIDov5Ege3JlcG9ydC5yZWNlbnRSdW5zLmxlbmd0aH0g5bGA77yI5pyA5aSaIDUwIOadoe+8iQogICAgICAgICAgICAgICAgICA8L3NwYW4+CiAgICAgICAgICAgICAgICA8L0NhcmRUaXRsZT4KICAgICAgICAgICAgICA8L0NhcmRIZWFkZXI+CiAgICAgICAgICAgICAgPENhcmRDb250ZW50PgogICAgICAgICAgICAgICAge3JlcG9ydC5yZWNlbnRSdW5zLmxlbmd0aCA9PT0gMCA/ICgKICAgICAgICAgICAgICAgICAgPHAgY2xhc3NOYW1lPSJ0ZXh0LXNtIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+6K+l5pe25q615rKh5pyJ5Ye65Ye76K6w5b2V44CCPC9wPgogICAgICAgICAgICAgICAgKSA6ICgKICAgICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9Im92ZXJmbG93LXgtYXV0byByb3VuZGVkLWxnIGJvcmRlciBib3JkZXItYm9yZGVyIj4KICAgICAgICAgICAgICAgICAgICA8dGFibGUgY2xhc3NOYW1lPSJ3LWZ1bGwgdGV4dC1sZWZ0IHRleHQtc20iPgogICAgICAgICAgICAgICAgICAgICAgPHRoZWFkIGNsYXNzTmFtZT0iYmctc2Vjb25kYXJ5LzUwIHRleHQteHMgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICAgICAgICAgICAgPHRyPgogICAgICAgICAgICAgICAgICAgICAgICAgIDx0aCBjbGFzc05hbWU9InB4LTMgcHktMiBmb250LW1lZGl1bSI+5byA5aeL5pe26Ze0PC90aD4KICAgICAgICAgICAgICAgICAgICAgICAgICA8dGggY2xhc3NOYW1lPSJweC0zIHB5LTIgZm9udC1tZWRpdW0iPueOqeWutjwvdGg+CiAgICAgICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj7nirbmgIE8L3RoPgogICAgICAgICAgICAgICAgICAgICAgICAgIDx0aCBjbGFzc05hbWU9InB4LTMgcHktMiBmb250LW1lZGl1bSI+5YWz5Y2hPC90aD4KICAgICAgICAgICAgICAgICAgICAgICAgICA8dGggY2xhc3NOYW1lPSJweC0zIHB5LTIgZm9udC1tZWRpdW0iPuWIhuaVsDwvdGg+CiAgICAgICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj7mtojogJc8L3RoPgogICAgICAgICAgICAgICAgICAgICAgICAgIDx0aCBjbGFzc05hbWU9InB4LTMgcHktMiBmb250LW1lZGl1bSI+5aSN5rS7PC90aD4KICAgICAgICAgICAgICAgICAgICAgICAgPC90cj4KICAgICAgICAgICAgICAgICAgICAgIDwvdGhlYWQ+CiAgICAgICAgICAgICAgICAgICAgICA8dGJvZHkgY2xhc3NOYW1lPSJkaXZpZGUteSBkaXZpZGUtYm9yZGVyIj4KICAgICAgICAgICAgICAgICAgICAgICAge3JlcG9ydC5yZWNlbnRSdW5zLm1hcCgocm93KSA9PiAoCiAgICAgICAgICAgICAgICAgICAgICAgICAgPHRyIGtleT17cm93LmlkfSBjbGFzc05hbWU9ImhvdmVyOmJnLXNlY29uZGFyeS8zMCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweC0zIHB5LTIgdGV4dC14cyB0ZXh0LW11dGVkLWZvcmVncm91bmQgdGFidWxhci1udW1zIj4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAge2Zvcm1hdENuV2FsbENsb2NrKG5ldyBEYXRlKHJvdy5zdGFydGVkQXQpKX0KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvdGQ+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweC0zIHB5LTIiPntyb3cubGFiZWx9PC90ZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB4LTMgcHktMiI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxCYWRnZSB0b25lPXtTVEFUVVNfVE9ORVtyb3cuc3RhdHVzXSA/PyAibXV0ZWQifT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICB7cnVuU3RhdHVzTGFiZWwocm93LnN0YXR1cyl9CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIDwvQmFkZ2U+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L3RkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHgtMyBweS0yIHRhYnVsYXItbnVtcyI+e3Jvdy5zdGFnZSB8fCAi4oCUIn08L3RkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHgtMyBweS0yIHRhYnVsYXItbnVtcyI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHtyb3cuc2NvcmUudG9Mb2NhbGVTdHJpbmcoInpoLUNOIil9CiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L3RkPgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHgtMyBweS0yIHRhYnVsYXItbnVtcyI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHtmb3JtYXRDcmVkaXRzKHJvdy5jcmVkaXRzU3BlbnQpfSBjcgogICAgICAgICAgICAgICAgICAgICAgICAgICAgPC90ZD4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB4LTMgcHktMiB0YWJ1bGFyLW51bXMiPntyb3cucmV2aXZlc308L3RkPgogICAgICAgICAgICAgICAgICAgICAgICAgIDwvdHI+CiAgICAgICAgICAgICAgICAgICAgICAgICkpfQogICAgICAgICAgICAgICAgICAgICAgPC90Ym9keT4KICAgICAgICAgICAgICAgICAgICA8L3RhYmxlPgogICAgICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgICAgICl9CiAgICAgICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICAgICAgPC9DYXJkPgogICAgICAgICAgPC8+CiAgICAgICAgKX0KICAgICAgPC9QYWdlQm9keT4KICAgIDwvPgogICk7Cn0K
+import { PageHeader } from "@/components/dashboard/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { db } from "@/lib/db/d1-http";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { requireUser } from "@/lib/usage/meter";
+import { redirect } from "next/navigation";
+import { formatCredits } from "@/lib/billing/credits";
+import {
+  cnLastNDaysStart,
+  cnStartOfToday,
+  cnStartOfTomorrow,
+  formatCnWallClock,
+} from "@/lib/date";
+import {
+  RAIDEN_STAGES,
+  raidenActivityKey,
+  raidenActivityWindow,
+} from "@/lib/raiden/config";
+import { getRaidenConfig } from "@/lib/raiden/settings";
+import {
+  getAdminRaidenReport,
+  listRaidenLeaderboard,
+  runStatusLabel,
+} from "@/lib/raiden/records";
+import { cn } from "@/lib/utils";
+
+import { PageBody } from "@/components/dashboard/section";
+
+export const dynamic = "force-dynamic";
+
+const RANGE_TABS: { value: string; label: string }[] = [
+  { value: "today", label: "今日" },
+  { value: "7d", label: "近 7 日" },
+  { value: "30d", label: "近 30 日" },
+  { value: "all", label: "全部" },
+];
+
+/** 时间窗按北京时间算，与转盘记录页一致。 */
+function resolveWindow(range: string): { start: Date; end: Date } {
+  const end = cnStartOfTomorrow();
+  if (range === "today") return { start: cnStartOfToday(), end };
+  if (range === "7d") return { start: cnLastNDaysStart(7), end };
+  if (range === "30d") return { start: cnLastNDaysStart(30), end };
+  return { start: new Date(0), end };
+}
+
+const STATUS_TONE: Record<string, "success" | "danger" | "muted" | "info"> = {
+  cleared: "success",
+  failed: "danger",
+  abandoned: "muted",
+  active: "info",
+};
+
+function Metric({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "positive" | "negative";
+}) {
+  return (
+    <div className="rounded-lg border border-border px-3 py-2.5">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "mt-1 text-lg font-semibold tabular-nums",
+          tone === "positive" && "text-[color:var(--primary)]",
+          tone === "negative" && "text-[color:var(--destructive)]",
+        )}
+      >
+        {value}
+      </p>
+      {hint && <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+export default async function AdminRaidenPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string }>;
+}) {
+  const currentUserId = await requireUser();
+  const params = await searchParams;
+
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    redirect("/dashboard");
+  }
+
+  const rawRange = params.range ?? "all";
+  const range = RANGE_TABS.some((t) => t.value === rawRange) ? rawRange : "all";
+  const win = resolveWindow(range);
+
+  const config = await getRaidenConfig();
+  const activity = raidenActivityWindow(config);
+  const activityKey = raidenActivityKey(config);
+
+  const [report, leaderboard] = activityKey
+    ? await Promise.all([
+        getAdminRaidenReport(activityKey, win.start, win.end),
+        listRaidenLeaderboard(activityKey, currentUserId, 10),
+      ])
+    : [null, []];
+
+  const net = report ? Number((report.spentCredits - report.rewardsPaid).toFixed(2)) : 0;
+
+  return (
+    <>
+      <PageHeader
+        title="雷电记录"
+        description="限时活动 · 纵版射击的装备消耗与通关奖励"
+      />
+
+      <PageBody className="space-y-6">
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">
+              收益概览
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                {activity.status === "disabled"
+                  ? "活动当前未开启"
+                  : `${activity.status === "active" ? "进行中" : activity.status === "pending" ? "未开始" : "已结束"} · ${config.startAt || "—"} ~ ${config.endAt || "—"} · 每日 ${config.dailyRuns} 次 · 复活 ${formatCredits(config.revivePriceCredits)} cr/次`}
+              </span>
+            </CardTitle>
+            <div className="flex gap-1 rounded-lg bg-muted p-1">
+              {RANGE_TABS.map((tab) => (
+                <a
+                  key={tab.value}
+                  href={`/admin/raiden${tab.value === "all" ? "" : `?range=${tab.value}`}`}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                    range === tab.value
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {tab.label}
+                </a>
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {!report || !activityKey ? (
+              <p className="text-sm text-muted-foreground">
+                活动未开启或未设置开始时间，暂无记录。开启后这里会按活动轮次统计出击、
+                装备消耗与奖励发放。
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                  <Metric
+                    label="站点净收益"
+                    value={`${formatCredits(net)} cr`}
+                    tone={net >= 0 ? "positive" : "negative"}
+                    hint="装备/复活消耗 − 通关奖励"
+                  />
+                  <Metric
+                    label="装备消耗"
+                    value={`${formatCredits(report.spentCredits)} cr`}
+                    hint="购买装备 + 付费复活"
+                  />
+                  <Metric
+                    label="奖励发放"
+                    value={`${formatCredits(report.rewardsPaid)} cr`}
+                    tone="negative"
+                    hint="计入临时余额"
+                  />
+                  <Metric
+                    label="出击次数"
+                    value={`${report.runs}`}
+                    hint={`${report.players} 位玩家参与`}
+                  />
+                  <Metric
+                    label="首通 / 重复"
+                    value={`${report.firstClears} / ${report.repeatClears}`}
+                    hint={`重复奖励每日封顶 ${formatCredits(config.repeatDailyCap)} cr`}
+                  />
+                  <Metric
+                    label="奖励有效期"
+                    value={`${config.rewardValidDays} 天`}
+                    hint={`满配装备 ${formatCredits(
+                      config.items.weapon.price * config.items.weapon.max +
+                        config.items.bomb.price * config.items.bomb.max +
+                        config.items.shield.price +
+                        config.items.life.price * config.items.life.max,
+                    )} cr`}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  统计范围是当前活动轮次（以开始时间区分），下一轮活动会从零重新统计。
+                  奖励全部发放到临时余额，过期未使用不会实际付出；这里的净值是 cr 口径，
+                  不代表真实资金。
+                </p>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {report && activityKey && (
+          <>
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">关卡数据</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-secondary/50 text-xs text-muted-foreground">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">关卡</th>
+                          <th className="px-3 py-2 font-medium">通关</th>
+                          <th className="px-3 py-2 font-medium">首通</th>
+                          <th className="px-3 py-2 font-medium">奖励</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {report.stages.map((row) => (
+                          <tr key={row.stageNo} className="hover:bg-secondary/30">
+                            <td className="px-3 py-2">
+                              {row.stageNo}. {row.name}
+                            </td>
+                            <td className="px-3 py-2 tabular-nums">{row.clears}</td>
+                            <td className="px-3 py-2 tabular-nums">{row.firstClears}</td>
+                            <td className="px-3 py-2 tabular-nums">
+                              {formatCredits(row.rewards)} cr
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    第 {RAIDEN_STAGES.length} 关通关即全关通关；首通每人每轮每关只发一次。
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">
+                    活动排行榜
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      当前轮次 · 每人取最高分 · 不受时间筛选影响
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {leaderboard.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">本轮还没有上榜记录。</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-lg border border-border">
+                      <table className="w-full text-left text-sm">
+                        <thead className="bg-secondary/50 text-xs text-muted-foreground">
+                          <tr>
+                            <th className="px-3 py-2 font-medium">#</th>
+                            <th className="px-3 py-2 font-medium">玩家</th>
+                            <th className="px-3 py-2 font-medium">最高分</th>
+                            <th className="px-3 py-2 font-medium">关卡</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {leaderboard.map((row) => (
+                            <tr key={row.userId} className="hover:bg-secondary/30">
+                              <td className="px-3 py-2 tabular-nums text-muted-foreground">
+                                {row.rank}
+                              </td>
+                              <td className="px-3 py-2">{row.label}</td>
+                              <td className="px-3 py-2 tabular-nums">
+                                {row.score.toLocaleString("zh-CN")}
+                              </td>
+                              <td className="px-3 py-2 text-xs text-muted-foreground">
+                                {row.clearedAll
+                                  ? "全关通关"
+                                  : row.stage > 0
+                                    ? (RAIDEN_STAGES[row.stage - 1]?.code ?? `STAGE ${row.stage}`)
+                                    : "未通关"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">
+                  最近对局
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    时间窗内最近 {report.recentRuns.length} 局（最多 50 条）
+                  </span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {report.recentRuns.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">该时段没有出击记录。</p>
+                ) : (
+                  <div className="overflow-x-auto rounded-lg border border-border">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-secondary/50 text-xs text-muted-foreground">
+                        <tr>
+                          <th className="px-3 py-2 font-medium">开始时间</th>
+                          <th className="px-3 py-2 font-medium">玩家</th>
+                          <th className="px-3 py-2 font-medium">状态</th>
+                          <th className="px-3 py-2 font-medium">关卡</th>
+                          <th className="px-3 py-2 font-medium">分数</th>
+                          <th className="px-3 py-2 font-medium">消耗</th>
+                          <th className="px-3 py-2 font-medium">复活</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {report.recentRuns.map((row) => (
+                          <tr key={row.id} className="hover:bg-secondary/30">
+                            <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
+                              {formatCnWallClock(new Date(row.startedAt))}
+                            </td>
+                            <td className="px-3 py-2">{row.label}</td>
+                            <td className="px-3 py-2">
+                              <Badge tone={STATUS_TONE[row.status] ?? "muted"}>
+                                {runStatusLabel(row.status)}
+                              </Badge>
+                            </td>
+                            <td className="px-3 py-2 tabular-nums">{row.stage || "—"}</td>
+                            <td className="px-3 py-2 tabular-nums">
+                              {row.score.toLocaleString("zh-CN")}
+                            </td>
+                            <td className="px-3 py-2 tabular-nums">
+                              {formatCredits(row.creditsSpent)} cr
+                            </td>
+                            <td className="px-3 py-2 tabular-nums">{row.revives}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
+        )}
+      </PageBody>
+    </>
+  );
+}

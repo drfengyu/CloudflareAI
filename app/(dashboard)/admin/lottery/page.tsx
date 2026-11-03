@@ -1,1 +1,332 @@
-aW1wb3J0IHsgUGFnZUhlYWRlciB9IGZyb20gIkAvY29tcG9uZW50cy9kYXNoYm9hcmQvcGFnZS1oZWFkZXIiOwppbXBvcnQgeyBDYXJkLCBDYXJkQ29udGVudCwgQ2FyZEhlYWRlciwgQ2FyZFRpdGxlIH0gZnJvbSAiQC9jb21wb25lbnRzL3VpL2NhcmQiOwppbXBvcnQgeyBCYWRnZSB9IGZyb20gIkAvY29tcG9uZW50cy91aS9iYWRnZSI7CmltcG9ydCB7IFBhZ2luYXRpb24gfSBmcm9tICJAL2NvbXBvbmVudHMvZGFzaGJvYXJkL3BhZ2luYXRpb24iOwppbXBvcnQgeyBkYiB9IGZyb20gIkAvbGliL2RiL2QxLWh0dHAiOwppbXBvcnQgeyB1c2VycyB9IGZyb20gIkAvbGliL2RiL3NjaGVtYSI7CmltcG9ydCB7IGVxIH0gZnJvbSAiZHJpenpsZS1vcm0iOwppbXBvcnQgeyByZXF1aXJlVXNlciB9IGZyb20gIkAvbGliL3VzYWdlL21ldGVyIjsKaW1wb3J0IHsgcmVkaXJlY3QgfSBmcm9tICJuZXh0L25hdmlnYXRpb24iOwppbXBvcnQgeyBmb3JtYXRDcmVkaXRzIH0gZnJvbSAiQC9saWIvYmlsbGluZy9jcmVkaXRzIjsKaW1wb3J0IHsgY25MYXN0TkRheXNTdGFydCwgY25TdGFydE9mVG9kYXksIGNuU3RhcnRPZlRvbW9ycm93LCBmb3JtYXRDbldhbGxDbG9jayB9IGZyb20gIkAvbGliL2RhdGUiOwppbXBvcnQgeyBnZXRMb3R0ZXJ5Q29uZmlnIH0gZnJvbSAiQC9saWIvbG90dGVyeS9jb25maWciOwppbXBvcnQgeyBhY3Rpdml0eVdpbmRvdywgcmV0dXJuUmF0ZVBlcmNlbnQsIHJvdW5kMiB9IGZyb20gIkAvbGliL2xvdHRlcnkvcHJpemUtbWF0aCI7CmltcG9ydCB7CiAgZHJhd05ldENyZWRpdHMsCiAgbGlzdERyYXdSZWNvcmRzLAogIGxvdHRlcnlCYWxhbmNlLAogIGxvdHRlcnlUaWNrZXRUb3RhbHMsCiAgbG90dGVyeVVzZXJSZWNvcmRzLAogIHR5cGUgRHJhd1JlY29yZCwKICB0eXBlIExvdHRlcnlXaW5kb3csCn0gZnJvbSAiQC9saWIvbG90dGVyeS9yZWNvcmRzIjsKaW1wb3J0IHsgY24gfSBmcm9tICJAL2xpYi91dGlscyI7CgppbXBvcnQgeyBQYWdlQm9keSB9IGZyb20gIkAvY29tcG9uZW50cy9kYXNoYm9hcmQvc2VjdGlvbiI7CgpleHBvcnQgY29uc3QgZHluYW1pYyA9ICJmb3JjZS1keW5hbWljIjsKCmNvbnN0IERFVEFJTF9QQUdFX1NJWkUgPSAxMDsKCmNvbnN0IFJBTkdFX1RBQlM6IHsgdmFsdWU6IHN0cmluZzsgbGFiZWw6IHN0cmluZyB9W10gPSBbCiAgeyB2YWx1ZTogInRvZGF5IiwgbGFiZWw6ICLku4rml6UiIH0sCiAgeyB2YWx1ZTogIjdkIiwgbGFiZWw6ICLov5EgNyDml6UiIH0sCiAgeyB2YWx1ZTogIjMwZCIsIGxhYmVsOiAi6L+RIDMwIOaXpSIgfSwKICB7IHZhbHVlOiAiYWxsIiwgbGFiZWw6ICLlhajpg6giIH0sCl07CgovKiog5pe26Ze056qX5oyJ5YyX5Lqs5pe26Ze0566X77yM5LiO55So6YeP55yL5p2/5LiA6Ie077yb44CM5YWo6YOo44CN5Y2z5LiN5Yqg6L+H5ruk44CCICovCmZ1bmN0aW9uIHJlc29sdmVXaW5kb3cocmFuZ2U6IHN0cmluZyk6IExvdHRlcnlXaW5kb3cgfCB1bmRlZmluZWQgewogIGNvbnN0IGVuZCA9IGNuU3RhcnRPZlRvbW9ycm93KCk7CiAgaWYgKHJhbmdlID09PSAidG9kYXkiKSByZXR1cm4geyBzdGFydDogY25TdGFydE9mVG9kYXkoKSwgZW5kIH07CiAgaWYgKHJhbmdlID09PSAiN2QiKSByZXR1cm4geyBzdGFydDogY25MYXN0TkRheXNTdGFydCg3KSwgZW5kIH07CiAgaWYgKHJhbmdlID09PSAiMzBkIikgcmV0dXJuIHsgc3RhcnQ6IGNuTGFzdE5EYXlzU3RhcnQoMzApLCBlbmQgfTsKICByZXR1cm4gdW5kZWZpbmVkOwp9CgpmdW5jdGlvbiBNZXRyaWMoewogIGxhYmVsLAogIHZhbHVlLAogIGhpbnQsCiAgdG9uZSwKfTogewogIGxhYmVsOiBzdHJpbmc7CiAgdmFsdWU6IHN0cmluZzsKICBoaW50Pzogc3RyaW5nOwogIHRvbmU/OiAicG9zaXRpdmUiIHwgIm5lZ2F0aXZlIjsKfSkgewogIHJldHVybiAoCiAgICA8ZGl2IGNsYXNzTmFtZT0icm91bmRlZC1sZyBib3JkZXIgYm9yZGVyLWJvcmRlciBweC0zIHB5LTIuNSI+CiAgICAgIDxwIGNsYXNzTmFtZT0idGV4dC14cyB0ZXh0LW11dGVkLWZvcmVncm91bmQiPntsYWJlbH08L3A+CiAgICAgIDxwCiAgICAgICAgY2xhc3NOYW1lPXtjbigKICAgICAgICAgICJtdC0xIHRleHQtbGcgZm9udC1zZW1pYm9sZCB0YWJ1bGFyLW51bXMiLAogICAgICAgICAgdG9uZSA9PT0gInBvc2l0aXZlIiAmJiAidGV4dC1bY29sb3I6dmFyKC0tcHJpbWFyeSldIiwKICAgICAgICAgIHRvbmUgPT09ICJuZWdhdGl2ZSIgJiYgInRleHQtW2NvbG9yOnZhcigtLWRlc3RydWN0aXZlKV0iLAogICAgICAgICl9CiAgICAgID4KICAgICAgICB7dmFsdWV9CiAgICAgIDwvcD4KICAgICAge2hpbnQgJiYgPHAgY2xhc3NOYW1lPSJtdC0wLjUgdGV4dC1bMTFweF0gdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj57aGludH08L3A+fQogICAgPC9kaXY+CiAgKTsKfQoKZnVuY3Rpb24gU2lnbmVkKHsgdmFsdWUsIHN1ZmZpeCA9ICIgY3IiIH06IHsgdmFsdWU6IG51bWJlcjsgc3VmZml4Pzogc3RyaW5nIH0pIHsKICByZXR1cm4gKAogICAgPHNwYW4KICAgICAgY2xhc3NOYW1lPXtjbigKICAgICAgICAiZm9udC1tZWRpdW0gdGFidWxhci1udW1zIiwKICAgICAgICB2YWx1ZSA+IDAKICAgICAgICAgID8gInRleHQtW2NvbG9yOnZhcigtLXByaW1hcnkpXSIKICAgICAgICAgIDogdmFsdWUgPCAwCiAgICAgICAgICAgID8gInRleHQtW2NvbG9yOnZhcigtLWRlc3RydWN0aXZlKV0iCiAgICAgICAgICAgIDogInRleHQtbXV0ZWQtZm9yZWdyb3VuZCIsCiAgICAgICl9CiAgICA+CiAgICAgIHt2YWx1ZSA+IDAgPyAiKyIgOiAiIn0KICAgICAge2Zvcm1hdENyZWRpdHModmFsdWUpfQogICAgICB7c3VmZml4fQogICAgPC9zcGFuPgogICk7Cn0KCmNvbnN0IFRJQ0tFVF9MQUJFTDogUmVjb3JkPERyYXdSZWNvcmRbInRpY2tldFNvdXJjZSJdLCBzdHJpbmc+ID0gewogIGJ1eTogIui0reS5sCIsCiAgZ2lmdDogIui1oOmAgSIsCiAgcHJpemU6ICLmir3kuK0iLAogIGZyZWU6ICLlhY3otLkiLAogIHVua25vd246ICLlt7LlpLHmlYgiLAp9OwoKZXhwb3J0IGRlZmF1bHQgYXN5bmMgZnVuY3Rpb24gQWRtaW5Mb3R0ZXJ5UGFnZSh7CiAgc2VhcmNoUGFyYW1zLAp9OiB7CiAgc2VhcmNoUGFyYW1zOiBQcm9taXNlPHsgcmFuZ2U/OiBzdHJpbmc7IHBhZ2U/OiBzdHJpbmcgfT47Cn0pIHsKICBjb25zdCBjdXJyZW50VXNlcklkID0gYXdhaXQgcmVxdWlyZVVzZXIoKTsKICBjb25zdCBwYXJhbXMgPSBhd2FpdCBzZWFyY2hQYXJhbXM7CiAgY29uc3QgcGFnZSA9IE1hdGgubWF4KDEsIHBhcnNlSW50KHBhcmFtcy5wYWdlID8/ICIxIiwgMTApIHx8IDEpOwoKICBjb25zdCBjdXJyZW50VXNlciA9IGF3YWl0IGRiCiAgICAuc2VsZWN0KCkKICAgIC5mcm9tKHVzZXJzKQogICAgLndoZXJlKGVxKHVzZXJzLmlkLCBjdXJyZW50VXNlcklkKSkKICAgIC5saW1pdCgxKTsKCiAgaWYgKCFjdXJyZW50VXNlclswXSB8fCBjdXJyZW50VXNlclswXS5yb2xlIDwgMTApIHsKICAgIHJlZGlyZWN0KCIvZGFzaGJvYXJkIik7CiAgfQoKICBjb25zdCByYXdSYW5nZSA9IHBhcmFtcy5yYW5nZSA/PyAiYWxsIjsKICBjb25zdCByYW5nZSA9IFJBTkdFX1RBQlMuc29tZSgodCkgPT4gdC52YWx1ZSA9PT0gcmF3UmFuZ2UpID8gcmF3UmFuZ2UgOiAiYWxsIjsKICBjb25zdCB3aW4gPSByZXNvbHZlV2luZG93KHJhbmdlKTsKCiAgY29uc3QgW2NvbmZpZywgYmFsYW5jZSwgcGVyVXNlciwgcmVjb3JkcywgdGlja2V0VG90YWxzXSA9IGF3YWl0IFByb21pc2UuYWxsKFsKICAgIGdldExvdHRlcnlDb25maWcoKSwKICAgIGxvdHRlcnlCYWxhbmNlKHsgd2luIH0pLAogICAgbG90dGVyeVVzZXJSZWNvcmRzKHdpbiksCiAgICBsaXN0RHJhd1JlY29yZHMoeyB3aW4sIGxpbWl0OiBERVRBSUxfUEFHRV9TSVpFLCBvZmZzZXQ6IChwYWdlIC0gMSkgKiBERVRBSUxfUEFHRV9TSVpFIH0pLAogICAgbG90dGVyeVRpY2tldFRvdGFscyh3aW4pLAogIF0pOwoKICAvLyDlvIDlpZbmgLvms6jmlbDlsLHmmK/lkIzkuIDnqpflj6PnmoTntK/orqHnu5/orqHooYzvvIznm7TmjqXlvZPliIbpobXmgLvmlbDnlKjvvIzkuI3lho0gQ09VTlQg5piO57uG44CCCiAgY29uc3QgZGV0YWlsVG90YWwgPSBiYWxhbmNlLmRyYXdzOwogIGNvbnN0IGRldGFpbFRvdGFsUGFnZXMgPSBNYXRoLm1heCgxLCBNYXRoLmNlaWwoZGV0YWlsVG90YWwgLyBERVRBSUxfUEFHRV9TSVpFKSk7CgogIGNvbnN0IGFjdGl2aXR5ID0gYWN0aXZpdHlXaW5kb3coY29uZmlnKTsKICBjb25zdCBjb25maWd1cmVkUmF0ZSA9IHJldHVyblJhdGVQZXJjZW50KGNvbmZpZyk7CiAgLy8g5a6e6ZmF6L+U6L+Y546H5Y+q5oyJ5bey5byA5aWW55qE5Yi4566X77ya5YeA5Y+R5Ye65Y6755qEIGNyIC8g5pS25Yiw55qE5Yi46Z2i5YC844CC5YCS5omj566X5Zyo5YiG5a2Q6YeM77yI5a6D5oq15LqG5aWW77yJ44CCCiAgY29uc3QgYWN0dWFsUmF0ZSA9IGJhbGFuY2UudGlja2V0RmFjZSA+IDAKICAgID8gcm91bmQyKCgoYmFsYW5jZS5wYWlkT3V0IC0gYmFsYW5jZS5jbGF3ZWRCYWNrKSAvIGJhbGFuY2UudGlja2V0RmFjZSkgKiAxMDApCiAgICA6IG51bGw7CgogIGNvbnN0IGVtYWlsQnlJZCA9IG5ldyBNYXAocGVyVXNlci5tYXAoKHUpID0+IFt1LnVzZXJJZCwgdS5lbWFpbF0pKTsKCiAgcmV0dXJuICgKICAgIDw+CiAgICAgIDxQYWdlSGVhZGVyCiAgICAgICAgdGl0bGU9Iua0u+WKqOiusOW9lSIKICAgICAgICBkZXNjcmlwdGlvbj0i6ZmQ5pe25rS75YqoIMK3IOeUqOaIt+WPguS4juaYjue7huS4juermeeCueaUtuebiiIKICAgICAgLz4KCiAgICAgIDxQYWdlQm9keSBjbGFzc05hbWU9InNwYWNlLXktNiI+CiAgICAgICAgPENhcmQ+CiAgICAgICAgICA8Q2FyZEhlYWRlciBjbGFzc05hbWU9ImZsZXgtcm93IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWJldHdlZW4gc3BhY2UteS0wIj4KICAgICAgICAgICAgPENhcmRUaXRsZSBjbGFzc05hbWU9InRleHQtYmFzZSI+CiAgICAgICAgICAgICAg5pS255uK5qaC6KeICiAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPSJtbC0yIHRleHQteHMgZm9udC1ub3JtYWwgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICAgIHthY3Rpdml0eS5zdGF0dXMgPT09ICJkaXNhYmxlZCIKICAgICAgICAgICAgICAgICAgPyAi5rS75Yqo5b2T5YmN5pyq5byA5ZCvIgogICAgICAgICAgICAgICAgICA6IGAke2FjdGl2aXR5LnN0YXR1cyA9PT0gImFjdGl2ZSIgPyAi6L+b6KGM5LitIiA6IGFjdGl2aXR5LnN0YXR1cyA9PT0gInBlbmRpbmciID8gIuacquW8gOWniyIgOiAi5bey57uT5p2fIn0gwrcgJHtjb25maWcuc3RhcnRBdCB8fCAi4oCUIn0gfiAke2NvbmZpZy5lbmRBdCB8fCAi4oCUIn0gwrcg5Yi45Lu3ICR7Zm9ybWF0Q3JlZGl0cyhjb25maWcudGlja2V0UHJpY2VDcmVkaXRzKX0gY3Igwrcg5aSW5ZyIICR7Y29uZmlnLm91dGVyQ2hhbmNlUGVyY2VudH0lYH0KICAgICAgICAgICAgICA8L3NwYW4+CiAgICAgICAgICAgIDwvQ2FyZFRpdGxlPgogICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZmxleCBnYXAtMSByb3VuZGVkLWxnIGJnLW11dGVkIHAtMSI+CiAgICAgICAgICAgICAge1JBTkdFX1RBQlMubWFwKCh0YWIpID0+ICgKICAgICAgICAgICAgICAgIDxhCiAgICAgICAgICAgICAgICAgIGtleT17dGFiLnZhbHVlfQogICAgICAgICAgICAgICAgICBocmVmPXtgL2FkbWluL2xvdHRlcnkke3RhYi52YWx1ZSA9PT0gImFsbCIgPyAiIiA6IGA/cmFuZ2U9JHt0YWIudmFsdWV9YH1gfQogICAgICAgICAgICAgICAgICBjbGFzc05hbWU9e2NuKAogICAgICAgICAgICAgICAgICAgICJyb3VuZGVkLW1kIHB4LTMgcHktMS41IHRleHQtc20gZm9udC1tZWRpdW0gdHJhbnNpdGlvbi1jb2xvcnMiLAogICAgICAgICAgICAgICAgICAgIHJhbmdlID09PSB0YWIudmFsdWUKICAgICAgICAgICAgICAgICAgICAgID8gImJnLWNhcmQgdGV4dC1mb3JlZ3JvdW5kIHNoYWRvdy1zbSIKICAgICAgICAgICAgICAgICAgICAgIDogInRleHQtbXV0ZWQtZm9yZWdyb3VuZCBob3Zlcjp0ZXh0LWZvcmVncm91bmQiLAogICAgICAgICAgICAgICAgICApfQogICAgICAgICAgICAgICAgPgogICAgICAgICAgICAgICAgICB7dGFiLmxhYmVsfQogICAgICAgICAgICAgICAgPC9hPgogICAgICAgICAgICAgICkpfQogICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgIDwvQ2FyZEhlYWRlcj4KICAgICAgICAgIDxDYXJkQ29udGVudCBjbGFzc05hbWU9InNwYWNlLXktMyI+CiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJncmlkIGdyaWQtY29scy0yIGdhcC0yIHNtOmdyaWQtY29scy0zIGxnOmdyaWQtY29scy02Ij4KICAgICAgICAgICAgICA8TWV0cmljIGxhYmVsPSLnq5nngrnlh4DmlLbnm4oiIHZhbHVlPXtgJHtmb3JtYXRDcmVkaXRzKGJhbGFuY2UubmV0KX0gY3JgfSB0b25lPXtiYWxhbmNlLm5ldCA+PSAwID8gInBvc2l0aXZlIiA6ICJuZWdhdGl2ZSJ9IGhpbnQ9IuWIuOmdoiArIOWbnuaUtiDiiJIg5Y+R5pS+IiAvPgogICAgICAgICAgICAgIDxNZXRyaWMgbGFiZWw9IuWUruWIuOaUtuWFpSIgdmFsdWU9e2Ake2Zvcm1hdENyZWRpdHModGlja2V0VG90YWxzLmJvdWdodENyZWRpdHMpfSBjcmB9IGhpbnQ9e2Ake3RpY2tldFRvdGFscy5ib3VnaHRUaWNrZXRzfSDlvKAgwrcg6LWg5Yi4IOaho+S9jSAke3RpY2tldFRvdGFscy5naWZ0VGlja2V0c30gLyDlpZbmsaAgJHt0aWNrZXRUb3RhbHMucHJpemVUaWNrZXRzfSDlvKBgfSAvPgogICAgICAgICAgICAgIDxNZXRyaWMgbGFiZWw9IuS4reWlluWPkeaUviIgdmFsdWU9e2Ake2Zvcm1hdENyZWRpdHMoYmFsYW5jZS5wYWlkT3V0KX0gY3JgfSB0b25lPSJuZWdhdGl2ZSIgaGludD17YCR7YmFsYW5jZS5kcmF3c30g5qyh5byA5aWWYH0gLz4KICAgICAgICAgICAgICA8TWV0cmljIGxhYmVsPSLlgJLmiaPlm57mlLYiIHZhbHVlPXtgJHtmb3JtYXRDcmVkaXRzKGJhbGFuY2UuY2xhd2VkQmFjayl9IGNyYH0gdG9uZT0icG9zaXRpdmUiIC8+CiAgICAgICAgICAgICAgPE1ldHJpYyBsYWJlbD0i5Y+C5LiO5Lq65pWwIiB2YWx1ZT17YCR7cGVyVXNlci5sZW5ndGh9YH0gaGludD17YOWkluWciOWRveS4rSAke2JhbGFuY2Uub3V0ZXJIaXRzfSDmrKFgfSAvPgogICAgICAgICAgICAgIDxNZXRyaWMKICAgICAgICAgICAgICAgIGxhYmVsPSLlrp7pmYXov5Tov5jnjociCiAgICAgICAgICAgICAgICB2YWx1ZT17YWN0dWFsUmF0ZSA9PT0gbnVsbCA/ICLigJQiIDogYCR7YWN0dWFsUmF0ZX0lYH0KICAgICAgICAgICAgICAgIGhpbnQ9e2Ake2NvbmZpZy5tdWx0aXBsaWVyQmFzZSA9PT0gImJhdGNoIiA/ICLphY3nva7ljZXmir3lj6PlvoQiIDogIumFjee9ruWPo+W+hCJ9ICR7Y29uZmlndXJlZFJhdGV9JWB9CiAgICAgICAgICAgICAgLz4KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIDxwIGNsYXNzTmFtZT0idGV4dC1bMTFweF0gdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICDlh4DmlLbnm4rlj6rnu5/orqHlt7LlvIDlpZbnmoTliLjvvJvnqpflj6PlhoXov5jmnIkge3RpY2tldFRvdGFscy51bnVzZWRUaWNrZXRzfSDlvKDmnKrlvIDlpZbvvIjpnaLlgLx7IiAifQogICAgICAgICAgICAgIHtmb3JtYXRDcmVkaXRzKHRpY2tldFRvdGFscy51bnVzZWRDcmVkaXRzKX0gY3LvvInlt7LmlLborqvmnKrlhZHnjrDjgILlgJLmiaPlm57mlLbmmK/miornlKjmiLflt7LmnInkvZnpop3liJLlm57vvIwKICAgICAgICAgICAgICDkuI3mmK/mlrDlop7njrDph5HmtYHlhaXvvJvkuK3lpZblj5HmlL7otbDluKbov4fmnJ/nmoTkuLTml7bkvZnpop3vvIzov4fmnJ/mnKrnlKjkuI3kvJrnnJ/nmoTku5jlh7rjgIIKICAgICAgICAgICAgICDotaDliLjmoaPkuI3liqggY3LvvIzlroPmjInjgIzov5nkuIDms6jnmoTliLjpnaLlt7LmlLbjgIHlhZHku5jlu7blkI7jgI3okL3lnKjlh4DmlLbnm4rph4zvvIzlj5Hlh7rljrvnmoTliLjopoHnrYnlroPooqvmir3mjonmiY3ovazmiJDmiJDmnKzjgIIKICAgICAgICAgICAgPC9wPgogICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICA8L0NhcmQ+CgogICAgICAgIDxDYXJkPgogICAgICAgICAgPENhcmRIZWFkZXIgY2xhc3NOYW1lPSJwYi0yIj4KICAgICAgICAgICAgPENhcmRUaXRsZSBjbGFzc05hbWU9InRleHQtYmFzZSI+5oyJ55So5oi3PC9DYXJkVGl0bGU+CiAgICAgICAgICA8L0NhcmRIZWFkZXI+CiAgICAgICAgICA8Q2FyZENvbnRlbnQ+CiAgICAgICAgICAgIHtwZXJVc2VyLmxlbmd0aCA9PT0gMCA/ICgKICAgICAgICAgICAgICA8cCBjbGFzc05hbWU9InRleHQtc20gdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj7or6Xml7bmrrXmsqHmnInlvIDlpZborrDlvZXjgII8L3A+CiAgICAgICAgICAgICkgOiAoCiAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9Im92ZXJmbG93LXgtYXV0byByb3VuZGVkLWxnIGJvcmRlciBib3JkZXItYm9yZGVyIj4KICAgICAgICAgICAgICAgIDx0YWJsZSBjbGFzc05hbWU9InctZnVsbCB0ZXh0LWxlZnQgdGV4dC1zbSI+CiAgICAgICAgICAgICAgICAgIDx0aGVhZCBjbGFzc05hbWU9ImJnLXNlY29uZGFyeS81MCB0ZXh0LXhzIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICAgICAgICAgICAgPHRyPgogICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj7nlKjmiLc8L3RoPgogICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj7mir3lpZbmrKHmlbA8L3RoPgogICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj7lpJblnIjlkb3kuK08L3RoPgogICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj7lt7LlvIDlpZbliLjpnaLlgLw8L3RoPgogICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj7kuK3lpZblj5HmlL48L3RoPgogICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj7lgJLmiaPlm57mlLY8L3RoPgogICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj7nq5nngrnlh4DmlLbnm4o8L3RoPgogICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj7mnIDov5Hlj4LkuI48L3RoPgogICAgICAgICAgICAgICAgICAgIDwvdHI+CiAgICAgICAgICAgICAgICAgIDwvdGhlYWQ+CiAgICAgICAgICAgICAgICAgIDx0Ym9keSBjbGFzc05hbWU9ImRpdmlkZS15IGRpdmlkZS1ib3JkZXIiPgogICAgICAgICAgICAgICAgICAgIHtwZXJVc2VyLm1hcCgodSkgPT4gKAogICAgICAgICAgICAgICAgICAgICAgPHRyIGtleT17dS51c2VySWR9IGNsYXNzTmFtZT0iaG92ZXI6Ymctc2Vjb25kYXJ5LzMwIj4KICAgICAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHgtMyBweS0yIj57dS5lbWFpbH08L3RkPgogICAgICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweC0zIHB5LTIgdGFidWxhci1udW1zIj57dS5kcmF3c308L3RkPgogICAgICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweC0zIHB5LTIgdGFidWxhci1udW1zIj57dS5vdXRlckhpdHN9PC90ZD4KICAgICAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHgtMyBweS0yIHRhYnVsYXItbnVtcyI+e2Zvcm1hdENyZWRpdHModS50aWNrZXRGYWNlKX0gY3I8L3RkPgogICAgICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweC0zIHB5LTIgdGFidWxhci1udW1zIHRleHQtW2NvbG9yOnZhcigtLWRlc3RydWN0aXZlKV0iPgogICAgICAgICAgICAgICAgICAgICAgICAgIHtmb3JtYXRDcmVkaXRzKHUucGFpZE91dCl9IGNyCiAgICAgICAgICAgICAgICAgICAgICAgIDwvdGQ+CiAgICAgICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB4LTMgcHktMiB0YWJ1bGFyLW51bXMgdGV4dC1bY29sb3I6dmFyKC0tcHJpbWFyeSldIj4KICAgICAgICAgICAgICAgICAgICAgICAgICB7Zm9ybWF0Q3JlZGl0cyh1LmNsYXdlZEJhY2spfSBjcgogICAgICAgICAgICAgICAgICAgICAgICA8L3RkPgogICAgICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweC0zIHB5LTIiPgogICAgICAgICAgICAgICAgICAgICAgICAgIDxTaWduZWQgdmFsdWU9e3UubmV0fSAvPgogICAgICAgICAgICAgICAgICAgICAgICA8L3RkPgogICAgICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweC0zIHB5LTIgdGV4dC14cyB0ZXh0LW11dGVkLWZvcmVncm91bmQgdGFidWxhci1udW1zIj4KICAgICAgICAgICAgICAgICAgICAgICAgICB7dS5sYXN0RHJhd0F0ID8gZm9ybWF0Q25XYWxsQ2xvY2sodS5sYXN0RHJhd0F0KSA6ICLigJQifQogICAgICAgICAgICAgICAgICAgICAgICA8L3RkPgogICAgICAgICAgICAgICAgICAgICAgPC90cj4KICAgICAgICAgICAgICAgICAgICApKX0KICAgICAgICAgICAgICAgICAgPC90Ym9keT4KICAgICAgICAgICAgICAgIDwvdGFibGU+CiAgICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgICl9CiAgICAgICAgICA8L0NhcmRDb250ZW50PgogICAgICAgIDwvQ2FyZD4KCiAgICAgICAgPENhcmQ+CiAgICAgICAgICA8Q2FyZEhlYWRlciBjbGFzc05hbWU9InBiLTIiPgogICAgICAgICAgICA8Q2FyZFRpdGxlIGNsYXNzTmFtZT0idGV4dC1iYXNlIj4KICAgICAgICAgICAgICDpgJDmrKHmmI7nu4YKICAgICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9Im1sLTIgdGV4dC14cyBmb250LW5vcm1hbCB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICAgICAgICAgICAg5YWxIHtkZXRhaWxUb3RhbH0g5rOoIMK3IOavj+mhtSB7REVUQUlMX1BBR0VfU0laRX0g5p2hIMK3IOaUtuebiuaMieWNleazqOWPo+W+hO+8muWIuOmdoiArIOWbnuaUtiDiiJIg5Y+R5pS+CiAgICAgICAgICAgICAgPC9zcGFuPgogICAgICAgICAgICA8L0NhcmRUaXRsZT4KICAgICAgICAgIDwvQ2FyZEhlYWRlcj4KICAgICAgICAgIDxDYXJkQ29udGVudD4KICAgICAgICAgICAge3JlY29yZHMubGVuZ3RoID09PSAwID8gKAogICAgICAgICAgICAgIDxwIGNsYXNzTmFtZT0idGV4dC1zbSB0ZXh0LW11dGVkLWZvcmVncm91bmQiPuivpeaXtuauteayoeacieW8gOWlluiusOW9leOAgjwvcD4KICAgICAgICAgICAgKSA6ICgKICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0ib3ZlcmZsb3cteC1hdXRvIHJvdW5kZWQtbGcgYm9yZGVyIGJvcmRlci1ib3JkZXIiPgogICAgICAgICAgICAgICAgPHRhYmxlIGNsYXNzTmFtZT0idy1mdWxsIHRleHQtbGVmdCB0ZXh0LXNtIj4KICAgICAgICAgICAgICAgICAgPHRoZWFkIGNsYXNzTmFtZT0iYmctc2Vjb25kYXJ5LzUwIHRleHQteHMgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICAgICAgICA8dHI+CiAgICAgICAgICAgICAgICAgICAgICA8dGggY2xhc3NOYW1lPSJweC0zIHB5LTIgZm9udC1tZWRpdW0iPuaXtumXtDwvdGg+CiAgICAgICAgICAgICAgICAgICAgICA8dGggY2xhc3NOYW1lPSJweC0zIHB5LTIgZm9udC1tZWRpdW0iPueUqOaItzwvdGg+CiAgICAgICAgICAgICAgICAgICAgICA8dGggY2xhc3NOYW1lPSJweC0zIHB5LTIgZm9udC1tZWRpdW0iPuWciOWxgjwvdGg+CiAgICAgICAgICAgICAgICAgICAgICA8dGggY2xhc3NOYW1lPSJweC0zIHB5LTIgZm9udC1tZWRpdW0iPue7k+aenDwvdGg+CiAgICAgICAgICAgICAgICAgICAgICA8dGggY2xhc3NOYW1lPSJweC0zIHB5LTIgZm9udC1tZWRpdW0iPueUqOaItyBjciDlj5jliqg8L3RoPgogICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj7liLg8L3RoPgogICAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHgtMyBweS0yIGZvbnQtbWVkaXVtIj7nq5nngrnlh4DmlLbnm4o8L3RoPgogICAgICAgICAgICAgICAgICAgIDwvdHI+CiAgICAgICAgICAgICAgICAgIDwvdGhlYWQ+CiAgICAgICAgICAgICAgICAgIDx0Ym9keSBjbGFzc05hbWU9ImRpdmlkZS15IGRpdmlkZS1ib3JkZXIiPgogICAgICAgICAgICAgICAgICAgIHtyZWNvcmRzLm1hcCgocikgPT4gKAogICAgICAgICAgICAgICAgICAgICAgPHRyIGtleT17ci5pZH0gY2xhc3NOYW1lPSJob3ZlcjpiZy1zZWNvbmRhcnkvMzAiPgogICAgICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweC0zIHB5LTIgdGV4dC14cyB0ZXh0LW11dGVkLWZvcmVncm91bmQgdGFidWxhci1udW1zIj4KICAgICAgICAgICAgICAgICAgICAgICAgICB7ci5jcmVhdGVkQXQgPyBmb3JtYXRDbldhbGxDbG9jayhyLmNyZWF0ZWRBdCkgOiAi4oCUIn0KICAgICAgICAgICAgICAgICAgICAgICAgPC90ZD4KICAgICAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHgtMyBweS0yIj4KICAgICAgICAgICAgICAgICAgICAgICAgICB7ZW1haWxCeUlkLmdldChyLnVzZXJJZCkgPz8gci51c2VySWQuc2xpY2UoMCwgOCl9CiAgICAgICAgICAgICAgICAgICAgICAgIDwvdGQ+CiAgICAgICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB4LTMgcHktMiI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgPEJhZGdlIHRvbmU9e3IucmluZyA9PT0gIm91dGVyIiA/ICJhY2NlbnQiIDogIm11dGVkIn0gY2xhc3NOYW1lPSJ0ZXh0LVsxMHB4XSI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICB7ci5yaW5nID09PSAib3V0ZXIiID8gIuWkluWciCIgOiAi5YaF5ZyIIn0KICAgICAgICAgICAgICAgICAgICAgICAgICA8L0JhZGdlPgogICAgICAgICAgICAgICAgICAgICAgICA8L3RkPgogICAgICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweC0zIHB5LTIiPgogICAgICAgICAgICAgICAgICAgICAgICAgIHtyLmxhYmVsfQogICAgICAgICAgICAgICAgICAgICAgICAgIHtyLnJpbmcgPT09ICJvdXRlciIgJiYgci5tdWx0aXBsaWVyICE9PSBudWxsICYmICgKICAgICAgICAgICAgICAgICAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT0ibWwtMSB0ZXh0LXhzIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIO+8iMOXe3IubXVsdGlwbGllcn3vvIzln7rmlbAge2Zvcm1hdENyZWRpdHMoci5iYXNlQ3JlZGl0cyl9IGNy77yJCiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8L3NwYW4+CiAgICAgICAgICAgICAgICAgICAgICAgICAgKX0KICAgICAgICAgICAgICAgICAgICAgICAgPC90ZD4KICAgICAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHgtMyBweS0yIj4KICAgICAgICAgICAgICAgICAgICAgICAgICB7ci5kZWx0YUNyZWRpdHMgPT09IDAgJiYgci5ncmFudFRpY2tldHMgPiAwID8gKAogICAgICAgICAgICAgICAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPSJ0ZXh0LXhzIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+5LiN5Y+RIGNy77yI6LWg5Yi45qGj77yJPC9zcGFuPgogICAgICAgICAgICAgICAgICAgICAgICAgICkgOiAoCiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8U2lnbmVkIHZhbHVlPXtyLmRlbHRhQ3JlZGl0c30gLz4KICAgICAgICAgICAgICAgICAgICAgICAgICApfQogICAgICAgICAgICAgICAgICAgICAgICA8L3RkPgogICAgICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweC0zIHB5LTIgdGV4dC14cyB0ZXh0LW11dGVkLWZvcmVncm91bmQgdGFidWxhci1udW1zIj4KICAgICAgICAgICAgICAgICAgICAgICAgICB7VElDS0VUX0xBQkVMW3IudGlja2V0U291cmNlXX0KICAgICAgICAgICAgICAgICAgICAgICAgICB7ci50aWNrZXRTb3VyY2UgPT09ICJidXkiID8gYCAke2Zvcm1hdENyZWRpdHMoci50aWNrZXRDcmVkaXRzKX0gY3JgIDogIiJ9CiAgICAgICAgICAgICAgICAgICAgICAgIDwvdGQ+CiAgICAgICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB4LTMgcHktMiI+CiAgICAgICAgICAgICAgICAgICAgICAgICAgPFNpZ25lZCB2YWx1ZT17ZHJhd05ldENyZWRpdHMocil9IC8+CiAgICAgICAgICAgICAgICAgICAgICAgIDwvdGQ+CiAgICAgICAgICAgICAgICAgICAgICA8L3RyPgogICAgICAgICAgICAgICAgICAgICkpfQogICAgICAgICAgICAgICAgICA8L3Rib2R5PgogICAgICAgICAgICAgICAgPC90YWJsZT4KICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgKX0KICAgICAgICAgICAgPFBhZ2luYXRpb24KICAgICAgICAgICAgICBwYWdlPXtwYWdlfQogICAgICAgICAgICAgIHRvdGFsUGFnZXM9e2RldGFpbFRvdGFsUGFnZXN9CiAgICAgICAgICAgICAgYmFzZVBhdGg9Ii9hZG1pbi9sb3R0ZXJ5IgogICAgICAgICAgICAgIHBhcmFtcz17eyByYW5nZTogcmFuZ2UgPT09ICJhbGwiID8gdW5kZWZpbmVkIDogcmFuZ2UgfX0KICAgICAgICAgICAgLz4KICAgICAgICAgIDwvQ2FyZENvbnRlbnQ+CiAgICAgICAgPC9DYXJkPgogICAgICA8L1BhZ2VCb2R5PgogICAgPC8+CiAgKTsKfQo=
+import { PageHeader } from "@/components/dashboard/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Pagination } from "@/components/dashboard/pagination";
+import { db } from "@/lib/db/d1-http";
+import { users } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { requireUser } from "@/lib/usage/meter";
+import { redirect } from "next/navigation";
+import { formatCredits } from "@/lib/billing/credits";
+import { cnLastNDaysStart, cnStartOfToday, cnStartOfTomorrow, formatCnWallClock } from "@/lib/date";
+import { getLotteryConfig } from "@/lib/lottery/config";
+import { activityWindow, returnRatePercent, round2 } from "@/lib/lottery/prize-math";
+import {
+  drawNetCredits,
+  listDrawRecords,
+  lotteryBalance,
+  lotteryTicketTotals,
+  lotteryUserRecords,
+  type DrawRecord,
+  type LotteryWindow,
+} from "@/lib/lottery/records";
+import { cn } from "@/lib/utils";
+
+import { PageBody } from "@/components/dashboard/section";
+
+export const dynamic = "force-dynamic";
+
+const DETAIL_PAGE_SIZE = 10;
+
+const RANGE_TABS: { value: string; label: string }[] = [
+  { value: "today", label: "今日" },
+  { value: "7d", label: "近 7 日" },
+  { value: "30d", label: "近 30 日" },
+  { value: "all", label: "全部" },
+];
+
+/** 时间窗按北京时间算，与用量看板一致；「全部」即不加过滤。 */
+function resolveWindow(range: string): LotteryWindow | undefined {
+  const end = cnStartOfTomorrow();
+  if (range === "today") return { start: cnStartOfToday(), end };
+  if (range === "7d") return { start: cnLastNDaysStart(7), end };
+  if (range === "30d") return { start: cnLastNDaysStart(30), end };
+  return undefined;
+}
+
+function Metric({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "positive" | "negative";
+}) {
+  return (
+    <div className="rounded-lg border border-border px-3 py-2.5">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p
+        className={cn(
+          "mt-1 text-lg font-semibold tabular-nums",
+          tone === "positive" && "text-[color:var(--primary)]",
+          tone === "negative" && "text-[color:var(--destructive)]",
+        )}
+      >
+        {value}
+      </p>
+      {hint && <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
+function Signed({ value, suffix = " cr" }: { value: number; suffix?: string }) {
+  return (
+    <span
+      className={cn(
+        "font-medium tabular-nums",
+        value > 0
+          ? "text-[color:var(--primary)]"
+          : value < 0
+            ? "text-[color:var(--destructive)]"
+            : "text-muted-foreground",
+      )}
+    >
+      {value > 0 ? "+" : ""}
+      {formatCredits(value)}
+      {suffix}
+    </span>
+  );
+}
+
+const TICKET_LABEL: Record<DrawRecord["ticketSource"], string> = {
+  buy: "购买",
+  gift: "赠送",
+  prize: "抽中",
+  free: "免费",
+  unknown: "已失效",
+};
+
+export default async function AdminLotteryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ range?: string; page?: string }>;
+}) {
+  const currentUserId = await requireUser();
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
+
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    redirect("/dashboard");
+  }
+
+  const rawRange = params.range ?? "all";
+  const range = RANGE_TABS.some((t) => t.value === rawRange) ? rawRange : "all";
+  const win = resolveWindow(range);
+
+  const [config, balance, perUser, records, ticketTotals] = await Promise.all([
+    getLotteryConfig(),
+    lotteryBalance({ win }),
+    lotteryUserRecords(win),
+    listDrawRecords({ win, limit: DETAIL_PAGE_SIZE, offset: (page - 1) * DETAIL_PAGE_SIZE }),
+    lotteryTicketTotals(win),
+  ]);
+
+  // 开奖总注数就是同一窗口的累计统计行，直接当分页总数用，不再 COUNT 明细。
+  const detailTotal = balance.draws;
+  const detailTotalPages = Math.max(1, Math.ceil(detailTotal / DETAIL_PAGE_SIZE));
+
+  const activity = activityWindow(config);
+  const configuredRate = returnRatePercent(config);
+  // 实际返还率只按已开奖的券算：净发出去的 cr / 收到的券面值。倒扣算在分子里（它抵了奖）。
+  const actualRate = balance.ticketFace > 0
+    ? round2(((balance.paidOut - balance.clawedBack) / balance.ticketFace) * 100)
+    : null;
+
+  const emailById = new Map(perUser.map((u) => [u.userId, u.email]));
+
+  return (
+    <>
+      <PageHeader
+        title="活动记录"
+        description="限时活动 · 用户参与明细与站点收益"
+      />
+
+      <PageBody className="space-y-6">
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">
+              收益概览
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                {activity.status === "disabled"
+                  ? "活动当前未开启"
+                  : `${activity.status === "active" ? "进行中" : activity.status === "pending" ? "未开始" : "已结束"} · ${config.startAt || "—"} ~ ${config.endAt || "—"} · 券价 ${formatCredits(config.ticketPriceCredits)} cr · 外圈 ${config.outerChancePercent}%`}
+              </span>
+            </CardTitle>
+            <div className="flex gap-1 rounded-lg bg-muted p-1">
+              {RANGE_TABS.map((tab) => (
+                <a
+                  key={tab.value}
+                  href={`/admin/lottery${tab.value === "all" ? "" : `?range=${tab.value}`}`}
+                  className={cn(
+                    "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                    range === tab.value
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {tab.label}
+                </a>
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+              <Metric label="站点净收益" value={`${formatCredits(balance.net)} cr`} tone={balance.net >= 0 ? "positive" : "negative"} hint="券面 + 回收 − 发放" />
+              <Metric label="售券收入" value={`${formatCredits(ticketTotals.boughtCredits)} cr`} hint={`${ticketTotals.boughtTickets} 张 · 赠券 档位 ${ticketTotals.giftTickets} / 奖池 ${ticketTotals.prizeTickets} 张`} />
+              <Metric label="中奖发放" value={`${formatCredits(balance.paidOut)} cr`} tone="negative" hint={`${balance.draws} 次开奖`} />
+              <Metric label="倒扣回收" value={`${formatCredits(balance.clawedBack)} cr`} tone="positive" />
+              <Metric label="参与人数" value={`${perUser.length}`} hint={`外圈命中 ${balance.outerHits} 次`} />
+              <Metric
+                label="实际返还率"
+                value={actualRate === null ? "—" : `${actualRate}%`}
+                hint={`${config.multiplierBase === "batch" ? "配置单抽口径" : "配置口径"} ${configuredRate}%`}
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              净收益只统计已开奖的券；窗口内还有 {ticketTotals.unusedTickets} 张未开奖（面值{" "}
+              {formatCredits(ticketTotals.unusedCredits)} cr）已收讫未兑现。倒扣回收是把用户已有余额划回，
+              不是新增现金流入；中奖发放走带过期的临时余额，过期未用不会真的付出。
+              赠券档不动 cr，它按「这一注的券面已收、兑付延后」落在净收益里，发出去的券要等它被抽掉才转成成本。
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">按用户</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {perUser.length === 0 ? (
+              <p className="text-sm text-muted-foreground">该时段没有开奖记录。</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-secondary/50 text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">用户</th>
+                      <th className="px-3 py-2 font-medium">抽奖次数</th>
+                      <th className="px-3 py-2 font-medium">外圈命中</th>
+                      <th className="px-3 py-2 font-medium">已开奖券面值</th>
+                      <th className="px-3 py-2 font-medium">中奖发放</th>
+                      <th className="px-3 py-2 font-medium">倒扣回收</th>
+                      <th className="px-3 py-2 font-medium">站点净收益</th>
+                      <th className="px-3 py-2 font-medium">最近参与</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {perUser.map((u) => (
+                      <tr key={u.userId} className="hover:bg-secondary/30">
+                        <td className="px-3 py-2">{u.email}</td>
+                        <td className="px-3 py-2 tabular-nums">{u.draws}</td>
+                        <td className="px-3 py-2 tabular-nums">{u.outerHits}</td>
+                        <td className="px-3 py-2 tabular-nums">{formatCredits(u.ticketFace)} cr</td>
+                        <td className="px-3 py-2 tabular-nums text-[color:var(--destructive)]">
+                          {formatCredits(u.paidOut)} cr
+                        </td>
+                        <td className="px-3 py-2 tabular-nums text-[color:var(--primary)]">
+                          {formatCredits(u.clawedBack)} cr
+                        </td>
+                        <td className="px-3 py-2">
+                          <Signed value={u.net} />
+                        </td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
+                          {u.lastDrawAt ? formatCnWallClock(u.lastDrawAt) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">
+              逐次明细
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                共 {detailTotal} 注 · 每页 {DETAIL_PAGE_SIZE} 条 · 收益按单注口径：券面 + 回收 − 发放
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {records.length === 0 ? (
+              <p className="text-sm text-muted-foreground">该时段没有开奖记录。</p>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-secondary/50 text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">时间</th>
+                      <th className="px-3 py-2 font-medium">用户</th>
+                      <th className="px-3 py-2 font-medium">圈层</th>
+                      <th className="px-3 py-2 font-medium">结果</th>
+                      <th className="px-3 py-2 font-medium">用户 cr 变动</th>
+                      <th className="px-3 py-2 font-medium">券</th>
+                      <th className="px-3 py-2 font-medium">站点净收益</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {records.map((r) => (
+                      <tr key={r.id} className="hover:bg-secondary/30">
+                        <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
+                          {r.createdAt ? formatCnWallClock(r.createdAt) : "—"}
+                        </td>
+                        <td className="px-3 py-2">
+                          {emailById.get(r.userId) ?? r.userId.slice(0, 8)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <Badge tone={r.ring === "outer" ? "accent" : "muted"} className="text-[10px]">
+                            {r.ring === "outer" ? "外圈" : "内圈"}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2">
+                          {r.label}
+                          {r.ring === "outer" && r.multiplier !== null && (
+                            <span className="ml-1 text-xs text-muted-foreground">
+                              （×{r.multiplier}，基数 {formatCredits(r.baseCredits)} cr）
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2">
+                          {r.deltaCredits === 0 && r.grantTickets > 0 ? (
+                            <span className="text-xs text-muted-foreground">不发 cr（赠券档）</span>
+                          ) : (
+                            <Signed value={r.deltaCredits} />
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
+                          {TICKET_LABEL[r.ticketSource]}
+                          {r.ticketSource === "buy" ? ` ${formatCredits(r.ticketCredits)} cr` : ""}
+                        </td>
+                        <td className="px-3 py-2">
+                          <Signed value={drawNetCredits(r)} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <Pagination
+              page={page}
+              totalPages={detailTotalPages}
+              basePath="/admin/lottery"
+              params={{ range: range === "all" ? undefined : range }}
+            />
+          </CardContent>
+        </Card>
+      </PageBody>
+    </>
+  );
+}

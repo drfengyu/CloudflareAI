@@ -1,1 +1,477 @@
-InVzZSBjbGllbnQiOwoKaW1wb3J0IHsgdXNlU3RhdGUgfSBmcm9tICJyZWFjdCI7CmltcG9ydCB7IEJ1dHRvbiB9IGZyb20gIkAvY29tcG9uZW50cy91aS9idXR0b24iOwppbXBvcnQgeyBCYWRnZSB9IGZyb20gIkAvY29tcG9uZW50cy91aS9iYWRnZSI7CmltcG9ydCB7CiAgVGFibGUsCiAgVGFibGVCb2R5LAogIFRhYmxlQ2VsbCwKICBUYWJsZUhlYWQsCiAgVGFibGVIZWFkZXIsCiAgVGFibGVSb3csCn0gZnJvbSAiQC9jb21wb25lbnRzL3VpL3RhYmxlIjsKaW1wb3J0IHsKICBEaWFsb2csCiAgRGlhbG9nQ29udGVudCwKICBEaWFsb2dEZXNjcmlwdGlvbiwKICBEaWFsb2dGb290ZXIsCiAgRGlhbG9nSGVhZGVyLAogIERpYWxvZ1RpdGxlLAogIERpYWxvZ1RyaWdnZXIsCn0gZnJvbSAiQC9jb21wb25lbnRzL3VpL2RpYWxvZyI7CmltcG9ydCB7IElucHV0IH0gZnJvbSAiQC9jb21wb25lbnRzL3VpL2lucHV0IjsKaW1wb3J0IHsgTGFiZWwgfSBmcm9tICJAL2NvbXBvbmVudHMvdWkvbGFiZWwiOwppbXBvcnQgewogIFNlbGVjdCwKICBTZWxlY3RDb250ZW50LAogIFNlbGVjdEl0ZW0sCiAgU2VsZWN0VHJpZ2dlciwKICBTZWxlY3RWYWx1ZSwKfSBmcm9tICJAL2NvbXBvbmVudHMvdWkvc2VsZWN0IjsKaW1wb3J0IHsgU3dpdGNoIH0gZnJvbSAiQC9jb21wb25lbnRzL3VpL3N3aXRjaCI7CmltcG9ydCB7IFBsdXMsIFBlbmNpbCwgVHJhc2gyLCBMaW5rLCBBY3Rpdml0eSwgV2lmaSwgV2lmaU9mZiB9IGZyb20gImx1Y2lkZS1yZWFjdCI7CmltcG9ydCB7IHRvYXN0IH0gZnJvbSAic29ubmVyIjsKaW1wb3J0IExpbmtOZXh0IGZyb20gIm5leHQvbGluayI7CmltcG9ydCB7CiAgQ0hBTk5FTF9UWVBFUywKICBDSEFOTkVMX0NPTkZJR19GSUVMRFMsCiAgdHlwZSBDb25maWdGaWVsZCwKfSBmcm9tICJAL2xpYi9jaGFubmVscy9yZWdpc3RyeSI7CgppbnRlcmZhY2UgQ2hhbm5lbCB7CiAgaWQ6IHN0cmluZzsKICBuYW1lOiBzdHJpbmc7CiAgdHlwZTogc3RyaW5nIHwgbnVsbDsKICBzdGF0dXM6IG51bWJlcjsKICBjb25maWc6IHN0cmluZyB8IG51bGw7CiAgY3JlYXRlZEF0OiBEYXRlIHwgc3RyaW5nIHwgbnVsbDsKfQoKaW50ZXJmYWNlIENoYW5uZWxzQ2xpZW50UHJvcHMgewogIGluaXRpYWxDaGFubmVsczogQ2hhbm5lbFtdOwp9CgppbXBvcnQgeyBQYWdlQm9keSB9IGZyb20gIkAvY29tcG9uZW50cy9kYXNoYm9hcmQvc2VjdGlvbiI7CgpleHBvcnQgZnVuY3Rpb24gQ2hhbm5lbHNDbGllbnQoeyBpbml0aWFsQ2hhbm5lbHMgfTogQ2hhbm5lbHNDbGllbnRQcm9wcykgewogIGNvbnN0IFtjaGFubmVscywgc2V0Q2hhbm5lbHNdID0gdXNlU3RhdGU8Q2hhbm5lbFtdPihpbml0aWFsQ2hhbm5lbHMpOwogIGNvbnN0IFtsb2FkaW5nLCBzZXRMb2FkaW5nXSA9IHVzZVN0YXRlKGZhbHNlKTsKICBjb25zdCBbaGVhbHRoQ2hlY2tMb2FkaW5nLCBzZXRIZWFsdGhDaGVja0xvYWRpbmddID0gdXNlU3RhdGU8c3RyaW5nIHwgbnVsbD4obnVsbCk7CiAgY29uc3QgW2RpYWxvZ09wZW4sIHNldERpYWxvZ09wZW5dID0gdXNlU3RhdGUoZmFsc2UpOwogIGNvbnN0IFtlZGl0aW5nQ2hhbm5lbCwgc2V0RWRpdGluZ0NoYW5uZWxdID0gdXNlU3RhdGU8Q2hhbm5lbCB8IG51bGw+KG51bGwpOwogIGNvbnN0IFtmb3JtRGF0YSwgc2V0Rm9ybURhdGFdID0gdXNlU3RhdGUoewogICAgbmFtZTogIiIsCiAgICB0eXBlOiAiY2xvdWRmbGFyZSIsCiAgICBjb25maWc6ICIiLAogIH0pOwogIGNvbnN0IFtzZWFyY2hUZXJtLCBzZXRTZWFyY2hUZXJtXSA9IHVzZVN0YXRlKCIiKTsKCiAgYXN5bmMgZnVuY3Rpb24gZmV0Y2hDaGFubmVscygpIHsKICAgIHNldExvYWRpbmcodHJ1ZSk7CiAgICB0cnkgewogICAgICBjb25zdCByZXMgPSBhd2FpdCBmZXRjaCgiL2FwaS9jaGFubmVscyIpOwogICAgICBjb25zdCBkYXRhID0gYXdhaXQgcmVzLmpzb24oKTsKICAgICAgc2V0Q2hhbm5lbHMoZGF0YS5kYXRhIHx8IFtdKTsKICAgIH0gY2F0Y2ggewogICAgICB0b2FzdC5lcnJvcigi6I635Y+W5rig6YGT5YiX6KGo5aSx6LSlIik7CiAgICB9IGZpbmFsbHkgewogICAgICBzZXRMb2FkaW5nKGZhbHNlKTsKICAgIH0KICB9CgogIGFzeW5jIGZ1bmN0aW9uIGhhbmRsZVN1Ym1pdChlOiBSZWFjdC5Gb3JtRXZlbnQpIHsKICAgIGUucHJldmVudERlZmF1bHQoKTsKICAgIHNldExvYWRpbmcodHJ1ZSk7CiAgICB0cnkgewogICAgICBjb25zdCB1cmwgPSBlZGl0aW5nQ2hhbm5lbAogICAgICAgID8gYC9hcGkvY2hhbm5lbHMvJHtlZGl0aW5nQ2hhbm5lbC5pZH1gCiAgICAgICAgOiAiL2FwaS9jaGFubmVscyI7CiAgICAgIGNvbnN0IG1ldGhvZCA9IGVkaXRpbmdDaGFubmVsID8gIlBVVCIgOiAiUE9TVCI7CgogICAgICBjb25zdCByZXMgPSBhd2FpdCBmZXRjaCh1cmwsIHsKICAgICAgICBtZXRob2QsCiAgICAgICAgaGVhZGVyczogeyAiQ29udGVudC1UeXBlIjogImFwcGxpY2F0aW9uL2pzb24iIH0sCiAgICAgICAgYm9keTogSlNPTi5zdHJpbmdpZnkoZm9ybURhdGEpLAogICAgICB9KTsKCiAgICAgIGlmICghcmVzLm9rKSB7CiAgICAgICAgY29uc3QgZXJyb3IgPSBhd2FpdCByZXMuanNvbigpOwogICAgICAgIHRocm93IG5ldyBFcnJvcihlcnJvci5lcnJvciB8fCAi5L+d5a2Y5aSx6LSlIik7CiAgICAgIH0KCiAgICAgIHRvYXN0LnN1Y2Nlc3MoZWRpdGluZ0NoYW5uZWwgPyAi5rig6YGT5bey5pu05pawIiA6ICLmuKDpgZPlt7LliJvlu7oiKTsKICAgICAgc2V0RGlhbG9nT3BlbihmYWxzZSk7CiAgICAgIHNldEVkaXRpbmdDaGFubmVsKG51bGwpOwogICAgICBzZXRGb3JtRGF0YSh7IG5hbWU6ICIiLCB0eXBlOiAiY2xvdWRmbGFyZSIsIGNvbmZpZzogIiIgfSk7CiAgICAgIGZldGNoQ2hhbm5lbHMoKTsKICAgIH0gY2F0Y2ggKGVycikgewogICAgICB0b2FzdC5lcnJvcigoZXJyIGFzIEVycm9yKS5tZXNzYWdlIHx8ICLkv53lrZjmuKDpgZPlpLHotKUiKTsKICAgIH0gZmluYWxseSB7CiAgICAgIHNldExvYWRpbmcoZmFsc2UpOwogICAgfQogIH0KCiAgYXN5bmMgZnVuY3Rpb24gaGFuZGxlRGVsZXRlKGNoYW5uZWxJZDogc3RyaW5nKSB7CiAgICBpZiAoIWNvbmZpcm0oIuehruWumuimgeWIoOmZpOivpea4oOmBk+WQl++8n+atpOaTjeS9nOS4jeWPr+aSpOmUgOOAgiIpKSByZXR1cm47CiAgICB0cnkgewogICAgICBjb25zdCByZXMgPSBhd2FpdCBmZXRjaChgL2FwaS9jaGFubmVscy8ke2NoYW5uZWxJZH1gLCB7CiAgICAgICAgbWV0aG9kOiAiREVMRVRFIiwKICAgICAgfSk7CiAgICAgIGlmICghcmVzLm9rKSB0aHJvdyBuZXcgRXJyb3IoIuWIoOmZpOWksei0pSIpOwogICAgICB0b2FzdC5zdWNjZXNzKCLmuKDpgZPlt7LliKDpmaQiKTsKICAgICAgZmV0Y2hDaGFubmVscygpOwogICAgfSBjYXRjaCB7CiAgICAgIHRvYXN0LmVycm9yKCLliKDpmaTmuKDpgZPlpLHotKUiKTsKICAgIH0KICB9CgogIGFzeW5jIGZ1bmN0aW9uIGhhbmRsZVRvZ2dsZVN0YXR1cyhjaGFubmVsOiBDaGFubmVsKSB7CiAgICBjb25zdCBuZXdTdGF0dXMgPSBjaGFubmVsLnN0YXR1cyA9PT0gMSA/IDIgOiAxOwogICAgdHJ5IHsKICAgICAgY29uc3QgcmVzID0gYXdhaXQgZmV0Y2goYC9hcGkvY2hhbm5lbHMvJHtjaGFubmVsLmlkfWAsIHsKICAgICAgICBtZXRob2Q6ICJQVVQiLAogICAgICAgIGhlYWRlcnM6IHsgIkNvbnRlbnQtVHlwZSI6ICJhcHBsaWNhdGlvbi9qc29uIiB9LAogICAgICAgIGJvZHk6IEpTT04uc3RyaW5naWZ5KHsgc3RhdHVzOiBuZXdTdGF0dXMgfSksCiAgICAgIH0pOwogICAgICBpZiAoIXJlcy5vaykgdGhyb3cgbmV3IEVycm9yKCLmk43kvZzlpLHotKUiKTsKICAgICAgdG9hc3Quc3VjY2VzcyhuZXdTdGF0dXMgPT09IDEgPyAi5rig6YGT5bey5ZCv55SoIiA6ICLmuKDpgZPlt7LnpoHnlKgiKTsKICAgICAgZmV0Y2hDaGFubmVscygpOwogICAgfSBjYXRjaCB7CiAgICAgIHRvYXN0LmVycm9yKCLnirbmgIHliIfmjaLlpLHotKUiKTsKICAgIH0KICB9CgogIGFzeW5jIGZ1bmN0aW9uIGhhbmRsZUhlYWx0aENoZWNrKGNoYW5uZWxJZDogc3RyaW5nKSB7CiAgICBzZXRIZWFsdGhDaGVja0xvYWRpbmcoY2hhbm5lbElkKTsKICAgIHRyeSB7CiAgICAgIGNvbnN0IHJlcyA9IGF3YWl0IGZldGNoKGAvYXBpL2NoYW5uZWxzLyR7Y2hhbm5lbElkfS9oZWFsdGhgKTsKICAgICAgY29uc3QgZGF0YSA9IGF3YWl0IHJlcy5qc29uKCk7CiAgICAgIGlmIChkYXRhLm9rKSB7CiAgICAgICAgdG9hc3Quc3VjY2VzcyhkYXRhLm1lc3NhZ2UgfHwgIui/nuaOpeato+W4uCIpOwogICAgICB9IGVsc2UgewogICAgICAgIHRvYXN0LmVycm9yKGRhdGEubWVzc2FnZSB8fCAi6L+e5o6l5aSx6LSlIik7CiAgICAgIH0KICAgIH0gY2F0Y2ggewogICAgICB0b2FzdC5lcnJvcigi5YGl5bq35qOA5p+l6K+35rGC5aSx6LSlIik7CiAgICB9IGZpbmFsbHkgewogICAgICBzZXRIZWFsdGhDaGVja0xvYWRpbmcobnVsbCk7CiAgICB9CiAgfQoKICBmdW5jdGlvbiBnZXRTdGF0dXNCYWRnZShzdGF0dXM6IG51bWJlcikgewogICAgc3dpdGNoIChzdGF0dXMpIHsKICAgICAgY2FzZSAxOgogICAgICAgIHJldHVybiA8QmFkZ2UgdG9uZT0ic3VjY2VzcyI+5ZCv55SoPC9CYWRnZT47CiAgICAgIGNhc2UgMjoKICAgICAgICByZXR1cm4gPEJhZGdlIHRvbmU9Im11dGVkIj7npoHnlKg8L0JhZGdlPjsKICAgICAgY2FzZSAzOgogICAgICAgIHJldHVybiA8QmFkZ2UgdG9uZT0iZGFuZ2VyIj7lt7LliKDpmaQ8L0JhZGdlPjsKICAgICAgZGVmYXVsdDoKICAgICAgICByZXR1cm4gPEJhZGdlIHRvbmU9Im11dGVkIj57c3RhdHVzfTwvQmFkZ2U+OwogICAgfQogIH0KCiAgZnVuY3Rpb24gb3BlbkNyZWF0ZURpYWxvZygpIHsKICAgIHNldEVkaXRpbmdDaGFubmVsKG51bGwpOwogICAgc2V0Rm9ybURhdGEoeyBuYW1lOiAiIiwgdHlwZTogImNsb3VkZmxhcmUiLCBjb25maWc6ICIiIH0pOwogICAgc2V0RGlhbG9nT3Blbih0cnVlKTsKICB9CgogIGZ1bmN0aW9uIG9wZW5FZGl0RGlhbG9nKGNoYW5uZWw6IENoYW5uZWwpIHsKICAgIHNldEVkaXRpbmdDaGFubmVsKGNoYW5uZWwpOwogICAgc2V0Rm9ybURhdGEoewogICAgICBuYW1lOiBjaGFubmVsLm5hbWUsCiAgICAgIHR5cGU6IGNoYW5uZWwudHlwZSA/PyAiY2xvdWRmbGFyZSIsCiAgICAgIGNvbmZpZzogY2hhbm5lbC5jb25maWcgfHwgIiIsCiAgICB9KTsKICAgIHNldERpYWxvZ09wZW4odHJ1ZSk7CiAgfQoKICAvKiogR2V0IGNvbmZpZyBmaWVsZHMgZm9yIHNlbGVjdGVkIGNoYW5uZWwgdHlwZSAqLwogIGZ1bmN0aW9uIGdldENvbmZpZ0ZpZWxkcyh0eXBlOiBzdHJpbmcpOiBDb25maWdGaWVsZFtdIHsKICAgIHJldHVybiBDSEFOTkVMX0NPTkZJR19GSUVMRFNbdHlwZV0gfHwgW107CiAgfQoKICAvKiogUGFyc2UgY29uZmlnIEpTT04gdG8gb2JqZWN0IGZvciBmb3JtICovCiAgZnVuY3Rpb24gZ2V0Q29uZmlnVmFsdWUoa2V5OiBzdHJpbmcpOiBzdHJpbmcgewogICAgdHJ5IHsKICAgICAgY29uc3QgcGFyc2VkID0gSlNPTi5wYXJzZShmb3JtRGF0YS5jb25maWcgfHwgInt9Iik7CiAgICAgIHJldHVybiAocGFyc2VkIGFzIFJlY29yZDxzdHJpbmcsIHN0cmluZz4pW2tleV0gfHwgIiI7CiAgICB9IGNhdGNoIHsKICAgICAgcmV0dXJuICIiOwogICAgfQogIH0KCiAgLyoqIFNldCBjb25maWcgdmFsdWUgaW4gSlNPTiAqLwogIGZ1bmN0aW9uIHNldENvbmZpZ1ZhbHVlKGtleTogc3RyaW5nLCB2YWx1ZTogc3RyaW5nKSB7CiAgICB0cnkgewogICAgICBjb25zdCBwYXJzZWQgPSBKU09OLnBhcnNlKGZvcm1EYXRhLmNvbmZpZyB8fCAie30iKSBhcyBSZWNvcmQ8c3RyaW5nLCBzdHJpbmc+OwogICAgICBwYXJzZWRba2V5XSA9IHZhbHVlOwogICAgICBzZXRGb3JtRGF0YSh7IC4uLmZvcm1EYXRhLCBjb25maWc6IEpTT04uc3RyaW5naWZ5KHBhcnNlZCwgbnVsbCwgMikgfSk7CiAgICB9IGNhdGNoIHsKICAgICAgY29uc3QgcGFyc2VkOiBSZWNvcmQ8c3RyaW5nLCBzdHJpbmc+ID0ge307CiAgICAgIHBhcnNlZFtrZXldID0gdmFsdWU7CiAgICAgIHNldEZvcm1EYXRhKHsgLi4uZm9ybURhdGEsIGNvbmZpZzogSlNPTi5zdHJpbmdpZnkocGFyc2VkLCBudWxsLCAyKSB9KTsKICAgIH0KICB9CgogIGNvbnN0IGNvbmZpZ0ZpZWxkcyA9IGdldENvbmZpZ0ZpZWxkcyhmb3JtRGF0YS50eXBlKTsKICBjb25zdCBmaWx0ZXJlZENoYW5uZWxzID0gY2hhbm5lbHMuZmlsdGVyKAogICAgKGMpID0+CiAgICAgIGMubmFtZS50b0xvd2VyQ2FzZSgpLmluY2x1ZGVzKHNlYXJjaFRlcm0udG9Mb3dlckNhc2UoKSkgfHwKICAgICAgKGMudHlwZSB8fCAiIikudG9Mb3dlckNhc2UoKS5pbmNsdWRlcyhzZWFyY2hUZXJtLnRvTG93ZXJDYXNlKCkpLAogICk7CgogIHJldHVybiAoCiAgICA8UGFnZUJvZHkgY2xhc3NOYW1lPSJzcGFjZS15LTAiPgogICAgICB7LyogSGVhZGVyICovfQogICAgICA8ZGl2IGNsYXNzTmFtZT0iZmxleCBpdGVtcy1jZW50ZXIganVzdGlmeS1iZXR3ZWVuIG1iLTYiPgogICAgICAgIDxkaXY+CiAgICAgICAgICA8aDEgY2xhc3NOYW1lPSJmb250LXNlcmlmIHRleHQtMnhsIGZvbnQtc2VtaWJvbGQgdHJhY2tpbmctWzAuMDJlbV0iPkFJIOS+m+W6lOWVhua4oOmBkzwvaDE+CiAgICAgICAgICA8cCBjbGFzc05hbWU9InRleHQtc20gdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIG10LTEiPgogICAgICAgICAgICDnrqHnkIYgQUkg5qih5Z6L5L6b5bqU5ZWG55qE6L+e5o6l6YWN572u77yM5pSv5oyBIE9wZW5BSSAvIEFudGhyb3BpYyAvIEF6dXJlIOetieWkmuenjea4oOmBkwogICAgICAgICAgPC9wPgogICAgICAgIDwvZGl2PgogICAgICAgIDxEaWFsb2cgb3Blbj17ZGlhbG9nT3Blbn0gb25PcGVuQ2hhbmdlPXtzZXREaWFsb2dPcGVufT4KICAgICAgICAgIDxEaWFsb2dUcmlnZ2VyIGFzQ2hpbGQ+CiAgICAgICAgICAgIDxCdXR0b24gb25DbGljaz17b3BlbkNyZWF0ZURpYWxvZ30+CiAgICAgICAgICAgICAgPFBsdXMgY2xhc3NOYW1lPSJtci0yIGgtNCB3LTQiIC8+CiAgICAgICAgICAgICAg5re75Yqg5rig6YGTCiAgICAgICAgICAgIDwvQnV0dG9uPgogICAgICAgICAgPC9EaWFsb2dUcmlnZ2VyPgogICAgICAgICAgPERpYWxvZ0NvbnRlbnQgY2xhc3NOYW1lPSJtYXgtdy1sZyI+CiAgICAgICAgICAgIDxmb3JtIG9uU3VibWl0PXtoYW5kbGVTdWJtaXR9PgogICAgICAgICAgICAgIDxEaWFsb2dIZWFkZXI+CiAgICAgICAgICAgICAgICA8RGlhbG9nVGl0bGU+CiAgICAgICAgICAgICAgICAgIHtlZGl0aW5nQ2hhbm5lbCA/ICLnvJbovpHmuKDpgZMiIDogIua3u+WKoOa4oOmBkyJ9CiAgICAgICAgICAgICAgICA8L0RpYWxvZ1RpdGxlPgogICAgICAgICAgICAgICAgPERpYWxvZ0Rlc2NyaXB0aW9uPgogICAgICAgICAgICAgICAgICB7ZWRpdGluZ0NoYW5uZWwKICAgICAgICAgICAgICAgICAgICA/ICLkv67mlLnmuKDpgZPphY3nva7kv6Hmga8iCiAgICAgICAgICAgICAgICAgICAgOiAi5Yib5bu65LiA5Liq5paw55qEIEFJIOS+m+W6lOWVhua4oOmBkyJ9CiAgICAgICAgICAgICAgICA8L0RpYWxvZ0Rlc2NyaXB0aW9uPgogICAgICAgICAgICAgIDwvRGlhbG9nSGVhZGVyPgogICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJncmlkIGdhcC00IHB5LTQiPgogICAgICAgICAgICAgICAgey8qIE5hbWUgKi99CiAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZ3JpZCBnYXAtMiI+CiAgICAgICAgICAgICAgICAgIDxMYWJlbCBodG1sRm9yPSJuYW1lIj7muKDpgZPlkI3np7A8L0xhYmVsPgogICAgICAgICAgICAgICAgICA8SW5wdXQKICAgICAgICAgICAgICAgICAgICBpZD0ibmFtZSIKICAgICAgICAgICAgICAgICAgICB2YWx1ZT17Zm9ybURhdGEubmFtZX0KICAgICAgICAgICAgICAgICAgICBvbkNoYW5nZT17KGUpID0+CiAgICAgICAgICAgICAgICAgICAgICBzZXRGb3JtRGF0YSh7IC4uLmZvcm1EYXRhLCBuYW1lOiBlLnRhcmdldC52YWx1ZSB9KQogICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICBwbGFjZWhvbGRlcj0i5L6L5aaC77yaT3BlbkFJIOS4u+i0puWPtyIKICAgICAgICAgICAgICAgICAgICByZXF1aXJlZAogICAgICAgICAgICAgICAgICAvPgogICAgICAgICAgICAgICAgPC9kaXY+CgogICAgICAgICAgICAgICAgey8qIFR5cGUgKi99CiAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZ3JpZCBnYXAtMiI+CiAgICAgICAgICAgICAgICAgIDxMYWJlbCBodG1sRm9yPSJ0eXBlIj7kvpvlupTllYbnsbvlnos8L0xhYmVsPgogICAgICAgICAgICAgICAgICA8U2VsZWN0CiAgICAgICAgICAgICAgICAgICAgdmFsdWU9e2Zvcm1EYXRhLnR5cGV9CiAgICAgICAgICAgICAgICAgICAgb25WYWx1ZUNoYW5nZT17KHZhbHVlKSA9PgogICAgICAgICAgICAgICAgICAgICAgc2V0Rm9ybURhdGEoewogICAgICAgICAgICAgICAgICAgICAgICAuLi5mb3JtRGF0YSwKICAgICAgICAgICAgICAgICAgICAgICAgdHlwZTogdmFsdWUsCiAgICAgICAgICAgICAgICAgICAgICAgIGNvbmZpZzogIiIsCiAgICAgICAgICAgICAgICAgICAgICB9KQogICAgICAgICAgICAgICAgICAgIH0KICAgICAgICAgICAgICAgICAgICBkaXNhYmxlZD17ISFlZGl0aW5nQ2hhbm5lbH0KICAgICAgICAgICAgICAgICAgPgogICAgICAgICAgICAgICAgICAgIDxTZWxlY3RUcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgICAgPFNlbGVjdFZhbHVlIHBsYWNlaG9sZGVyPSLpgInmi6nnsbvlnosiIC8+CiAgICAgICAgICAgICAgICAgICAgPC9TZWxlY3RUcmlnZ2VyPgogICAgICAgICAgICAgICAgICAgIDxTZWxlY3RDb250ZW50PgogICAgICAgICAgICAgICAgICAgICAge0NIQU5ORUxfVFlQRVMubWFwKCh0KSA9PiAoCiAgICAgICAgICAgICAgICAgICAgICAgIDxTZWxlY3RJdGVtIGtleT17dC52YWx1ZX0gdmFsdWU9e3QudmFsdWV9PgogICAgICAgICAgICAgICAgICAgICAgICAgIHt0LmxhYmVsfQogICAgICAgICAgICAgICAgICAgICAgICA8L1NlbGVjdEl0ZW0+CiAgICAgICAgICAgICAgICAgICAgICApKX0KICAgICAgICAgICAgICAgICAgICA8L1NlbGVjdENvbnRlbnQ+CiAgICAgICAgICAgICAgICAgIDwvU2VsZWN0PgogICAgICAgICAgICAgICAgPC9kaXY+CgogICAgICAgICAgICAgICAgey8qIER5bmFtaWMgQ29uZmlnIEZpZWxkcyAqL30KICAgICAgICAgICAgICAgIHtjb25maWdGaWVsZHMubGVuZ3RoID4gMCAmJiAoCiAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJzcGFjZS15LTMgYm9yZGVyIHJvdW5kZWQtbGcgcC00IGJnLW11dGVkLzMwIj4KICAgICAgICAgICAgICAgICAgICA8cCBjbGFzc05hbWU9InRleHQteHMgZm9udC1tZWRpdW0gdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICAgICAgICAgIOi/nuaOpemFjee9rgogICAgICAgICAgICAgICAgICAgIDwvcD4KICAgICAgICAgICAgICAgICAgICB7Y29uZmlnRmllbGRzLm1hcCgoZmllbGQpID0+ICgKICAgICAgICAgICAgICAgICAgICAgIDxkaXYga2V5PXtmaWVsZC5rZXl9IGNsYXNzTmFtZT0iZ3JpZCBnYXAtMS41Ij4KICAgICAgICAgICAgICAgICAgICAgICAgPExhYmVsIGh0bWxGb3I9e2BjZmctJHtmaWVsZC5rZXl9YH0+CiAgICAgICAgICAgICAgICAgICAgICAgICAge2ZpZWxkLmxhYmVsfQogICAgICAgICAgICAgICAgICAgICAgICAgIHtmaWVsZC5yZXF1aXJlZCAmJiAoCiAgICAgICAgICAgICAgICAgICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9InRleHQtZGVzdHJ1Y3RpdmUgbWwtMSI+Kjwvc3Bhbj4KICAgICAgICAgICAgICAgICAgICAgICAgICApfQogICAgICAgICAgICAgICAgICAgICAgICA8L0xhYmVsPgogICAgICAgICAgICAgICAgICAgICAgICA8SW5wdXQKICAgICAgICAgICAgICAgICAgICAgICAgICBpZD17YGNmZy0ke2ZpZWxkLmtleX1gfQogICAgICAgICAgICAgICAgICAgICAgICAgIHR5cGU9e2ZpZWxkLnR5cGUgPT09ICJwYXNzd29yZCIgPyAicGFzc3dvcmQiIDogInRleHQifQogICAgICAgICAgICAgICAgICAgICAgICAgIHZhbHVlPXtnZXRDb25maWdWYWx1ZShmaWVsZC5rZXkpfQogICAgICAgICAgICAgICAgICAgICAgICAgIG9uQ2hhbmdlPXsoZSkgPT4KICAgICAgICAgICAgICAgICAgICAgICAgICAgIHNldENvbmZpZ1ZhbHVlKGZpZWxkLmtleSwgZS50YXJnZXQudmFsdWUpCiAgICAgICAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgICAgICAgIHBsYWNlaG9sZGVyPXtmaWVsZC5wbGFjZWhvbGRlcn0KICAgICAgICAgICAgICAgICAgICAgICAgICByZXF1aXJlZD17ZmllbGQucmVxdWlyZWR9CiAgICAgICAgICAgICAgICAgICAgICAgIC8+CiAgICAgICAgICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgICAgICAgICApKX0KICAgICAgICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgICAgICApfQoKICAgICAgICAgICAgICAgIHsvKiBSYXcgSlNPTiBFZGl0b3IgKGZhbGxiYWNrKSAqL30KICAgICAgICAgICAgICAgIHtjb25maWdGaWVsZHMubGVuZ3RoID09PSAwICYmICgKICAgICAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9ImdyaWQgZ2FwLTIiPgogICAgICAgICAgICAgICAgICAgIDxMYWJlbCBodG1sRm9yPSJjb25maWciPumFjee9riAoSlNPTik8L0xhYmVsPgogICAgICAgICAgICAgICAgICAgIDx0ZXh0YXJlYQogICAgICAgICAgICAgICAgICAgICAgaWQ9ImNvbmZpZyIKICAgICAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT0iZmxleCBtaW4taC1bODBweF0gdy1mdWxsIHJvdW5kZWQtbWQgYm9yZGVyIGJvcmRlci1pbnB1dCBiZy10cmFuc3BhcmVudCBweC0zIHB5LTIgdGV4dC14cyBmb250LW1vbm8gcGxhY2Vob2xkZXI6dGV4dC1tdXRlZC1mb3JlZ3JvdW5kIGZvY3VzLXZpc2libGU6b3V0bGluZS1ub25lIGZvY3VzLXZpc2libGU6cmluZy0xIGZvY3VzLXZpc2libGU6cmluZy1yaW5nIgogICAgICAgICAgICAgICAgICAgICAgdmFsdWU9e2Zvcm1EYXRhLmNvbmZpZ30KICAgICAgICAgICAgICAgICAgICAgIG9uQ2hhbmdlPXsoZSkgPT4KICAgICAgICAgICAgICAgICAgICAgICAgc2V0Rm9ybURhdGEoeyAuLi5mb3JtRGF0YSwgY29uZmlnOiBlLnRhcmdldC52YWx1ZSB9KQogICAgICAgICAgICAgICAgICAgICAgfQogICAgICAgICAgICAgICAgICAgICAgcGxhY2Vob2xkZXI9J3siYXBpS2V5IjogIi4uLiJ9JwogICAgICAgICAgICAgICAgICAgIC8+CiAgICAgICAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICAgICAgKX0KICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgICA8RGlhbG9nRm9vdGVyPgogICAgICAgICAgICAgICAgPEJ1dHRvbiB0eXBlPSJzdWJtaXQiIGRpc2FibGVkPXtsb2FkaW5nfT4KICAgICAgICAgICAgICAgICAge2xvYWRpbmcKICAgICAgICAgICAgICAgICAgICA/ICLkv53lrZjkuK0uLi4iCiAgICAgICAgICAgICAgICAgICAgOiBlZGl0aW5nQ2hhbm5lbAogICAgICAgICAgICAgICAgICAgICAgPyAi5pu05pawIgogICAgICAgICAgICAgICAgICAgICAgOiAi5Yib5bu6In0KICAgICAgICAgICAgICAgIDwvQnV0dG9uPgogICAgICAgICAgICAgIDwvRGlhbG9nRm9vdGVyPgogICAgICAgICAgICA8L2Zvcm0+CiAgICAgICAgICA8L0RpYWxvZ0NvbnRlbnQ+CiAgICAgICAgPC9EaWFsb2c+CiAgICAgIDwvZGl2PgoKICAgICAgey8qIFNlYXJjaCAvIEZpbHRlciAqL30KICAgICAgPGRpdiBjbGFzc05hbWU9ImZsZXggaXRlbXMtY2VudGVyIGdhcC00IG1iLTQiPgogICAgICAgIDxJbnB1dAogICAgICAgICAgcGxhY2Vob2xkZXI9IuaQnOe0oua4oOmBk+WQjeensOaIluexu+Weiy4uLiIKICAgICAgICAgIHZhbHVlPXtzZWFyY2hUZXJtfQogICAgICAgICAgb25DaGFuZ2U9eyhlKSA9PiBzZXRTZWFyY2hUZXJtKGUudGFyZ2V0LnZhbHVlKX0KICAgICAgICAgIGNsYXNzTmFtZT0ibWF4LXcteHMiCiAgICAgICAgLz4KICAgICAgICA8c3BhbiBjbGFzc05hbWU9InRleHQteHMgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgIOWFsSB7ZmlsdGVyZWRDaGFubmVscy5sZW5ndGh9IOS4qua4oOmBkwogICAgICAgIDwvc3Bhbj4KICAgICAgPC9kaXY+CgogICAgICB7LyogVGFibGUgKi99CiAgICAgIDxkaXYgY2xhc3NOYW1lPSJyb3VuZGVkLWxnIGJvcmRlciI+CiAgICAgICAgPFRhYmxlPgogICAgICAgICAgPFRhYmxlSGVhZGVyPgogICAgICAgICAgICA8VGFibGVSb3c+CiAgICAgICAgICAgICAgPFRhYmxlSGVhZD7lkI3np7A8L1RhYmxlSGVhZD4KICAgICAgICAgICAgICA8VGFibGVIZWFkPuexu+WeizwvVGFibGVIZWFkPgogICAgICAgICAgICAgIDxUYWJsZUhlYWQ+54q25oCBPC9UYWJsZUhlYWQ+CiAgICAgICAgICAgICAgPFRhYmxlSGVhZD7liJvlu7rml7bpl7Q8L1RhYmxlSGVhZD4KICAgICAgICAgICAgICA8VGFibGVIZWFkIGNsYXNzTmFtZT0idGV4dC1yaWdodCI+5pON5L2cPC9UYWJsZUhlYWQ+CiAgICAgICAgICAgIDwvVGFibGVSb3c+CiAgICAgICAgICA8L1RhYmxlSGVhZGVyPgogICAgICAgICAgPFRhYmxlQm9keT4KICAgICAgICAgICAge2ZpbHRlcmVkQ2hhbm5lbHMubGVuZ3RoID09PSAwID8gKAogICAgICAgICAgICAgIDxUYWJsZVJvdz4KICAgICAgICAgICAgICAgIDxUYWJsZUNlbGwgY29sU3Bhbj17NX0gY2xhc3NOYW1lPSJ0ZXh0LWNlbnRlciBweS04IHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICAgICAgICAgIHtzZWFyY2hUZXJtID8gIuayoeacieWMuemFjeeahOa4oOmBkyIgOiAi5pqC5peg5rig6YGT77yM54K55Ye744CM5re75Yqg5rig6YGT44CN5Yib5bu6In0KICAgICAgICAgICAgICAgIDwvVGFibGVDZWxsPgogICAgICAgICAgICAgIDwvVGFibGVSb3c+CiAgICAgICAgICAgICkgOiAoCiAgICAgICAgICAgICAgZmlsdGVyZWRDaGFubmVscy5tYXAoKGNoYW5uZWwpID0+ICgKICAgICAgICAgICAgICAgIDxUYWJsZVJvdyBrZXk9e2NoYW5uZWwuaWR9PgogICAgICAgICAgICAgICAgICA8VGFibGVDZWxsPgogICAgICAgICAgICAgICAgICAgIDxMaW5rTmV4dAogICAgICAgICAgICAgICAgICAgICAgaHJlZj17YC9hZG1pbi9jaGFubmVscy8ke2NoYW5uZWwuaWR9YH0KICAgICAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT0iZm9udC1tZWRpdW0gaG92ZXI6dW5kZXJsaW5lIgogICAgICAgICAgICAgICAgICAgID4KICAgICAgICAgICAgICAgICAgICAgIHtjaGFubmVsLm5hbWV9CiAgICAgICAgICAgICAgICAgICAgPC9MaW5rTmV4dD4KICAgICAgICAgICAgICAgICAgPC9UYWJsZUNlbGw+CiAgICAgICAgICAgICAgICAgIDxUYWJsZUNlbGw+CiAgICAgICAgICAgICAgICAgICAgPEJhZGdlIHRvbmU9Im91dGxpbmUiPgogICAgICAgICAgICAgICAgICAgICAge2NoYW5uZWwudHlwZSB8fCAidW5rbm93biJ9CiAgICAgICAgICAgICAgICAgICAgPC9CYWRnZT4KICAgICAgICAgICAgICAgICAgPC9UYWJsZUNlbGw+CiAgICAgICAgICAgICAgICAgIDxUYWJsZUNlbGw+e2dldFN0YXR1c0JhZGdlKGNoYW5uZWwuc3RhdHVzKX08L1RhYmxlQ2VsbD4KICAgICAgICAgICAgICAgICAgPFRhYmxlQ2VsbCBjbGFzc05hbWU9InRleHQtc20gdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICAgICAgICB7Y2hhbm5lbC5jcmVhdGVkQXQKICAgICAgICAgICAgICAgICAgICAgID8gbmV3IERhdGUoY2hhbm5lbC5jcmVhdGVkQXQpLnRvTG9jYWxlRGF0ZVN0cmluZygiemgtQ04iKQogICAgICAgICAgICAgICAgICAgICAgOiAi4oCUIn0KICAgICAgICAgICAgICAgICAgPC9UYWJsZUNlbGw+CiAgICAgICAgICAgICAgICAgIDxUYWJsZUNlbGwgY2xhc3NOYW1lPSJ0ZXh0LXJpZ2h0Ij4KICAgICAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZmxleCBpdGVtcy1jZW50ZXIganVzdGlmeS1lbmQgZ2FwLTEiPgogICAgICAgICAgICAgICAgICAgICAgey8qIEhlYWx0aCBDaGVjayAqL30KICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24KICAgICAgICAgICAgICAgICAgICAgICAgdmFyaWFudD0iZ2hvc3QiCiAgICAgICAgICAgICAgICAgICAgICAgIHNpemU9Imljb24iCiAgICAgICAgICAgICAgICAgICAgICAgIHRpdGxlPSLlgaXlurfmo4Dmn6UiCiAgICAgICAgICAgICAgICAgICAgICAgIGRpc2FibGVkPXtoZWFsdGhDaGVja0xvYWRpbmcgPT09IGNoYW5uZWwuaWR9CiAgICAgICAgICAgICAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IGhhbmRsZUhlYWx0aENoZWNrKGNoYW5uZWwuaWQpfQogICAgICAgICAgICAgICAgICAgICAgPgogICAgICAgICAgICAgICAgICAgICAgICB7aGVhbHRoQ2hlY2tMb2FkaW5nID09PSBjaGFubmVsLmlkID8gKAogICAgICAgICAgICAgICAgICAgICAgICAgIDxBY3Rpdml0eSBjbGFzc05hbWU9ImgtNCB3LTQgYW5pbWF0ZS1wdWxzZSIgLz4KICAgICAgICAgICAgICAgICAgICAgICAgKSA6ICgKICAgICAgICAgICAgICAgICAgICAgICAgICA8V2lmaSBjbGFzc05hbWU9ImgtNCB3LTQiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICl9CiAgICAgICAgICAgICAgICAgICAgICA8L0J1dHRvbj4KCiAgICAgICAgICAgICAgICAgICAgICB7LyogVG9nZ2xlIFN0YXR1cyAqL30KICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24KICAgICAgICAgICAgICAgICAgICAgICAgdmFyaWFudD0iZ2hvc3QiCiAgICAgICAgICAgICAgICAgICAgICAgIHNpemU9Imljb24iCiAgICAgICAgICAgICAgICAgICAgICAgIHRpdGxlPXtjaGFubmVsLnN0YXR1cyA9PT0gMSA/ICLnpoHnlKgiIDogIuWQr+eUqCJ9CiAgICAgICAgICAgICAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IGhhbmRsZVRvZ2dsZVN0YXR1cyhjaGFubmVsKX0KICAgICAgICAgICAgICAgICAgICAgID4KICAgICAgICAgICAgICAgICAgICAgICAge2NoYW5uZWwuc3RhdHVzID09PSAxID8gKAogICAgICAgICAgICAgICAgICAgICAgICAgIDxXaWZpT2ZmIGNsYXNzTmFtZT0iaC00IHctNCB0ZXh0LW11dGVkLWZvcmVncm91bmQiIC8+CiAgICAgICAgICAgICAgICAgICAgICAgICkgOiAoCiAgICAgICAgICAgICAgICAgICAgICAgICAgPFdpZmkgY2xhc3NOYW1lPSJoLTQgdy00IHRleHQtZ3JlZW4tNTAwIiAvPgogICAgICAgICAgICAgICAgICAgICAgICApfQogICAgICAgICAgICAgICAgICAgICAgPC9CdXR0b24+CgogICAgICAgICAgICAgICAgICAgICAgey8qIEVkaXQgKi99CiAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uCiAgICAgICAgICAgICAgICAgICAgICAgIHZhcmlhbnQ9Imdob3N0IgogICAgICAgICAgICAgICAgICAgICAgICBzaXplPSJpY29uIgogICAgICAgICAgICAgICAgICAgICAgICB0aXRsZT0i57yW6L6RIgogICAgICAgICAgICAgICAgICAgICAgICBvbkNsaWNrPXsoKSA9PiBvcGVuRWRpdERpYWxvZyhjaGFubmVsKX0KICAgICAgICAgICAgICAgICAgICAgID4KICAgICAgICAgICAgICAgICAgICAgICAgPFBlbmNpbCBjbGFzc05hbWU9ImgtNCB3LTQiIC8+CiAgICAgICAgICAgICAgICAgICAgICA8L0J1dHRvbj4KCiAgICAgICAgICAgICAgICAgICAgICB7LyogVmlldyBEZXRhaWwgKi99CiAgICAgICAgICAgICAgICAgICAgICA8QnV0dG9uIHZhcmlhbnQ9Imdob3N0IiBzaXplPSJpY29uIiB0aXRsZT0i6K+m5oOFIiBhc0NoaWxkPgogICAgICAgICAgICAgICAgICAgICAgICA8TGlua05leHQgaHJlZj17YC9hZG1pbi9jaGFubmVscy8ke2NoYW5uZWwuaWR9YH0+CiAgICAgICAgICAgICAgICAgICAgICAgICAgPExpbmsgY2xhc3NOYW1lPSJoLTQgdy00IiAvPgogICAgICAgICAgICAgICAgICAgICAgICA8L0xpbmtOZXh0PgogICAgICAgICAgICAgICAgICAgICAgPC9CdXR0b24+CgogICAgICAgICAgICAgICAgICAgICAgey8qIERlbGV0ZSAqL30KICAgICAgICAgICAgICAgICAgICAgIDxCdXR0b24KICAgICAgICAgICAgICAgICAgICAgICAgdmFyaWFudD0iZ2hvc3QiCiAgICAgICAgICAgICAgICAgICAgICAgIHNpemU9Imljb24iCiAgICAgICAgICAgICAgICAgICAgICAgIHRpdGxlPSLliKDpmaQiCiAgICAgICAgICAgICAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IGhhbmRsZURlbGV0ZShjaGFubmVsLmlkKX0KICAgICAgICAgICAgICAgICAgICAgID4KICAgICAgICAgICAgICAgICAgICAgICAgPFRyYXNoMiBjbGFzc05hbWU9ImgtNCB3LTQgdGV4dC1kZXN0cnVjdGl2ZSIgLz4KICAgICAgICAgICAgICAgICAgICAgIDwvQnV0dG9uPgogICAgICAgICAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICAgICAgICA8L1RhYmxlQ2VsbD4KICAgICAgICAgICAgICAgIDwvVGFibGVSb3c+CiAgICAgICAgICAgICAgKSkKICAgICAgICAgICAgKX0KICAgICAgICAgIDwvVGFibGVCb2R5PgogICAgICAgIDwvVGFibGU+CiAgICAgIDwvZGl2PgogICAgPC9QYWdlQm9keT4KICApOwp9Cg==
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Pencil, Trash2, Link, Activity, Wifi, WifiOff } from "lucide-react";
+import { toast } from "sonner";
+import LinkNext from "next/link";
+import {
+  CHANNEL_TYPES,
+  CHANNEL_CONFIG_FIELDS,
+  type ConfigField,
+} from "@/lib/channels/registry";
+
+interface Channel {
+  id: string;
+  name: string;
+  type: string | null;
+  status: number;
+  config: string | null;
+  createdAt: Date | string | null;
+}
+
+interface ChannelsClientProps {
+  initialChannels: Channel[];
+}
+
+import { PageBody } from "@/components/dashboard/section";
+
+export function ChannelsClient({ initialChannels }: ChannelsClientProps) {
+  const [channels, setChannels] = useState<Channel[]>(initialChannels);
+  const [loading, setLoading] = useState(false);
+  const [healthCheckLoading, setHealthCheckLoading] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
+  const [formData, setFormData] = useState({
+    name: "",
+    type: "cloudflare",
+    config: "",
+  });
+  const [searchTerm, setSearchTerm] = useState("");
+
+  async function fetchChannels() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/channels");
+      const data = await res.json();
+      setChannels(data.data || []);
+    } catch {
+      toast.error("获取渠道列表失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      const url = editingChannel
+        ? `/api/channels/${editingChannel.id}`
+        : "/api/channels";
+      const method = editingChannel ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "保存失败");
+      }
+
+      toast.success(editingChannel ? "渠道已更新" : "渠道已创建");
+      setDialogOpen(false);
+      setEditingChannel(null);
+      setFormData({ name: "", type: "cloudflare", config: "" });
+      fetchChannels();
+    } catch (err) {
+      toast.error((err as Error).message || "保存渠道失败");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete(channelId: string) {
+    if (!confirm("确定要删除该渠道吗？此操作不可撤销。")) return;
+    try {
+      const res = await fetch(`/api/channels/${channelId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error("删除失败");
+      toast.success("渠道已删除");
+      fetchChannels();
+    } catch {
+      toast.error("删除渠道失败");
+    }
+  }
+
+  async function handleToggleStatus(channel: Channel) {
+    const newStatus = channel.status === 1 ? 2 : 1;
+    try {
+      const res = await fetch(`/api/channels/${channel.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error("操作失败");
+      toast.success(newStatus === 1 ? "渠道已启用" : "渠道已禁用");
+      fetchChannels();
+    } catch {
+      toast.error("状态切换失败");
+    }
+  }
+
+  async function handleHealthCheck(channelId: string) {
+    setHealthCheckLoading(channelId);
+    try {
+      const res = await fetch(`/api/channels/${channelId}/health`);
+      const data = await res.json();
+      if (data.ok) {
+        toast.success(data.message || "连接正常");
+      } else {
+        toast.error(data.message || "连接失败");
+      }
+    } catch {
+      toast.error("健康检查请求失败");
+    } finally {
+      setHealthCheckLoading(null);
+    }
+  }
+
+  function getStatusBadge(status: number) {
+    switch (status) {
+      case 1:
+        return <Badge tone="success">启用</Badge>;
+      case 2:
+        return <Badge tone="muted">禁用</Badge>;
+      case 3:
+        return <Badge tone="danger">已删除</Badge>;
+      default:
+        return <Badge tone="muted">{status}</Badge>;
+    }
+  }
+
+  function openCreateDialog() {
+    setEditingChannel(null);
+    setFormData({ name: "", type: "cloudflare", config: "" });
+    setDialogOpen(true);
+  }
+
+  function openEditDialog(channel: Channel) {
+    setEditingChannel(channel);
+    setFormData({
+      name: channel.name,
+      type: channel.type ?? "cloudflare",
+      config: channel.config || "",
+    });
+    setDialogOpen(true);
+  }
+
+  /** Get config fields for selected channel type */
+  function getConfigFields(type: string): ConfigField[] {
+    return CHANNEL_CONFIG_FIELDS[type] || [];
+  }
+
+  /** Parse config JSON to object for form */
+  function getConfigValue(key: string): string {
+    try {
+      const parsed = JSON.parse(formData.config || "{}");
+      return (parsed as Record<string, string>)[key] || "";
+    } catch {
+      return "";
+    }
+  }
+
+  /** Set config value in JSON */
+  function setConfigValue(key: string, value: string) {
+    try {
+      const parsed = JSON.parse(formData.config || "{}") as Record<string, string>;
+      parsed[key] = value;
+      setFormData({ ...formData, config: JSON.stringify(parsed, null, 2) });
+    } catch {
+      const parsed: Record<string, string> = {};
+      parsed[key] = value;
+      setFormData({ ...formData, config: JSON.stringify(parsed, null, 2) });
+    }
+  }
+
+  const configFields = getConfigFields(formData.type);
+  const filteredChannels = channels.filter(
+    (c) =>
+      c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (c.type || "").toLowerCase().includes(searchTerm.toLowerCase()),
+  );
+
+  return (
+    <PageBody className="space-y-0">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="font-serif text-2xl font-semibold tracking-[0.02em]">AI 供应商渠道</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            管理 AI 模型供应商的连接配置，支持 OpenAI / Anthropic / Azure 等多种渠道
+          </p>
+        </div>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={openCreateDialog}>
+              <Plus className="mr-2 h-4 w-4" />
+              添加渠道
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-lg">
+            <form onSubmit={handleSubmit}>
+              <DialogHeader>
+                <DialogTitle>
+                  {editingChannel ? "编辑渠道" : "添加渠道"}
+                </DialogTitle>
+                <DialogDescription>
+                  {editingChannel
+                    ? "修改渠道配置信息"
+                    : "创建一个新的 AI 供应商渠道"}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                {/* Name */}
+                <div className="grid gap-2">
+                  <Label htmlFor="name">渠道名称</Label>
+                  <Input
+                    id="name"
+                    value={formData.name}
+                    onChange={(e) =>
+                      setFormData({ ...formData, name: e.target.value })
+                    }
+                    placeholder="例如：OpenAI 主账号"
+                    required
+                  />
+                </div>
+
+                {/* Type */}
+                <div className="grid gap-2">
+                  <Label htmlFor="type">供应商类型</Label>
+                  <Select
+                    value={formData.type}
+                    onValueChange={(value) =>
+                      setFormData({
+                        ...formData,
+                        type: value,
+                        config: "",
+                      })
+                    }
+                    disabled={!!editingChannel}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择类型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CHANNEL_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>
+                          {t.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Dynamic Config Fields */}
+                {configFields.length > 0 && (
+                  <div className="space-y-3 border rounded-lg p-4 bg-muted/30">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      连接配置
+                    </p>
+                    {configFields.map((field) => (
+                      <div key={field.key} className="grid gap-1.5">
+                        <Label htmlFor={`cfg-${field.key}`}>
+                          {field.label}
+                          {field.required && (
+                            <span className="text-destructive ml-1">*</span>
+                          )}
+                        </Label>
+                        <Input
+                          id={`cfg-${field.key}`}
+                          type={field.type === "password" ? "password" : "text"}
+                          value={getConfigValue(field.key)}
+                          onChange={(e) =>
+                            setConfigValue(field.key, e.target.value)
+                          }
+                          placeholder={field.placeholder}
+                          required={field.required}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Raw JSON Editor (fallback) */}
+                {configFields.length === 0 && (
+                  <div className="grid gap-2">
+                    <Label htmlFor="config">配置 (JSON)</Label>
+                    <textarea
+                      id="config"
+                      className="flex min-h-[80px] w-full rounded-md border border-input bg-transparent px-3 py-2 text-xs font-mono placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      value={formData.config}
+                      onChange={(e) =>
+                        setFormData({ ...formData, config: e.target.value })
+                      }
+                      placeholder='{"apiKey": "..."}'
+                    />
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={loading}>
+                  {loading
+                    ? "保存中..."
+                    : editingChannel
+                      ? "更新"
+                      : "创建"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {/* Search / Filter */}
+      <div className="flex items-center gap-4 mb-4">
+        <Input
+          placeholder="搜索渠道名称或类型..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-xs"
+        />
+        <span className="text-xs text-muted-foreground">
+          共 {filteredChannels.length} 个渠道
+        </span>
+      </div>
+
+      {/* Table */}
+      <div className="rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>名称</TableHead>
+              <TableHead>类型</TableHead>
+              <TableHead>状态</TableHead>
+              <TableHead>创建时间</TableHead>
+              <TableHead className="text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredChannels.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  {searchTerm ? "没有匹配的渠道" : "暂无渠道，点击「添加渠道」创建"}
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredChannels.map((channel) => (
+                <TableRow key={channel.id}>
+                  <TableCell>
+                    <LinkNext
+                      href={`/admin/channels/${channel.id}`}
+                      className="font-medium hover:underline"
+                    >
+                      {channel.name}
+                    </LinkNext>
+                  </TableCell>
+                  <TableCell>
+                    <Badge tone="outline">
+                      {channel.type || "unknown"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{getStatusBadge(channel.status)}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {channel.createdAt
+                      ? new Date(channel.createdAt).toLocaleDateString("zh-CN")
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      {/* Health Check */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="健康检查"
+                        disabled={healthCheckLoading === channel.id}
+                        onClick={() => handleHealthCheck(channel.id)}
+                      >
+                        {healthCheckLoading === channel.id ? (
+                          <Activity className="h-4 w-4 animate-pulse" />
+                        ) : (
+                          <Wifi className="h-4 w-4" />
+                        )}
+                      </Button>
+
+                      {/* Toggle Status */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title={channel.status === 1 ? "禁用" : "启用"}
+                        onClick={() => handleToggleStatus(channel)}
+                      >
+                        {channel.status === 1 ? (
+                          <WifiOff className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <Wifi className="h-4 w-4 text-green-500" />
+                        )}
+                      </Button>
+
+                      {/* Edit */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="编辑"
+                        onClick={() => openEditDialog(channel)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+
+                      {/* View Detail */}
+                      <Button variant="ghost" size="icon" title="详情" asChild>
+                        <LinkNext href={`/admin/channels/${channel.id}`}>
+                          <Link className="h-4 w-4" />
+                        </LinkNext>
+                      </Button>
+
+                      {/* Delete */}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="删除"
+                        onClick={() => handleDelete(channel.id)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </PageBody>
+  );
+}

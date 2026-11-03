@@ -1,1 +1,287 @@
-InVzZSBjbGllbnQiOwoKaW1wb3J0IHsgdXNlU3RhdGUsIHVzZU1lbW8gfSBmcm9tICJyZWFjdCI7CmltcG9ydCB7IFNlYXJjaCB9IGZyb20gImx1Y2lkZS1yZWFjdCI7CmltcG9ydCB7IENhcmQsIENhcmRDb250ZW50IH0gZnJvbSAiQC9jb21wb25lbnRzL3VpL2NhcmQiOwppbXBvcnQgeyBCYWRnZSB9IGZyb20gIkAvY29tcG9uZW50cy91aS9iYWRnZSI7CmltcG9ydCB7IGNuIH0gZnJvbSAiQC9saWIvdXRpbHMiOwppbXBvcnQgeyB1cGRhdGVNb2RlbE11bHRpcGxpZXIsIHVwZGF0ZU1vZGVsUmVzZXJ2ZSB9IGZyb20gIi4vYWN0aW9ucyI7CmltcG9ydCB7IHRvYXN0IH0gZnJvbSAic29ubmVyIjsKaW1wb3J0IHsgZm9ybWF0TW9kZWxQcmljZSB9IGZyb20gIkAvbGliL2JpbGxpbmcvZGlzcGxheS1wcmljZSI7Cgpjb25zdCBDQVRFR09SWV9MQUJFTFM6IFJlY29yZDxzdHJpbmcsIHN0cmluZz4gPSB7CiAgdGV4dDogIuaWh+acrOeUn+aIkCIsCiAgaW1hZ2U6ICLlm77lg4/nlJ/miJAiLAogIHZpc2lvbjogIuWbvuWDj+eQhuinoyIsCiAgZW1iZWRkaW5nczogIuW1jOWFpeWQkemHjyIsCiAgdHJhbnNsYXRlOiAi57+76K+RIiwKICBzcGVlY2g6ICLor63pn7MiLAogIGNsYXNzaWZ5OiAi5YiG57G7L+ajgOa1iyIsCiAgdmlkZW86ICLop4bpopEiLAogIHJlbW90ZTogIui/nOeoi+a4oOmBkyIsCn07Cgp0eXBlIE1vZGVsV2l0aFByaWNpbmcgPSB7CiAgaWQ6IHN0cmluZzsKICBuYW1lOiBzdHJpbmc7CiAgY2F0ZWdvcnk6IHN0cmluZzsKICBzb3VyY2U6IHN0cmluZzsKICBjaGFubmVsU291cmNlPzogc3RyaW5nOwogIGNoYW5uZWxJZD86IHN0cmluZzsKICBwcmljaW5nPzogewogICAgY2F0ZWdvcnk6IHN0cmluZyB8IG51bGw7CiAgICBzb3VyY2U6IHN0cmluZyB8IG51bGw7CiAgICBpbnB1dFByaWNlOiBudW1iZXIgfCBudWxsOwogICAgb3V0cHV0UHJpY2U6IG51bWJlciB8IG51bGw7CiAgICB1bml0OiBzdHJpbmcgfCBudWxsOwogICAgaXNJbWFnZTogYm9vbGVhbjsKICAgIGZpeGVkUHJpY2U6IG51bWJlciB8IG51bGw7CiAgICBtdWx0aXBsaWVyOiBudW1iZXI7CiAgICAvKiog5L2Z6aKd6aKE5qOA55qE6L6T5Ye66aKE55WZ5qGj5L2N77yIdG9rZW4g5pWw77yJ77yMbnVsbCA9IOeUqOm7mOiupCAxMDI0ICovCiAgICByZXNlcnZlT3V0cHV0VG9rZW5zOiBudW1iZXIgfCBudWxsOwogICAgdXBkYXRlZEF0OiBEYXRlIHwgbnVsbDsKICB9Owp9OwoKaW50ZXJmYWNlIFByaWNpbmdNYW5hZ2VyUHJvcHMgewogIG1vZGVsczogTW9kZWxXaXRoUHJpY2luZ1tdOwogIC8qKiDlhajlsYDln7rnoYDlgI3njofvvIhwcmljaW5nX2Jhc2VfbXVsdGlwbGllcu+8ie+8jOWunuS7mOWNleS7tyA9IOihqOS7tyDDlyDmqKHlnovlgI3njocgw5cg5a6DICovCiAgYmFzZU11bHRpcGxpZXI6IG51bWJlcjsKICAvKiog5piv5ZCm5LuO5pyN5Yqh56uv5Lyg5YWl5LqG5rig6YGT5qih5Z6LICovCiAgY2hhbm5lbE1vZGVscz86IE1vZGVsV2l0aFByaWNpbmdbXTsKICAvKiog5rig6YGT5YiX6KGoICovCiAgY2hhbm5lbHM/OiB7IGlkOiBzdHJpbmc7IG5hbWU6IHN0cmluZzsgdHlwZTogc3RyaW5nOyBsYWJlbDogc3RyaW5nIH1bXTsKICAvKiog5b2T5YmN6YCJ5Lit55qE5rig6YGTICovCiAgYWN0aXZlQ2hhbm5lbD86IHN0cmluZzsKICAvKiog5YiH5o2i5rig6YGTICovCiAgb25DaGFubmVsQ2hhbmdlPzogKGlkOiBzdHJpbmcpID0+IHZvaWQ7Cn0KCmltcG9ydCB7IFBhZ2VCb2R5IH0gZnJvbSAiQC9jb21wb25lbnRzL2Rhc2hib2FyZC9zZWN0aW9uIjsKCmV4cG9ydCBmdW5jdGlvbiBQcmljaW5nTWFuYWdlcih7CiAgbW9kZWxzID0gW10sCiAgYmFzZU11bHRpcGxpZXIsCiAgY2hhbm5lbE1vZGVscyA9IFtdLAogIGNoYW5uZWxzID0gW10sCiAgYWN0aXZlQ2hhbm5lbCA9ICJjbG91ZGZsYXJlIiwKICBvbkNoYW5uZWxDaGFuZ2UsCn06IFByaWNpbmdNYW5hZ2VyUHJvcHMpIHsKICBjb25zdCBbcXVlcnksIHNldFF1ZXJ5XSA9IHVzZVN0YXRlKCIiKTsKICBjb25zdCBbY2F0ZWdvcnlGaWx0ZXIsIHNldENhdGVnb3J5RmlsdGVyXSA9IHVzZVN0YXRlPHN0cmluZz4oImFsbCIpOwogIGNvbnN0IFtsb2NhbEFjdGl2ZUNoYW5uZWwsIHNldExvY2FsQWN0aXZlQ2hhbm5lbF0gPSB1c2VTdGF0ZShhY3RpdmVDaGFubmVsKTsKCiAgY29uc3QgY3VycmVudENoYW5uZWwgPSBvbkNoYW5uZWxDaGFuZ2UgPyBhY3RpdmVDaGFubmVsIDogbG9jYWxBY3RpdmVDaGFubmVsOwogIGNvbnN0IHNldEN1cnJlbnRDaGFubmVsID0gb25DaGFubmVsQ2hhbmdlIHx8IHNldExvY2FsQWN0aXZlQ2hhbm5lbDsKCiAgLy8g5ZCI5bm25omA5pyJ5rig6YGT55qE5qih5Z6LCiAgY29uc3QgYWxsQ2hhbm5lbFRhYnMgPSBbCiAgICB7IGlkOiAiY2xvdWRmbGFyZSIsIG5hbWU6ICJDbG91ZGZsYXJlIFdvcmtlcnMgQUkiLCB0eXBlOiAiY2xvdWRmbGFyZSIsIGxhYmVsOiAiQ2xvdWRmbGFyZSIgfSwKICAgIC4uLmNoYW5uZWxzLmZpbHRlcigoYykgPT4gYy50eXBlICE9PSAiY2xvdWRmbGFyZSIpLAogIF07CgogIGNvbnN0IGN1cnJlbnRNb2RlbHMgPSB1c2VNZW1vKCgpID0+IHsKICAgIGlmIChjdXJyZW50Q2hhbm5lbCA9PT0gImNsb3VkZmxhcmUiKSByZXR1cm4gbW9kZWxzOwogICAgcmV0dXJuIGNoYW5uZWxNb2RlbHMuZmlsdGVyKChtKSA9PiBtLmNoYW5uZWxJZCA9PT0gY3VycmVudENoYW5uZWwgfHwgbS5jaGFubmVsU291cmNlID09PSBjdXJyZW50Q2hhbm5lbCk7CiAgfSwgW2N1cnJlbnRDaGFubmVsLCBtb2RlbHMsIGNoYW5uZWxNb2RlbHNdKTsKCiAgLy8g5YiG57G7CiAgY29uc3QgY2F0ZWdvcmllcyA9IHVzZU1lbW8oKCkgPT4gewogICAgY29uc3QgY2F0cyA9IG5ldyBTZXQoY3VycmVudE1vZGVscy5tYXAoKG0pID0+IG0uY2F0ZWdvcnkpKTsKICAgIHJldHVybiBBcnJheS5mcm9tKGNhdHMpLnNvcnQoKTsKICB9LCBbY3VycmVudE1vZGVsc10pOwoKICAvLyDov4fmu6QKICBjb25zdCB2aXNpYmxlID0gdXNlTWVtbygoKSA9PiB7CiAgICBjb25zdCBxID0gcXVlcnkudHJpbSgpLnRvTG93ZXJDYXNlKCk7CiAgICByZXR1cm4gY3VycmVudE1vZGVscy5maWx0ZXIoKG0pID0+IHsKICAgICAgaWYgKGNhdGVnb3J5RmlsdGVyICE9PSAiYWxsIiAmJiBtLmNhdGVnb3J5ICE9PSBjYXRlZ29yeUZpbHRlcikgcmV0dXJuIGZhbHNlOwogICAgICBpZiAoIXEpIHJldHVybiB0cnVlOwogICAgICByZXR1cm4gKAogICAgICAgIG0uaWQudG9Mb3dlckNhc2UoKS5pbmNsdWRlcyhxKSB8fAogICAgICAgIG0ubmFtZS50b0xvd2VyQ2FzZSgpLmluY2x1ZGVzKHEpCiAgICAgICk7CiAgICB9KTsKICB9LCBbY3VycmVudE1vZGVscywgcXVlcnksIGNhdGVnb3J5RmlsdGVyXSk7CgogIHJldHVybiAoCiAgICA8UGFnZUJvZHkgY2xhc3NOYW1lPSJzcGFjZS15LTUiPgogICAgICB7Lyog5rig6YGT6YCJ6aG55Y2hICovfQogICAgICB7YWxsQ2hhbm5lbFRhYnMubGVuZ3RoID4gMSAmJiAoCiAgICAgICAgPGRpdiBjbGFzc05hbWU9ImZsZXggZmxleC13cmFwIGdhcC0xLjUgYm9yZGVyLWIgYm9yZGVyLWJvcmRlciBwYi0zIj4KICAgICAgICAgIHthbGxDaGFubmVsVGFicy5tYXAoKGNoKSA9PiAoCiAgICAgICAgICAgIDxidXR0b24KICAgICAgICAgICAgICBrZXk9e2NoLmlkfQogICAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IHNldEN1cnJlbnRDaGFubmVsKGNoLmlkKX0KICAgICAgICAgICAgICBjbGFzc05hbWU9e2NuKAogICAgICAgICAgICAgICAgInJvdW5kZWQtdC1sZyBweC00IHB5LTIgdGV4dC14cyBmb250LW1lZGl1bSB0cmFuc2l0aW9uLWNvbG9ycyIsCiAgICAgICAgICAgICAgICBjdXJyZW50Q2hhbm5lbCA9PT0gY2guaWQKICAgICAgICAgICAgICAgICAgPyAiYm9yZGVyLWItMiBib3JkZXItW2NvbG9yOnZhcigtLXByaW1hcnkpXSB0ZXh0LWZvcmVncm91bmQiCiAgICAgICAgICAgICAgICAgIDogInRleHQtbXV0ZWQtZm9yZWdyb3VuZCBob3Zlcjp0ZXh0LWZvcmVncm91bmQiLAogICAgICAgICAgICAgICl9CiAgICAgICAgICAgID4KICAgICAgICAgICAgICB7Y2gubGFiZWx9CiAgICAgICAgICAgIDwvYnV0dG9uPgogICAgICAgICAgKSl9CiAgICAgICAgPC9kaXY+CiAgICAgICl9CgogICAgICB7LyogU2VhcmNoICsgQ2F0ZWdvcnkgZmlsdGVyICovfQogICAgICA8ZGl2IGNsYXNzTmFtZT0iZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTMiPgogICAgICAgIDxkaXYgY2xhc3NOYW1lPSJyZWxhdGl2ZSBtYXgtdy14cyI+CiAgICAgICAgICA8U2VhcmNoIGNsYXNzTmFtZT0icG9pbnRlci1ldmVudHMtbm9uZSBhYnNvbHV0ZSBsZWZ0LTMgdG9wLTEvMiBoLTQgdy00IC10cmFuc2xhdGUteS0xLzIgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIiAvPgogICAgICAgICAgPGlucHV0CiAgICAgICAgICAgIHZhbHVlPXtxdWVyeX0KICAgICAgICAgICAgb25DaGFuZ2U9eyhlKSA9PiBzZXRRdWVyeShlLnRhcmdldC52YWx1ZSl9CiAgICAgICAgICAgIHBsYWNlaG9sZGVyPSLmkJzntKLmqKHlnosgSUQgLyDlkI3np7AiCiAgICAgICAgICAgIGNsYXNzTmFtZT0iaC05IHctZnVsbCByb3VuZGVkLWxnIGJvcmRlciBib3JkZXItYm9yZGVyIGJnLWNhcmQgcGwtOSBwci0zIHRleHQtc20gb3V0bGluZS1ub25lIGZvY3VzOmJvcmRlci1bY29sb3I6dmFyKC0tcHJpbWFyeSldIgogICAgICAgICAgLz4KICAgICAgICA8L2Rpdj4KICAgICAgICA8c2VsZWN0CiAgICAgICAgICB2YWx1ZT17Y2F0ZWdvcnlGaWx0ZXJ9CiAgICAgICAgICBvbkNoYW5nZT17KGUpID0+IHNldENhdGVnb3J5RmlsdGVyKGUudGFyZ2V0LnZhbHVlKX0KICAgICAgICAgIGNsYXNzTmFtZT0iaC05IHJvdW5kZWQtbGcgYm9yZGVyIGJvcmRlci1ib3JkZXIgYmctY2FyZCBweC0zIHRleHQteHMgb3V0bGluZS1ub25lIGZvY3VzOmJvcmRlci1bY29sb3I6dmFyKC0tcHJpbWFyeSldIgogICAgICAgID4KICAgICAgICAgIDxvcHRpb24gdmFsdWU9ImFsbCI+5YWo6YOo5YiG57G7PC9vcHRpb24+CiAgICAgICAgICB7Y2F0ZWdvcmllcy5tYXAoKGNhdCkgPT4gKAogICAgICAgICAgICA8b3B0aW9uIGtleT17Y2F0fSB2YWx1ZT17Y2F0fT4KICAgICAgICAgICAgICB7Q0FURUdPUllfTEFCRUxTW2NhdF0gfHwgY2F0fSAoe2N1cnJlbnRNb2RlbHMuZmlsdGVyKChtKSA9PiBtLmNhdGVnb3J5ID09PSBjYXQpLmxlbmd0aH0pCiAgICAgICAgICAgIDwvb3B0aW9uPgogICAgICAgICAgKSl9CiAgICAgICAgPC9zZWxlY3Q+CiAgICAgICAgPHNwYW4gY2xhc3NOYW1lPSJ0ZXh0LXhzIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+e3Zpc2libGUubGVuZ3RofSDkuKrmqKHlnos8L3NwYW4+CiAgICAgIDwvZGl2PgoKICAgICAgey8qIOaooeWei+WIl+ihqCAqL30KICAgICAgPGRpdiBjbGFzc05hbWU9InNwYWNlLXktMiI+CiAgICAgICAge3Zpc2libGUubGVuZ3RoID09PSAwID8gKAogICAgICAgICAgPHAgY2xhc3NOYW1lPSJweS04IHRleHQtY2VudGVyIHRleHQtc20gdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj7msqHmnInljLnphY3nmoTmqKHlnos8L3A+CiAgICAgICAgKSA6ICgKICAgICAgICAgIHZpc2libGUubWFwKChtb2RlbCkgPT4gKAogICAgICAgICAgICA8TW9kZWxQcmljaW5nUm93IGtleT17bW9kZWwuaWR9IG1vZGVsPXttb2RlbH0gYmFzZU11bHRpcGxpZXI9e2Jhc2VNdWx0aXBsaWVyfSAvPgogICAgICAgICAgKSkKICAgICAgICApfQogICAgICA8L2Rpdj4KICAgIDwvUGFnZUJvZHk+CiAgKTsKfQoKZnVuY3Rpb24gTW9kZWxQcmljaW5nUm93KHsKICBtb2RlbCwKICBiYXNlTXVsdGlwbGllciwKfTogewogIG1vZGVsOiBNb2RlbFdpdGhQcmljaW5nOwogIGJhc2VNdWx0aXBsaWVyOiBudW1iZXI7Cn0pIHsKICBjb25zdCBbbXVsdGlwbGllciwgc2V0TXVsdGlwbGllcl0gPSB1c2VTdGF0ZShTdHJpbmcobW9kZWwucHJpY2luZz8ubXVsdGlwbGllciA/PyAxLjApKTsKICBjb25zdCBbcmVzZXJ2ZSwgc2V0UmVzZXJ2ZV0gPSB1c2VTdGF0ZShTdHJpbmcobW9kZWwucHJpY2luZz8ucmVzZXJ2ZU91dHB1dFRva2VucyA/PyAxMDI0KSk7CiAgY29uc3QgW3NhdmluZywgc2V0U2F2aW5nXSA9IHVzZVN0YXRlKGZhbHNlKTsKCiAgY29uc3QgcCA9IG1vZGVsLnByaWNpbmc7CiAgY29uc3Qgc3RvcmVkUHJpY2UgPSBwID8gKHAuaXNJbWFnZSA/IChwLmZpeGVkUHJpY2UgPz8gMCkgOiAocC5pbnB1dFByaWNlID8/IDApKSA6IDA7CiAgLy8g6KGo5Lu377ya5bey5ZCr5Z+656GA5YCN546H77yM5LiOIC9wcmljaW5nIOS4iue7meeUqOaIt+eci+eahOWNleS7t+WQjOa6kAogIGNvbnN0IGRpc3BsYXlQcmljZSA9IHAgPyBmb3JtYXRNb2RlbFByaWNlKHN0b3JlZFByaWNlLCBwLmlzSW1hZ2UsIGJhc2VNdWx0aXBsaWVyKSA6ICLigJQiOwogIC8vIOWunuS7mO+8muihqOS7t+WGjeS5mOi/meS4gOihjOeahOaooeWei+WAjeeOhwogIGNvbnN0IGZpbmFsUHJpY2UgPSBwCiAgICA/IGZvcm1hdE1vZGVsUHJpY2UoCiAgICAgICAgc3RvcmVkUHJpY2UgKiAocGFyc2VGbG9hdChtdWx0aXBsaWVyKSB8fCAxKSwKICAgICAgICBwLmlzSW1hZ2UsCiAgICAgICAgYmFzZU11bHRpcGxpZXIsCiAgICAgICkKICAgIDogIuKAlCI7CgogIGFzeW5jIGZ1bmN0aW9uIGhhbmRsZVNhdmUoKSB7CiAgICBjb25zdCB2YWwgPSBwYXJzZUZsb2F0KG11bHRpcGxpZXIpOwogICAgaWYgKGlzTmFOKHZhbCkgfHwgdmFsIDwgMC4wMSB8fCB2YWwgPiAxMDApIHsKICAgICAgdG9hc3QuZXJyb3IoIuWAjeeOh+W/hemhu+WcqCAwLjAxIOWIsCAxMDAg5LmL6Ze0Iik7CiAgICAgIHJldHVybjsKICAgIH0KICAgIGNvbnN0IHJlc2VydmVWYWwgPSBwYXJzZUludChyZXNlcnZlLCAxMCk7CiAgICBpZiAoIU51bWJlci5pc0ludGVnZXIocmVzZXJ2ZVZhbCkgfHwgcmVzZXJ2ZVZhbCA8IDEgfHwgcmVzZXJ2ZVZhbCA+IDEyOF8wMDApIHsKICAgICAgdG9hc3QuZXJyb3IoIumihOajgOmihOeVmeW/hemhu+WcqCAxIOWIsCAxMjgwMDAgdG9rZW4g5LmL6Ze0Iik7CiAgICAgIHJldHVybjsKICAgIH0KCiAgICBjb25zdCBqb2JzOiBQcm9taXNlPHsgc3VjY2VzczogYm9vbGVhbjsgZXJyb3I/OiBzdHJpbmcgfT5bXSA9IFtdOwogICAgaWYgKHZhbCAhPT0gKG1vZGVsLnByaWNpbmc/Lm11bHRpcGxpZXIgPz8gMSkpIGpvYnMucHVzaCh1cGRhdGVNb2RlbE11bHRpcGxpZXIobW9kZWwuaWQsIHZhbCkpOwogICAgaWYgKHJlc2VydmVWYWwgIT09IChtb2RlbC5wcmljaW5nPy5yZXNlcnZlT3V0cHV0VG9rZW5zID8/IDEwMjQpKSB7CiAgICAgIGpvYnMucHVzaCh1cGRhdGVNb2RlbFJlc2VydmUobW9kZWwuaWQsIHJlc2VydmVWYWwpKTsKICAgIH0KICAgIGlmIChqb2JzLmxlbmd0aCA9PT0gMCkgewogICAgICB0b2FzdCgi5rKh5pyJ5pS55YqoIik7CiAgICAgIHJldHVybjsKICAgIH0KCiAgICBzZXRTYXZpbmcodHJ1ZSk7CiAgICB0cnkgewogICAgICBjb25zdCBmYWlsZWQgPSAoYXdhaXQgUHJvbWlzZS5hbGwoam9icykpLmZpbmQoKHIpID0+ICFyLnN1Y2Nlc3MpOwogICAgICBpZiAoZmFpbGVkKSB0aHJvdyBuZXcgRXJyb3IoZmFpbGVkLmVycm9yKTsKICAgICAgdG9hc3Quc3VjY2Vzcyhg5bey5pu05paw77ya5YCN546HICR7dmFsfXggwrcg6aKE5qOA6aKE55WZICR7cmVzZXJ2ZVZhbH0gdG9rZW5zYCk7CiAgICB9IGNhdGNoIChlcnIpIHsKICAgICAgdG9hc3QuZXJyb3IoKGVyciBhcyBFcnJvcikubWVzc2FnZSB8fCAi5L+d5a2Y5aSx6LSlIik7CiAgICB9IGZpbmFsbHkgewogICAgICBzZXRTYXZpbmcoZmFsc2UpOwogICAgfQogIH0KCiAgcmV0dXJuICgKICAgIDxDYXJkPgogICAgICA8Q2FyZENvbnRlbnQgY2xhc3NOYW1lPSJmbGV4IGl0ZW1zLWNlbnRlciBnYXAtNCBweS0zIj4KICAgICAgICA8ZGl2IGNsYXNzTmFtZT0ibWluLXctMCBmbGV4LTEiPgogICAgICAgICAgPGRpdiBjbGFzc05hbWU9ImZsZXggaXRlbXMtY2VudGVyIGdhcC0yIj4KICAgICAgICAgICAgPHAgY2xhc3NOYW1lPSJ0ZXh0LXNtIGZvbnQtbWVkaXVtIHRydW5jYXRlIj57bW9kZWwubmFtZX08L3A+CiAgICAgICAgICAgIDxCYWRnZSB0b25lPSJtdXRlZCIgY2xhc3NOYW1lPSJ0ZXh0LVsxMHB4XSI+e21vZGVsLnNvdXJjZX08L0JhZGdlPgogICAgICAgICAgICB7bW9kZWwuY2hhbm5lbFNvdXJjZSAmJiBtb2RlbC5jaGFubmVsU291cmNlICE9PSAiY2xvdWRmbGFyZSIgJiYgKAogICAgICAgICAgICAgIDxCYWRnZSB0b25lPSJhY2NlbnQiIGNsYXNzTmFtZT0idGV4dC1bMTBweF0iPnttb2RlbC5jaGFubmVsU291cmNlfTwvQmFkZ2U+CiAgICAgICAgICAgICl9CiAgICAgICAgICA8L2Rpdj4KICAgICAgICAgIDxjb2RlIGNsYXNzTmFtZT0idGV4dC14cyB0ZXh0LW11dGVkLWZvcmVncm91bmQgYmxvY2sgdHJ1bmNhdGUiPnttb2RlbC5pZH08L2NvZGU+CiAgICAgICAgPC9kaXY+CgogICAgICAgIDxkaXYgY2xhc3NOYW1lPSJoaWRkZW4gbWQ6YmxvY2sgdGV4dC1yaWdodCB0ZXh0LXhzIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCBtaW4tdy1bMTIwcHhdIj4KICAgICAgICAgIDxkaXY+6KGo5Lu3OiB7ZGlzcGxheVByaWNlfTwvZGl2PgogICAgICAgICAgPGRpdj7lrp7ku5g6IDxzcGFuIGNsYXNzTmFtZT0idGV4dC1mb3JlZ3JvdW5kIGZvbnQtbWVkaXVtIj57ZmluYWxQcmljZX08L3NwYW4+PC9kaXY+CiAgICAgICAgPC9kaXY+CgogICAgICAgIDxkaXYgY2xhc3NOYW1lPSJmbGV4IGl0ZW1zLWNlbnRlciBnYXAtMiBzaHJpbmstMCI+CiAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTEiPgogICAgICAgICAgICA8aW5wdXQKICAgICAgICAgICAgICB0eXBlPSJudW1iZXIiCiAgICAgICAgICAgICAgc3RlcD0iMC4wMSIKICAgICAgICAgICAgICBtaW49IjAuMDEiCiAgICAgICAgICAgICAgbWF4PSIxMDAiCiAgICAgICAgICAgICAgdmFsdWU9e211bHRpcGxpZXJ9CiAgICAgICAgICAgICAgb25DaGFuZ2U9eyhlKSA9PiBzZXRNdWx0aXBsaWVyKGUudGFyZ2V0LnZhbHVlKX0KICAgICAgICAgICAgICB0aXRsZT0i5qih5Z6L5YCN546H77ya5a6e5LuY5Y2V5Lu3ID0g6KGo5Lu3IMOXIOWugyIKICAgICAgICAgICAgICBjbGFzc05hbWU9ImgtOCB3LTIwIHJvdW5kZWQgYm9yZGVyIGJvcmRlci1ib3JkZXIgYmctY2FyZCBweC0yIHRleHQteHMgdGV4dC1yaWdodCBvdXRsaW5lLW5vbmUgZm9jdXM6Ym9yZGVyLVtjb2xvcjp2YXIoLS1wcmltYXJ5KV0iCiAgICAgICAgICAgIC8+CiAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT0idGV4dC14cyB0ZXh0LW11dGVkLWZvcmVncm91bmQiPng8L3NwYW4+CiAgICAgICAgICA8L2Rpdj4KICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJmbGV4IGl0ZW1zLWNlbnRlciBnYXAtMSI+CiAgICAgICAgICAgIDxpbnB1dAogICAgICAgICAgICAgIHR5cGU9Im51bWJlciIKICAgICAgICAgICAgICBzdGVwPSIxIgogICAgICAgICAgICAgIG1pbj0iMSIKICAgICAgICAgICAgICBtYXg9IjEyODAwMCIKICAgICAgICAgICAgICB2YWx1ZT17cmVzZXJ2ZX0KICAgICAgICAgICAgICBvbkNoYW5nZT17KGUpID0+IHNldFJlc2VydmUoZS50YXJnZXQudmFsdWUpfQogICAgICAgICAgICAgIHRpdGxlPSLkvZnpop3pooTmo4DlgYflrprnmoTovpPlh7ogdG9rZW4g5pWw77ya5a6i5oi356uvIG1heF90b2tlbnMg6LaF6L+H5a6D5pe25oyJ5a6D566X77yM6YG/5YWN6buY6K6kIDMyMDAwIOeahOWuouaIt+err+iiq+WFqOmHj+mihOeVmeaMoeWcqCA0MDIiCiAgICAgICAgICAgICAgY2xhc3NOYW1lPSJoLTggdy0yMCByb3VuZGVkIGJvcmRlciBib3JkZXItYm9yZGVyIGJnLWNhcmQgcHgtMiB0ZXh0LXhzIHRleHQtcmlnaHQgb3V0bGluZS1ub25lIGZvY3VzOmJvcmRlci1bY29sb3I6dmFyKC0tcHJpbWFyeSldIgogICAgICAgICAgICAvPgogICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9InRleHQteHMgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj50azwvc3Bhbj4KICAgICAgICAgIDwvZGl2PgogICAgICAgICAgPGJ1dHRvbgogICAgICAgICAgICBvbkNsaWNrPXtoYW5kbGVTYXZlfQogICAgICAgICAgICBkaXNhYmxlZD17c2F2aW5nfQogICAgICAgICAgICBjbGFzc05hbWU9e2NuKAogICAgICAgICAgICAgICJoLTggcm91bmRlZC1tZCBweC0zIHRleHQteHMgZm9udC1tZWRpdW0gdHJhbnNpdGlvbi1jb2xvcnMiLAogICAgICAgICAgICAgICJiZy1bY29sb3I6dmFyKC0tcHJpbWFyeSldIHRleHQtcHJpbWFyeS1mb3JlZ3JvdW5kIGhvdmVyOm9wYWNpdHktOTAgZGlzYWJsZWQ6b3BhY2l0eS01MCIsCiAgICAgICAgICAgICl9CiAgICAgICAgICA+CiAgICAgICAgICAgIHtzYXZpbmcgPyAiLi4uIiA6ICLkv53lrZgifQogICAgICAgICAgPC9idXR0b24+CiAgICAgICAgPC9kaXY+CiAgICAgIDwvQ2FyZENvbnRlbnQ+CiAgICA8L0NhcmQ+CiAgKTsKfQo=
+"use client";
+
+import { useState, useMemo } from "react";
+import { Search } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { updateModelMultiplier, updateModelReserve } from "./actions";
+import { toast } from "sonner";
+import { formatModelPrice } from "@/lib/billing/display-price";
+
+const CATEGORY_LABELS: Record<string, string> = {
+  text: "文本生成",
+  image: "图像生成",
+  vision: "图像理解",
+  embeddings: "嵌入向量",
+  translate: "翻译",
+  speech: "语音",
+  classify: "分类/检测",
+  video: "视频",
+  remote: "远程渠道",
+};
+
+type ModelWithPricing = {
+  id: string;
+  name: string;
+  category: string;
+  source: string;
+  channelSource?: string;
+  channelId?: string;
+  pricing?: {
+    category: string | null;
+    source: string | null;
+    inputPrice: number | null;
+    outputPrice: number | null;
+    unit: string | null;
+    isImage: boolean;
+    fixedPrice: number | null;
+    multiplier: number;
+    /** 余额预检的输出预留档位（token 数），null = 用默认 1024 */
+    reserveOutputTokens: number | null;
+    updatedAt: Date | null;
+  };
+};
+
+interface PricingManagerProps {
+  models: ModelWithPricing[];
+  /** 全局基础倍率（pricing_base_multiplier），实付单价 = 表价 × 模型倍率 × 它 */
+  baseMultiplier: number;
+  /** 是否从服务端传入了渠道模型 */
+  channelModels?: ModelWithPricing[];
+  /** 渠道列表 */
+  channels?: { id: string; name: string; type: string; label: string }[];
+  /** 当前选中的渠道 */
+  activeChannel?: string;
+  /** 切换渠道 */
+  onChannelChange?: (id: string) => void;
+}
+
+import { PageBody } from "@/components/dashboard/section";
+
+export function PricingManager({
+  models = [],
+  baseMultiplier,
+  channelModels = [],
+  channels = [],
+  activeChannel = "cloudflare",
+  onChannelChange,
+}: PricingManagerProps) {
+  const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [localActiveChannel, setLocalActiveChannel] = useState(activeChannel);
+
+  const currentChannel = onChannelChange ? activeChannel : localActiveChannel;
+  const setCurrentChannel = onChannelChange || setLocalActiveChannel;
+
+  // 合并所有渠道的模型
+  const allChannelTabs = [
+    { id: "cloudflare", name: "Cloudflare Workers AI", type: "cloudflare", label: "Cloudflare" },
+    ...channels.filter((c) => c.type !== "cloudflare"),
+  ];
+
+  const currentModels = useMemo(() => {
+    if (currentChannel === "cloudflare") return models;
+    return channelModels.filter((m) => m.channelId === currentChannel || m.channelSource === currentChannel);
+  }, [currentChannel, models, channelModels]);
+
+  // 分类
+  const categories = useMemo(() => {
+    const cats = new Set(currentModels.map((m) => m.category));
+    return Array.from(cats).sort();
+  }, [currentModels]);
+
+  // 过滤
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return currentModels.filter((m) => {
+      if (categoryFilter !== "all" && m.category !== categoryFilter) return false;
+      if (!q) return true;
+      return (
+        m.id.toLowerCase().includes(q) ||
+        m.name.toLowerCase().includes(q)
+      );
+    });
+  }, [currentModels, query, categoryFilter]);
+
+  return (
+    <PageBody className="space-y-5">
+      {/* 渠道选项卡 */}
+      {allChannelTabs.length > 1 && (
+        <div className="flex flex-wrap gap-1.5 border-b border-border pb-3">
+          {allChannelTabs.map((ch) => (
+            <button
+              key={ch.id}
+              onClick={() => setCurrentChannel(ch.id)}
+              className={cn(
+                "rounded-t-lg px-4 py-2 text-xs font-medium transition-colors",
+                currentChannel === ch.id
+                  ? "border-b-2 border-[color:var(--primary)] text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {ch.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Search + Category filter */}
+      <div className="flex items-center gap-3">
+        <div className="relative max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="搜索模型 ID / 名称"
+            className="h-9 w-full rounded-lg border border-border bg-card pl-9 pr-3 text-sm outline-none focus:border-[color:var(--primary)]"
+          />
+        </div>
+        <select
+          value={categoryFilter}
+          onChange={(e) => setCategoryFilter(e.target.value)}
+          className="h-9 rounded-lg border border-border bg-card px-3 text-xs outline-none focus:border-[color:var(--primary)]"
+        >
+          <option value="all">全部分类</option>
+          {categories.map((cat) => (
+            <option key={cat} value={cat}>
+              {CATEGORY_LABELS[cat] || cat} ({currentModels.filter((m) => m.category === cat).length})
+            </option>
+          ))}
+        </select>
+        <span className="text-xs text-muted-foreground">{visible.length} 个模型</span>
+      </div>
+
+      {/* 模型列表 */}
+      <div className="space-y-2">
+        {visible.length === 0 ? (
+          <p className="py-8 text-center text-sm text-muted-foreground">没有匹配的模型</p>
+        ) : (
+          visible.map((model) => (
+            <ModelPricingRow key={model.id} model={model} baseMultiplier={baseMultiplier} />
+          ))
+        )}
+      </div>
+    </PageBody>
+  );
+}
+
+function ModelPricingRow({
+  model,
+  baseMultiplier,
+}: {
+  model: ModelWithPricing;
+  baseMultiplier: number;
+}) {
+  const [multiplier, setMultiplier] = useState(String(model.pricing?.multiplier ?? 1.0));
+  const [reserve, setReserve] = useState(String(model.pricing?.reserveOutputTokens ?? 1024));
+  const [saving, setSaving] = useState(false);
+
+  const p = model.pricing;
+  const storedPrice = p ? (p.isImage ? (p.fixedPrice ?? 0) : (p.inputPrice ?? 0)) : 0;
+  // 表价：已含基础倍率，与 /pricing 上给用户看的单价同源
+  const displayPrice = p ? formatModelPrice(storedPrice, p.isImage, baseMultiplier) : "—";
+  // 实付：表价再乘这一行的模型倍率
+  const finalPrice = p
+    ? formatModelPrice(
+        storedPrice * (parseFloat(multiplier) || 1),
+        p.isImage,
+        baseMultiplier,
+      )
+    : "—";
+
+  async function handleSave() {
+    const val = parseFloat(multiplier);
+    if (isNaN(val) || val < 0.01 || val > 100) {
+      toast.error("倍率必须在 0.01 到 100 之间");
+      return;
+    }
+    const reserveVal = parseInt(reserve, 10);
+    if (!Number.isInteger(reserveVal) || reserveVal < 1 || reserveVal > 128_000) {
+      toast.error("预检预留必须在 1 到 128000 token 之间");
+      return;
+    }
+
+    const jobs: Promise<{ success: boolean; error?: string }>[] = [];
+    if (val !== (model.pricing?.multiplier ?? 1)) jobs.push(updateModelMultiplier(model.id, val));
+    if (reserveVal !== (model.pricing?.reserveOutputTokens ?? 1024)) {
+      jobs.push(updateModelReserve(model.id, reserveVal));
+    }
+    if (jobs.length === 0) {
+      toast("没有改动");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const failed = (await Promise.all(jobs)).find((r) => !r.success);
+      if (failed) throw new Error(failed.error);
+      toast.success(`已更新：倍率 ${val}x · 预检预留 ${reserveVal} tokens`);
+    } catch (err) {
+      toast.error((err as Error).message || "保存失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardContent className="flex items-center gap-4 py-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium truncate">{model.name}</p>
+            <Badge tone="muted" className="text-[10px]">{model.source}</Badge>
+            {model.channelSource && model.channelSource !== "cloudflare" && (
+              <Badge tone="accent" className="text-[10px]">{model.channelSource}</Badge>
+            )}
+          </div>
+          <code className="text-xs text-muted-foreground block truncate">{model.id}</code>
+        </div>
+
+        <div className="hidden md:block text-right text-xs text-muted-foreground min-w-[120px]">
+          <div>表价: {displayPrice}</div>
+          <div>实付: <span className="text-foreground font-medium">{finalPrice}</span></div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              step="0.01"
+              min="0.01"
+              max="100"
+              value={multiplier}
+              onChange={(e) => setMultiplier(e.target.value)}
+              title="模型倍率：实付单价 = 表价 × 它"
+              className="h-8 w-20 rounded border border-border bg-card px-2 text-xs text-right outline-none focus:border-[color:var(--primary)]"
+            />
+            <span className="text-xs text-muted-foreground">x</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              step="1"
+              min="1"
+              max="128000"
+              value={reserve}
+              onChange={(e) => setReserve(e.target.value)}
+              title="余额预检假定的输出 token 数：客户端 max_tokens 超过它时按它算，避免默认 32000 的客户端被全量预留挡在 402"
+              className="h-8 w-20 rounded border border-border bg-card px-2 text-xs text-right outline-none focus:border-[color:var(--primary)]"
+            />
+            <span className="text-xs text-muted-foreground">tk</span>
+          </div>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className={cn(
+              "h-8 rounded-md px-3 text-xs font-medium transition-colors",
+              "bg-[color:var(--primary)] text-primary-foreground hover:opacity-90 disabled:opacity-50",
+            )}
+          >
+            {saving ? "..." : "保存"}
+          </button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

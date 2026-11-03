@@ -1,1 +1,34 @@
-aW1wb3J0IHsgY24gfSBmcm9tICJAL2xpYi91dGlscyI7CgpleHBvcnQgZnVuY3Rpb24gUGFnZUhlYWRlcih7CiAgdGl0bGUsCiAgZGVzY3JpcHRpb24sCiAgYWN0aW9uLAogIGNsYXNzTmFtZSwKfTogewogIHRpdGxlOiBzdHJpbmc7CiAgZGVzY3JpcHRpb24/OiBzdHJpbmc7CiAgYWN0aW9uPzogUmVhY3QuUmVhY3ROb2RlOwogIGNsYXNzTmFtZT86IHN0cmluZzsKfSkgewogIHJldHVybiAoCiAgICA8ZGl2IGNsYXNzTmFtZT17Y24oImJvcmRlci1iIGJvcmRlci1ib3JkZXIgcHgtNSBweS04IHRleHQtY2VudGVyIHNtOnB4LTgiLCBjbGFzc05hbWUpfT4KICAgICAgPGgxIGNsYXNzTmFtZT0iZm9udC1zZXJpZiB0ZXh0LTJ4bCBmb250LXNlbWlib2xkIHRyYWNraW5nLVswLjAyZW1dIj57dGl0bGV9PC9oMT4KICAgICAge2Rlc2NyaXB0aW9uICYmICgKICAgICAgICA8cCBjbGFzc05hbWU9Im14LWF1dG8gbXQtMS41IG1heC13LTJ4bCB0ZXh0LVsxM3B4XSBmb250LWxpZ2h0IHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICB7ZGVzY3JpcHRpb259CiAgICAgICAgPC9wPgogICAgICApfQogICAgICB7YWN0aW9uICYmIDxkaXYgY2xhc3NOYW1lPSJtdC00IGZsZXgganVzdGlmeS1jZW50ZXIiPnthY3Rpb259PC9kaXY+fQogICAgPC9kaXY+CiAgKTsKfQoKLyoqIFBsYWNlaG9sZGVyIGJsb2NrIGZvciByb3V0ZXMgdGhhdCBhcmUgc2NhZmZvbGRlZCBidXQgbm90IHlldCBpbXBsZW1lbnRlZC4gKi8KZXhwb3J0IGZ1bmN0aW9uIFBsYWNlaG9sZGVyKHsgbm90ZSB9OiB7IG5vdGU6IHN0cmluZyB9KSB7CiAgcmV0dXJuICgKICAgIDxkaXYgY2xhc3NOYW1lPSJtLTggZmxleCBoLTY0IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWNlbnRlciByb3VuZGVkLVt2YXIoLS1yYWRpdXMtbGcpXSBib3JkZXIgYm9yZGVyLWRhc2hlZCBib3JkZXItYm9yZGVyIGJnLWNhcmQgdGV4dC1zbSB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICB7bm90ZX0KICAgIDwvZGl2PgogICk7Cn0K
+import { cn } from "@/lib/utils";
+
+export function PageHeader({
+  title,
+  description,
+  action,
+  className,
+}: {
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("border-b border-border px-5 py-8 text-center sm:px-8", className)}>
+      <h1 className="font-serif text-2xl font-semibold tracking-[0.02em]">{title}</h1>
+      {description && (
+        <p className="mx-auto mt-1.5 max-w-2xl text-[13px] font-light text-muted-foreground">
+          {description}
+        </p>
+      )}
+      {action && <div className="mt-4 flex justify-center">{action}</div>}
+    </div>
+  );
+}
+
+/** Placeholder block for routes that are scaffolded but not yet implemented. */
+export function Placeholder({ note }: { note: string }) {
+  return (
+    <div className="m-8 flex h-64 items-center justify-center rounded-[var(--radius-lg)] border border-dashed border-border bg-card text-sm text-muted-foreground">
+      {note}
+    </div>
+  );
+}

@@ -1,1 +1,176 @@
-aW1wb3J0IHsgUGFnZUhlYWRlciB9IGZyb20gIkAvY29tcG9uZW50cy9kYXNoYm9hcmQvcGFnZS1oZWFkZXIiOwppbXBvcnQgeyBQcmljaW5nVGFicyB9IGZyb20gIkAvY29tcG9uZW50cy9wcmljaW5nL3ByaWNpbmctdGFicyI7CmltcG9ydCB7IGZldGNoTW9kZWxDYXRhbG9nLCB0eXBlIE5vcm1hbGl6ZWRNb2RlbCB9IGZyb20gIkAvbGliL2Nsb3VkZmxhcmUvY2F0YWxvZyI7CmltcG9ydCB7IGdldERpc3BsYXlQcmljZSB9IGZyb20gIkAvbGliL2JpbGxpbmcvZGlzcGxheS1wcmljZSI7CmltcG9ydCB7IGdldFByaWNpbmdDb25maWcgfSBmcm9tICJAL2xpYi9iaWxsaW5nL21vZGVsLXByaWNpbmciOwppbXBvcnQgeyBnZXRDYWNoZWRNb2RlbFByaWNpbmdNYXAgfSBmcm9tICJAL2xpYi9iaWxsaW5nL3ByaWNpbmctY2FjaGUiOwppbXBvcnQgeyBkYiB9IGZyb20gIkAvbGliL2RiL2QxLWh0dHAiOwppbXBvcnQgeyBjaGFubmVscywgbW9kZWxQcmljaW5nIH0gZnJvbSAiQC9saWIvZGIvc2NoZW1hIjsKaW1wb3J0IHsgZXEgfSBmcm9tICJkcml6emxlLW9ybSI7CmltcG9ydCB7IEluZm8gfSBmcm9tICJsdWNpZGUtcmVhY3QiOwppbXBvcnQgeyBDYXJkLCBDYXJkQ29udGVudCB9IGZyb20gIkAvY29tcG9uZW50cy91aS9jYXJkIjsKCmltcG9ydCB7IFBhZ2VCb2R5IH0gZnJvbSAiQC9jb21wb25lbnRzL2Rhc2hib2FyZC9zZWN0aW9uIjsKCmV4cG9ydCBjb25zdCBkeW5hbWljID0gImZvcmNlLWR5bmFtaWMiOwoKY29uc3QgQ0FURUdPUllfT1JERVIgPSBbInRleHQiLCAiaW1hZ2UiLCAidmlzaW9uIiwgImVtYmVkZGluZ3MiLCAidHJhbnNsYXRlIiwgInNwZWVjaCIsICJ2aWRlbyJdOwoKZXhwb3J0IGRlZmF1bHQgYXN5bmMgZnVuY3Rpb24gUHJpY2luZ1BhZ2UoKSB7CiAgY29uc3QgW2NmTW9kZWxzLCBwcmljaW5nTWFwLCBiYXNlTXVsdGlwbGllciwgY2hhbm5lbFJvd3NdID0gYXdhaXQgUHJvbWlzZS5hbGwoWwogICAgZmV0Y2hNb2RlbENhdGFsb2coKSwKICAgIGdldENhY2hlZE1vZGVsUHJpY2luZ01hcCgpLAogICAgZ2V0UHJpY2luZ0NvbmZpZygpLnRoZW4oKGMpID0+IGMuYmFzZU11bHRpcGxpZXIpLAogICAgZGIKICAgICAgLnNlbGVjdCh7IGlkOiBjaGFubmVscy5pZCwgbmFtZTogY2hhbm5lbHMubmFtZSwgdHlwZTogY2hhbm5lbHMudHlwZSB9KQogICAgICAuZnJvbShjaGFubmVscykKICAgICAgLndoZXJlKGVxKGNoYW5uZWxzLnN0YXR1cywgMSkpLAogIF0pOwoKICAvLyDmiYDmnInmuKDpgZMgdGFiCiAgY29uc3QgY2xvdWRmbGFyZVRhYiA9IHsKICAgIGlkOiAiY2xvdWRmbGFyZSIgYXMgY29uc3QsCiAgICB0eXBlOiAiY2xvdWRmbGFyZSIgYXMgY29uc3QsCiAgICBuYW1lOiAiQ2xvdWRmbGFyZSBXb3JrZXJzIEFJIiwKICAgIGxhYmVsOiAiQ2xvdWRmbGFyZSIsCiAgfTsKICBjb25zdCBhbGxDaGFubmVscyA9IFsKICAgIGNsb3VkZmxhcmVUYWIsCiAgICAuLi5jaGFubmVsUm93cwogICAgICAuZmlsdGVyKChjKSA9PiBjLnR5cGUgJiYgYy50eXBlICE9PSAiY2xvdWRmbGFyZSIpCiAgICAgIC5tYXAoKGMpID0+ICh7CiAgICAgICAgaWQ6IGMuaWQsCiAgICAgICAgdHlwZTogYy50eXBlISwKICAgICAgICBuYW1lOiBjLm5hbWUsCiAgICAgICAgbGFiZWw6IGMubmFtZSwgLy8g5L2/55So5rig6YGT6Ieq5a6a5LmJ5ZCN56ew77yI5aaCICJWZXJjZWwi44CBIkRlZXBTZWVrIu+8iQogICAgICB9KSksCiAgXTsKCiAgLy8g5pyN5Yqh56uv6aKE6K6h566X5Lu35qC877yM5Lyg57qv5pWw5o2u5a+56LGh57uZIENsaWVudCBDb21wb25lbnQKICBmdW5jdGlvbiBtb2RlbFRvUm93KG06IE5vcm1hbGl6ZWRNb2RlbCAmIHsgY2hhbm5lbFNvdXJjZTogc3RyaW5nIH0pOiB7CiAgICBpZDogc3RyaW5nOwogICAgbmFtZTogc3RyaW5nOwogICAgY2F0ZWdvcnk6IHN0cmluZzsKICAgIGNoYW5uZWxTb3VyY2U6IHN0cmluZzsKICAgIHByaWNlQ3I6IG51bWJlcjsKICAgIGlzSW1hZ2U6IGJvb2xlYW47CiAgICByZXF1aXJlV29ya2Vyc1BhaWQ/OiBib29sZWFuOwogIH0gewogICAgY29uc3QgZHAgPSBnZXREaXNwbGF5UHJpY2UobSwgcHJpY2luZ01hcCk7CiAgICByZXR1cm4gewogICAgICBpZDogbS5pZCwKICAgICAgbmFtZTogbS5uYW1lLAogICAgICBjYXRlZ29yeTogbS5jYXRlZ29yeSwKICAgICAgY2hhbm5lbFNvdXJjZTogbS5jaGFubmVsU291cmNlLAogICAgICBwcmljZUNyOiBkcC5jcmVkaXRzLAogICAgICBpc0ltYWdlOiBkcC5pc0ltYWdlLAogICAgICByZXF1aXJlV29ya2Vyc1BhaWQ6IG0ucmVxdWlyZVdvcmtlcnNQYWlkLAogICAgfTsKICB9CgogIC8vIENsb3VkZmxhcmUg5qih5Z6LCiAgY29uc3QgY2ZSb3dzID0gY2ZNb2RlbHMKICAgIC5tYXAoKG0pID0+ICh7IC4uLm0sIGNoYW5uZWxTb3VyY2U6ICJjbG91ZGZsYXJlIiBhcyBjb25zdCB9KSkKICAgIC5zb3J0KChhLCBiKSA9PiB7CiAgICAgIGNvbnN0IHBhID0gZ2V0RGlzcGxheVByaWNlKGEsIHByaWNpbmdNYXApOwogICAgICBjb25zdCBwYiA9IGdldERpc3BsYXlQcmljZShiLCBwcmljaW5nTWFwKTsKICAgICAgcmV0dXJuIHBhLmNyZWRpdHMgLSBwYi5jcmVkaXRzOwogICAgfSkKICAgIC5tYXAobW9kZWxUb1Jvdyk7CgogIC8vIOmdniBDbG91ZGZsYXJlIOa4oOmBk+aooeWei++8muS7jiBtb2RlbF9wcmljaW5nIOihqOivu+WPlgogIGNvbnN0IGFsbFByaWNpbmdSb3dzID0gYXdhaXQgZGIKICAgIC5zZWxlY3QoewogICAgICBtb2RlbElkOiBtb2RlbFByaWNpbmcubW9kZWxJZCwKICAgICAgY2hhbm5lbElkOiBtb2RlbFByaWNpbmcuY2hhbm5lbElkLAogICAgICBpbnB1dFByaWNlOiBtb2RlbFByaWNpbmcuaW5wdXRQcmljZSwKICAgICAgaXNJbWFnZTogbW9kZWxQcmljaW5nLmlzSW1hZ2UsCiAgICAgIGZpeGVkUHJpY2U6IG1vZGVsUHJpY2luZy5maXhlZFByaWNlLAogICAgICBtdWx0aXBsaWVyOiBtb2RlbFByaWNpbmcubXVsdGlwbGllciwKICAgIH0pCiAgICAuZnJvbShtb2RlbFByaWNpbmcpOwoKICBjb25zdCBwcmljaW5nQnlDaGFubmVsOiBSZWNvcmQ8c3RyaW5nLCB0eXBlb2YgYWxsUHJpY2luZ1Jvd3M+ID0ge307CiAgZm9yIChjb25zdCByb3cgb2YgYWxsUHJpY2luZ1Jvd3MpIHsKICAgIGNvbnN0IGNpZCA9IHJvdy5jaGFubmVsSWQgfHwgImRlZmF1bHQiOwogICAgaWYgKCFwcmljaW5nQnlDaGFubmVsW2NpZF0pIHByaWNpbmdCeUNoYW5uZWxbY2lkXSA9IFtdOwogICAgcHJpY2luZ0J5Q2hhbm5lbFtjaWRdLnB1c2gocm93KTsKICB9CgogIGNvbnN0IG1vZGVsc0J5Q2hhbm5lbDogUmVjb3JkPHN0cmluZywgdHlwZW9mIGNmUm93cz4gPSB7CiAgICBjbG91ZGZsYXJlOiBjZlJvd3MsCiAgfTsKCiAgZm9yIChjb25zdCBjaCBvZiBhbGxDaGFubmVscykgewogICAgaWYgKGNoLmlkID09PSAiY2xvdWRmbGFyZSIpIGNvbnRpbnVlOwogICAgY29uc3QgY3AgPSBwcmljaW5nQnlDaGFubmVsW2NoLmlkXSB8fCBbXTsKICAgIG1vZGVsc0J5Q2hhbm5lbFtjaC5pZF0gPSBjcAogICAgICAubWFwKChwKSA9PiB7CiAgICAgICAgY29uc3QgaXNJbWFnZSA9IHAuaXNJbWFnZSA9PT0gMTsKICAgICAgICBjb25zdCBtdWx0ID0gcC5tdWx0aXBsaWVyID8/IDEuMDsKICAgICAgICBjb25zdCBiYXNlUHJpY2UgPSBpc0ltYWdlID8gKHAuZml4ZWRQcmljZSA/PyAzNTAwKSA6IChwLmlucHV0UHJpY2UgPz8gMTAwKTsKICAgICAgICByZXR1cm4gewogICAgICAgICAgaWQ6IHAubW9kZWxJZCwKICAgICAgICAgIG5hbWU6IGZyaWVuZGx5TmFtZShwLm1vZGVsSWQpLAogICAgICAgICAgY2F0ZWdvcnk6IGlzSW1hZ2UgPyAiaW1hZ2UiIGFzIGNvbnN0IDogInRleHQiIGFzIGNvbnN0LAogICAgICAgICAgY2hhbm5lbFNvdXJjZTogY2gudHlwZSwKICAgICAgICAgIGNoYW5uZWxOYW1lOiBjaC5uYW1lLAogICAgICAgICAgcHJpY2VDcjogYmFzZVByaWNlICogbXVsdCwKICAgICAgICAgIGlzSW1hZ2UsCiAgICAgICAgfTsKICAgICAgfSkKICAgICAgLnNvcnQoKGEsIGIpID0+IGEucHJpY2VDciAtIGIucHJpY2VDcik7CiAgfQoKICBjb25zdCB0b3RhbENvdW50ID0gT2JqZWN0LnZhbHVlcyhtb2RlbHNCeUNoYW5uZWwpLnJlZHVjZSgocywgbCkgPT4gcyArIGwubGVuZ3RoLCAwKTsKCiAgcmV0dXJuICgKICAgIDw+CiAgICAgIDxQYWdlSGVhZGVyCiAgICAgICAgdGl0bGU9IuWumuS7tyIKICAgICAgICBkZXNjcmlwdGlvbj17YOaJgOacieaooeWei+eahOWunumZheiuoei0ueS7t+agvCDCtyDlhbEgJHt0b3RhbENvdW50fSDkuKrmqKHlnotgfQogICAgICAvPgoKICAgICAgPFBhZ2VCb2R5IGNsYXNzTmFtZT0ic3BhY2UteS02Ij4KICAgICAgICA8Q2FyZCBjbGFzc05hbWU9ImJvcmRlci1wcmltYXJ5LzIwIGJnLXByaW1hcnkvNSI+CiAgICAgICAgICA8Q2FyZENvbnRlbnQgY2xhc3NOYW1lPSJzcGFjZS15LTMgcHQtNSI+CiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJmbGV4IGl0ZW1zLXN0YXJ0IGdhcC0yIj4KICAgICAgICAgICAgICA8SW5mbyBjbGFzc05hbWU9ImgtNCB3LTQgdGV4dC1wcmltYXJ5IG10LTAuNSIgLz4KICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0ic3BhY2UteS0yIHRleHQtc20iPgogICAgICAgICAgICAgICAgPHAgY2xhc3NOYW1lPSJmb250LW1lZGl1bSB0ZXh0LXByaW1hcnkiPuWumuS7t+ivtOaYjjwvcD4KICAgICAgICAgICAgICAgIDx1bCBjbGFzc05hbWU9InNwYWNlLXktMSB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICAgICAgICAgICAgICA8bGk+4oCiIOWFqOermee7n+S4gOS7pSBDcmVkaXRz77yIY3LvvInorqHku7fvvIzkuI3mtonlj4rlhbbku5botKfluIE8L2xpPgogICAgICAgICAgICAgICAgICA8bGk+4oCiIOS4i+WIl+WNleS7t+WNszxiPuWunumZheaJo+i0ueS7tzwvYj7vvJrooajku7cgw5cg5qih5Z6L5YCN546HIMOXIOWfuuehgOWAjeeOh++8iOW9k+WJjSDDl3tiYXNlTXVsdGlwbGllcn3vvIk8L2xpPgogICAgICAgICAgICAgICAgICA8bGk+4oCiIOaWh+acrCAvIOW1jOWFpeetieaMiSB0b2tlbiDorqHotLnnmoTmqKHlnovljZXkvY3kuLrjgIxjciAvIHBlciBLIGlucHV0IHRva2Vu44CNPC9saT4KICAgICAgICAgICAgICAgICAgPGxpPuKAoiDlm77lg4/mqKHlnovmjInlvKDlm7rlrprorqHotLnvvIhjciAvIGltYWdl77yJ77yM5LiN5Y+X5Z+656GA5YCN546H5b2x5ZONPC9saT4KICAgICAgICAgICAgICAgIDwvdWw+CiAgICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICA8L0NhcmQ+CgogICAgICAgIDxQcmljaW5nVGFicwogICAgICAgICAgYWxsQ2hhbm5lbHM9e2FsbENoYW5uZWxzfQogICAgICAgICAgbW9kZWxzQnlDaGFubmVsPXttb2RlbHNCeUNoYW5uZWx9CiAgICAgICAgICBiYXNlTXVsdGlwbGllcj17YmFzZU11bHRpcGxpZXJ9CiAgICAgICAgLz4KICAgICAgPC9QYWdlQm9keT4KICAgIDwvPgogICk7Cn0KCmZ1bmN0aW9uIGZyaWVuZGx5TmFtZShpZDogc3RyaW5nKTogc3RyaW5nIHsKICBjb25zdCBzZWcgPSBpZC5zcGxpdCgiLyIpLnBvcCgpID8/IGlkOwogIHJldHVybiBzZWcucmVwbGFjZSgvWy1fXS9nLCAiICIpLnJlcGxhY2UoL1xiXHcvZywgKGMpID0+IGMudG9VcHBlckNhc2UoKSk7Cn0KCmZ1bmN0aW9uIGNoYW5uZWxMYWJlbCh0eXBlOiBzdHJpbmcpOiBzdHJpbmcgewogIGNvbnN0IGxhYmVsczogUmVjb3JkPHN0cmluZywgc3RyaW5nPiA9IHsKICAgIG9wZW5haTogIk9wZW5BSSIsCiAgICBkZWVwc2VlazogIkRlZXBTZWVrIiwKICAgIGFudGhyb3BpYzogIkFudGhyb3BpYyIsCiAgICBhenVyZTogIkF6dXJlIiwKICAgICJvcGVuYWktY29tcGF0aWJsZSI6ICLnrKzkuInmlrkiLAogIH07CiAgcmV0dXJuIGxhYmVsc1t0eXBlXSB8fCB0eXBlOwp9Cg==
+import { PageHeader } from "@/components/dashboard/page-header";
+import { PricingTabs } from "@/components/pricing/pricing-tabs";
+import { fetchModelCatalog, type NormalizedModel } from "@/lib/cloudflare/catalog";
+import { getDisplayPrice } from "@/lib/billing/display-price";
+import { getPricingConfig } from "@/lib/billing/model-pricing";
+import { getCachedModelPricingMap } from "@/lib/billing/pricing-cache";
+import { db } from "@/lib/db/d1-http";
+import { channels, modelPricing } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { Info } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+
+import { PageBody } from "@/components/dashboard/section";
+
+export const dynamic = "force-dynamic";
+
+const CATEGORY_ORDER = ["text", "image", "vision", "embeddings", "translate", "speech", "video"];
+
+export default async function PricingPage() {
+  const [cfModels, pricingMap, baseMultiplier, channelRows] = await Promise.all([
+    fetchModelCatalog(),
+    getCachedModelPricingMap(),
+    getPricingConfig().then((c) => c.baseMultiplier),
+    db
+      .select({ id: channels.id, name: channels.name, type: channels.type })
+      .from(channels)
+      .where(eq(channels.status, 1)),
+  ]);
+
+  // 所有渠道 tab
+  const cloudflareTab = {
+    id: "cloudflare" as const,
+    type: "cloudflare" as const,
+    name: "Cloudflare Workers AI",
+    label: "Cloudflare",
+  };
+  const allChannels = [
+    cloudflareTab,
+    ...channelRows
+      .filter((c) => c.type && c.type !== "cloudflare")
+      .map((c) => ({
+        id: c.id,
+        type: c.type!,
+        name: c.name,
+        label: c.name, // 使用渠道自定义名称（如 "Vercel"、"DeepSeek"）
+      })),
+  ];
+
+  // 服务端预计算价格，传纯数据对象给 Client Component
+  function modelToRow(m: NormalizedModel & { channelSource: string }): {
+    id: string;
+    name: string;
+    category: string;
+    channelSource: string;
+    priceCr: number;
+    isImage: boolean;
+    requireWorkersPaid?: boolean;
+  } {
+    const dp = getDisplayPrice(m, pricingMap);
+    return {
+      id: m.id,
+      name: m.name,
+      category: m.category,
+      channelSource: m.channelSource,
+      priceCr: dp.credits,
+      isImage: dp.isImage,
+      requireWorkersPaid: m.requireWorkersPaid,
+    };
+  }
+
+  // Cloudflare 模型
+  const cfRows = cfModels
+    .map((m) => ({ ...m, channelSource: "cloudflare" as const }))
+    .sort((a, b) => {
+      const pa = getDisplayPrice(a, pricingMap);
+      const pb = getDisplayPrice(b, pricingMap);
+      return pa.credits - pb.credits;
+    })
+    .map(modelToRow);
+
+  // 非 Cloudflare 渠道模型：从 model_pricing 表读取
+  const allPricingRows = await db
+    .select({
+      modelId: modelPricing.modelId,
+      channelId: modelPricing.channelId,
+      inputPrice: modelPricing.inputPrice,
+      isImage: modelPricing.isImage,
+      fixedPrice: modelPricing.fixedPrice,
+      multiplier: modelPricing.multiplier,
+    })
+    .from(modelPricing);
+
+  const pricingByChannel: Record<string, typeof allPricingRows> = {};
+  for (const row of allPricingRows) {
+    const cid = row.channelId || "default";
+    if (!pricingByChannel[cid]) pricingByChannel[cid] = [];
+    pricingByChannel[cid].push(row);
+  }
+
+  const modelsByChannel: Record<string, typeof cfRows> = {
+    cloudflare: cfRows,
+  };
+
+  for (const ch of allChannels) {
+    if (ch.id === "cloudflare") continue;
+    const cp = pricingByChannel[ch.id] || [];
+    modelsByChannel[ch.id] = cp
+      .map((p) => {
+        const isImage = p.isImage === 1;
+        const mult = p.multiplier ?? 1.0;
+        const basePrice = isImage ? (p.fixedPrice ?? 3500) : (p.inputPrice ?? 100);
+        return {
+          id: p.modelId,
+          name: friendlyName(p.modelId),
+          category: isImage ? "image" as const : "text" as const,
+          channelSource: ch.type,
+          channelName: ch.name,
+          priceCr: basePrice * mult,
+          isImage,
+        };
+      })
+      .sort((a, b) => a.priceCr - b.priceCr);
+  }
+
+  const totalCount = Object.values(modelsByChannel).reduce((s, l) => s + l.length, 0);
+
+  return (
+    <>
+      <PageHeader
+        title="定价"
+        description={`所有模型的实际计费价格 · 共 ${totalCount} 个模型`}
+      />
+
+      <PageBody className="space-y-6">
+        <Card className="border-primary/20 bg-primary/5">
+          <CardContent className="space-y-3 pt-5">
+            <div className="flex items-start gap-2">
+              <Info className="h-4 w-4 text-primary mt-0.5" />
+              <div className="space-y-2 text-sm">
+                <p className="font-medium text-primary">定价说明</p>
+                <ul className="space-y-1 text-muted-foreground">
+                  <li>• 全站统一以 Credits（cr）计价，不涉及其他货币</li>
+                  <li>• 下列单价即<b>实际扣费价</b>：表价 × 模型倍率 × 基础倍率（当前 ×{baseMultiplier}）</li>
+                  <li>• 文本 / 嵌入等按 token 计费的模型单位为「cr / per K input token」</li>
+                  <li>• 图像模型按张固定计费（cr / image），不受基础倍率影响</li>
+                </ul>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <PricingTabs
+          allChannels={allChannels}
+          modelsByChannel={modelsByChannel}
+          baseMultiplier={baseMultiplier}
+        />
+      </PageBody>
+    </>
+  );
+}
+
+function friendlyName(id: string): string {
+  const seg = id.split("/").pop() ?? id;
+  return seg.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function channelLabel(type: string): string {
+  const labels: Record<string, string> = {
+    openai: "OpenAI",
+    deepseek: "DeepSeek",
+    anthropic: "Anthropic",
+    azure: "Azure",
+    "openai-compatible": "第三方",
+  };
+  return labels[type] || type;
+}

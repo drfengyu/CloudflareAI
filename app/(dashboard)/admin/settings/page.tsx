@@ -1,1 +1,321 @@
-aW1wb3J0IHsgUGFnZUhlYWRlciB9IGZyb20gIkAvY29tcG9uZW50cy9kYXNoYm9hcmQvcGFnZS1oZWFkZXIiOwppbXBvcnQgeyBDYXJkLCBDYXJkQ29udGVudCwgQ2FyZEhlYWRlciwgQ2FyZFRpdGxlIH0gZnJvbSAiQC9jb21wb25lbnRzL3VpL2NhcmQiOwppbXBvcnQgeyBkYiB9IGZyb20gIkAvbGliL2RiL2QxLWh0dHAiOwppbXBvcnQgeyB1c2Vycywgb3B0aW9ucyB9IGZyb20gIkAvbGliL2RiL3NjaGVtYSI7CmltcG9ydCB7IGVxIH0gZnJvbSAiZHJpenpsZS1vcm0iOwppbXBvcnQgeyByZXF1aXJlVXNlciB9IGZyb20gIkAvbGliL3VzYWdlL21ldGVyIjsKaW1wb3J0IHsgcmVkaXJlY3QgfSBmcm9tICJuZXh0L25hdmlnYXRpb24iOwppbXBvcnQgeyBTZXR0aW5nc0Zvcm0sIFByaWNpbmdTZXR0aW5nc0Zvcm0sIENoZWNraW5TZXR0aW5nc0Zvcm0sIEludml0ZVNldHRpbmdzRm9ybSwgQ2FzaGJhY2tTZXR0aW5nc0Zvcm0sIFJlY2hhcmdlQm9udXNTZXR0aW5nc0Zvcm0sIFRhc2tTZXR0aW5nc0Zvcm0sIEF1dGhDaGFubmVsc0Zvcm0sIEVwYXlTZXR0aW5nc0Zvcm0sIExpbnV4ZG9TZXR0aW5nc0Zvcm0gfSBmcm9tICIuL3NldHRpbmdzLWZvcm0iOwppbXBvcnQgeyBEYXNoYm9hcmRJbmZvRm9ybSB9IGZyb20gIi4vZGFzaGJvYXJkLWluZm8tZm9ybSI7CmltcG9ydCB7IExvdHRlcnlGb3JtIH0gZnJvbSAiLi9sb3R0ZXJ5LWZvcm0iOwppbXBvcnQgeyBSYWlkZW5Gb3JtIH0gZnJvbSAiLi9yYWlkZW4tZm9ybSI7CmltcG9ydCB7IEZsaXBGb3JtIH0gZnJvbSAiLi9mbGlwLWZvcm0iOwppbXBvcnQgeyBzYW5pdGl6ZUxvdHRlcnlDb25maWcgfSBmcm9tICJAL2xpYi9sb3R0ZXJ5L3ByaXplLW1hdGgiOwppbXBvcnQgeyBzYW5pdGl6ZVJhaWRlbkNvbmZpZyB9IGZyb20gIkAvbGliL3JhaWRlbi9jb25maWciOwppbXBvcnQgeyBzYW5pdGl6ZUZsaXBDb25maWcgfSBmcm9tICJAL2xpYi9mbGlwL2NvbmZpZyI7CmltcG9ydCB7IFRBU0tTIH0gZnJvbSAiQC9saWIvdGFza3MvdGFza3MiOwppbXBvcnQgeyBzYW5pdGl6ZUJvbnVzVGllcnMgfSBmcm9tICJAL2xpYi9wYXltZW50L2JvbnVzIjsKaW1wb3J0IHR5cGUgeyBBbm5vdW5jZW1lbnRJbnB1dCwgRmFxSXRlbSB9IGZyb20gIkAvbGliL3NldHRpbmdzL2Rhc2hib2FyZC1pbmZvIjsKCmltcG9ydCB7IFBhZ2VCb2R5IH0gZnJvbSAiQC9jb21wb25lbnRzL2Rhc2hib2FyZC9zZWN0aW9uIjsKCmV4cG9ydCBjb25zdCBkeW5hbWljID0gImZvcmNlLWR5bmFtaWMiOwoKLyoqIG9wdGlvbiDooajlrZjnmoTmmK/lrZfnrKbkuLLvvIznvJbovpHlmajph4zpnIDopoHov5jljp/miJDmlbDnu4TvvJvohI/mlbDmja7mjInnqbrmlbDnu4TlpITnkIbjgIIgKi8KZnVuY3Rpb24gcGFyc2VBcnJheTxUPihyYXc6IHN0cmluZyB8IHVuZGVmaW5lZCk6IFRbXSB7CiAgaWYgKCFyYXcpIHJldHVybiBbXTsKICB0cnkgewogICAgY29uc3QgdmFsdWUgPSBKU09OLnBhcnNlKHJhdyk7CiAgICByZXR1cm4gQXJyYXkuaXNBcnJheSh2YWx1ZSkgPyAodmFsdWUgYXMgVFtdKSA6IFtdOwogIH0gY2F0Y2ggewogICAgcmV0dXJuIFtdOwogIH0KfQoKZXhwb3J0IGRlZmF1bHQgYXN5bmMgZnVuY3Rpb24gQWRtaW5TZXR0aW5nc1BhZ2UoKSB7CiAgY29uc3QgY3VycmVudFVzZXJJZCA9IGF3YWl0IHJlcXVpcmVVc2VyKCk7CgogIC8vIDIwMjYtMTAtMjMg5oCn6IO977ya5p2D6ZmQ5qOA5p+lICsg6K6+572u5p+l6K+i5bm25Y+R77yI5Y6f5YWI5Liy6KGMIDMg5qyhIEQxIOW+gOi/lO+8ieOAggogIC8vIGxvdHRlcnlDb25maWcg55u05o6l5LuOIGFsbFNldHRpbmdzIOmHjOWPlu+8jOS4jeWGjeWNleeLrOiwgyBnZXRMb3R0ZXJ5Q29uZmln77yI55yB5LiA5qyhIEQx77yJ44CCCiAgY29uc3QgW2N1cnJlbnRVc2VyLCBhbGxTZXR0aW5nc10gPSBhd2FpdCBQcm9taXNlLmFsbChbCiAgICBkYgogICAgICAuc2VsZWN0KCkKICAgICAgLmZyb20odXNlcnMpCiAgICAgIC53aGVyZShlcSh1c2Vycy5pZCwgY3VycmVudFVzZXJJZCkpCiAgICAgIC5saW1pdCgxKSwKICAgIGRiLnNlbGVjdCgpLmZyb20ob3B0aW9ucyksCiAgXSk7CgogIGlmICghY3VycmVudFVzZXJbMF0gfHwgY3VycmVudFVzZXJbMF0ucm9sZSA8IDEwKSB7CiAgICByZWRpcmVjdCgiL2Rhc2hib2FyZCIpOwogIH0KCiAgLy8g6L2s5o2i5Li6IGtleS12YWx1ZSDlr7nosaEKICBjb25zdCBzZXR0aW5nczogUmVjb3JkPHN0cmluZywgc3RyaW5nPiA9IHt9OwogIGFsbFNldHRpbmdzLmZvckVhY2goKG9wdCkgPT4gewogICAgc2V0dGluZ3Nbb3B0LmtleV0gPSBvcHQudmFsdWU7CiAgfSk7CgogIC8vIOS4ieS4qua0u+WKqOeahOmFjee9ruWcqOW6k+mHjOWQhOaYr+S4gOautSBKU09O77yM55u05o6l5LuOIGFsbFNldHRpbmdzIOino+aekO+8jOecgeaOieWQhOiHqueahCBnZXRTZXR0aW5nIOW+gOi/lOOAggogIC8vIOiEj+WAvOS4gOW+i+eUsSBzYW5pdGl6ZSog5YWc5Zue5Y+v55So6buY6K6k5YC877yM5LiN6K6p6K6+572u6aG15Zug5Li65LiA6KGM5Z2PIEpTT04g5oql6ZSZ44CCCiAgY29uc3QgcGFyc2VDb25maWcgPSA8VCw+KHJhdzogc3RyaW5nIHwgdW5kZWZpbmVkLCBzYW5pdGl6ZTogKHZhbHVlOiB1bmtub3duKSA9PiBUKTogVCA9PiB7CiAgICBpZiAoIXJhdykgcmV0dXJuIHNhbml0aXplKG51bGwpOwogICAgdHJ5IHsKICAgICAgcmV0dXJuIHNhbml0aXplKEpTT04ucGFyc2UocmF3KSk7CiAgICB9IGNhdGNoIHsKICAgICAgcmV0dXJuIHNhbml0aXplKG51bGwpOwogICAgfQogIH07CiAgY29uc3QgbG90dGVyeUNvbmZpZyA9IHBhcnNlQ29uZmlnKHNldHRpbmdzLmxvdHRlcnlfY29uZmlnLCBzYW5pdGl6ZUxvdHRlcnlDb25maWcpOwogIGNvbnN0IHJhaWRlbkNvbmZpZyA9IHBhcnNlQ29uZmlnKHNldHRpbmdzLnJhaWRlbl9jb25maWcsIHNhbml0aXplUmFpZGVuQ29uZmlnKTsKICBjb25zdCBmbGlwQ29uZmlnID0gcGFyc2VDb25maWcoc2V0dGluZ3MuZmxpcF9jb25maWcsIHNhbml0aXplRmxpcENvbmZpZyk7CgogIC8vIOWFheWAvOi1oOmAgeaho+S9jeS4juS7u+WKoeWlluWKseimhuebluWcqOW6k+mHjOaYryBKU09O77yM5Lqk57uZ6KGo5Y2V5YmN5YWI6L+Y5Y6f5oiQ57uT5p6E5YyW5YC877yaCiAgLy8g6KGo5Y2V5oyJ6KGML+aMieS7u+WKoeaYvuekuuaVsOWtl++8jOeuoeeQhuWRmOS4jemcgOimgeS5n+S4jeW6lOivpeeci+WIsCBKU09OIOaWh+acrOOAggogIGNvbnN0IGJvbnVzVGllcnMgPSBzYW5pdGl6ZUJvbnVzVGllcnMocGFyc2VBcnJheTx1bmtub3duPihzZXR0aW5ncy5yZWNoYXJnZV9ib251c190aWVycykpOwogIGNvbnN0IHRhc2tSZXdhcmRPdmVycmlkZXMgPSAoKCkgPT4gewogICAgY29uc3QgcmF3ID0gc2V0dGluZ3MudGFza19yZXdhcmRfb3ZlcnJpZGVzOwogICAgaWYgKCFyYXcpIHJldHVybiB7fTsKICAgIGxldCBwYXJzZWQ6IHVua25vd247CiAgICB0cnkgewogICAgICBwYXJzZWQgPSBKU09OLnBhcnNlKHJhdyk7CiAgICB9IGNhdGNoIHsKICAgICAgcmV0dXJuIHt9OwogICAgfQogICAgaWYgKCFwYXJzZWQgfHwgdHlwZW9mIHBhcnNlZCAhPT0gIm9iamVjdCIgfHwgQXJyYXkuaXNBcnJheShwYXJzZWQpKSByZXR1cm4ge307CiAgICBjb25zdCBvdXQ6IFJlY29yZDxzdHJpbmcsIG51bWJlcj4gPSB7fTsKICAgIGZvciAoY29uc3QgW2tleSwgdmFsdWVdIG9mIE9iamVjdC5lbnRyaWVzKHBhcnNlZCkpIHsKICAgICAgY29uc3QgbiA9IE51bWJlcih2YWx1ZSk7CiAgICAgIGlmIChOdW1iZXIuaXNGaW5pdGUobikpIG91dFtrZXldID0gbjsKICAgIH0KICAgIHJldHVybiBvdXQ7CiAgfSkoKTsKCiAgcmV0dXJuICgKICAgIDw+CiAgICAgIDxQYWdlSGVhZGVyCiAgICAgICAgdGl0bGU9Iuezu+e7n+iuvue9riIKICAgICAgICBkZXNjcmlwdGlvbj0i566h55CG5bmz5Y+w6YWN572u44CB5Yqf6IO95byA5YWzIgogICAgICAvPgoKICAgICAgPFBhZ2VCb2R5IGNsYXNzTmFtZT0ic3BhY2UteS02Ij4KICAgICAgICA8Q2FyZD4KICAgICAgICAgIDxDYXJkSGVhZGVyPgogICAgICAgICAgICA8Q2FyZFRpdGxlIGNsYXNzTmFtZT0idGV4dC1iYXNlIj7ln7rnoYDorr7nva48L0NhcmRUaXRsZT4KICAgICAgICAgIDwvQ2FyZEhlYWRlcj4KICAgICAgICAgIDxDYXJkQ29udGVudD4KICAgICAgICAgICAgPFNldHRpbmdzRm9ybQogICAgICAgICAgICAgIGluaXRpYWxTZXR0aW5ncz17ewogICAgICAgICAgICAgICAgc2l0ZU5hbWU6IHNldHRpbmdzLnNpdGVOYW1lIHx8ICJDbG91ZGZsYXJlIEFJIENvbnNvbGUiLAogICAgICAgICAgICAgICAgZGVmYXVsdEJhbGFuY2VWYWxpZERheXM6IHNldHRpbmdzLmRlZmF1bHRCYWxhbmNlVmFsaWREYXlzIHx8ICIzNjUiLAogICAgICAgICAgICAgICAgY3JlZGl0c1BlclVzZDogc2V0dGluZ3MuY3JlZGl0c1BlclVzZCB8fCAiMSIsCiAgICAgICAgICAgICAgfX0KICAgICAgICAgICAgLz4KICAgICAgICAgIDwvQ2FyZENvbnRlbnQ+CiAgICAgICAgPC9DYXJkPgoKICAgICAgICA8Q2FyZD4KICAgICAgICAgIDxDYXJkSGVhZGVyPgogICAgICAgICAgICA8Q2FyZFRpdGxlIGNsYXNzTmFtZT0idGV4dC1iYXNlIj7lhajlsYDlrprku7flgI3njoc8L0NhcmRUaXRsZT4KICAgICAgICAgIDwvQ2FyZEhlYWRlcj4KICAgICAgICAgIDxDYXJkQ29udGVudD4KICAgICAgICAgICAgPFByaWNpbmdTZXR0aW5nc0Zvcm0KICAgICAgICAgICAgICBpbml0aWFsU2V0dGluZ3M9e3sKICAgICAgICAgICAgICAgIGJhc2VNdWx0aXBsaWVyOiBzZXR0aW5ncy5wcmljaW5nX2Jhc2VfbXVsdGlwbGllciB8fCAiMTAwMCIsCiAgICAgICAgICAgICAgICBhZGp1c3RUaHJlc2hvbGQ6IHNldHRpbmdzLnByaWNpbmdfYWRqdXN0X3RocmVzaG9sZCB8fCAiMTAwIiwKICAgICAgICAgICAgICAgIGFkanVzdE11bHRpcGxpZXJMb3c6IHNldHRpbmdzLnByaWNpbmdfYWRqdXN0X211bHRpcGxpZXJfbG93IHx8ICI1IiwKICAgICAgICAgICAgICAgIGFkanVzdE11bHRpcGxpZXJIaWdoOiBzZXR0aW5ncy5wcmljaW5nX2FkanVzdF9tdWx0aXBsaWVyX2hpZ2ggfHwgIjEiLAogICAgICAgICAgICAgICAgZGVmYXVsdFByaWNlUGVyTWlsbGlvbjogc2V0dGluZ3MucHJpY2luZ19kZWZhdWx0X3ByaWNlX3Blcl9taWxsaW9uIHx8ICIxMDAiLAogICAgICAgICAgICAgIH19CiAgICAgICAgICAgIC8+CiAgICAgICAgICA8L0NhcmRDb250ZW50PgogICAgICAgIDwvQ2FyZD4KCiAgICAgICAgPENhcmQ+CiAgICAgICAgICA8Q2FyZEhlYWRlcj4KICAgICAgICAgICAgPENhcmRUaXRsZSBjbGFzc05hbWU9InRleHQtYmFzZSI+562+5Yiw6K6+572uPC9DYXJkVGl0bGU+CiAgICAgICAgICA8L0NhcmRIZWFkZXI+CiAgICAgICAgICA8Q2FyZENvbnRlbnQ+CiAgICAgICAgICAgIDxDaGVja2luU2V0dGluZ3NGb3JtCiAgICAgICAgICAgICAgaW5pdGlhbFNldHRpbmdzPXt7CiAgICAgICAgICAgICAgICBlbmFibGVkOiBzZXR0aW5ncy5jaGVja2luX2VuYWJsZWQgPT09ICJ0cnVlIiwKICAgICAgICAgICAgICAgIG1pblF1b3RhOiBzZXR0aW5ncy5jaGVja2luX21pbl9xdW90YSB8fCAiMC4wMSIsCiAgICAgICAgICAgICAgICBtYXhRdW90YTogc2V0dGluZ3MuY2hlY2tpbl9tYXhfcXVvdGEgfHwgIjAuMSIsCiAgICAgICAgICAgICAgICB2YWxpZERheXM6IHNldHRpbmdzLmNoZWNraW5fdmFsaWRfZGF5cyB8fCAiNyIsCiAgICAgICAgICAgICAgICBzdHJlYWtFbmFibGVkOiBzZXR0aW5ncy5jaGVja2luX3N0cmVha19lbmFibGVkICE9PSAiZmFsc2UiLAogICAgICAgICAgICAgICAgc3RyZWFrRGF5czogc2V0dGluZ3MuY2hlY2tpbl9zdHJlYWtfZGF5cyB8fCAiNyIsCiAgICAgICAgICAgICAgICBzdHJlYWtSZXdhcmQ6IHNldHRpbmdzLmNoZWNraW5fc3RyZWFrX3Jld2FyZCB8fCAiMjAwIiwKICAgICAgICAgICAgICB9fQogICAgICAgICAgICAvPgogICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICA8L0NhcmQ+CgogICAgICAgIDxDYXJkPgogICAgICAgICAgPENhcmRIZWFkZXI+CiAgICAgICAgICAgIDxDYXJkVGl0bGUgY2xhc3NOYW1lPSJ0ZXh0LWJhc2UiPumCgOivt+WlluWKsTwvQ2FyZFRpdGxlPgogICAgICAgICAgPC9DYXJkSGVhZGVyPgogICAgICAgICAgPENhcmRDb250ZW50PgogICAgICAgICAgICA8SW52aXRlU2V0dGluZ3NGb3JtCiAgICAgICAgICAgICAgaW5pdGlhbFNldHRpbmdzPXt7CiAgICAgICAgICAgICAgICBlbmFibGVkOiBzZXR0aW5ncy5pbnZpdGVfZW5hYmxlZCAhPT0gImZhbHNlIiwKICAgICAgICAgICAgICAgIGludml0ZXJSZXdhcmQ6IHNldHRpbmdzLmludml0ZV9yZXdhcmRfaW52aXRlciB8fCAiMzAwIiwKICAgICAgICAgICAgICAgIGludml0ZWVSZXdhcmQ6IHNldHRpbmdzLmludml0ZV9yZXdhcmRfaW52aXRlZSB8fCAiMjAwIiwKICAgICAgICAgICAgICB9fQogICAgICAgICAgICAvPgogICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICA8L0NhcmQ+CgogICAgICAgIDxDYXJkPgogICAgICAgICAgPENhcmRIZWFkZXI+CiAgICAgICAgICAgIDxDYXJkVGl0bGUgY2xhc3NOYW1lPSJ0ZXh0LWJhc2UiPua2iOi0uei/lOWIqTwvQ2FyZFRpdGxlPgogICAgICAgICAgPC9DYXJkSGVhZGVyPgogICAgICAgICAgPENhcmRDb250ZW50PgogICAgICAgICAgICA8Q2FzaGJhY2tTZXR0aW5nc0Zvcm0KICAgICAgICAgICAgICBpbml0aWFsU2V0dGluZ3M9e3sKICAgICAgICAgICAgICAgIGVuYWJsZWQ6IHNldHRpbmdzLmNhc2hiYWNrX2VuYWJsZWQgPT09ICJ0cnVlIiB8fCBzZXR0aW5ncy5jYXNoYmFja19lbmFibGVkID09PSAiMSIsCiAgICAgICAgICAgICAgICByYXRlOiBzZXR0aW5ncy5jYXNoYmFja19yYXRlIHx8ICIwLjEiLAogICAgICAgICAgICAgICAgbWluQ3JlZGl0czogc2V0dGluZ3MuY2FzaGJhY2tfbWluX2NyZWRpdHMgfHwgIjIwIiwKICAgICAgICAgICAgICAgIGNhcDogc2V0dGluZ3MuY2FzaGJhY2tfY2FwIHx8ICIyMDAiLAogICAgICAgICAgICAgICAgdmFsaWREYXlzOiBzZXR0aW5ncy5jYXNoYmFja192YWxpZF9kYXlzIHx8ICI3IiwKICAgICAgICAgICAgICAgIGJhY2tmaWxsRGF5czogc2V0dGluZ3MuY2FzaGJhY2tfYmFja2ZpbGxfZGF5cyB8fCAiMyIsCiAgICAgICAgICAgICAgICBsZWFkZXJib2FyZERheXM6IHNldHRpbmdzLmNhc2hiYWNrX2xlYWRlcmJvYXJkX2RheXMgfHwgIjciLAogICAgICAgICAgICAgIH19CiAgICAgICAgICAgIC8+CiAgICAgICAgICA8L0NhcmRDb250ZW50PgogICAgICAgIDwvQ2FyZD4KCiAgICAgICAgPENhcmQ+CiAgICAgICAgICA8Q2FyZEhlYWRlcj4KICAgICAgICAgICAgPENhcmRUaXRsZSBjbGFzc05hbWU9InRleHQtYmFzZSI+5YWF5YC86Zi25qKv6LWg6YCBPC9DYXJkVGl0bGU+CiAgICAgICAgICA8L0NhcmRIZWFkZXI+CiAgICAgICAgICA8Q2FyZENvbnRlbnQ+CiAgICAgICAgICAgIDxSZWNoYXJnZUJvbnVzU2V0dGluZ3NGb3JtCiAgICAgICAgICAgICAgaW5pdGlhbFNldHRpbmdzPXt7CiAgICAgICAgICAgICAgICBlbmFibGVkOiBzZXR0aW5ncy5yZWNoYXJnZV9ib251c19lbmFibGVkID09PSAidHJ1ZSIgfHwgc2V0dGluZ3MucmVjaGFyZ2VfYm9udXNfZW5hYmxlZCA9PT0gIjEiLAogICAgICAgICAgICAgICAgdmFsaWREYXlzOiBzZXR0aW5ncy5yZWNoYXJnZV9ib251c192YWxpZF9kYXlzIHx8ICIzMCIsCiAgICAgICAgICAgICAgICB0aWVyczogYm9udXNUaWVycywKICAgICAgICAgICAgICB9fQogICAgICAgICAgICAvPgogICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICA8L0NhcmQ+CgogICAgICAgIDxDYXJkPgogICAgICAgICAgPENhcmRIZWFkZXI+CiAgICAgICAgICAgIDxDYXJkVGl0bGUgY2xhc3NOYW1lPSJ0ZXh0LWJhc2UiPuS7u+WKoeaIkOWwseWlluWKsTwvQ2FyZFRpdGxlPgogICAgICAgICAgPC9DYXJkSGVhZGVyPgogICAgICAgICAgPENhcmRDb250ZW50PgogICAgICAgICAgICA8VGFza1NldHRpbmdzRm9ybQogICAgICAgICAgICAgIGluaXRpYWxTZXR0aW5ncz17ewogICAgICAgICAgICAgICAgZW5hYmxlZDogc2V0dGluZ3MudGFza3NfZW5hYmxlZCA9PT0gInRydWUiIHx8IHNldHRpbmdzLnRhc2tzX2VuYWJsZWQgPT09ICIxIiwKICAgICAgICAgICAgICAgIHZhbGlkRGF5czogc2V0dGluZ3MudGFza3NfdmFsaWRfZGF5cyB8fCAiMzAiLAogICAgICAgICAgICAgICAgcmV3YXJkczogdGFza1Jld2FyZE92ZXJyaWRlcywKICAgICAgICAgICAgICB9fQogICAgICAgICAgICAgIGNhdGFsb2c9e1RBU0tTLm1hcCgodCkgPT4gKHsKICAgICAgICAgICAgICAgIGtleTogdC5rZXksCiAgICAgICAgICAgICAgICB0aXRsZTogdC50aXRsZSwKICAgICAgICAgICAgICAgIHRhcmdldDogdC50YXJnZXQsCiAgICAgICAgICAgICAgICBkZWZhdWx0UmV3YXJkOiB0LmRlZmF1bHRSZXdhcmQsCiAgICAgICAgICAgICAgfSkpfQogICAgICAgICAgICAvPgogICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICA8L0NhcmQ+CgogICAgICAgIDxDYXJkPgogICAgICAgICAgPENhcmRIZWFkZXI+CiAgICAgICAgICAgIDxDYXJkVGl0bGUgY2xhc3NOYW1lPSJ0ZXh0LWJhc2UiPuWcqOe6v+WFheWAvO+8iOaYk+aUr+S7mO+8iTwvQ2FyZFRpdGxlPgogICAgICAgICAgPC9DYXJkSGVhZGVyPgogICAgICAgICAgPENhcmRDb250ZW50PgogICAgICAgICAgICA8RXBheVNldHRpbmdzRm9ybQogICAgICAgICAgICAgIGluaXRpYWxTZXR0aW5ncz17ewogICAgICAgICAgICAgICAgZW5hYmxlZDogc2V0dGluZ3MuZXBheV9lbmFibGVkID09PSAidHJ1ZSIsCiAgICAgICAgICAgICAgICBhcGlVcmw6IHNldHRpbmdzLmVwYXlfYXBpX3VybCB8fCAiIiwKICAgICAgICAgICAgICAgIHBpZDogc2V0dGluZ3MuZXBheV9waWQgfHwgIiIsCiAgICAgICAgICAgICAgICBrZXk6IHNldHRpbmdzLmVwYXlfa2V5IHx8ICIiLAogICAgICAgICAgICAgICAgcmF0ZTogc2V0dGluZ3MucmVjaGFyZ2VfcmF0ZSB8fCAiMTAiLAogICAgICAgICAgICAgICAgbWluQ255OiBzZXR0aW5ncy5yZWNoYXJnZV9taW4gfHwgIjEiLAogICAgICAgICAgICAgICAgbWF4Q255OiBzZXR0aW5ncy5yZWNoYXJnZV9tYXggfHwgIjEwMDAiLAogICAgICAgICAgICAgIH19CiAgICAgICAgICAgIC8+CiAgICAgICAgICA8L0NhcmRDb250ZW50PgogICAgICAgIDwvQ2FyZD4KCiAgICAgICAgPENhcmQ+CiAgICAgICAgICA8Q2FyZEhlYWRlcj4KICAgICAgICAgICAgPENhcmRUaXRsZSBjbGFzc05hbWU9InRleHQtYmFzZSI+5Zyo57q/5YWF5YC877yITGludXhETyDnp6/liIbvvIk8L0NhcmRUaXRsZT4KICAgICAgICAgIDwvQ2FyZEhlYWRlcj4KICAgICAgICAgIDxDYXJkQ29udGVudD4KICAgICAgICAgICAgPExpbnV4ZG9TZXR0aW5nc0Zvcm0KICAgICAgICAgICAgICBpbml0aWFsU2V0dGluZ3M9e3sKICAgICAgICAgICAgICAgIGVuYWJsZWQ6IHNldHRpbmdzLmxkcGF5X2VuYWJsZWQgPT09ICJ0cnVlIiwKICAgICAgICAgICAgICAgIGFwaVVybDogc2V0dGluZ3MubGRwYXlfYXBpX3VybCB8fCAiaHR0cHM6Ly9jcmVkaXQubGludXguZG8vZXBheSIsCiAgICAgICAgICAgICAgICBwaWQ6IHNldHRpbmdzLmxkcGF5X3BpZCB8fCAiIiwKICAgICAgICAgICAgICAgIGtleTogc2V0dGluZ3MubGRwYXlfa2V5IHx8ICIiLAogICAgICAgICAgICAgICAgcmF0ZTogc2V0dGluZ3MubGRwYXlfcmF0ZSB8fCAiMSIsCiAgICAgICAgICAgICAgICBtaW5Dbnk6IHNldHRpbmdzLmxkcGF5X21pbiB8fCAiMSIsCiAgICAgICAgICAgICAgICBtYXhDbnk6IHNldHRpbmdzLmxkcGF5X21heCB8fCAiMTAwMCIsCiAgICAgICAgICAgICAgfX0KICAgICAgICAgICAgLz4KICAgICAgICAgIDwvQ2FyZENvbnRlbnQ+CiAgICAgICAgPC9DYXJkPgoKICAgICAgICA8Q2FyZD4KICAgICAgICAgIDxDYXJkSGVhZGVyPgogICAgICAgICAgICA8Q2FyZFRpdGxlIGNsYXNzTmFtZT0idGV4dC1iYXNlIj7orqTor4HmuKDpgZM8L0NhcmRUaXRsZT4KICAgICAgICAgIDwvQ2FyZEhlYWRlcj4KICAgICAgICAgIDxDYXJkQ29udGVudD4KICAgICAgICAgICAgPEF1dGhDaGFubmVsc0Zvcm0KICAgICAgICAgICAgICBpbml0aWFsU2V0dGluZ3M9e3sKICAgICAgICAgICAgICAgIGVtYWlsRW5hYmxlZDogc2V0dGluZ3MuYXV0aF9lbWFpbF9lbmFibGVkICE9PSAiZmFsc2UiLAogICAgICAgICAgICAgICAgZ2l0aHViRW5hYmxlZDogc2V0dGluZ3MuYXV0aF9naXRodWJfZW5hYmxlZCAhPT0gImZhbHNlIiwKICAgICAgICAgICAgICAgIGxpbnV4ZG9FbmFibGVkOiBzZXR0aW5ncy5hdXRoX2xpbnV4ZG9fZW5hYmxlZCAhPT0gImZhbHNlIiwKICAgICAgICAgICAgICB9fQogICAgICAgICAgICAvPgogICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICA8L0NhcmQ+CgogICAgICAgIDxDYXJkPgogICAgICAgICAgPENhcmRIZWFkZXI+CiAgICAgICAgICAgIDxDYXJkVGl0bGUgY2xhc3NOYW1lPSJ0ZXh0LWJhc2UiPueci+adv+S/oeaBr++8iOWFrOWRiiAvIOmXruetlCAvIOacjeWKoeWPr+eUqOaAp++8iTwvQ2FyZFRpdGxlPgogICAgICAgICAgPC9DYXJkSGVhZGVyPgogICAgICAgICAgPENhcmRDb250ZW50PgogICAgICAgICAgICA8RGFzaGJvYXJkSW5mb0Zvcm0KICAgICAgICAgICAgICBpbml0aWFsU2V0dGluZ3M9e3sKICAgICAgICAgICAgICAgIGFubm91bmNlbWVudHM6IHBhcnNlQXJyYXk8QW5ub3VuY2VtZW50SW5wdXQ+KHNldHRpbmdzLmRhc2hib2FyZF9hbm5vdW5jZW1lbnRzKSwKICAgICAgICAgICAgICAgIGZhcTogcGFyc2VBcnJheTxGYXFJdGVtPihzZXR0aW5ncy5kYXNoYm9hcmRfZmFxKSwKICAgICAgICAgICAgICAgIHVwdGltZUVuYWJsZWQ6IHNldHRpbmdzLnVwdGltZV9lbmFibGVkID09PSAidHJ1ZSIsCiAgICAgICAgICAgICAgICB1cHRpbWVBcGlVcmw6IHNldHRpbmdzLnVwdGltZV9hcGlfdXJsIHx8ICIiLAogICAgICAgICAgICAgIH19CiAgICAgICAgICAgIC8+CiAgICAgICAgICA8L0NhcmRDb250ZW50PgogICAgICAgIDwvQ2FyZD4KCiAgICAgICAgPENhcmQ+CiAgICAgICAgICA8Q2FyZEhlYWRlcj4KICAgICAgICAgICAgPENhcmRUaXRsZSBjbGFzc05hbWU9InRleHQtYmFzZSI+6ZmQ5pe25rS75Yqo77yI5bm46L+Q6L2s55uY77yJPC9DYXJkVGl0bGU+CiAgICAgICAgICA8L0NhcmRIZWFkZXI+CiAgICAgICAgICA8Q2FyZENvbnRlbnQ+CiAgICAgICAgICAgIDxMb3R0ZXJ5Rm9ybSBpbml0aWFsQ29uZmlnPXtsb3R0ZXJ5Q29uZmlnfSAvPgogICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICA8L0NhcmQ+CgogICAgICAgIDxDYXJkPgogICAgICAgICAgPENhcmRIZWFkZXI+CiAgICAgICAgICAgIDxDYXJkVGl0bGUgY2xhc3NOYW1lPSJ0ZXh0LWJhc2UiPumZkOaXtua0u+WKqO+8iOmbt+eUteihjOWKqO+8iTwvQ2FyZFRpdGxlPgogICAgICAgICAgPC9DYXJkSGVhZGVyPgogICAgICAgICAgPENhcmRDb250ZW50PgogICAgICAgICAgICA8UmFpZGVuRm9ybSBpbml0aWFsQ29uZmlnPXtyYWlkZW5Db25maWd9IC8+CiAgICAgICAgICA8L0NhcmRDb250ZW50PgogICAgICAgIDwvQ2FyZD4KCiAgICAgICAgPENhcmQ+CiAgICAgICAgICA8Q2FyZEhlYWRlcj4KICAgICAgICAgICAgPENhcmRUaXRsZSBjbGFzc05hbWU9InRleHQtYmFzZSI+6ZmQ5pe25rS75Yqo77yI57+754mM5aS65a6d77yJPC9DYXJkVGl0bGU+CiAgICAgICAgICA8L0NhcmRIZWFkZXI+CiAgICAgICAgICA8Q2FyZENvbnRlbnQ+CiAgICAgICAgICAgIDxGbGlwRm9ybSBpbml0aWFsQ29uZmlnPXtmbGlwQ29uZmlnfSAvPgogICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICA8L0NhcmQ+CiAgICAgIDwvUGFnZUJvZHk+CiAgICA8Lz4KICApOwp9Cg==
+import { PageHeader } from "@/components/dashboard/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { db } from "@/lib/db/d1-http";
+import { users, options } from "@/lib/db/schema";
+import { eq } from "drizzle-orm";
+import { requireUser } from "@/lib/usage/meter";
+import { redirect } from "next/navigation";
+import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, InviteSettingsForm, CashbackSettingsForm, RechargeBonusSettingsForm, TaskSettingsForm, AuthChannelsForm, EpaySettingsForm, LinuxdoSettingsForm } from "./settings-form";
+import { DashboardInfoForm } from "./dashboard-info-form";
+import { LotteryForm } from "./lottery-form";
+import { RaidenForm } from "./raiden-form";
+import { FlipForm } from "./flip-form";
+import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
+import { sanitizeRaidenConfig } from "@/lib/raiden/config";
+import { sanitizeFlipConfig } from "@/lib/flip/config";
+import { TASKS } from "@/lib/tasks/tasks";
+import { sanitizeBonusTiers } from "@/lib/payment/bonus";
+import type { AnnouncementInput, FaqItem } from "@/lib/settings/dashboard-info";
+
+import { PageBody } from "@/components/dashboard/section";
+
+export const dynamic = "force-dynamic";
+
+/** option 表存的是字符串，编辑器里需要还原成数组；脏数据按空数组处理。 */
+function parseArray<T>(raw: string | undefined): T[] {
+  if (!raw) return [];
+  try {
+    const value = JSON.parse(raw);
+    return Array.isArray(value) ? (value as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export default async function AdminSettingsPage() {
+  const currentUserId = await requireUser();
+
+  // 2026-10-23 性能：权限检查 + 设置查询并发（原先串行 3 次 D1 往返）。
+  // lotteryConfig 直接从 allSettings 里取，不再单独调 getLotteryConfig（省一次 D1）。
+  const [currentUser, allSettings] = await Promise.all([
+    db
+      .select()
+      .from(users)
+      .where(eq(users.id, currentUserId))
+      .limit(1),
+    db.select().from(options),
+  ]);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    redirect("/dashboard");
+  }
+
+  // 转换为 key-value 对象
+  const settings: Record<string, string> = {};
+  allSettings.forEach((opt) => {
+    settings[opt.key] = opt.value;
+  });
+
+  // 三个活动的配置在库里各是一段 JSON，直接从 allSettings 解析，省掉各自的 getSetting 往返。
+  // 脏值一律由 sanitize* 兜回可用默认值，不让设置页因为一行坏 JSON 报错。
+  const parseConfig = <T,>(raw: string | undefined, sanitize: (value: unknown) => T): T => {
+    if (!raw) return sanitize(null);
+    try {
+      return sanitize(JSON.parse(raw));
+    } catch {
+      return sanitize(null);
+    }
+  };
+  const lotteryConfig = parseConfig(settings.lottery_config, sanitizeLotteryConfig);
+  const raidenConfig = parseConfig(settings.raiden_config, sanitizeRaidenConfig);
+  const flipConfig = parseConfig(settings.flip_config, sanitizeFlipConfig);
+
+  // 充值赠送档位与任务奖励覆盖在库里是 JSON，交给表单前先还原成结构化值：
+  // 表单按行/按任务显示数字，管理员不需要也不应该看到 JSON 文本。
+  const bonusTiers = sanitizeBonusTiers(parseArray<unknown>(settings.recharge_bonus_tiers));
+  const taskRewardOverrides = (() => {
+    const raw = settings.task_reward_overrides;
+    if (!raw) return {};
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return {};
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, number> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      const n = Number(value);
+      if (Number.isFinite(n)) out[key] = n;
+    }
+    return out;
+  })();
+
+  return (
+    <>
+      <PageHeader
+        title="系统设置"
+        description="管理平台配置、功能开关"
+      />
+
+      <PageBody className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">基础设置</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SettingsForm
+              initialSettings={{
+                siteName: settings.siteName || "Cloudflare AI Console",
+                defaultBalanceValidDays: settings.defaultBalanceValidDays || "365",
+                creditsPerUsd: settings.creditsPerUsd || "1",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">全局定价倍率</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PricingSettingsForm
+              initialSettings={{
+                baseMultiplier: settings.pricing_base_multiplier || "1000",
+                adjustThreshold: settings.pricing_adjust_threshold || "100",
+                adjustMultiplierLow: settings.pricing_adjust_multiplier_low || "5",
+                adjustMultiplierHigh: settings.pricing_adjust_multiplier_high || "1",
+                defaultPricePerMillion: settings.pricing_default_price_per_million || "100",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">签到设置</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CheckinSettingsForm
+              initialSettings={{
+                enabled: settings.checkin_enabled === "true",
+                minQuota: settings.checkin_min_quota || "0.01",
+                maxQuota: settings.checkin_max_quota || "0.1",
+                validDays: settings.checkin_valid_days || "7",
+                streakEnabled: settings.checkin_streak_enabled !== "false",
+                streakDays: settings.checkin_streak_days || "7",
+                streakReward: settings.checkin_streak_reward || "200",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">邀请奖励</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <InviteSettingsForm
+              initialSettings={{
+                enabled: settings.invite_enabled !== "false",
+                inviterReward: settings.invite_reward_inviter || "300",
+                inviteeReward: settings.invite_reward_invitee || "200",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">消费返利</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CashbackSettingsForm
+              initialSettings={{
+                enabled: settings.cashback_enabled === "true" || settings.cashback_enabled === "1",
+                rate: settings.cashback_rate || "0.1",
+                minCredits: settings.cashback_min_credits || "20",
+                cap: settings.cashback_cap || "200",
+                validDays: settings.cashback_valid_days || "7",
+                backfillDays: settings.cashback_backfill_days || "3",
+                leaderboardDays: settings.cashback_leaderboard_days || "7",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">充值阶梯赠送</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RechargeBonusSettingsForm
+              initialSettings={{
+                enabled: settings.recharge_bonus_enabled === "true" || settings.recharge_bonus_enabled === "1",
+                validDays: settings.recharge_bonus_valid_days || "30",
+                tiers: bonusTiers,
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">任务成就奖励</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TaskSettingsForm
+              initialSettings={{
+                enabled: settings.tasks_enabled === "true" || settings.tasks_enabled === "1",
+                validDays: settings.tasks_valid_days || "30",
+                rewards: taskRewardOverrides,
+              }}
+              catalog={TASKS.map((t) => ({
+                key: t.key,
+                title: t.title,
+                target: t.target,
+                defaultReward: t.defaultReward,
+              }))}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">在线充值（易支付）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <EpaySettingsForm
+              initialSettings={{
+                enabled: settings.epay_enabled === "true",
+                apiUrl: settings.epay_api_url || "",
+                pid: settings.epay_pid || "",
+                key: settings.epay_key || "",
+                rate: settings.recharge_rate || "10",
+                minCny: settings.recharge_min || "1",
+                maxCny: settings.recharge_max || "1000",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">在线充值（LinuxDO 积分）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LinuxdoSettingsForm
+              initialSettings={{
+                enabled: settings.ldpay_enabled === "true",
+                apiUrl: settings.ldpay_api_url || "https://credit.linux.do/epay",
+                pid: settings.ldpay_pid || "",
+                key: settings.ldpay_key || "",
+                rate: settings.ldpay_rate || "1",
+                minCny: settings.ldpay_min || "1",
+                maxCny: settings.ldpay_max || "1000",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">认证渠道</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AuthChannelsForm
+              initialSettings={{
+                emailEnabled: settings.auth_email_enabled !== "false",
+                githubEnabled: settings.auth_github_enabled !== "false",
+                linuxdoEnabled: settings.auth_linuxdo_enabled !== "false",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">看板信息（公告 / 问答 / 服务可用性）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <DashboardInfoForm
+              initialSettings={{
+                announcements: parseArray<AnnouncementInput>(settings.dashboard_announcements),
+                faq: parseArray<FaqItem>(settings.dashboard_faq),
+                uptimeEnabled: settings.uptime_enabled === "true",
+                uptimeApiUrl: settings.uptime_api_url || "",
+              }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">限时活动（幸运转盘）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <LotteryForm initialConfig={lotteryConfig} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">限时活动（雷电行动）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RaidenForm initialConfig={raidenConfig} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">限时活动（翻牌夺宝）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FlipForm initialConfig={flipConfig} />
+          </CardContent>
+        </Card>
+      </PageBody>
+    </>
+  );
+}

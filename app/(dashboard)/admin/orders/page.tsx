@@ -1,1 +1,106 @@
-aW1wb3J0IHsgUGFnZUhlYWRlciB9IGZyb20gIkAvY29tcG9uZW50cy9kYXNoYm9hcmQvcGFnZS1oZWFkZXIiOwppbXBvcnQgeyBDYXJkLCBDYXJkQ29udGVudCwgQ2FyZEhlYWRlciwgQ2FyZFRpdGxlIH0gZnJvbSAiQC9jb21wb25lbnRzL3VpL2NhcmQiOwppbXBvcnQgeyBiYXRjaFJvd3MsIGRiIH0gZnJvbSAiQC9saWIvZGIvZDEtaHR0cCI7CmltcG9ydCB7IHVzZXJzIH0gZnJvbSAiQC9saWIvZGIvc2NoZW1hIjsKaW1wb3J0IHsgZXEsIGluQXJyYXkgfSBmcm9tICJkcml6emxlLW9ybSI7CmltcG9ydCB7IHJlcXVpcmVVc2VyIH0gZnJvbSAiQC9saWIvdXNhZ2UvbWV0ZXIiOwppbXBvcnQgeyByZWRpcmVjdCB9IGZyb20gIm5leHQvbmF2aWdhdGlvbiI7CmltcG9ydCB7IGxpc3RBbGxPcmRlcnMgfSBmcm9tICJAL2xpYi9wYXltZW50L29yZGVyIjsKaW1wb3J0IHsgQWRtaW5PcmRlcnNUYWJsZSwgdHlwZSBBZG1pbk9yZGVyUm93IH0gZnJvbSAiLi9vcmRlcnMtdGFibGUiOwoKaW1wb3J0IHsgUGFnZUJvZHkgfSBmcm9tICJAL2NvbXBvbmVudHMvZGFzaGJvYXJkL3NlY3Rpb24iOwoKZXhwb3J0IGNvbnN0IGR5bmFtaWMgPSAiZm9yY2UtZHluYW1pYyI7CgpleHBvcnQgZGVmYXVsdCBhc3luYyBmdW5jdGlvbiBBZG1pbk9yZGVyc1BhZ2UoewogIHNlYXJjaFBhcmFtcywKfTogewogIHNlYXJjaFBhcmFtczogUHJvbWlzZTx7IHN0YXR1cz86IHN0cmluZyB9PjsKfSkgewogIGNvbnN0IGN1cnJlbnRVc2VySWQgPSBhd2FpdCByZXF1aXJlVXNlcigpOwogIGNvbnN0IHBhcmFtcyA9IGF3YWl0IHNlYXJjaFBhcmFtczsKCiAgLy8g5qOA5p+l5p2D6ZmQCiAgY29uc3QgY3VycmVudFVzZXIgPSBhd2FpdCBkYgogICAgLnNlbGVjdCgpCiAgICAuZnJvbSh1c2VycykKICAgIC53aGVyZShlcSh1c2Vycy5pZCwgY3VycmVudFVzZXJJZCkpCiAgICAubGltaXQoMSk7CgogIGlmICghY3VycmVudFVzZXJbMF0gfHwgY3VycmVudFVzZXJbMF0ucm9sZSA8IDEwKSB7CiAgICByZWRpcmVjdCgiL2Rhc2hib2FyZCIpOwogIH0KCiAgLy8g54q25oCB562b6YCJ77yIMCDlvoXmlK/ku5ggLyAxIOehruiupOS4rSAvIDIg5bey5Yiw6LSmIC8gMyDlt7LlhbPpl60gLyA5IOW8guW4uO+8iQogIGNvbnN0IHN0YXR1c0ZpbHRlciA9IHBhcmFtcy5zdGF0dXMgIT09IHVuZGVmaW5lZCA/IE51bWJlcihwYXJhbXMuc3RhdHVzKSA6IHVuZGVmaW5lZDsKICBjb25zdCB2YWxpZFN0YXR1cyA9IFswLCAxLCAyLCAzLCA5XS5pbmNsdWRlcyhzdGF0dXNGaWx0ZXIgPz8gLTEpID8gc3RhdHVzRmlsdGVyIDogdW5kZWZpbmVkOwoKICBjb25zdCBvcmRlcnMgPSBhd2FpdCBsaXN0QWxsT3JkZXJzKHZhbGlkU3RhdHVzLCAyMDApOwoKICAvLyBsZWZ0Sm9pbiDmnIkgYnVn77ya5pS555So5Lik5qyh5p+l6K+i5omL5Yqo5pig5bCE55So5oi36YKu566xCiAgY29uc3QgdXNlcklkcyA9IFsuLi5uZXcgU2V0KG9yZGVycy5tYXAoKG8pID0+IG8udXNlcklkKSldOwogIGNvbnN0IHVzZXJSb3dzOiB7IGlkOiBzdHJpbmc7IGVtYWlsOiBzdHJpbmcgfCBudWxsIH1bXSA9IFtdOwogIC8vIOS4gOasoeacgOWkmiAyMDAg5Y2V77yMaWQg6ZuG5ZCI5Y+v6IO96LaF6L+HIEQxIOWNleivreWPpSAxMDAg5Liq57uR5a6a5Y+C5pWw55qE5LiK6ZmQ77yM5YiG5q615p+l44CCCiAgZm9yIChjb25zdCBjaHVuayBvZiBiYXRjaFJvd3ModXNlcklkcywgMSkpIHsKICAgIGNvbnN0IHBhcnQgPSBhd2FpdCBkYgogICAgICAuc2VsZWN0KHsgaWQ6IHVzZXJzLmlkLCBlbWFpbDogdXNlcnMuZW1haWwgfSkKICAgICAgLmZyb20odXNlcnMpCiAgICAgIC53aGVyZShpbkFycmF5KHVzZXJzLmlkLCBjaHVuaykpOwogICAgdXNlclJvd3MucHVzaCguLi5wYXJ0KTsKICB9CiAgY29uc3QgZW1haWxNYXAgPSBuZXcgTWFwKHVzZXJSb3dzLm1hcCgodSkgPT4gW3UuaWQsIHUuZW1haWxdKSk7CgogIGNvbnN0IHJvd3M6IEFkbWluT3JkZXJSb3dbXSA9IG9yZGVycy5tYXAoKG8pID0+ICh7CiAgICBpZDogby5pZCwKICAgIG9yZGVyTm86IG8ub3JkZXJObywKICAgIHVzZXJFbWFpbDogZW1haWxNYXAuZ2V0KG8udXNlcklkKSA/PyBvLnVzZXJJZC5zbGljZSgwLCA4KSwKICAgIGFtb3VudENueTogby5hbW91bnRDbnksCiAgICBjcmVkaXRzOiBvLmNyZWRpdHMsCiAgICBzdGF0dXM6IG8uc3RhdHVzLAogICAgY2hhbm5lbDogby5jaGFubmVsID8/IG51bGwsCiAgICB0cmFkZU5vOiBvLnRyYWRlTm8gPz8gbnVsbCwKICAgIHBhaWRBdDogby5wYWlkQXQgPyBuZXcgRGF0ZShvLnBhaWRBdCkudG9JU09TdHJpbmcoKSA6IG51bGwsCiAgICBjcmVhdGVkQXQ6IG5ldyBEYXRlKG8uY3JlYXRlZEF0ISkudG9JU09TdHJpbmcoKSwKICB9KSk7CgogIGNvbnN0IHN0YXR1c1RhYnM6IHsgdmFsdWU/OiBudW1iZXI7IGxhYmVsOiBzdHJpbmcgfVtdID0gWwogICAgeyB2YWx1ZTogdW5kZWZpbmVkLCBsYWJlbDogIuWFqOmDqCIgfSwKICAgIHsgdmFsdWU6IDAsIGxhYmVsOiAi5b6F5pSv5LuYIiB9LAogICAgeyB2YWx1ZTogMiwgbGFiZWw6ICLlt7LliLDotKYiIH0sCiAgICB7IHZhbHVlOiAzLCBsYWJlbDogIuW3suWFs+mXrSIgfSwKICAgIHsgdmFsdWU6IDksIGxhYmVsOiAi5byC5bi4IiB9LAogIF07CgogIHJldHVybiAoCiAgICA8PgogICAgICA8UGFnZUhlYWRlciB0aXRsZT0i6K6i5Y2V566h55CGIiBkZXNjcmlwdGlvbj0i5Zyo57q/5YWF5YC86K6i5Y2VIMK3IOWvuei0puS4juihpeWPkSIgLz4KCiAgICAgIDxQYWdlQm9keSBjbGFzc05hbWU9InNwYWNlLXktNiI+CiAgICAgICAgPENhcmQ+CiAgICAgICAgICA8Q2FyZEhlYWRlciBjbGFzc05hbWU9ImZsZXgtcm93IGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWJldHdlZW4gc3BhY2UteS0wIj4KICAgICAgICAgICAgPENhcmRUaXRsZSBjbGFzc05hbWU9InRleHQtYmFzZSI+5YWF5YC86K6i5Y2VPC9DYXJkVGl0bGU+CiAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJmbGV4IGdhcC0xIHJvdW5kZWQtbGcgYmctbXV0ZWQgcC0xIj4KICAgICAgICAgICAgICB7c3RhdHVzVGFicy5tYXAoKHRhYikgPT4gKAogICAgICAgICAgICAgICAgPGEKICAgICAgICAgICAgICAgICAga2V5PXt0YWIubGFiZWx9CiAgICAgICAgICAgICAgICAgIGhyZWY9e3RhYi52YWx1ZSA9PT0gdW5kZWZpbmVkID8gIi9hZG1pbi9vcmRlcnMiIDogYC9hZG1pbi9vcmRlcnM/c3RhdHVzPSR7dGFiLnZhbHVlfWB9CiAgICAgICAgICAgICAgICAgIGNsYXNzTmFtZT17CiAgICAgICAgICAgICAgICAgICAgInJvdW5kZWQtbWQgcHgtMyBweS0xLjUgdGV4dC1zbSBmb250LW1lZGl1bSB0cmFuc2l0aW9uLWNvbG9ycyAiICsKICAgICAgICAgICAgICAgICAgICAoc3RhdHVzRmlsdGVyID09PSB0YWIudmFsdWUKICAgICAgICAgICAgICAgICAgICAgID8gImJnLWNhcmQgdGV4dC1mb3JlZ3JvdW5kIHNoYWRvdy1zbSIKICAgICAgICAgICAgICAgICAgICAgIDogInRleHQtbXV0ZWQtZm9yZWdyb3VuZCBob3Zlcjp0ZXh0LWZvcmVncm91bmQiKQogICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICA+CiAgICAgICAgICAgICAgICAgIHt0YWIubGFiZWx9CiAgICAgICAgICAgICAgICA8L2E+CiAgICAgICAgICAgICAgKSl9CiAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgPC9DYXJkSGVhZGVyPgogICAgICAgICAgPENhcmRDb250ZW50PgogICAgICAgICAgICA8QWRtaW5PcmRlcnNUYWJsZSBvcmRlcnM9e3Jvd3N9IC8+CiAgICAgICAgICA8L0NhcmRDb250ZW50PgogICAgICAgIDwvQ2FyZD4KICAgICAgPC9QYWdlQm9keT4KICAgIDwvPgogICk7Cn0K
+import { PageHeader } from "@/components/dashboard/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { batchRows, db } from "@/lib/db/d1-http";
+import { users } from "@/lib/db/schema";
+import { eq, inArray } from "drizzle-orm";
+import { requireUser } from "@/lib/usage/meter";
+import { redirect } from "next/navigation";
+import { listAllOrders } from "@/lib/payment/order";
+import { AdminOrdersTable, type AdminOrderRow } from "./orders-table";
+
+import { PageBody } from "@/components/dashboard/section";
+
+export const dynamic = "force-dynamic";
+
+export default async function AdminOrdersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string }>;
+}) {
+  const currentUserId = await requireUser();
+  const params = await searchParams;
+
+  // 检查权限
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    redirect("/dashboard");
+  }
+
+  // 状态筛选（0 待支付 / 1 确认中 / 2 已到账 / 3 已关闭 / 9 异常）
+  const statusFilter = params.status !== undefined ? Number(params.status) : undefined;
+  const validStatus = [0, 1, 2, 3, 9].includes(statusFilter ?? -1) ? statusFilter : undefined;
+
+  const orders = await listAllOrders(validStatus, 200);
+
+  // leftJoin 有 bug：改用两次查询手动映射用户邮箱
+  const userIds = [...new Set(orders.map((o) => o.userId))];
+  const userRows: { id: string; email: string | null }[] = [];
+  // 一次最多 200 单，id 集合可能超过 D1 单语句 100 个绑定参数的上限，分段查。
+  for (const chunk of batchRows(userIds, 1)) {
+    const part = await db
+      .select({ id: users.id, email: users.email })
+      .from(users)
+      .where(inArray(users.id, chunk));
+    userRows.push(...part);
+  }
+  const emailMap = new Map(userRows.map((u) => [u.id, u.email]));
+
+  const rows: AdminOrderRow[] = orders.map((o) => ({
+    id: o.id,
+    orderNo: o.orderNo,
+    userEmail: emailMap.get(o.userId) ?? o.userId.slice(0, 8),
+    amountCny: o.amountCny,
+    credits: o.credits,
+    status: o.status,
+    channel: o.channel ?? null,
+    tradeNo: o.tradeNo ?? null,
+    paidAt: o.paidAt ? new Date(o.paidAt).toISOString() : null,
+    createdAt: new Date(o.createdAt!).toISOString(),
+  }));
+
+  const statusTabs: { value?: number; label: string }[] = [
+    { value: undefined, label: "全部" },
+    { value: 0, label: "待支付" },
+    { value: 2, label: "已到账" },
+    { value: 3, label: "已关闭" },
+    { value: 9, label: "异常" },
+  ];
+
+  return (
+    <>
+      <PageHeader title="订单管理" description="在线充值订单 · 对账与补发" />
+
+      <PageBody className="space-y-6">
+        <Card>
+          <CardHeader className="flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-base">充值订单</CardTitle>
+            <div className="flex gap-1 rounded-lg bg-muted p-1">
+              {statusTabs.map((tab) => (
+                <a
+                  key={tab.label}
+                  href={tab.value === undefined ? "/admin/orders" : `/admin/orders?status=${tab.value}`}
+                  className={
+                    "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+                    (statusFilter === tab.value
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground")
+                  }
+                >
+                  {tab.label}
+                </a>
+              ))}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <AdminOrdersTable orders={rows} />
+          </CardContent>
+        </Card>
+      </PageBody>
+    </>
+  );
+}

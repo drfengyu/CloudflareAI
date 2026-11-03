@@ -1,1 +1,314 @@
-aW1wb3J0IExpbmsgZnJvbSAibmV4dC9saW5rIjsKaW1wb3J0IHsgQXJyb3dSaWdodCwgQm9va09wZW4sIEtleVJvdW5kLCBCb3hlcyB9IGZyb20gImx1Y2lkZS1yZWFjdCI7CmltcG9ydCB7IFBhZ2VIZWFkZXIgfSBmcm9tICJAL2NvbXBvbmVudHMvZGFzaGJvYXJkL3BhZ2UtaGVhZGVyIjsKaW1wb3J0IHsgQ2FyZCwgQ2FyZENvbnRlbnQsIENhcmRIZWFkZXIsIENhcmRUaXRsZSB9IGZyb20gIkAvY29tcG9uZW50cy91aS9jYXJkIjsKaW1wb3J0IHsgQ29weUJ1dHRvbiB9IGZyb20gIkAvY29tcG9uZW50cy91aS9jb3B5LWJ1dHRvbiI7CmltcG9ydCB7IGdldFJlcXVlc3RPcmlnaW4gfSBmcm9tICJAL2xpYi9yZXF1ZXN0LW9yaWdpbiI7CmltcG9ydCB7IFBhZ2VCb2R5IH0gZnJvbSAiQC9jb21wb25lbnRzL2Rhc2hib2FyZC9zZWN0aW9uIjsKCmV4cG9ydCBjb25zdCBkeW5hbWljID0gImZvcmNlLWR5bmFtaWMiOwoKY29uc3QgRVhBTVBMRV9NT0RFTCA9ICJAY2YvbWV0YS9sbGFtYS0zLjEtOGItaW5zdHJ1Y3QtZnA4IjsKCmZ1bmN0aW9uIENvZGVCbG9jayh7IHRpdGxlLCBjb2RlIH06IHsgdGl0bGU6IHN0cmluZzsgY29kZTogc3RyaW5nIH0pIHsKICByZXR1cm4gKAogICAgPGRpdiBjbGFzc05hbWU9Im92ZXJmbG93LWhpZGRlbiByb3VuZGVkLWxnIGJvcmRlciBib3JkZXItYm9yZGVyIj4KICAgICAgPGRpdiBjbGFzc05hbWU9ImZsZXggaXRlbXMtY2VudGVyIGp1c3RpZnktYmV0d2VlbiBnYXAtMiBib3JkZXItYiBib3JkZXItYm9yZGVyIGJnLW11dGVkLzQwIHB4LTMgcHktMS41Ij4KICAgICAgICA8c3BhbiBjbGFzc05hbWU9InRleHQteHMgZm9udC1tZWRpdW0iPnt0aXRsZX08L3NwYW4+CiAgICAgICAgPENvcHlCdXR0b24gdmFsdWU9e2NvZGV9IGxhYmVsPSLlpI3liLYiIC8+CiAgICAgIDwvZGl2PgogICAgICA8cHJlIGNsYXNzTmFtZT0ib3ZlcmZsb3cteC1hdXRvIHAtNCB0ZXh0LXhzIGxlYWRpbmctcmVsYXhlZCI+CiAgICAgICAgPGNvZGU+e2NvZGV9PC9jb2RlPgogICAgICA8L3ByZT4KICAgIDwvZGl2PgogICk7Cn0KCmV4cG9ydCBkZWZhdWx0IGFzeW5jIGZ1bmN0aW9uIERvY3NQYWdlKCkgewogIGNvbnN0IG9yaWdpbiA9IGF3YWl0IGdldFJlcXVlc3RPcmlnaW4oKTsKICBjb25zdCBvcGVuYWlCYXNlID0gYCR7b3JpZ2lufS92MWA7CgogIGNvbnN0IGN1cmxDaGF0ID0gYGN1cmwgJHtvcGVuYWlCYXNlfS9jaGF0L2NvbXBsZXRpb25zIFxcCiAgLUggIkF1dGhvcml6YXRpb246IEJlYXJlciAkQ0ZBSV9BUElfS0VZIiBcXAogIC1IICJDb250ZW50LVR5cGU6IGFwcGxpY2F0aW9uL2pzb24iIFxcCiAgLWQgJ3sKICAgICJtb2RlbCI6ICIke0VYQU1QTEVfTU9ERUx9IiwKICAgICJtZXNzYWdlcyI6IFt7InJvbGUiOiAidXNlciIsICJjb250ZW50IjogIueUqOS4gOS4quivjeW9ouWuueS6keiuoeeulyJ9XQogIH0nYDsKCiAgY29uc3QgcHl0aG9uT3BlbmFpID0gYGZyb20gb3BlbmFpIGltcG9ydCBPcGVuQUkKCmNsaWVudCA9IE9wZW5BSSgKICAgIGFwaV9rZXk9InNrLWNmYWkteHh4eHh4eHgiLAogICAgYmFzZV91cmw9IiR7b3BlbmFpQmFzZX0iLAopCgpyZXNwID0gY2xpZW50LmNoYXQuY29tcGxldGlvbnMuY3JlYXRlKAogICAgbW9kZWw9IiR7RVhBTVBMRV9NT0RFTH0iLAogICAgbWVzc2FnZXM9W3sicm9sZSI6ICJ1c2VyIiwgImNvbnRlbnQiOiAi5L2g5aW9In1dLAopCnByaW50KHJlc3AuY2hvaWNlc1swXS5tZXNzYWdlLmNvbnRlbnQpYDsKCiAgY29uc3QgcHl0aG9uQW50aHJvcGljID0gYGltcG9ydCBhbnRocm9waWMKCmNsaWVudCA9IGFudGhyb3BpYy5BbnRocm9waWMoCiAgICBhcGlfa2V5PSJzay1jZmFpLXh4eHh4eHh4IiwKICAgIGJhc2VfdXJsPSIke29yaWdpbn0iLAopCgptZXNzYWdlID0gY2xpZW50Lm1lc3NhZ2VzLmNyZWF0ZSgKICAgIG1vZGVsPSIke0VYQU1QTEVfTU9ERUx9IiwKICAgIG1heF90b2tlbnM9MTAyNCwKICAgIG1lc3NhZ2VzPVt7InJvbGUiOiAidXNlciIsICJjb250ZW50IjogIuS9oOWlvSJ9XSwKKQpwcmludChtZXNzYWdlLmNvbnRlbnRbMF0udGV4dClgOwoKICBjb25zdCBjdXJsRW1iZWRkaW5ncyA9IGBjdXJsICR7b3BlbmFpQmFzZX0vZW1iZWRkaW5ncyBcXAogIC1IICJBdXRob3JpemF0aW9uOiBCZWFyZXIgJENGQUlfQVBJX0tFWSIgXFwKICAtSCAiQ29udGVudC1UeXBlOiBhcHBsaWNhdGlvbi9qc29uIiBcXAogIC1kICd7Im1vZGVsIjogIkBjZi9iYWFpL2JnZS1tMyIsICJpbnB1dCI6IFsi5L2g5aW977yM5LiW55WMIl19J2A7CgogIGNvbnN0IGVudkNvbmZpZyA9IGAjIENsYXVkZSBDb2RlIC8gQW50aHJvcGljIOWuouaIt+errwpleHBvcnQgQU5USFJPUElDX0JBU0VfVVJMPSIke29yaWdpbn0iCmV4cG9ydCBBTlRIUk9QSUNfQVVUSF9UT0tFTj0ic2stY2ZhaS14eHh4eHh4eCIKCiMg5Lu75oSPIE9wZW5BSSDlhbzlrrnlrqLmiLfnq68KZXhwb3J0IE9QRU5BSV9CQVNFX1VSTD0iJHtvcGVuYWlCYXNlfSIKZXhwb3J0IE9QRU5BSV9BUElfS0VZPSJzay1jZmFpLXh4eHh4eHh4ImA7CgogIHJldHVybiAoCiAgICA8PgogICAgICA8UGFnZUhlYWRlcgogICAgICAgIHRpdGxlPSJBUEkg5o6l5YWl5oyH5Y2XIgogICAgICAgIGRlc2NyaXB0aW9uPSLlhbzlrrkgT3BlbkFJIOS4jiBBbnRocm9waWMg5Y2P6K6u77yM5pu/5o2iIGJhc2VfdXJsIOWNs+WPr+aOpeWFpSIKICAgICAgLz4KICAgICAgPFBhZ2VCb2R5IGNsYXNzTmFtZT0ic3BhY2UteS00Ij4KICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZ3JpZCBnYXAtNCBtZDpncmlkLWNvbHMtMyI+CiAgICAgICAgICA8TGluawogICAgICAgICAgICBocmVmPSIva2V5cyIKICAgICAgICAgICAgY2xhc3NOYW1lPSJncm91cCByb3VuZGVkLXhsIGJvcmRlciBib3JkZXItYm9yZGVyIGJnLWNhcmQgcC01IHRyYW5zaXRpb24tY29sb3JzIGhvdmVyOmJvcmRlci1wcmltYXJ5LzQwIgogICAgICAgICAgPgogICAgICAgICAgICA8S2V5Um91bmQgY2xhc3NOYW1lPSJoLTQgdy00IHRleHQtcHJpbWFyeSIgLz4KICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9Im10LTMgZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTEgdGV4dC1zbSBmb250LW1lZGl1bSI+CiAgICAgICAgICAgICAgMS4g5Yib5bu6IEFQSSDlr4bpkqUKICAgICAgICAgICAgICA8QXJyb3dSaWdodCBjbGFzc05hbWU9ImgtMy41IHctMy41IHRleHQtbXV0ZWQtZm9yZWdyb3VuZCB0cmFuc2l0aW9uLXRyYW5zZm9ybSBncm91cC1ob3Zlcjp0cmFuc2xhdGUteC0wLjUiIC8+CiAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICA8cCBjbGFzc05hbWU9Im10LTEgdGV4dC14cyB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICAgICAgICAgIOeUn+aIkCBzay1jZmFpLSDlr4bpkqXvvIzlj6/pmZDliLbpop3luqbjgIHmqKHlnovkuI4gSVAKICAgICAgICAgICAgPC9wPgogICAgICAgICAgPC9MaW5rPgogICAgICAgICAgPExpbmsKICAgICAgICAgICAgaHJlZj0iL21vZGVscyIKICAgICAgICAgICAgY2xhc3NOYW1lPSJncm91cCByb3VuZGVkLXhsIGJvcmRlciBib3JkZXItYm9yZGVyIGJnLWNhcmQgcC01IHRyYW5zaXRpb24tY29sb3JzIGhvdmVyOmJvcmRlci1wcmltYXJ5LzQwIgogICAgICAgICAgPgogICAgICAgICAgICA8Qm94ZXMgY2xhc3NOYW1lPSJoLTQgdy00IHRleHQtcHJpbWFyeSIgLz4KICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9Im10LTMgZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTEgdGV4dC1zbSBmb250LW1lZGl1bSI+CiAgICAgICAgICAgICAgMi4g6YCJ5oup5qih5Z6LCiAgICAgICAgICAgICAgPEFycm93UmlnaHQgY2xhc3NOYW1lPSJoLTMuNSB3LTMuNSB0ZXh0LW11dGVkLWZvcmVncm91bmQgdHJhbnNpdGlvbi10cmFuc2Zvcm0gZ3JvdXAtaG92ZXI6dHJhbnNsYXRlLXgtMC41IiAvPgogICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgPHAgY2xhc3NOYW1lPSJtdC0xIHRleHQteHMgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICDmqKHlnosgSUQg55u05o6l5aGr5Zyo6K+35rGC5L2T55qEIG1vZGVsIOWtl+autemHjAogICAgICAgICAgICA8L3A+CiAgICAgICAgICA8L0xpbms+CiAgICAgICAgICA8TGluawogICAgICAgICAgICBocmVmPSIvcHJpY2luZyIKICAgICAgICAgICAgY2xhc3NOYW1lPSJncm91cCByb3VuZGVkLXhsIGJvcmRlciBib3JkZXItYm9yZGVyIGJnLWNhcmQgcC01IHRyYW5zaXRpb24tY29sb3JzIGhvdmVyOmJvcmRlci1wcmltYXJ5LzQwIgogICAgICAgICAgPgogICAgICAgICAgICA8Qm9va09wZW4gY2xhc3NOYW1lPSJoLTQgdy00IHRleHQtcHJpbWFyeSIgLz4KICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9Im10LTMgZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTEgdGV4dC1zbSBmb250LW1lZGl1bSI+CiAgICAgICAgICAgICAgMy4g5p+l55yL5Lu35qC8CiAgICAgICAgICAgICAgPEFycm93UmlnaHQgY2xhc3NOYW1lPSJoLTMuNSB3LTMuNSB0ZXh0LW11dGVkLWZvcmVncm91bmQgdHJhbnNpdGlvbi10cmFuc2Zvcm0gZ3JvdXAtaG92ZXI6dHJhbnNsYXRlLXgtMC41IiAvPgogICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgPHAgY2xhc3NOYW1lPSJtdC0xIHRleHQteHMgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICDmjIkgY3Ig6K6h6LS577yM5aSx6LSl55qE6LCD55So5LiN6K6h6LS5CiAgICAgICAgICAgIDwvcD4KICAgICAgICAgIDwvTGluaz4KICAgICAgICA8L2Rpdj4KCiAgICAgICAgPENhcmQ+CiAgICAgICAgICA8Q2FyZEhlYWRlcj4KICAgICAgICAgICAgPENhcmRUaXRsZSBjbGFzc05hbWU9InRleHQtYmFzZSI+5o6l5YWl5L+h5oGvPC9DYXJkVGl0bGU+CiAgICAgICAgICA8L0NhcmRIZWFkZXI+CiAgICAgICAgICA8Q2FyZENvbnRlbnQgY2xhc3NOYW1lPSJzcGFjZS15LTMiPgogICAgICAgICAgICA8ZGl2PgogICAgICAgICAgICAgIDxwIGNsYXNzTmFtZT0ibWItMS41IHRleHQteHMgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICAgIE9wZW5BSSDlhbzlrrkgYmFzZV91cmwKICAgICAgICAgICAgICA8L3A+CiAgICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9ImZsZXggaXRlbXMtY2VudGVyIGdhcC0yIj4KICAgICAgICAgICAgICAgIDxjb2RlIGNsYXNzTmFtZT0ibWluLXctMCBmbGV4LTEgdHJ1bmNhdGUgcm91bmRlZC1sZyBib3JkZXIgYm9yZGVyLWJvcmRlciBiZy1iYWNrZ3JvdW5kIHB4LTMgcHktMiB0ZXh0LXhzIj4KICAgICAgICAgICAgICAgICAge29wZW5haUJhc2V9CiAgICAgICAgICAgICAgICA8L2NvZGU+CiAgICAgICAgICAgICAgICA8Q29weUJ1dHRvbiB2YWx1ZT17b3BlbmFpQmFzZX0gLz4KICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIDxkaXY+CiAgICAgICAgICAgICAgPHAgY2xhc3NOYW1lPSJtYi0xLjUgdGV4dC14cyB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICAgICAgICAgICAgQW50aHJvcGljIOWFvOWuuSBiYXNlX3VybAogICAgICAgICAgICAgIDwvcD4KICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTIiPgogICAgICAgICAgICAgICAgPGNvZGUgY2xhc3NOYW1lPSJtaW4tdy0wIGZsZXgtMSB0cnVuY2F0ZSByb3VuZGVkLWxnIGJvcmRlciBib3JkZXItYm9yZGVyIGJnLWJhY2tncm91bmQgcHgtMyBweS0yIHRleHQteHMiPgogICAgICAgICAgICAgICAgICB7b3JpZ2lufQogICAgICAgICAgICAgICAgPC9jb2RlPgogICAgICAgICAgICAgICAgPENvcHlCdXR0b24gdmFsdWU9e29yaWdpbn0gLz4KICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIDxwIGNsYXNzTmFtZT0idGV4dC14cyB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICAgICAgICAgIOmJtOadg++8mjxjb2RlIGNsYXNzTmFtZT0iZm9udC1tb25vIj5BdXRob3JpemF0aW9uOiBCZWFyZXIgc2stY2ZhaS3igKY8L2NvZGU+CiAgICAgICAgICAgICAg77yIQW50aHJvcGljIOerr+eCueS5n+aOpeWPlyA8Y29kZSBjbGFzc05hbWU9ImZvbnQtbW9ubyI+eC1hcGkta2V5PC9jb2RlPu+8ieOAggogICAgICAgICAgICAgIOe9keWFs+i3r+W+hOayoeaciSA8Y29kZSBjbGFzc05hbWU9ImZvbnQtbW9ubyI+L2FwaTwvY29kZT4g5YmN57yA44CCCiAgICAgICAgICAgIDwvcD4KICAgICAgICAgIDwvQ2FyZENvbnRlbnQ+CiAgICAgICAgPC9DYXJkPgoKICAgICAgICA8Q2FyZD4KICAgICAgICAgIDxDYXJkSGVhZGVyPgogICAgICAgICAgICA8Q2FyZFRpdGxlIGNsYXNzTmFtZT0idGV4dC1iYXNlIj7mlK/mjIHnmoTnq6/ngrk8L0NhcmRUaXRsZT4KICAgICAgICAgIDwvQ2FyZEhlYWRlcj4KICAgICAgICAgIDxDYXJkQ29udGVudD4KICAgICAgICAgICAgPGRpdiBjbGFzc05hbWU9Im92ZXJmbG93LXgtYXV0byI+CiAgICAgICAgICAgICAgPHRhYmxlIGNsYXNzTmFtZT0idy1mdWxsIHRleHQtbGVmdCB0ZXh0LXhzIj4KICAgICAgICAgICAgICAgIDx0aGVhZCBjbGFzc05hbWU9ImJvcmRlci1iIGJvcmRlci1ib3JkZXIgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICAgICAgPHRyPgogICAgICAgICAgICAgICAgICAgIDx0aCBjbGFzc05hbWU9InB5LTIgcHItNCBmb250LW1lZGl1bSI+5pa55rOVPC90aD4KICAgICAgICAgICAgICAgICAgICA8dGggY2xhc3NOYW1lPSJweS0yIHByLTQgZm9udC1tZWRpdW0iPui3r+W+hDwvdGg+CiAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHktMiBwci00IGZvbnQtbWVkaXVtIj7ljY/orq48L3RoPgogICAgICAgICAgICAgICAgICAgIDx0aCBjbGFzc05hbWU9InB5LTIgZm9udC1tZWRpdW0iPuivtOaYjjwvdGg+CiAgICAgICAgICAgICAgICAgIDwvdHI+CiAgICAgICAgICAgICAgICA8L3RoZWFkPgogICAgICAgICAgICAgICAgPHRib2R5IGNsYXNzTmFtZT0iZGl2aWRlLXkgZGl2aWRlLWJvcmRlciI+CiAgICAgICAgICAgICAgICAgIDx0cj4KICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweS0yIHByLTQgZm9udC1tb25vIj5HRVQ8L3RkPgogICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB5LTIgcHItNCBmb250LW1vbm8iPi92MS9tb2RlbHM8L3RkPgogICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB5LTIgcHItNCI+T3BlbkFJPC90ZD4KICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweS0yIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICAgICAgICAgICAgICDmqKHlnovliJfooajvvIjlhazlvIDvvIzml6DpnIDpibTmnYPvvIkKICAgICAgICAgICAgICAgICAgICA8L3RkPgogICAgICAgICAgICAgICAgICA8L3RyPgogICAgICAgICAgICAgICAgICA8dHI+CiAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHktMiBwci00IGZvbnQtbW9ubyI+UE9TVDwvdGQ+CiAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHktMiBwci00IGZvbnQtbW9ubyI+L3YxL2NoYXQvY29tcGxldGlvbnM8L3RkPgogICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB5LTIgcHItNCI+T3BlbkFJPC90ZD4KICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweS0yIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICAgICAgICAgICAgICDlr7nor53ooaXlhajvvIzmlK/mjIHmtYHlvI8KICAgICAgICAgICAgICAgICAgICA8L3RkPgogICAgICAgICAgICAgICAgICA8L3RyPgogICAgICAgICAgICAgICAgICA8dHI+CiAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHktMiBwci00IGZvbnQtbW9ubyI+UE9TVDwvdGQ+CiAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHktMiBwci00IGZvbnQtbW9ubyI+L3YxL21lc3NhZ2VzPC90ZD4KICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweS0yIHByLTQiPkFudGhyb3BpYzwvdGQ+CiAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHktMiB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICAgICAgICAgICAgICAgICAgQ2xhdWRlIENvZGUg562JIEFudGhyb3BpYyDlrqLmiLfnq68KICAgICAgICAgICAgICAgICAgICA8L3RkPgogICAgICAgICAgICAgICAgICA8L3RyPgogICAgICAgICAgICAgICAgICA8dHI+CiAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHktMiBwci00IGZvbnQtbW9ubyI+UE9TVDwvdGQ+CiAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHktMiBwci00IGZvbnQtbW9ubyI+L3YxL2VtYmVkZGluZ3M8L3RkPgogICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB5LTIgcHItNCI+T3BlbkFJPC90ZD4KICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweS0yIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+5paH5pys5ZCR6YePPC90ZD4KICAgICAgICAgICAgICAgICAgPC90cj4KICAgICAgICAgICAgICAgIDwvdGJvZHk+CiAgICAgICAgICAgICAgPC90YWJsZT4KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICA8L0NhcmRDb250ZW50PgogICAgICAgIDwvQ2FyZD4KCiAgICAgICAgPENhcmQ+CiAgICAgICAgICA8Q2FyZEhlYWRlcj4KICAgICAgICAgICAgPENhcmRUaXRsZSBjbGFzc05hbWU9InRleHQtYmFzZSI+6LCD55So56S65L6LPC9DYXJkVGl0bGU+CiAgICAgICAgICA8L0NhcmRIZWFkZXI+CiAgICAgICAgICA8Q2FyZENvbnRlbnQgY2xhc3NOYW1lPSJzcGFjZS15LTMiPgogICAgICAgICAgICA8Q29kZUJsb2NrIHRpdGxlPSJjdXJsIMK3IGNoYXQgY29tcGxldGlvbnMiIGNvZGU9e2N1cmxDaGF0fSAvPgogICAgICAgICAgICA8Q29kZUJsb2NrIHRpdGxlPSJQeXRob24gwrcgT3BlbkFJIFNESyIgY29kZT17cHl0aG9uT3BlbmFpfSAvPgogICAgICAgICAgICA8Q29kZUJsb2NrIHRpdGxlPSJQeXRob24gwrcgQW50aHJvcGljIFNESyIgY29kZT17cHl0aG9uQW50aHJvcGljfSAvPgogICAgICAgICAgICA8Q29kZUJsb2NrIHRpdGxlPSJjdXJsIMK3IGVtYmVkZGluZ3MiIGNvZGU9e2N1cmxFbWJlZGRpbmdzfSAvPgogICAgICAgICAgICA8cCBjbGFzc05hbWU9InRleHQteHMgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICDmtYHlvI/ovpPlh7rlnKjor7fmsYLkvZPph4zliqB7IiAifQogICAgICAgICAgICAgIDxjb2RlIGNsYXNzTmFtZT0iZm9udC1tb25vIj4mcXVvdDtzdHJlYW0mcXVvdDs6IHRydWU8L2NvZGU+77yM5ZON5bqU5Li6IFNTReOAggogICAgICAgICAgICAgIOekuuS+i+S4reeahOaooeWeiyBJRCDku4XkvZzmvJTnpLrvvIzlrp7pmYXlj6/nlKjmqKHlnovku6V7IiAifQogICAgICAgICAgICAgIDxMaW5rIGhyZWY9Ii9tb2RlbHMiIGNsYXNzTmFtZT0idGV4dC1wcmltYXJ5IGhvdmVyOnVuZGVybGluZSI+CiAgICAgICAgICAgICAgICDmqKHlnovlupMKICAgICAgICAgICAgICA8L0xpbms+eyIgIn0KICAgICAgICAgICAgICDkuLrlh4bjgIIKICAgICAgICAgICAgPC9wPgogICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICA8L0NhcmQ+CgogICAgICAgIDxDYXJkPgogICAgICAgICAgPENhcmRIZWFkZXI+CiAgICAgICAgICAgIDxDYXJkVGl0bGUgY2xhc3NOYW1lPSJ0ZXh0LWJhc2UiPuWuouaIt+err+eOr+Wig+WPmOmHjzwvQ2FyZFRpdGxlPgogICAgICAgICAgPC9DYXJkSGVhZGVyPgogICAgICAgICAgPENhcmRDb250ZW50PgogICAgICAgICAgICA8Q29kZUJsb2NrIHRpdGxlPSJTaGVsbCIgY29kZT17ZW52Q29uZmlnfSAvPgogICAgICAgICAgPC9DYXJkQ29udGVudD4KICAgICAgICA8L0NhcmQ+CgogICAgICAgIDxDYXJkPgogICAgICAgICAgPENhcmRIZWFkZXI+CiAgICAgICAgICAgIDxDYXJkVGl0bGUgY2xhc3NOYW1lPSJ0ZXh0LWJhc2UiPumUmeivr+eggTwvQ2FyZFRpdGxlPgogICAgICAgICAgPC9DYXJkSGVhZGVyPgogICAgICAgICAgPENhcmRDb250ZW50PgogICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0ib3ZlcmZsb3cteC1hdXRvIj4KICAgICAgICAgICAgICA8dGFibGUgY2xhc3NOYW1lPSJ3LWZ1bGwgdGV4dC1sZWZ0IHRleHQteHMiPgogICAgICAgICAgICAgICAgPHRoZWFkIGNsYXNzTmFtZT0iYm9yZGVyLWIgYm9yZGVyLWJvcmRlciB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICAgICAgICAgICAgICA8dHI+CiAgICAgICAgICAgICAgICAgICAgPHRoIGNsYXNzTmFtZT0icHktMiBwci00IGZvbnQtbWVkaXVtIj7nirbmgIHnoIE8L3RoPgogICAgICAgICAgICAgICAgICAgIDx0aCBjbGFzc05hbWU9InB5LTIgZm9udC1tZWRpdW0iPuWQq+S5iTwvdGg+CiAgICAgICAgICAgICAgICAgIDwvdHI+CiAgICAgICAgICAgICAgICA8L3RoZWFkPgogICAgICAgICAgICAgICAgPHRib2R5IGNsYXNzTmFtZT0iZGl2aWRlLXkgZGl2aWRlLWJvcmRlciI+CiAgICAgICAgICAgICAgICAgIDx0cj4KICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweS0yIHByLTQgZm9udC1tb25vIj40MDA8L3RkPgogICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB5LTIgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICAgICAgICAgIOivt+axguS9k+S4jeWQiOazle+8iOWtl+autee8uuWkseaIluexu+Wei+mUmeivr++8iQogICAgICAgICAgICAgICAgICAgIDwvdGQ+CiAgICAgICAgICAgICAgICAgIDwvdHI+CiAgICAgICAgICAgICAgICAgIDx0cj4KICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweS0yIHByLTQgZm9udC1tb25vIj40MDE8L3RkPgogICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB5LTIgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICAgICAgICAgIEFQSSBLZXkg57y65aSx44CB5peg5pWI44CB6KKr56aB55So5oiW5bey6L+H5pyfCiAgICAgICAgICAgICAgICAgICAgPC90ZD4KICAgICAgICAgICAgICAgICAgPC90cj4KICAgICAgICAgICAgICAgICAgPHRyPgogICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB5LTIgcHItNCBmb250LW1vbm8iPjQwMjwvdGQ+CiAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHktMiB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICAgICAgICAgICAgICAgICAg5L2Z6aKd5LiN6Laz77yM6ZSZ6K+v5L+h5oGv6YeM5bim5pys5qyh6aKE5qOA6ZyA6KaB55qEIGNyCiAgICAgICAgICAgICAgICAgICAgPC90ZD4KICAgICAgICAgICAgICAgICAgPC90cj4KICAgICAgICAgICAgICAgICAgPHRyPgogICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB5LTIgcHItNCBmb250LW1vbm8iPjQwMzwvdGQ+CiAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHktMiB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICAgICAgICAgICAgICAgICAg5qih5Z6L5LiN5Zyo6K+lIEtleSDnmoTnmb3lkI3ljZXlhoUKICAgICAgICAgICAgICAgICAgICA8L3RkPgogICAgICAgICAgICAgICAgICA8L3RyPgogICAgICAgICAgICAgICAgICA8dHI+CiAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHktMiBwci00IGZvbnQtbW9ubyI+NDI5PC90ZD4KICAgICAgICAgICAgICAgICAgICA8dGQgY2xhc3NOYW1lPSJweS0yIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICAgICAgICAgICAgICDor7fmsYLov4flv6vvvIjmr4/nlKjmiLfmr4/liIbpkp8gNjAg5qyh77yJCiAgICAgICAgICAgICAgICAgICAgPC90ZD4KICAgICAgICAgICAgICAgICAgPC90cj4KICAgICAgICAgICAgICAgICAgPHRyPgogICAgICAgICAgICAgICAgICAgIDx0ZCBjbGFzc05hbWU9InB5LTIgcHItNCBmb250LW1vbm8iPjUwMDwvdGQ+CiAgICAgICAgICAgICAgICAgICAgPHRkIGNsYXNzTmFtZT0icHktMiB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICAgICAgICAgICAgICAgICAg5LiK5ri45qih5Z6L5oiW572R5YWz5YaF6YOo6ZSZ6K+vCiAgICAgICAgICAgICAgICAgICAgPC90ZD4KICAgICAgICAgICAgICAgICAgPC90cj4KICAgICAgICAgICAgICAgIDwvdGJvZHk+CiAgICAgICAgICAgICAgPC90YWJsZT4KICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgIDxwIGNsYXNzTmFtZT0ibXQtMyB0ZXh0LXhzIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+CiAgICAgICAgICAgICAg5oiQ5Yqf6LCD55So5oyJIHRva2VuIOaVsOS7juS9memineaJoyBjcu+8m+Wksei0peiwg+eUqOS4jeiuoei0ueOAgueUqOmHj+WPr+WcqHsiICJ9CiAgICAgICAgICAgICAgPExpbmsgaHJlZj0iL2hpc3RvcnkiIGNsYXNzTmFtZT0idGV4dC1wcmltYXJ5IGhvdmVyOnVuZGVybGluZSI+CiAgICAgICAgICAgICAgICDkvb/nlKjorrDlvZUKICAgICAgICAgICAgICA8L0xpbms+eyIgIn0KICAgICAgICAgICAgICDmn6XnnIvvvIzkvZnpop3kuI7lhYXlgLzlnKh7IiAifQogICAgICAgICAgICAgIDxMaW5rIGhyZWY9Ii93YWxsZXQiIGNsYXNzTmFtZT0idGV4dC1wcmltYXJ5IGhvdmVyOnVuZGVybGluZSI+CiAgICAgICAgICAgICAgICDmiJHnmoTpkrHljIUKICAgICAgICAgICAgICA8L0xpbms+CiAgICAgICAgICAgICAg44CCCiAgICAgICAgICAgIDwvcD4KICAgICAgICAgIDwvQ2FyZENvbnRlbnQ+CiAgICAgICAgPC9DYXJkPgogICAgICA8L1BhZ2VCb2R5PgogICAgPC8+CiAgKTsKfQo=
+import Link from "next/link";
+import { ArrowRight, BookOpen, KeyRound, Boxes } from "lucide-react";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CopyButton } from "@/components/ui/copy-button";
+import { getRequestOrigin } from "@/lib/request-origin";
+import { PageBody } from "@/components/dashboard/section";
+
+export const dynamic = "force-dynamic";
+
+const EXAMPLE_MODEL = "@cf/meta/llama-3.1-8b-instruct-fp8";
+
+function CodeBlock({ title, code }: { title: string; code: string }) {
+  return (
+    <div className="overflow-hidden rounded-lg border border-border">
+      <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/40 px-3 py-1.5">
+        <span className="text-xs font-medium">{title}</span>
+        <CopyButton value={code} label="复制" />
+      </div>
+      <pre className="overflow-x-auto p-4 text-xs leading-relaxed">
+        <code>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+export default async function DocsPage() {
+  const origin = await getRequestOrigin();
+  const openaiBase = `${origin}/v1`;
+
+  const curlChat = `curl ${openaiBase}/chat/completions \\
+  -H "Authorization: Bearer $CFAI_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "${EXAMPLE_MODEL}",
+    "messages": [{"role": "user", "content": "用一个词形容云计算"}]
+  }'`;
+
+  const pythonOpenai = `from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-cfai-xxxxxxxx",
+    base_url="${openaiBase}",
+)
+
+resp = client.chat.completions.create(
+    model="${EXAMPLE_MODEL}",
+    messages=[{"role": "user", "content": "你好"}],
+)
+print(resp.choices[0].message.content)`;
+
+  const pythonAnthropic = `import anthropic
+
+client = anthropic.Anthropic(
+    api_key="sk-cfai-xxxxxxxx",
+    base_url="${origin}",
+)
+
+message = client.messages.create(
+    model="${EXAMPLE_MODEL}",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "你好"}],
+)
+print(message.content[0].text)`;
+
+  const curlEmbeddings = `curl ${openaiBase}/embeddings \\
+  -H "Authorization: Bearer $CFAI_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"model": "@cf/baai/bge-m3", "input": ["你好，世界"]}'`;
+
+  const envConfig = `# Claude Code / Anthropic 客户端
+export ANTHROPIC_BASE_URL="${origin}"
+export ANTHROPIC_AUTH_TOKEN="sk-cfai-xxxxxxxx"
+
+# 任意 OpenAI 兼容客户端
+export OPENAI_BASE_URL="${openaiBase}"
+export OPENAI_API_KEY="sk-cfai-xxxxxxxx"`;
+
+  return (
+    <>
+      <PageHeader
+        title="API 接入指南"
+        description="兼容 OpenAI 与 Anthropic 协议，替换 base_url 即可接入"
+      />
+      <PageBody className="space-y-4">
+        <div className="grid gap-4 md:grid-cols-3">
+          <Link
+            href="/keys"
+            className="group rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/40"
+          >
+            <KeyRound className="h-4 w-4 text-primary" />
+            <div className="mt-3 flex items-center gap-1 text-sm font-medium">
+              1. 创建 API 密钥
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              生成 sk-cfai- 密钥，可限制额度、模型与 IP
+            </p>
+          </Link>
+          <Link
+            href="/models"
+            className="group rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/40"
+          >
+            <Boxes className="h-4 w-4 text-primary" />
+            <div className="mt-3 flex items-center gap-1 text-sm font-medium">
+              2. 选择模型
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              模型 ID 直接填在请求体的 model 字段里
+            </p>
+          </Link>
+          <Link
+            href="/pricing"
+            className="group rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/40"
+          >
+            <BookOpen className="h-4 w-4 text-primary" />
+            <div className="mt-3 flex items-center gap-1 text-sm font-medium">
+              3. 查看价格
+              <ArrowRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              按 cr 计费，失败的调用不计费
+            </p>
+          </Link>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">接入信息</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <p className="mb-1.5 text-xs text-muted-foreground">
+                OpenAI 兼容 base_url
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="min-w-0 flex-1 truncate rounded-lg border border-border bg-background px-3 py-2 text-xs">
+                  {openaiBase}
+                </code>
+                <CopyButton value={openaiBase} />
+              </div>
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs text-muted-foreground">
+                Anthropic 兼容 base_url
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="min-w-0 flex-1 truncate rounded-lg border border-border bg-background px-3 py-2 text-xs">
+                  {origin}
+                </code>
+                <CopyButton value={origin} />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              鉴权：<code className="font-mono">Authorization: Bearer sk-cfai-…</code>
+              （Anthropic 端点也接受 <code className="font-mono">x-api-key</code>）。
+              网关路径没有 <code className="font-mono">/api</code> 前缀。
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">支持的端点</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-border text-muted-foreground">
+                  <tr>
+                    <th className="py-2 pr-4 font-medium">方法</th>
+                    <th className="py-2 pr-4 font-medium">路径</th>
+                    <th className="py-2 pr-4 font-medium">协议</th>
+                    <th className="py-2 font-medium">说明</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  <tr>
+                    <td className="py-2 pr-4 font-mono">GET</td>
+                    <td className="py-2 pr-4 font-mono">/v1/models</td>
+                    <td className="py-2 pr-4">OpenAI</td>
+                    <td className="py-2 text-muted-foreground">
+                      模型列表（公开，无需鉴权）
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 pr-4 font-mono">POST</td>
+                    <td className="py-2 pr-4 font-mono">/v1/chat/completions</td>
+                    <td className="py-2 pr-4">OpenAI</td>
+                    <td className="py-2 text-muted-foreground">
+                      对话补全，支持流式
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 pr-4 font-mono">POST</td>
+                    <td className="py-2 pr-4 font-mono">/v1/messages</td>
+                    <td className="py-2 pr-4">Anthropic</td>
+                    <td className="py-2 text-muted-foreground">
+                      Claude Code 等 Anthropic 客户端
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 pr-4 font-mono">POST</td>
+                    <td className="py-2 pr-4 font-mono">/v1/embeddings</td>
+                    <td className="py-2 pr-4">OpenAI</td>
+                    <td className="py-2 text-muted-foreground">文本向量</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">调用示例</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <CodeBlock title="curl · chat completions" code={curlChat} />
+            <CodeBlock title="Python · OpenAI SDK" code={pythonOpenai} />
+            <CodeBlock title="Python · Anthropic SDK" code={pythonAnthropic} />
+            <CodeBlock title="curl · embeddings" code={curlEmbeddings} />
+            <p className="text-xs text-muted-foreground">
+              流式输出在请求体里加{" "}
+              <code className="font-mono">&quot;stream&quot;: true</code>，响应为 SSE。
+              示例中的模型 ID 仅作演示，实际可用模型以{" "}
+              <Link href="/models" className="text-primary hover:underline">
+                模型库
+              </Link>{" "}
+              为准。
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">客户端环境变量</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CodeBlock title="Shell" code={envConfig} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">错误码</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="border-b border-border text-muted-foreground">
+                  <tr>
+                    <th className="py-2 pr-4 font-medium">状态码</th>
+                    <th className="py-2 font-medium">含义</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  <tr>
+                    <td className="py-2 pr-4 font-mono">400</td>
+                    <td className="py-2 text-muted-foreground">
+                      请求体不合法（字段缺失或类型错误）
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 pr-4 font-mono">401</td>
+                    <td className="py-2 text-muted-foreground">
+                      API Key 缺失、无效、被禁用或已过期
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 pr-4 font-mono">402</td>
+                    <td className="py-2 text-muted-foreground">
+                      余额不足，错误信息里带本次预检需要的 cr
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 pr-4 font-mono">403</td>
+                    <td className="py-2 text-muted-foreground">
+                      模型不在该 Key 的白名单内
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 pr-4 font-mono">429</td>
+                    <td className="py-2 text-muted-foreground">
+                      请求过快（每用户每分钟 60 次）
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2 pr-4 font-mono">500</td>
+                    <td className="py-2 text-muted-foreground">
+                      上游模型或网关内部错误
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">
+              成功调用按 token 数从余额扣 cr；失败调用不计费。用量可在{" "}
+              <Link href="/history" className="text-primary hover:underline">
+                使用记录
+              </Link>{" "}
+              查看，余额与充值在{" "}
+              <Link href="/wallet" className="text-primary hover:underline">
+                我的钱包
+              </Link>
+              。
+            </p>
+          </CardContent>
+        </Card>
+      </PageBody>
+    </>
+  );
+}

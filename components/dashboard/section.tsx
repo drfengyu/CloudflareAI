@@ -1,1 +1,83 @@
-aW1wb3J0IHR5cGUgeyBSZWFjdE5vZGUgfSBmcm9tICJyZWFjdCI7CmltcG9ydCB7IGNuIH0gZnJvbSAiQC9saWIvdXRpbHMiOwoKLyoqCiAqIOmhtemdouato+aWh+eahOe7n+S4gOeJiOW/g++8muWPguiAg+ermeaYr+OAjOWxheS4reeqhOagj+aWh+aho+OAjeiAjOS4jeaYr+a7oemTuuaOp+WItuWPsO+8jAogKiDlrr3lsY/kuIvmiorlhoXlrrnmlLbmiJDkuIDooYzlj6/or7vlrr3luqbvvIzkuKTkvqfnlZnnmb3kuqTnu5nnurjpnaLog4zmma/jgIIKICovCmV4cG9ydCBmdW5jdGlvbiBQYWdlQm9keSh7CiAgY2hpbGRyZW4sCiAgY2xhc3NOYW1lLAogIHdpZHRoID0gIndpZGUiLAp9OiB7CiAgY2hpbGRyZW46IFJlYWN0Tm9kZTsKICBjbGFzc05hbWU/OiBzdHJpbmc7CiAgd2lkdGg/OiAid2lkZSIgfCAicmVhZGluZyI7Cn0pIHsKICByZXR1cm4gKAogICAgPGRpdgogICAgICBjbGFzc05hbWU9e2NuKAogICAgICAgICJteC1hdXRvIHctZnVsbCBzcGFjZS15LTYgcHgtNSBweS04IHNtOnB4LTgiLAogICAgICAgIHdpZHRoID09PSAid2lkZSIgPyAibWF4LXctNnhsIiA6ICJtYXgtdy0zeGwiLAogICAgICAgIGNsYXNzTmFtZSwKICAgICAgKX0KICAgID4KICAgICAge2NoaWxkcmVufQogICAgPC9kaXY+CiAgKTsKfQoKLyoqIOWIhuiKgu+8muihrOe6v+WxheS4reWwj+agh+mimCArIOS4gOihjOi9u+Wtl+mHjeWJr+agh+mimO+8jOiKguS4juiKguS5i+mXtOWPqueVmeWPkeS4nee6v+OAgiAqLwpleHBvcnQgZnVuY3Rpb24gUGFnZVNlY3Rpb24oewogIHRpdGxlLAogIHN1YnRpdGxlLAogIGFjdGlvbiwKICBjaGlsZHJlbiwKICBjbGFzc05hbWUsCn06IHsKICB0aXRsZTogc3RyaW5nOwogIHN1YnRpdGxlPzogc3RyaW5nOwogIGFjdGlvbj86IFJlYWN0Tm9kZTsKICBjaGlsZHJlbjogUmVhY3ROb2RlOwogIGNsYXNzTmFtZT86IHN0cmluZzsKfSkgewogIHJldHVybiAoCiAgICA8c2VjdGlvbiBjbGFzc05hbWU9e2NuKCJib3JkZXItdCBib3JkZXItYm9yZGVyIHB0LTgiLCBjbGFzc05hbWUpfT4KICAgICAgPGRpdiBjbGFzc05hbWU9Im1iLTYgdGV4dC1jZW50ZXIiPgogICAgICAgIDxoMiBjbGFzc05hbWU9ImZvbnQtc2VyaWYgdGV4dC1bMS4zNXJlbV0gZm9udC1zZW1pYm9sZCB0cmFja2luZy1bMC4wMmVtXSB0ZXh0LWZvcmVncm91bmQiPgogICAgICAgICAge3RpdGxlfQogICAgICAgIDwvaDI+CiAgICAgICAge3N1YnRpdGxlID8gKAogICAgICAgICAgPHAgY2xhc3NOYW1lPSJtdC0xLjUgdGV4dC1bMTNweF0gZm9udC1saWdodCB0ZXh0LW11dGVkLWZvcmVncm91bmQiPntzdWJ0aXRsZX08L3A+CiAgICAgICAgKSA6IG51bGx9CiAgICAgICAge2FjdGlvbiA/IDxkaXYgY2xhc3NOYW1lPSJtdC00IGZsZXgganVzdGlmeS1jZW50ZXIiPnthY3Rpb259PC9kaXY+IDogbnVsbH0KICAgICAgPC9kaXY+CiAgICAgIHtjaGlsZHJlbn0KICAgIDwvc2VjdGlvbj4KICApOwp9CgovKiog6I2v5Li4562b6YCJ55qE5qC35byP77ya5Y+C6ICD56uZ55qEIC5tZW51LXRhYiDigJTigJQg5o+P6L655ZyG6KeS6IO25ZuK77yM6YCJ5Lit5oCB5aGr5Li76Imy44CCICovCmV4cG9ydCBjb25zdCBwaWxsVGFiQ2xhc3MgPSAoYWN0aXZlOiBib29sZWFuKSA9PgogIGNuKAogICAgInJvdW5kZWQtZnVsbCBib3JkZXIgcHgtNCBweS0xLjUgdGV4dC14cyB0cmFuc2l0aW9uLWNvbG9ycyIsCiAgICBhY3RpdmUKICAgICAgPyAiYm9yZGVyLXByaW1hcnkgYmctcHJpbWFyeSBmb250LW1lZGl1bSB0ZXh0LXByaW1hcnktZm9yZWdyb3VuZCIKICAgICAgOiAiYm9yZGVyLWJvcmRlciB0ZXh0LW11dGVkLWZvcmVncm91bmQgaG92ZXI6Ym9yZGVyLVtjb2xvcjp2YXIoLS1wcmltYXJ5KV0gaG92ZXI6dGV4dC1mb3JlZ3JvdW5kIiwKICApOwoKZXhwb3J0IGZ1bmN0aW9uIFBpbGxUYWIoewogIGFjdGl2ZSwKICBjbGFzc05hbWUsCiAgLi4ucHJvcHMKfTogUmVhY3QuQnV0dG9uSFRNTEF0dHJpYnV0ZXM8SFRNTEJ1dHRvbkVsZW1lbnQ+ICYgeyBhY3RpdmU6IGJvb2xlYW4gfSkgewogIHJldHVybiAoCiAgICA8YnV0dG9uCiAgICAgIHR5cGU9ImJ1dHRvbiIKICAgICAgYXJpYS1wcmVzc2VkPXthY3RpdmV9CiAgICAgIHsuLi5wcm9wc30KICAgICAgLy8g6L+95Yqg5Zyo5Z+656GA5qC35byP5LmL5ZCO77ya6LCD55So5pa55Y+q6IO95b6u6LCD77yM5LiN6IO95oqK6IO25ZuK5bqV5a2Q55qEIGNsYXNzIOmhtuaOiQogICAgICBjbGFzc05hbWU9e2NuKHBpbGxUYWJDbGFzcyhhY3RpdmUpLCBjbGFzc05hbWUpfQogICAgLz4KICApOwp9Cg==
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
+
+/**
+ * 页面正文的统一版心：参考站是「居中窄栏文档」而不是满铺控制台，
+ * 宽屏下把内容收成一行可读宽度，两侧留白交给纸面背景。
+ */
+export function PageBody({
+  children,
+  className,
+  width = "wide",
+}: {
+  children: ReactNode;
+  className?: string;
+  width?: "wide" | "reading";
+}) {
+  return (
+    <div
+      className={cn(
+        "mx-auto w-full space-y-6 px-5 py-8 sm:px-8",
+        width === "wide" ? "max-w-6xl" : "max-w-3xl",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** 分节：衬线居中小标题 + 一行轻字重副标题，节与节之间只留发丝线。 */
+export function PageSection({
+  title,
+  subtitle,
+  action,
+  children,
+  className,
+}: {
+  title: string;
+  subtitle?: string;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={cn("border-t border-border pt-8", className)}>
+      <div className="mb-6 text-center">
+        <h2 className="font-serif text-[1.35rem] font-semibold tracking-[0.02em] text-foreground">
+          {title}
+        </h2>
+        {subtitle ? (
+          <p className="mt-1.5 text-[13px] font-light text-muted-foreground">{subtitle}</p>
+        ) : null}
+        {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** 药丸筛选的样式：参考站的 .menu-tab —— 描边圆角胶囊，选中态填主色。 */
+export const pillTabClass = (active: boolean) =>
+  cn(
+    "rounded-full border px-4 py-1.5 text-xs transition-colors",
+    active
+      ? "border-primary bg-primary font-medium text-primary-foreground"
+      : "border-border text-muted-foreground hover:border-[color:var(--primary)] hover:text-foreground",
+  );
+
+export function PillTab({
+  active,
+  className,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { active: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={active}
+      {...props}
+      // 追加在基础样式之后：调用方只能微调，不能把胶囊底子的 class 顶掉
+      className={cn(pillTabClass(active), className)}
+    />
+  );
+}

@@ -1,1 +1,280 @@
-InVzZSBjbGllbnQiOwoKaW1wb3J0IHsgdXNlTWVtbywgdXNlU3RhdGUgfSBmcm9tICJyZWFjdCI7CmltcG9ydCB7IFNlYXJjaCB9IGZyb20gImx1Y2lkZS1yZWFjdCI7CmltcG9ydCB7IENhcmQsIENhcmRDb250ZW50IH0gZnJvbSAiQC9jb21wb25lbnRzL3VpL2NhcmQiOwppbXBvcnQgeyBCYWRnZSB9IGZyb20gIkAvY29tcG9uZW50cy91aS9iYWRnZSI7CmltcG9ydCB7IENBVEVHT1JJRVMsIHR5cGUgQ2F0ZWdvcnlJZCB9IGZyb20gIkAvbGliL2NhdGVnb3JpZXMiOwppbXBvcnQgdHlwZSB7IE5vcm1hbGl6ZWRNb2RlbCB9IGZyb20gIkAvbGliL2Nsb3VkZmxhcmUvY2F0YWxvZyI7CmltcG9ydCB7IGNuLCBmb3JtYXROdW1iZXIgfSBmcm9tICJAL2xpYi91dGlscyI7CmltcG9ydCB7IGZvcm1hdE1vZGVsUHJpY2UsIGdldERpc3BsYXlQcmljZSB9IGZyb20gIkAvbGliL2JpbGxpbmcvZGlzcGxheS1wcmljZSI7CmltcG9ydCB7IFBhZ2VCb2R5LCBQaWxsVGFiLCBwaWxsVGFiQ2xhc3MgfSBmcm9tICJAL2NvbXBvbmVudHMvZGFzaGJvYXJkL3NlY3Rpb24iOwoKdHlwZSBGaWx0ZXIgPSBDYXRlZ29yeUlkIHwgImFsbCI7CgppbnRlcmZhY2UgQ2hhbm5lbFRhYiB7CiAgaWQ6IHN0cmluZzsKICB0eXBlOiBzdHJpbmc7CiAgbmFtZTogc3RyaW5nOwogIGxhYmVsOiBzdHJpbmc7Cn0KCmV4cG9ydCBmdW5jdGlvbiBNb2RlbEJyb3dzZXIoewogIGFsbENoYW5uZWxzLAogIG1vZGVsc0J5Q2hhbm5lbCwKICBwcmljaW5nTWFwLAogIGJhc2VNdWx0aXBsaWVyLAp9OiB7CiAgYWxsQ2hhbm5lbHM6IENoYW5uZWxUYWJbXTsKICBtb2RlbHNCeUNoYW5uZWw6IFJlY29yZDxzdHJpbmcsIE5vcm1hbGl6ZWRNb2RlbFtdPjsKICAvKiog5YWo5bGA5Z+656GA5YCN546H77ya5Y2h54mH5LiK55qE5Y2V5Lu35oyJ5a6e5LuY5Y+j5b6E5bGV56S65pe25LmY5LiK5Y67ICovCiAgYmFzZU11bHRpcGxpZXI6IG51bWJlcjsKICBwcmljaW5nTWFwPzogTWFwPAogICAgc3RyaW5nLAogICAgewogICAgICBpbnB1dFByaWNlOiBudW1iZXI7CiAgICAgIG91dHB1dFByaWNlOiBudW1iZXI7CiAgICAgIGlzSW1hZ2U6IGJvb2xlYW47CiAgICAgIGZpeGVkUHJpY2U6IG51bWJlcjsKICAgICAgdW5pdDogc3RyaW5nOwogICAgICBtdWx0aXBsaWVyOiBudW1iZXI7CiAgICB9CiAgPjsKfSkgewogIGNvbnN0IFthY3RpdmVDaGFubmVsLCBzZXRBY3RpdmVDaGFubmVsXSA9IHVzZVN0YXRlKCJjbG91ZGZsYXJlIik7CiAgY29uc3QgW2ZpbHRlciwgc2V0RmlsdGVyXSA9IHVzZVN0YXRlPEZpbHRlcj4oImFsbCIpOwogIGNvbnN0IFtxdWVyeSwgc2V0UXVlcnldID0gdXNlU3RhdGUoIiIpOwoKICAvLyDlvZPliY3muKDpgZPnmoTmqKHlnosKICBjb25zdCBjdXJyZW50TW9kZWxzID0gdXNlTWVtbygKICAgICgpID0+IG1vZGVsc0J5Q2hhbm5lbFthY3RpdmVDaGFubmVsXSB8fCBbXSwKICAgIFttb2RlbHNCeUNoYW5uZWwsIGFjdGl2ZUNoYW5uZWxdLAogICk7CgogIC8vIOWIhuexu+iuoeaVsO+8iOW9k+WJjea4oOmBk+WGhe+8iQogIGNvbnN0IGNvdW50cyA9IHVzZU1lbW8oKCkgPT4gewogICAgY29uc3QgYzogUGFydGlhbDxSZWNvcmQ8Q2F0ZWdvcnlJZCwgbnVtYmVyPj4gPSB7fTsKICAgIGZvciAoY29uc3QgbSBvZiBjdXJyZW50TW9kZWxzKSBjW20uY2F0ZWdvcnldID0gKGNbbS5jYXRlZ29yeV0gPz8gMCkgKyAxOwogICAgcmV0dXJuIGM7CiAgfSwgW2N1cnJlbnRNb2RlbHNdKTsKCiAgLy8g6L+H5ruk5ZCO55qE5qih5Z6LCiAgY29uc3QgdmlzaWJsZSA9IHVzZU1lbW8oKCkgPT4gewogICAgY29uc3QgcSA9IHF1ZXJ5LnRyaW0oKS50b0xvd2VyQ2FzZSgpOwogICAgcmV0dXJuIGN1cnJlbnRNb2RlbHMuZmlsdGVyKChtKSA9PiB7CiAgICAgIGlmIChmaWx0ZXIgIT09ICJhbGwiICYmIG0uY2F0ZWdvcnkgIT09IGZpbHRlcikgcmV0dXJuIGZhbHNlOwogICAgICBpZiAoIXEpIHJldHVybiB0cnVlOwogICAgICByZXR1cm4gKAogICAgICAgIG0uaWQudG9Mb3dlckNhc2UoKS5pbmNsdWRlcyhxKSB8fAogICAgICAgIG0ubmFtZS50b0xvd2VyQ2FzZSgpLmluY2x1ZGVzKHEpIHx8CiAgICAgICAgbS5kZXNjcmlwdGlvbi50b0xvd2VyQ2FzZSgpLmluY2x1ZGVzKHEpIHx8CiAgICAgICAgKG0uZGVzY3JpcHRpb25aaD8udG9Mb3dlckNhc2UoKS5pbmNsdWRlcyhxKSA/PyBmYWxzZSkgfHwKICAgICAgICAobS5hdXRob3I/LnRvTG93ZXJDYXNlKCkuaW5jbHVkZXMocSkgPz8gZmFsc2UpCiAgICAgICk7CiAgICB9KTsKICB9LCBbY3VycmVudE1vZGVscywgZmlsdGVyLCBxdWVyeV0pOwoKICAvLyDliIbnsbsgdGFi77yI5LuF5b2T5YmN5rig6YGT5pyJ5pWw5o2u55qE5YiG57G777yJCiAgY29uc3QgY2F0ZWdvcnlUYWJzOiB7IGlkOiBGaWx0ZXI7IGxhYmVsOiBzdHJpbmc7IGNvdW50OiBudW1iZXIgfVtdID0gWwogICAgeyBpZDogImFsbCIsIGxhYmVsOiAi5YWo6YOoIiwgY291bnQ6IGN1cnJlbnRNb2RlbHMubGVuZ3RoIH0sCiAgICAuLi5DQVRFR09SSUVTLmZpbHRlcigoYykgPT4gKGNvdW50c1tjLmlkXSA/PyAwKSA+IDApLm1hcCgoYykgPT4gKHsKICAgICAgaWQ6IGMuaWQgYXMgRmlsdGVyLAogICAgICBsYWJlbDogYy5sYWJlbCwKICAgICAgY291bnQ6IGNvdW50c1tjLmlkXSA/PyAwLAogICAgfSkpLAogIF07CgogIHJldHVybiAoCiAgICA8UGFnZUJvZHkgY2xhc3NOYW1lPSJwdC0yIj4KICAgICAgey8qIOetm+mAieWMuuaVtOS9k+WxheS4re+8muaQnOe0ouOAgea4oOmBk+OAgeWIhuexu+S4ieihjOmDvei1sOeJiOW/g+S4rei9tO+8jOWPguiAg+ermeeahCBtZW51LXRhYnMg5o6S5rOVICovfQogICAgICA8ZGl2IGNsYXNzTmFtZT0icmVsYXRpdmUgbXgtYXV0byB3LWZ1bGwgbWF4LXctbWQiPgogICAgICAgIDxTZWFyY2ggY2xhc3NOYW1lPSJwb2ludGVyLWV2ZW50cy1ub25lIGFic29sdXRlIGxlZnQtMyB0b3AtMS8yIGgtNCB3LTQgLXRyYW5zbGF0ZS15LTEvMiB0ZXh0LW11dGVkLWZvcmVncm91bmQiIC8+CiAgICAgICAgPGlucHV0CiAgICAgICAgICB2YWx1ZT17cXVlcnl9CiAgICAgICAgICBvbkNoYW5nZT17KGUpID0+IHNldFF1ZXJ5KGUudGFyZ2V0LnZhbHVlKX0KICAgICAgICAgIHBsYWNlaG9sZGVyPSLmkJzntKLmqKHlnosgaWQgLyDlkI3np7AgLyDljoLllYYgLyDmj4/ov7AiCiAgICAgICAgICBjbGFzc05hbWU9ImgtOSB3LWZ1bGwgcm91bmRlZC1mdWxsIGJvcmRlciBib3JkZXItYm9yZGVyIGJnLWNhcmQgcHgtNCBwbC05IHRleHQtc20gb3V0bGluZS1ub25lIGZvY3VzOmJvcmRlci1bY29sb3I6dmFyKC0tcHJpbWFyeSldIgogICAgICAgIC8+CiAgICAgIDwvZGl2PgoKICAgICAgPGRpdiBjbGFzc05hbWU9ImZsZXggZmxleC13cmFwIGp1c3RpZnktY2VudGVyIGdhcC0yIj4KICAgICAgICB7YWxsQ2hhbm5lbHMubWFwKChjaCkgPT4gKAogICAgICAgICAgPGJ1dHRvbgogICAgICAgICAgICBrZXk9e2NoLmlkfQogICAgICAgICAgICB0eXBlPSJidXR0b24iCiAgICAgICAgICAgIG9uQ2xpY2s9eygpID0+IHsKICAgICAgICAgICAgICBzZXRBY3RpdmVDaGFubmVsKGNoLmlkKTsKICAgICAgICAgICAgICBzZXRGaWx0ZXIoImFsbCIpOwogICAgICAgICAgICB9fQogICAgICAgICAgICBjbGFzc05hbWU9e2NuKHBpbGxUYWJDbGFzcyhhY3RpdmVDaGFubmVsID09PSBjaC5pZCksICJmbGV4IGl0ZW1zLWNlbnRlciBnYXAtMS41Iil9CiAgICAgICAgICA+CiAgICAgICAgICAgIHtjaC5sYWJlbH0KICAgICAgICAgICAgPHNwYW4KICAgICAgICAgICAgICBjbGFzc05hbWU9e2NuKAogICAgICAgICAgICAgICAgInJvdW5kZWQtZnVsbCBweC0xLjUgcHktMC41IHRleHQtWzEwcHhdIHRhYnVsYXItbnVtcyIsCiAgICAgICAgICAgICAgICBhY3RpdmVDaGFubmVsID09PSBjaC5pZCA/ICJiZy1wcmltYXJ5LWZvcmVncm91bmQvMjAiIDogImJnLW11dGVkIiwKICAgICAgICAgICAgICApfQogICAgICAgICAgICA+CiAgICAgICAgICAgICAge21vZGVsc0J5Q2hhbm5lbFtjaC5pZF0/Lmxlbmd0aCB8fCAwfQogICAgICAgICAgICA8L3NwYW4+CiAgICAgICAgICA8L2J1dHRvbj4KICAgICAgICApKX0KICAgICAgPC9kaXY+CgogICAgICB7Lyog5YiG57G76YCJ6aG55Y2h77yI5LuF5b2T5YmN5rig6YGT5pyJ5pWw5o2u5pe25pi+56S677yJICovfQogICAgICB7Y3VycmVudE1vZGVscy5sZW5ndGggPiAwICYmICgKICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZmxleCBmbGV4LXdyYXAganVzdGlmeS1jZW50ZXIgZ2FwLTIiPgogICAgICAgICAge2NhdGVnb3J5VGFicy5tYXAoKHQpID0+ICgKICAgICAgICAgICAgPFBpbGxUYWIKICAgICAgICAgICAgICBrZXk9e3QuaWR9CiAgICAgICAgICAgICAgYWN0aXZlPXtmaWx0ZXIgPT09IHQuaWR9CiAgICAgICAgICAgICAgb25DbGljaz17KCkgPT4gc2V0RmlsdGVyKHQuaWQpfQogICAgICAgICAgICAgIGNsYXNzTmFtZT0idGFidWxhci1udW1zIgogICAgICAgICAgICA+CiAgICAgICAgICAgICAge3QubGFiZWx9CiAgICAgICAgICAgICAgPHNwYW4gY2xhc3NOYW1lPSJtbC0xLjUgb3BhY2l0eS02MCI+e3QuY291bnR9PC9zcGFuPgogICAgICAgICAgICA8L1BpbGxUYWI+CiAgICAgICAgICApKX0KICAgICAgICA8L2Rpdj4KICAgICAgKX0KCiAgICAgIHsvKiDmqKHlnovnvZHmoLwgKi99CiAgICAgIDxkaXYgY2xhc3NOYW1lPSJncmlkIGdyaWQtY29scy0xIGdhcC0zIG1kOmdyaWQtY29scy0yIHhsOmdyaWQtY29scy0zIj4KICAgICAgICB7dmlzaWJsZS5tYXAoKG0pID0+ICgKICAgICAgICAgIDxNb2RlbENhcmQKICAgICAgICAgICAga2V5PXttLmlkfQogICAgICAgICAgICBtb2RlbD17bX0KICAgICAgICAgICAgcHJpY2luZ01hcD17cHJpY2luZ01hcH0KICAgICAgICAgICAgYmFzZU11bHRpcGxpZXI9e2Jhc2VNdWx0aXBsaWVyfQogICAgICAgICAgLz4KICAgICAgICApKX0KICAgICAgPC9kaXY+CgogICAgICB7dmlzaWJsZS5sZW5ndGggPT09IDAgJiYgKAogICAgICAgIDxwIGNsYXNzTmFtZT0icHktMTIgdGV4dC1jZW50ZXIgdGV4dC1zbSB0ZXh0LW11dGVkLWZvcmVncm91bmQiPuayoeacieWMuemFjeeahOaooeWeizwvcD4KICAgICAgKX0KICAgIDwvUGFnZUJvZHk+CiAgKTsKfQoKZnVuY3Rpb24gTW9kZWxDYXJkKHsKICBtb2RlbCwKICBwcmljaW5nTWFwLAogIGJhc2VNdWx0aXBsaWVyLAp9OiB7CiAgbW9kZWw6IE5vcm1hbGl6ZWRNb2RlbDsKICBiYXNlTXVsdGlwbGllcjogbnVtYmVyOwogIHByaWNpbmdNYXA/OiBNYXA8CiAgICBzdHJpbmcsCiAgICB7CiAgICAgIGlucHV0UHJpY2U6IG51bWJlcjsKICAgICAgb3V0cHV0UHJpY2U6IG51bWJlcjsKICAgICAgaXNJbWFnZTogYm9vbGVhbjsKICAgICAgZml4ZWRQcmljZTogbnVtYmVyOwogICAgICB1bml0OiBzdHJpbmc7CiAgICAgIG11bHRpcGxpZXI6IG51bWJlcjsKICAgIH0KICA+Owp9KSB7CiAgY29uc3QgZGVzY3JpcHRpb24gPSBtb2RlbC5kZXNjcmlwdGlvblpoID8/IG1vZGVsLmRlc2NyaXB0aW9uOwogIGNvbnN0IGRpc3BsYXlQcmljZSA9IGdldERpc3BsYXlQcmljZShtb2RlbCwgcHJpY2luZ01hcCk7CgogIHJldHVybiAoCiAgICA8Q2FyZCBjbGFzc05hbWU9ImZsZXggaC1mdWxsIGZsZXgtY29sIj4KICAgICAgPENhcmRDb250ZW50IGNsYXNzTmFtZT0iZmxleCBmbGV4LTEgZmxleC1jb2wgZ2FwLTIgcHQtNSI+CiAgICAgICAgPGRpdiBjbGFzc05hbWU9ImZsZXggaXRlbXMtc3RhcnQganVzdGlmeS1iZXR3ZWVuIGdhcC0yIj4KICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJmbGV4IG1pbi13LTAgaXRlbXMtc3RhcnQgZ2FwLTIuNSI+CiAgICAgICAgICAgIDxWZW5kb3JMb2dvIGF1dGhvcj17bW9kZWwuYXV0aG9yfSBuYW1lPXttb2RlbC5uYW1lfSBsb2dvPXttb2RlbC5sb2dvfSAvPgogICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0ibWluLXctMCI+CiAgICAgICAgICAgICAgPHAgY2xhc3NOYW1lPSJsaW5lLWNsYW1wLTIgdGV4dC1zbSBmb250LXNlbWlib2xkIGxlYWRpbmctdGlnaHQiPgogICAgICAgICAgICAgICAge21vZGVsLm5hbWV9CiAgICAgICAgICAgICAgPC9wPgogICAgICAgICAgICAgIHttb2RlbC5hdXRob3IgJiYgKAogICAgICAgICAgICAgICAgPHAgY2xhc3NOYW1lPSJ0cnVuY2F0ZSB0ZXh0LVsxMXB4XSB0ZXh0LW11dGVkLWZvcmVncm91bmQiPnttb2RlbC5hdXRob3J9PC9wPgogICAgICAgICAgICAgICl9CiAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgPC9kaXY+CiAgICAgICAgICB7Lyog5p2l5rqQ5rig6YGT5qCH562+ICovfQogICAgICAgICAge21vZGVsLmNoYW5uZWxTb3VyY2UgPT09ICJjbG91ZGZsYXJlIiA/ICgKICAgICAgICAgICAgPEJhZGdlIHRvbmU9InN1Y2Nlc3MiPkNGIOaJmOeuoTwvQmFkZ2U+CiAgICAgICAgICApIDogbW9kZWwuY2hhbm5lbFNvdXJjZSA9PT0gImRlZXBzZWVrIiA/ICgKICAgICAgICAgICAgPEJhZGdlIHRvbmU9ImFjY2VudCI+RGVlcFNlZWs8L0JhZGdlPgogICAgICAgICAgKSA6IG1vZGVsLmNoYW5uZWxTb3VyY2UgPT09ICJvcGVuYWkiID8gKAogICAgICAgICAgICA8QmFkZ2UgdG9uZT0iYWNjZW50Ij5PcGVuQUk8L0JhZGdlPgogICAgICAgICAgKSA6IG1vZGVsLmNoYW5uZWxTb3VyY2UgPT09ICJhbnRocm9waWMiID8gKAogICAgICAgICAgICA8QmFkZ2UgdG9uZT0iYWNjZW50Ij5BbnRocm9waWM8L0JhZGdlPgogICAgICAgICAgKSA6IG1vZGVsLmNoYW5uZWxOYW1lID8gKAogICAgICAgICAgICA8QmFkZ2UgdG9uZT0iaW5mbyI+e21vZGVsLmNoYW5uZWxOYW1lfTwvQmFkZ2U+CiAgICAgICAgICApIDogbW9kZWwuc291cmNlID09PSAiaG9zdGVkIiA/ICgKICAgICAgICAgICAgPEJhZGdlIHRvbmU9InN1Y2Nlc3MiPkNGIOaJmOeuoTwvQmFkZ2U+CiAgICAgICAgICApIDogKAogICAgICAgICAgICA8QmFkZ2UgdG9uZT0id2FybmluZyI+56ys5LiJ5pa56K6h6LS5PC9CYWRnZT4KICAgICAgICAgICl9CiAgICAgICAgPC9kaXY+CiAgICAgICAgPGNvZGUgY2xhc3NOYW1lPSJicmVhay1hbGwgdGV4dC1bMTFweF0gdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIj57bW9kZWwuaWR9PC9jb2RlPgogICAgICAgIHtkZXNjcmlwdGlvbiAmJiAoCiAgICAgICAgICA8cCBjbGFzc05hbWU9ImxpbmUtY2xhbXAtMyB0ZXh0LXhzIHRleHQtbXV0ZWQtZm9yZWdyb3VuZCI+e2Rlc2NyaXB0aW9ufTwvcD4KICAgICAgICApfQogICAgICAgIDxkaXYgY2xhc3NOYW1lPSJtdC1hdXRvIGZsZXggZmxleC13cmFwIGdhcC0xLjUgcHQtMiI+CiAgICAgICAgICB7bW9kZWwudGFncz8ubWFwKCh0YWcpID0+ICgKICAgICAgICAgICAgPEJhZGdlIGtleT17dGFnfSB0b25lPXt0YWdUb25lKHRhZyl9PgogICAgICAgICAgICAgIHt0YWd9CiAgICAgICAgICAgIDwvQmFkZ2U+CiAgICAgICAgICApKX0KICAgICAgICAgIHttb2RlbC5mdW5jdGlvbkNhbGxpbmcgJiYgIW1vZGVsLnRhZ3M/LmluY2x1ZGVzKCLlh73mlbDosIPnlKgiKSAmJiAoCiAgICAgICAgICAgIDxCYWRnZSB0b25lPSJhY2NlbnQiPuWHveaVsOiwg+eUqDwvQmFkZ2U+CiAgICAgICAgICApfQogICAgICAgICAge21vZGVsLmNvbnRleHRXaW5kb3cgPyAoCiAgICAgICAgICAgIDxCYWRnZSB0b25lPSJtdXRlZCI+e2Zvcm1hdE51bWJlcihtb2RlbC5jb250ZXh0V2luZG93KX0gY3R4PC9CYWRnZT4KICAgICAgICAgICkgOiBudWxsfQogICAgICAgICAge21vZGVsLmJldGEgJiYgIW1vZGVsLnRhZ3M/LmluY2x1ZGVzKCLmtYvor5XniYgiKSAmJiAoCiAgICAgICAgICAgIDxCYWRnZSB0b25lPSJtdXRlZCI+YmV0YTwvQmFkZ2U+CiAgICAgICAgICApfQogICAgICAgICAge21vZGVsLnJlcXVpcmVXb3JrZXJzUGFpZCAmJiAoCiAgICAgICAgICAgIDxCYWRnZSB0b25lPSJ3YXJuaW5nIj7pnIAgV29ya2VycyBQYWlkPC9CYWRnZT4KICAgICAgICAgICl9CiAgICAgICAgICA8QmFkZ2UgdG9uZT0ibXV0ZWQiIGNsYXNzTmFtZT0iZm9udC1tb25vIj4KICAgICAgICAgICAge2Zvcm1hdE1vZGVsUHJpY2UoZGlzcGxheVByaWNlLmNyZWRpdHMsIGRpc3BsYXlQcmljZS5pc0ltYWdlLCBiYXNlTXVsdGlwbGllcil9CiAgICAgICAgICA8L0JhZGdlPgogICAgICAgIDwvZGl2PgogICAgICA8L0NhcmRDb250ZW50PgogICAgPC9DYXJkPgogICk7Cn0KCmZ1bmN0aW9uIFZlbmRvckxvZ28oewogIGF1dGhvciwKICBuYW1lLAogIGxvZ28sCn06IHsKICBhdXRob3I/OiBzdHJpbmc7CiAgbmFtZTogc3RyaW5nOwogIGxvZ28/OiBzdHJpbmc7Cn0pIHsKICAvLyDkuIrmuLggbG9nbyDpk77mjqXnu4/luLggNDA077yI5aaCIEJBQUkg55qE5Zu+5qCH77yJ77yM5Yqg6L295aSx6LSl5bCx6YCA5Zue6aaW5a2X5q+N77yM6YG/5YWN5Ye6546w56C05Zu+5Y2g5L2NCiAgY29uc3QgW2Jyb2tlbiwgc2V0QnJva2VuXSA9IHVzZVN0YXRlKGZhbHNlKTsKCiAgaWYgKGxvZ28gJiYgIWJyb2tlbikgewogICAgcmV0dXJuICgKICAgICAgPGltZwogICAgICAgIHNyYz17bG9nb30KICAgICAgICBhbHQ9e2F1dGhvciA/PyBuYW1lfQogICAgICAgIGNsYXNzTmFtZT0ibXQtMC41IGgtNiB3LTYgc2hyaW5rLTAgcm91bmRlZCBvYmplY3QtY29udGFpbiIKICAgICAgICBsb2FkaW5nPSJsYXp5IgogICAgICAgIG9uRXJyb3I9eygpID0+IHNldEJyb2tlbih0cnVlKX0KICAgICAgLz4KICAgICk7CiAgfQogIGNvbnN0IGluaXRpYWwgPSAoYXV0aG9yID8/IG5hbWUpLnRyaW0oKS5jaGFyQXQoMCkudG9VcHBlckNhc2UoKSB8fCAiPyI7CiAgcmV0dXJuICgKICAgIDxkaXYgY2xhc3NOYW1lPSJtdC0wLjUgZmxleCBoLTYgdy02IHNocmluay0wIGl0ZW1zLWNlbnRlciBqdXN0aWZ5LWNlbnRlciByb3VuZGVkIGJnLVtjb2xvcjp2YXIoLS1wcmltYXJ5KV0vMTAgdGV4dC1bMTFweF0gZm9udC1zZW1pYm9sZCB0ZXh0LW11dGVkLWZvcmVncm91bmQiPgogICAgICB7aW5pdGlhbH0KICAgIDwvZGl2PgogICk7Cn0KCmZ1bmN0aW9uIHRhZ1RvbmUodGFnOiBzdHJpbmcpOiAiYWNjZW50IiB8ICJ3YXJuaW5nIiB8ICJtdXRlZCIgewogIGlmICh0YWcgPT09ICLlt7LlvIPnlKgiKSByZXR1cm4gIndhcm5pbmciOwogIGlmICh0YWcgPT09ICLmtYvor5XniYgiKSByZXR1cm4gIm11dGVkIjsKICByZXR1cm4gImFjY2VudCI7Cn0K
+"use client";
+
+import { useMemo, useState } from "react";
+import { Search } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { CATEGORIES, type CategoryId } from "@/lib/categories";
+import type { NormalizedModel } from "@/lib/cloudflare/catalog";
+import { cn, formatNumber } from "@/lib/utils";
+import { formatModelPrice, getDisplayPrice } from "@/lib/billing/display-price";
+import { PageBody, PillTab, pillTabClass } from "@/components/dashboard/section";
+
+type Filter = CategoryId | "all";
+
+interface ChannelTab {
+  id: string;
+  type: string;
+  name: string;
+  label: string;
+}
+
+export function ModelBrowser({
+  allChannels,
+  modelsByChannel,
+  pricingMap,
+  baseMultiplier,
+}: {
+  allChannels: ChannelTab[];
+  modelsByChannel: Record<string, NormalizedModel[]>;
+  /** 全局基础倍率：卡片上的单价按实付口径展示时乘上去 */
+  baseMultiplier: number;
+  pricingMap?: Map<
+    string,
+    {
+      inputPrice: number;
+      outputPrice: number;
+      isImage: boolean;
+      fixedPrice: number;
+      unit: string;
+      multiplier: number;
+    }
+  >;
+}) {
+  const [activeChannel, setActiveChannel] = useState("cloudflare");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [query, setQuery] = useState("");
+
+  // 当前渠道的模型
+  const currentModels = useMemo(
+    () => modelsByChannel[activeChannel] || [],
+    [modelsByChannel, activeChannel],
+  );
+
+  // 分类计数（当前渠道内）
+  const counts = useMemo(() => {
+    const c: Partial<Record<CategoryId, number>> = {};
+    for (const m of currentModels) c[m.category] = (c[m.category] ?? 0) + 1;
+    return c;
+  }, [currentModels]);
+
+  // 过滤后的模型
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return currentModels.filter((m) => {
+      if (filter !== "all" && m.category !== filter) return false;
+      if (!q) return true;
+      return (
+        m.id.toLowerCase().includes(q) ||
+        m.name.toLowerCase().includes(q) ||
+        m.description.toLowerCase().includes(q) ||
+        (m.descriptionZh?.toLowerCase().includes(q) ?? false) ||
+        (m.author?.toLowerCase().includes(q) ?? false)
+      );
+    });
+  }, [currentModels, filter, query]);
+
+  // 分类 tab（仅当前渠道有数据的分类）
+  const categoryTabs: { id: Filter; label: string; count: number }[] = [
+    { id: "all", label: "全部", count: currentModels.length },
+    ...CATEGORIES.filter((c) => (counts[c.id] ?? 0) > 0).map((c) => ({
+      id: c.id as Filter,
+      label: c.label,
+      count: counts[c.id] ?? 0,
+    })),
+  ];
+
+  return (
+    <PageBody className="pt-2">
+      {/* 筛选区整体居中：搜索、渠道、分类三行都走版心中轴，参考站的 menu-tabs 排法 */}
+      <div className="relative mx-auto w-full max-w-md">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="搜索模型 id / 名称 / 厂商 / 描述"
+          className="h-9 w-full rounded-full border border-border bg-card px-4 pl-9 text-sm outline-none focus:border-[color:var(--primary)]"
+        />
+      </div>
+
+      <div className="flex flex-wrap justify-center gap-2">
+        {allChannels.map((ch) => (
+          <button
+            key={ch.id}
+            type="button"
+            onClick={() => {
+              setActiveChannel(ch.id);
+              setFilter("all");
+            }}
+            className={cn(pillTabClass(activeChannel === ch.id), "flex items-center gap-1.5")}
+          >
+            {ch.label}
+            <span
+              className={cn(
+                "rounded-full px-1.5 py-0.5 text-[10px] tabular-nums",
+                activeChannel === ch.id ? "bg-primary-foreground/20" : "bg-muted",
+              )}
+            >
+              {modelsByChannel[ch.id]?.length || 0}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {/* 分类选项卡（仅当前渠道有数据时显示） */}
+      {currentModels.length > 0 && (
+        <div className="flex flex-wrap justify-center gap-2">
+          {categoryTabs.map((t) => (
+            <PillTab
+              key={t.id}
+              active={filter === t.id}
+              onClick={() => setFilter(t.id)}
+              className="tabular-nums"
+            >
+              {t.label}
+              <span className="ml-1.5 opacity-60">{t.count}</span>
+            </PillTab>
+          ))}
+        </div>
+      )}
+
+      {/* 模型网格 */}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {visible.map((m) => (
+          <ModelCard
+            key={m.id}
+            model={m}
+            pricingMap={pricingMap}
+            baseMultiplier={baseMultiplier}
+          />
+        ))}
+      </div>
+
+      {visible.length === 0 && (
+        <p className="py-12 text-center text-sm text-muted-foreground">没有匹配的模型</p>
+      )}
+    </PageBody>
+  );
+}
+
+function ModelCard({
+  model,
+  pricingMap,
+  baseMultiplier,
+}: {
+  model: NormalizedModel;
+  baseMultiplier: number;
+  pricingMap?: Map<
+    string,
+    {
+      inputPrice: number;
+      outputPrice: number;
+      isImage: boolean;
+      fixedPrice: number;
+      unit: string;
+      multiplier: number;
+    }
+  >;
+}) {
+  const description = model.descriptionZh ?? model.description;
+  const displayPrice = getDisplayPrice(model, pricingMap);
+
+  return (
+    <Card className="flex h-full flex-col">
+      <CardContent className="flex flex-1 flex-col gap-2 pt-5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <VendorLogo author={model.author} name={model.name} logo={model.logo} />
+            <div className="min-w-0">
+              <p className="line-clamp-2 text-sm font-semibold leading-tight">
+                {model.name}
+              </p>
+              {model.author && (
+                <p className="truncate text-[11px] text-muted-foreground">{model.author}</p>
+              )}
+            </div>
+          </div>
+          {/* 来源渠道标签 */}
+          {model.channelSource === "cloudflare" ? (
+            <Badge tone="success">CF 托管</Badge>
+          ) : model.channelSource === "deepseek" ? (
+            <Badge tone="accent">DeepSeek</Badge>
+          ) : model.channelSource === "openai" ? (
+            <Badge tone="accent">OpenAI</Badge>
+          ) : model.channelSource === "anthropic" ? (
+            <Badge tone="accent">Anthropic</Badge>
+          ) : model.channelName ? (
+            <Badge tone="info">{model.channelName}</Badge>
+          ) : model.source === "hosted" ? (
+            <Badge tone="success">CF 托管</Badge>
+          ) : (
+            <Badge tone="warning">第三方计费</Badge>
+          )}
+        </div>
+        <code className="break-all text-[11px] text-muted-foreground">{model.id}</code>
+        {description && (
+          <p className="line-clamp-3 text-xs text-muted-foreground">{description}</p>
+        )}
+        <div className="mt-auto flex flex-wrap gap-1.5 pt-2">
+          {model.tags?.map((tag) => (
+            <Badge key={tag} tone={tagTone(tag)}>
+              {tag}
+            </Badge>
+          ))}
+          {model.functionCalling && !model.tags?.includes("函数调用") && (
+            <Badge tone="accent">函数调用</Badge>
+          )}
+          {model.contextWindow ? (
+            <Badge tone="muted">{formatNumber(model.contextWindow)} ctx</Badge>
+          ) : null}
+          {model.beta && !model.tags?.includes("测试版") && (
+            <Badge tone="muted">beta</Badge>
+          )}
+          {model.requireWorkersPaid && (
+            <Badge tone="warning">需 Workers Paid</Badge>
+          )}
+          <Badge tone="muted" className="font-mono">
+            {formatModelPrice(displayPrice.credits, displayPrice.isImage, baseMultiplier)}
+          </Badge>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function VendorLogo({
+  author,
+  name,
+  logo,
+}: {
+  author?: string;
+  name: string;
+  logo?: string;
+}) {
+  // 上游 logo 链接经常 404（如 BAAI 的图标），加载失败就退回首字母，避免出现破图占位
+  const [broken, setBroken] = useState(false);
+
+  if (logo && !broken) {
+    return (
+      <img
+        src={logo}
+        alt={author ?? name}
+        className="mt-0.5 h-6 w-6 shrink-0 rounded object-contain"
+        loading="lazy"
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  const initial = (author ?? name).trim().charAt(0).toUpperCase() || "?";
+  return (
+    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded bg-[color:var(--primary)]/10 text-[11px] font-semibold text-muted-foreground">
+      {initial}
+    </div>
+  );
+}
+
+function tagTone(tag: string): "accent" | "warning" | "muted" {
+  if (tag === "已弃用") return "warning";
+  if (tag === "测试版") return "muted";
+  return "accent";
+}

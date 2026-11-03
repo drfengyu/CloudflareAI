@@ -1,1 +1,196 @@
-aW1wb3J0IHsgUGFnZUhlYWRlciB9IGZyb20gIkAvY29tcG9uZW50cy9kYXNoYm9hcmQvcGFnZS1oZWFkZXIiOwppbXBvcnQgeyBDYXJkLCBDYXJkQ29udGVudCB9IGZyb20gIkAvY29tcG9uZW50cy91aS9jYXJkIjsKaW1wb3J0IHsgcmVxdWlyZVVzZXIgfSBmcm9tICJAL2xpYi91c2FnZS9tZXRlciI7CmltcG9ydCB7IGRiIH0gZnJvbSAiQC9saWIvZGIvZDEtaHR0cCI7CmltcG9ydCB7IHVzZXJzLCB0ZW1wb3JhcnlCYWxhbmNlcywgcGF5bWVudE9yZGVycyB9IGZyb20gIkAvbGliL2RiL3NjaGVtYSI7CmltcG9ydCB7IGFuZCwgZGVzYywgZXEsIGd0IH0gZnJvbSAiZHJpenpsZS1vcm0iOwppbXBvcnQgeyBXYWxsZXQsIENsb2NrIH0gZnJvbSAibHVjaWRlLXJlYWN0IjsKaW1wb3J0IHsgUmVkZWVtQ29kZURpYWxvZyB9IGZyb20gIi4vcmVkZWVtLWNvZGUtZGlhbG9nIjsKaW1wb3J0IHsgQ2hlY2tpbkNhbGVuZGFyQ2FyZCB9IGZyb20gIi4vY2hlY2tpbi1jYWxlbmRhci1jYXJkIjsKaW1wb3J0IHsgUmVjaGFyZ2VPcmRlcnNDYXJkIH0gZnJvbSAiLi9yZWNoYXJnZS1vcmRlcnMtY2FyZCI7CmltcG9ydCB7IFRlbXBCYWxhbmNlc0NhcmQsIHR5cGUgU2VyaWFsaXplZFRlbXBCYWxhbmNlIH0gZnJvbSAiLi90ZW1wLWJhbGFuY2VzLWNhcmQiOwppbXBvcnQgeyBUb3B1cFJlY29yZHNDYXJkIH0gZnJvbSAiLi90b3B1cC1yZWNvcmRzLWNhcmQiOwppbXBvcnQgeyBmb3JtYXRDcmVkaXRzIH0gZnJvbSAiQC9saWIvYmlsbGluZy9jcmVkaXRzIjsKaW1wb3J0IHsgY2FsY3VsYXRlRGlzcGxheUJhbGFuY2UgfSBmcm9tICJAL2xpYi9iaWxsaW5nL2Rpc3BsYXktYmFsYW5jZSI7CmltcG9ydCB7IGxpc3RXYWxsZXRUb3B1cFBhZ2UsIHdhbGxldFRvcHVwV2hlcmUgfSBmcm9tICJAL2xpYi9iaWxsaW5nL2dyYW50LWV4cGlyeSI7CmltcG9ydCB7IGdldFJlY2hhcmdlQm9udXNTZXR0aW5ncyB9IGZyb20gIkAvbGliL3BheW1lbnQvYm9udXMiOwppbXBvcnQgeyBnZXRMaW51eGRvQ29uZmlnIH0gZnJvbSAiQC9saWIvcGF5bWVudC9saW51eGRvIjsKaW1wb3J0IHsgUEFZX09SREVSX1BBR0VfU0laRSwgc2VyaWFsaXplUGF5T3JkZXIgfSBmcm9tICJAL2xpYi9wYXltZW50L3BheS1vcmRlci12aWV3IjsKaW1wb3J0IHsgZm9ybWF0Q25EYXRlLCBjbkRheXNBZ29TdGFydCB9IGZyb20gIkAvbGliL2RhdGUiOwppbXBvcnQgeyBQYWdlQm9keSwgUGFnZVNlY3Rpb24gfSBmcm9tICJAL2NvbXBvbmVudHMvZGFzaGJvYXJkL3NlY3Rpb24iOwoKZXhwb3J0IGNvbnN0IGR5bmFtaWMgPSAiZm9yY2UtZHluYW1pYyI7CgpleHBvcnQgZGVmYXVsdCBhc3luYyBmdW5jdGlvbiBXYWxsZXRQYWdlKHsKICBzZWFyY2hQYXJhbXMsCn06IHsKICBzZWFyY2hQYXJhbXM6IFByb21pc2U8eyBwYWlkPzogc3RyaW5nOyBvcmRlck5vPzogc3RyaW5nIH0+Owp9KSB7CiAgY29uc3QgdXNlcklkID0gYXdhaXQgcmVxdWlyZVVzZXIoKTsKICBjb25zdCBwYXJhbXMgPSBhd2FpdCBzZWFyY2hQYXJhbXM7CiAgY29uc3Qgbm93ID0gbmV3IERhdGUoKTsKCiAgLy8g5YWF5YC85rWB5rC05Y+q5L+d55WZ6L+R5LiJ5Liq5pyI77yM5pu05pep55qE5Y6G5Y+y5LiN5YaN5bGV56S644CCCiAgY29uc3QgaGlzdG9yeUN1dG9mZiA9IGNuRGF5c0Fnb1N0YXJ0KDkwKTsKCiAgLy8gMjAyNi0xMC0xNyDmgKfog73vvJrov5nkupvmn6Xor6LkupLkuI3kvp3otZbvvIjlhajpg73lj6rmjIkgdXNlcklkIOWPluaVsO+8ie+8jOWOn+WFiOaYr+S4gOadoeaOpeS4gOadoSBhd2FpdO+8jAogIC8vIOS4suihjCA1IOasoSBEMSDlvoDov5Qg4omIIDIg56eS77yb5bm25Y+R5oiQ5LiA5rOi5ZCO5Y+q5Ymp5pyA5oWi6YKj5p2h55qE5pe26Ze044CC5Y+W5pWw5Y+j5b6E5LiA5a2X5pyq5pS544CCCiAgY29uc3QgW3VzZXJSb3dzLCB0ZW1wQmFsYW5jZXMsIHBheU9yZGVycywgbGludXhkb0NvbmZpZywgYm9udXNDb25maWcsIHRvcHVwV2hlcmVdID0gYXdhaXQgUHJvbWlzZS5hbGwoWwogICAgLy8g6I635Y+W55So5oi35rC45LmF5L2Z6aKdCiAgICBkYgogICAgICAuc2VsZWN0KHsgYmFsYW5jZUNyZWRpdHM6IHVzZXJzLmJhbGFuY2VDcmVkaXRzIH0pCiAgICAgIC5mcm9tKHVzZXJzKQogICAgICAud2hlcmUoZXEodXNlcnMuaWQsIHVzZXJJZCkpCiAgICAgIC5saW1pdCgxKSwKICAgIC8vIOiOt+WPluacqui/h+acn+eahOS4tOaXtuS9memine+8iOi/h+acn+WIpOWumuS4i+ayieWIsCBTUUzvvIzkuI3lho3miorlt7LlpLHmlYjnmoTooYzor7vov5vlhoXlrZjvvIkKICAgIGRiCiAgICAgIC5zZWxlY3QoKQogICAgICAuZnJvbSh0ZW1wb3JhcnlCYWxhbmNlcykKICAgICAgLndoZXJlKGFuZChlcSh0ZW1wb3JhcnlCYWxhbmNlcy51c2VySWQsIHVzZXJJZCksIGd0KHRlbXBvcmFyeUJhbGFuY2VzLmV4cGlyZXNBdCwgbm93KSkpCiAgICAgIC5vcmRlckJ5KHRlbXBvcmFyeUJhbGFuY2VzLmV4cGlyZXNBdCksCiAgICAvLyDlnKjnur/lhYXlgLzorqLljZXvvIjlkKvlm57ot7PorqLljZXlj7fnva7pobbpgLvovpHkuqTnu5nlrqLmiLfnq6/nu4Tku7bvvJvnv7vpobXkuZ/lnKjljaHniYflhoXlsYDpg6jliLfmlrDvvIkKICAgIC8vIOi/memHjOS4jeaMiSBoaXN0b3J5Q3V0b2ZmIOijgeWJqu+8muW+heaUr+S7mC/mlK/ku5jnoa7orqTkuK3nmoTorqLljZXlj6/ku6XpmYjml6fliLDku7vmhI/kuYXvvIzogIzov5nlvKDljaHmmK8KICAgIC8vIOeUqOaIt+WUr+S4gOiDveiHquafpeW5tuaJi+WKqOOAjOafpeivouOAjeWCrOWNleeahOWcsOaWue+8jOijgeWJquS8muaKiuacquWIsOi0puiuouWNleS7juinhumHjumHjOaKueaOieOAggogICAgZGIKICAgICAgLnNlbGVjdCgpCiAgICAgIC5mcm9tKHBheW1lbnRPcmRlcnMpCiAgICAgIC53aGVyZShlcShwYXltZW50T3JkZXJzLnVzZXJJZCwgdXNlcklkKSkKICAgICAgLm9yZGVyQnkoZGVzYyhwYXltZW50T3JkZXJzLmNyZWF0ZWRBdCkpCiAgICAgIC5saW1pdChQQVlfT1JERVJfUEFHRV9TSVpFICsgMSksCiAgICBnZXRMaW51eGRvQ29uZmlnKCksCiAgICAvLyDlhYXlgLzpmLbmoq/otaDpgIHvvJrlj6rlnKjlhYXlgLzlvLnnqpfph4zpooTlkYrjgIzmnKzljZXpop3lpJbotaDpgIHjgI3vvIzlrp7pmYXlj5HmlL7nlLHorqLljZXnu5Pnrpfot6/lvoTotJ/otKMKICAgIGdldFJlY2hhcmdlQm9udXNTZXR0aW5ncygpLAogICAgLy8g5YWF5YC85rWB5rC055qE5Y+v6KeB5oCn5p2h5Lu277yI5ZCr6L+R5LiJ5Liq5pyI6KOB5YmqICsg5Y+R5pS+5Yiw5pyf6L+H5ruk77yM5rS75Yqo5rWB5rC05pW057G75o6S6Zmk77yJCiAgICB3YWxsZXRUb3B1cFdoZXJlKHVzZXJJZCwgaGlzdG9yeUN1dG9mZiwgbm93KSwKICBdKTsKCiAgY29uc3QgcGVybWFuZW50QmFsYW5jZSA9IHVzZXJSb3dzWzBdPy5iYWxhbmNlQ3JlZGl0cyB8fCAwOwoKICAvLyDorqHnrpfmgLvkvZnpop3vvJrljIXlkKvmiYDmnInmnKrov4fmnJ/nmoTkuLTml7bkvZnpop3vvIjkuI3ov4fmu6TlsI/pop3vvIkKICAvLyBKUyDkvqflho3liKTkuIDmrKHmmK/lhZzlupXvvJrlvILluLjlgLzlnKggU1FMIOmHjOWPr+iDveiiq+WuveadvuavlOi+g+aUvuihjO+8jOWugeWPr+WwkeaYvuekuuS5n+S4jeiZmuWinuS9memineOAggogIGNvbnN0IGFsbFZhbGlkVGVtcEJhbGFuY2VzID0gdGVtcEJhbGFuY2VzLmZpbHRlcigKICAgICh0YikgPT4gbmV3IERhdGUodGIuZXhwaXJlc0F0KSA+IG5vdwogICk7CiAgY29uc3QgdGVtcG9yYXJ5VG90YWwgPSBhbGxWYWxpZFRlbXBCYWxhbmNlcy5yZWR1Y2UoKHN1bSwgdGIpID0+IHN1bSArIHRiLmFtb3VudCwgMCk7CgogIC8vIOiuoeeul+aYvuekuueUqOS9memine+8iOi0n+aVsOihpeato++8iQogIGNvbnN0IGRpc3BsYXlCYWxhbmNlID0gY2FsY3VsYXRlRGlzcGxheUJhbGFuY2UocGVybWFuZW50QmFsYW5jZSwgdGVtcG9yYXJ5VG90YWwpOwoKICAvLyDkuLTml7bkvZnpop3mmI7nu4bmmL7npLrpgLvovpHvvJoKICAvLyAxLiDlpoLmnpzmsLjkuYXkvZnpop3kuLrotJ/vvIzorqHnrpfmr4/mnaHkuLTml7bkvZnpop3nmoQi5bey55So5LqO6KGl5q2jIumDqOWIhgogIC8vIDIuIOWPquaYvuekuuWJqeS9meWPr+eUqOmineW6piA+IDAg55qE5Li05pe25L2Z6aKdCiAgbGV0IHJlbWFpbmluZ0RlZmljaXQgPSBwZXJtYW5lbnRCYWxhbmNlIDwgMCA/IE1hdGguYWJzKHBlcm1hbmVudEJhbGFuY2UpIDogMDsKICBjb25zdCBkaXNwbGF5VGVtcEJhbGFuY2VzOiBBcnJheTwKICAgICh0eXBlb2YgYWxsVmFsaWRUZW1wQmFsYW5jZXMpW251bWJlcl0gJiB7CiAgICAgIGRpc3BsYXlBbW91bnQ6IG51bWJlcjsKICAgICAgdXNlZEZvckNvbXBlbnNhdGlvbjogbnVtYmVyOwogICAgfQogID4gPSBbXTsKICBmb3IgKGNvbnN0IHRiIG9mIGFsbFZhbGlkVGVtcEJhbGFuY2VzLnNvcnQoCiAgICAoYSwgYikgPT4gbmV3IERhdGUoYS5leHBpcmVzQXQpLmdldFRpbWUoKSAtIG5ldyBEYXRlKGIuZXhwaXJlc0F0KS5nZXRUaW1lKCksIC8vIOaMiei/h+acn+aXtumXtOaOkuW6jwogICkpIHsKICAgIC8vIOawuOS5heS9memineS4uui0n+aXtu+8jOmdoOWJjeeahOS4tOaXtuS9memineWFiOeUqOS6juihpeatowogICAgY29uc3QgdXNlZEZvckNvbXBlbnNhdGlvbiA9CiAgICAgIHJlbWFpbmluZ0RlZmljaXQgPiAwID8gTWF0aC5taW4odGIuYW1vdW50LCByZW1haW5pbmdEZWZpY2l0KSA6IDA7CiAgICByZW1haW5pbmdEZWZpY2l0IC09IHVzZWRGb3JDb21wZW5zYXRpb247CiAgICBjb25zdCBkaXNwbGF5QW1vdW50ID0gdGIuYW1vdW50IC0gdXNlZEZvckNvbXBlbnNhdGlvbjsKICAgIGlmIChkaXNwbGF5QW1vdW50ID49IDAuMDEpIHsKICAgICAgZGlzcGxheVRlbXBCYWxhbmNlcy5wdXNoKHsgLi4udGIsIGRpc3BsYXlBbW91bnQsIHVzZWRGb3JDb21wZW5zYXRpb24gfSk7CiAgICB9CiAgfQoKICBjb25zdCB0b3RhbEJhbGFuY2UgPSBwZXJtYW5lbnRCYWxhbmNlICsgdGVtcG9yYXJ5VG90YWw7CgogIC8vIOetvuWIsOWlluWKseS4juWFkeaNoueggeWPkeeahOaYr+S4gOasoeaAp+S4tOaXtuS9memine+8jOWIsOacn+S5i+WQjuS4jeWGjeS9nOS4uuOAjOWPr+eUqOS9memineadpea6kOOAjeaYvuekuuOAggogIC8vIOi/h+acn+WIpOWumuW3suS4i+ayiei/myBTUUzvvIxMSU1JVCDlj5bliLDnmoTlsLHmmK/lj6/op4HooYzvvJvnv7vpobXnlLHljaHniYflhoUgc2VydmVyIGFjdGlvbiDlpI3nlKjlkIzkuIDlhaXlj6PjgIIKICBjb25zdCB0b3B1cFBhZ2UgPSBhd2FpdCBsaXN0V2FsbGV0VG9wdXBQYWdlKHRvcHVwV2hlcmUsIDEpOwoKICBjb25zdCBoYXNNb3JlUGF5T3JkZXJzID0gcGF5T3JkZXJzLmxlbmd0aCA+IFBBWV9PUkRFUl9QQUdFX1NJWkU7CiAgY29uc3Qgc2VyaWFsaXplZE9yZGVycyA9IHBheU9yZGVycy5zbGljZSgwLCBQQVlfT1JERVJfUEFHRV9TSVpFKS5tYXAoc2VyaWFsaXplUGF5T3JkZXIpOwoKICBjb25zdCBzZXJpYWxpemVkVGVtcEJhbGFuY2VzOiBTZXJpYWxpemVkVGVtcEJhbGFuY2VbXSA9IGRpc3BsYXlUZW1wQmFsYW5jZXMubWFwKCh0YikgPT4gKHsKICAgIGlkOiB0Yi5pZCwKICAgIGRpc3BsYXlBbW91bnQ6IHRiLmRpc3BsYXlBbW91bnQsCiAgICB1c2VkRm9yQ29tcGVuc2F0aW9uOiB0Yi51c2VkRm9yQ29tcGVuc2F0aW9uLAogICAgZGVzY3JpcHRpb246IHRiLmRlc2NyaXB0aW9uID8/IG51bGwsCiAgICBleHBpcmVzQXRMYWJlbDogZm9ybWF0Q25EYXRlKHRiLmV4cGlyZXNBdCksCiAgfSkpOwoKICBjb25zdCBqdXN0UmV0dXJuZWQgPSBwYXJhbXMucGFpZCA9PT0gIjEiOwogIGNvbnN0IGhpZ2hsaWdodE9yZGVyTm8gPSBwYXJhbXMub3JkZXJObyA/PyB1bmRlZmluZWQ7CgogIHJldHVybiAoCiAgICA8PgogICAgICA8UGFnZUhlYWRlcgogICAgICAgIHRpdGxlPSLmiJHnmoTpkrHljIUiCiAgICAgICAgZGVzY3JpcHRpb249IuS9memineOAgeWFheWAvOOAgea1geawtOiusOW9lSIKICAgICAgLz4KCiAgICAgIDxQYWdlQm9keSBjbGFzc05hbWU9InB0LTIiPgogICAgICAgIDxQYWdlU2VjdGlvbiB0aXRsZT0i5L2Z6aKd5LiO562+5YiwIiBzdWJ0aXRsZT0i5rC45LmF5LiO5Li05pe25L2Z6aKd5p6E5oiQ77yM562+5Yiw5ZKM5YWR5o2i56CB5Y+R5pS+55qE6aKd5bqmIiBjbGFzc05hbWU9ImJvcmRlci10LTAgcHQtMCI+CiAgICAgICAgICB7Lyog5L2Z6aKd5Y2h54mHICovfQogICAgICAgICAgPENhcmQgY2xhc3NOYW1lPSJib3JkZXItcHJpbWFyeS8yMCBiZy1wcmltYXJ5LzUiPgogICAgICAgICAgICA8Q2FyZENvbnRlbnQgY2xhc3NOYW1lPSJmbGV4IGZsZXgtd3JhcCBpdGVtcy1jZW50ZXIganVzdGlmeS1iZXR3ZWVuIGdhcC00IHB0LTUiPgogICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJmbGV4IGl0ZW1zLWNlbnRlciBnYXAtMyI+CiAgICAgICAgICAgICAgICA8ZGl2IGNsYXNzTmFtZT0iZmxleCBoLTEyIHctMTIgaXRlbXMtY2VudGVyIGp1c3RpZnktY2VudGVyIHJvdW5kZWQtZnVsbCBiZy1wcmltYXJ5IHRleHQtcHJpbWFyeS1mb3JlZ3JvdW5kIj4KICAgICAgICAgICAgICAgICAgPFdhbGxldCBjbGFzc05hbWU9ImgtNiB3LTYiIC8+CiAgICAgICAgICAgICAgICA8L2Rpdj4KICAgICAgICAgICAgICAgIDxkaXY+CiAgICAgICAgICAgICAgICAgIDxwIGNsYXNzTmFtZT0idGV4dC1zbSB0ZXh0LW11dGVkLWZvcmVncm91bmQiPuaAu+S9meminTwvcD4KICAgICAgICAgICAgICAgICAgPHAgY2xhc3NOYW1lPSJ0ZXh0LTJ4bCBmb250LXNlbWlib2xkIHRhYnVsYXItbnVtcyI+CiAgICAgICAgICAgICAgICAgICAge2Zvcm1hdENyZWRpdHModG90YWxCYWxhbmNlKX0gY3JlZGl0cwogICAgICAgICAgICAgICAgICA8L3A+CiAgICAgICAgICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJtdC0xIGZsZXggZmxleC13cmFwIGdhcC0zIHRleHQteHMgdGV4dC1tdXRlZC1mb3JlZ3JvdW5kIHRhYnVsYXItbnVtcyI+CiAgICAgICAgICAgICAgICAgICAgPHNwYW4+5rC45LmFOiB7Zm9ybWF0Q3JlZGl0cyhkaXNwbGF5QmFsYW5jZS5kaXNwbGF5UGVybWFuZW50KX0gY3I8L3NwYW4+CiAgICAgICAgICAgICAgICAgICAgeyh0ZW1wb3JhcnlUb3RhbCA+IDAgfHwgcGVybWFuZW50QmFsYW5jZSA8IDApICYmICgKICAgICAgICAgICAgICAgICAgICAgIDxzcGFuIGNsYXNzTmFtZT0iZmxleCBpdGVtcy1jZW50ZXIgZ2FwLTEiPgogICAgICAgICAgICAgICAgICAgICAgICA8Q2xvY2sgY2xhc3NOYW1lPSJoLTMgdy0zIiAvPgogICAgICAgICAgICAgICAgICAgICAgICDkuLTml7Y6IHtmb3JtYXRDcmVkaXRzKGRpc3BsYXlCYWxhbmNlLmRpc3BsYXlUZW1wb3JhcnkpfSBjcgogICAgICAgICAgICAgICAgICAgICAgPC9zcGFuPgogICAgICAgICAgICAgICAgICAgICl9CiAgICAgICAgICAgICAgICAgICAge3Blcm1hbmVudEJhbGFuY2UgPCAwICYmIHRlbXBvcmFyeVRvdGFsID4gMCAmJiAoCiAgICAgICAgICAgICAgICAgICAgICA8c3BhbiBjbGFzc05hbWU9InRleHQtYW1iZXItNjAwIGRhcms6dGV4dC1hbWJlci00MDAiPgogICAgICAgICAgICAgICAgICAgICAgICAo5bey55So5Li05pe25L2Z6aKd6KGl5q2jKQogICAgICAgICAgICAgICAgICAgICAgPC9zcGFuPgogICAgICAgICAgICAgICAgICAgICl9CiAgICAgICAgICAgICAgICAgIDwvZGl2PgogICAgICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgICAgPC9kaXY+CiAgICAgICAgICAgICAgPFJlZGVlbUNvZGVEaWFsb2cKICAgICAgICAgICAgICAgIGxpbnV4ZG9FbmFibGVkPXtsaW51eGRvQ29uZmlnLmVuYWJsZWR9CiAgICAgICAgICAgICAgICBsaW51eGRvTWluPXtsaW51eGRvQ29uZmlnLm1pbkNueX0KICAgICAgICAgICAgICAgIGxpbnV4ZG9NYXg9e2xpbnV4ZG9Db25maWcubWF4Q255fQogICAgICAgICAgICAgICAgYm9udXNUaWVycz17Ym9udXNDb25maWcuZW5hYmxlZCA/IGJvbnVzQ29uZmlnLnRpZXJzIDogW119CiAgICAgICAgICAgICAgICBib251c1ZhbGlkRGF5cz17Ym9udXNDb25maWcudmFsaWREYXlzfQogICAgICAgICAgICAgIC8+CiAgICAgICAgICAgIDwvQ2FyZENvbnRlbnQ+CiAgICAgICAgICA8L0NhcmQ+CgogICAgICAgICAgey8qIOetvuWIsOaXpeWOhiAqL30KICAgICAgICAgIDxDaGVja2luQ2FsZW5kYXJDYXJkIC8+CiAgICAgICAgPC9QYWdlU2VjdGlvbj4KCiAgICAgICAgPFBhZ2VTZWN0aW9uIHRpdGxlPSLlhYXlgLzkuI7mtYHmsLQiIHN1YnRpdGxlPSLlnKjnur/lhYXlgLzorqLljZXjgIHkuLTml7bkvZnpop3mmI7nu4bkuI7lhYXlgLzorrDlvZUiPgogICAgICAgICAgey8qIOWcqOe6v+WFheWAvOiuouWNle+8iOWbnui3s+ehruiupCArIOi9ruivoiArIOWNoeeJh+WGhee/u+mhte+8iSAqL30KICAgICAgICAgIDxkaXYgY2xhc3NOYW1lPSJzcGFjZS15LTYiPgogICAgICAgICAgICA8UmVjaGFyZ2VPcmRlcnNDYXJkCiAgICAgICAgICAgICAgb3JkZXJzPXtzZXJpYWxpemVkT3JkZXJzfQogICAgICAgICAgICAgIGluaXRpYWxIYXNOZXh0PXtoYXNNb3JlUGF5T3JkZXJzfQogICAgICAgICAgICAgIGhpZ2hsaWdodE9yZGVyTm89e2hpZ2hsaWdodE9yZGVyTm99CiAgICAgICAgICAgICAganVzdFJldHVybmVkPXtqdXN0UmV0dXJuZWR9CiAgICAgICAgICAgIC8+CgogICAgICAgICAgICB7Lyog5Li05pe25L2Z6aKd5piO57uG77yI5Y2h54mH5YaF5pys5Zyw5YiG6aG177yJICovfQogICAgICAgICAgICA8VGVtcEJhbGFuY2VzQ2FyZCBiYWxhbmNlcz17c2VyaWFsaXplZFRlbXBCYWxhbmNlc30gLz4KCiAgICAgICAgICAgIHsvKiDlhYXlgLzmtYHmsLTvvIjljaHniYflhoXlsYDpg6jnv7vpobXvvIkgKi99CiAgICAgICAgICAgIDxUb3B1cFJlY29yZHNDYXJkCiAgICAgICAgICAgICAgcmVjb3Jkcz17dG9wdXBQYWdlLnJlY29yZHN9CiAgICAgICAgICAgICAgaW5pdGlhbEhhc05leHQ9e3RvcHVwUGFnZS5oYXNOZXh0fQogICAgICAgICAgICAvPgogICAgICAgICAgPC9kaXY+CiAgICAgICAgPC9QYWdlU2VjdGlvbj4KICAgICAgPC9QYWdlQm9keT4KICAgIDwvPgogICk7Cn0K
+import { PageHeader } from "@/components/dashboard/page-header";
+import { Card, CardContent } from "@/components/ui/card";
+import { requireUser } from "@/lib/usage/meter";
+import { db } from "@/lib/db/d1-http";
+import { users, temporaryBalances, paymentOrders } from "@/lib/db/schema";
+import { and, desc, eq, gt } from "drizzle-orm";
+import { Wallet, Clock } from "lucide-react";
+import { RedeemCodeDialog } from "./redeem-code-dialog";
+import { CheckinCalendarCard } from "./checkin-calendar-card";
+import { RechargeOrdersCard } from "./recharge-orders-card";
+import { TempBalancesCard, type SerializedTempBalance } from "./temp-balances-card";
+import { TopupRecordsCard } from "./topup-records-card";
+import { formatCredits } from "@/lib/billing/credits";
+import { calculateDisplayBalance } from "@/lib/billing/display-balance";
+import { listWalletTopupPage, walletTopupWhere } from "@/lib/billing/grant-expiry";
+import { getRechargeBonusSettings } from "@/lib/payment/bonus";
+import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
+import { PAY_ORDER_PAGE_SIZE, serializePayOrder } from "@/lib/payment/pay-order-view";
+import { formatCnDate, cnDaysAgoStart } from "@/lib/date";
+import { PageBody, PageSection } from "@/components/dashboard/section";
+
+export const dynamic = "force-dynamic";
+
+export default async function WalletPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ paid?: string; orderNo?: string }>;
+}) {
+  const userId = await requireUser();
+  const params = await searchParams;
+  const now = new Date();
+
+  // 充值流水只保留近三个月，更早的历史不再展示。
+  const historyCutoff = cnDaysAgoStart(90);
+
+  // 2026-10-17 性能：这些查询互不依赖（全都只按 userId 取数），原先是一条接一条 await，
+  // 串行 5 次 D1 往返 ≈ 2 秒；并发成一波后只剩最慢那条的时间。取数口径一字未改。
+  const [userRows, tempBalances, payOrders, linuxdoConfig, bonusConfig, topupWhere] = await Promise.all([
+    // 获取用户永久余额
+    db
+      .select({ balanceCredits: users.balanceCredits })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1),
+    // 获取未过期的临时余额（过期判定下沉到 SQL，不再把已失效的行读进内存）
+    db
+      .select()
+      .from(temporaryBalances)
+      .where(and(eq(temporaryBalances.userId, userId), gt(temporaryBalances.expiresAt, now)))
+      .orderBy(temporaryBalances.expiresAt),
+    // 在线充值订单（含回跳订单号置顶逻辑交给客户端组件；翻页也在卡片内局部刷新）
+    // 这里不按 historyCutoff 裁剪：待支付/支付确认中的订单可以陈旧到任意久，而这张卡是
+    // 用户唯一能自查并手动「查询」催单的地方，裁剪会把未到账订单从视野里抹掉。
+    db
+      .select()
+      .from(paymentOrders)
+      .where(eq(paymentOrders.userId, userId))
+      .orderBy(desc(paymentOrders.createdAt))
+      .limit(PAY_ORDER_PAGE_SIZE + 1),
+    getLinuxdoConfig(),
+    // 充值阶梯赠送：只在充值弹窗里预告「本单额外赠送」，实际发放由订单结算路径负责
+    getRechargeBonusSettings(),
+    // 充值流水的可见性条件（含近三个月裁剪 + 发放到期过滤，活动流水整类排除）
+    walletTopupWhere(userId, historyCutoff, now),
+  ]);
+
+  const permanentBalance = userRows[0]?.balanceCredits || 0;
+
+  // 计算总余额：包含所有未过期的临时余额（不过滤小额）
+  // JS 侧再判一次是兜底：异常值在 SQL 里可能被宽松比较放行，宁可少显示也不虚增余额。
+  const allValidTempBalances = tempBalances.filter(
+    (tb) => new Date(tb.expiresAt) > now
+  );
+  const temporaryTotal = allValidTempBalances.reduce((sum, tb) => sum + tb.amount, 0);
+
+  // 计算显示用余额（负数补正）
+  const displayBalance = calculateDisplayBalance(permanentBalance, temporaryTotal);
+
+  // 临时余额明细显示逻辑：
+  // 1. 如果永久余额为负，计算每条临时余额的"已用于补正"部分
+  // 2. 只显示剩余可用额度 > 0 的临时余额
+  let remainingDeficit = permanentBalance < 0 ? Math.abs(permanentBalance) : 0;
+  const displayTempBalances: Array<
+    (typeof allValidTempBalances)[number] & {
+      displayAmount: number;
+      usedForCompensation: number;
+    }
+  > = [];
+  for (const tb of allValidTempBalances.sort(
+    (a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime(), // 按过期时间排序
+  )) {
+    // 永久余额为负时，靠前的临时余额先用于补正
+    const usedForCompensation =
+      remainingDeficit > 0 ? Math.min(tb.amount, remainingDeficit) : 0;
+    remainingDeficit -= usedForCompensation;
+    const displayAmount = tb.amount - usedForCompensation;
+    if (displayAmount >= 0.01) {
+      displayTempBalances.push({ ...tb, displayAmount, usedForCompensation });
+    }
+  }
+
+  const totalBalance = permanentBalance + temporaryTotal;
+
+  // 签到奖励与兑换码发的是一次性临时余额，到期之后不再作为「可用余额来源」显示。
+  // 过期判定已下沉进 SQL，LIMIT 取到的就是可见行；翻页由卡片内 server action 复用同一入口。
+  const topupPage = await listWalletTopupPage(topupWhere, 1);
+
+  const hasMorePayOrders = payOrders.length > PAY_ORDER_PAGE_SIZE;
+  const serializedOrders = payOrders.slice(0, PAY_ORDER_PAGE_SIZE).map(serializePayOrder);
+
+  const serializedTempBalances: SerializedTempBalance[] = displayTempBalances.map((tb) => ({
+    id: tb.id,
+    displayAmount: tb.displayAmount,
+    usedForCompensation: tb.usedForCompensation,
+    description: tb.description ?? null,
+    expiresAtLabel: formatCnDate(tb.expiresAt),
+  }));
+
+  const justReturned = params.paid === "1";
+  const highlightOrderNo = params.orderNo ?? undefined;
+
+  return (
+    <>
+      <PageHeader
+        title="我的钱包"
+        description="余额、充值、流水记录"
+      />
+
+      <PageBody className="pt-2">
+        <PageSection title="余额与签到" subtitle="永久与临时余额构成，签到和兑换码发放的额度" className="border-t-0 pt-0">
+          {/* 余额卡片 */}
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="flex flex-wrap items-center justify-between gap-4 pt-5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  <Wallet className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">总余额</p>
+                  <p className="text-2xl font-semibold tabular-nums">
+                    {formatCredits(totalBalance)} credits
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground tabular-nums">
+                    <span>永久: {formatCredits(displayBalance.displayPermanent)} cr</span>
+                    {(temporaryTotal > 0 || permanentBalance < 0) && (
+                      <span className="flex items-center gap-1">
+                        <Clock className="h-3 w-3" />
+                        临时: {formatCredits(displayBalance.displayTemporary)} cr
+                      </span>
+                    )}
+                    {permanentBalance < 0 && temporaryTotal > 0 && (
+                      <span className="text-amber-600 dark:text-amber-400">
+                        (已用临时余额补正)
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <RedeemCodeDialog
+                linuxdoEnabled={linuxdoConfig.enabled}
+                linuxdoMin={linuxdoConfig.minCny}
+                linuxdoMax={linuxdoConfig.maxCny}
+                bonusTiers={bonusConfig.enabled ? bonusConfig.tiers : []}
+                bonusValidDays={bonusConfig.validDays}
+              />
+            </CardContent>
+          </Card>
+
+          {/* 签到日历 */}
+          <CheckinCalendarCard />
+        </PageSection>
+
+        <PageSection title="充值与流水" subtitle="在线充值订单、临时余额明细与充值记录">
+          {/* 在线充值订单（回跳确认 + 轮询 + 卡片内翻页） */}
+          <div className="space-y-6">
+            <RechargeOrdersCard
+              orders={serializedOrders}
+              initialHasNext={hasMorePayOrders}
+              highlightOrderNo={highlightOrderNo}
+              justReturned={justReturned}
+            />
+
+            {/* 临时余额明细（卡片内本地分页） */}
+            <TempBalancesCard balances={serializedTempBalances} />
+
+            {/* 充值流水（卡片内局部翻页） */}
+            <TopupRecordsCard
+              records={topupPage.records}
+              initialHasNext={topupPage.hasNext}
+            />
+          </div>
+        </PageSection>
+      </PageBody>
+    </>
+  );
+}
