@@ -34,7 +34,14 @@ import type {
   MyRaidenSummary,
 } from "@/lib/raiden/records";
 import { HP_HEAL_KILLS, type HudSnapshot } from "./engine";
-import { BULLET_TYPES, describeWeapon, MAX_WEAPON_LEVEL, WEAPONS } from "./weapons";
+import {
+  BULLET_TYPES,
+  describeWeapon,
+  MAX_LEVEL_SCORE,
+  MAX_WEAPON_LEVEL,
+  SLOT_LABEL,
+  WEAPONS,
+} from "./weapons";
 import { formatStageTime, scoreText } from "@/lib/raiden/format";
 import { LoadoutShop } from "./loadout-shop";
 
@@ -257,11 +264,15 @@ function LivePanel({
           icon={Heart}
           tone={hpPct > 50 ? "text-emerald-300" : hpPct > 25 ? "text-amber-300" : "text-rose-300"}
         />
-        <LiveStat
-          label={`武器 · ${WEAPONS[hud.weapon].name}`}
-          value={`Lv ${hud.weaponLevel} / ${hud.maxWeaponLevel}`}
-          icon={Zap}
-        />
+        {hud.slots.map((slot, index) => (
+          <LiveStat
+            key={SLOT_LABEL[index]}
+            label={`${SLOT_LABEL[index]} · ${slot.type ? WEAPONS[slot.type].name : "空"}`}
+            value={slot.type ? `Lv ${slot.level} / ${hud.maxWeaponLevel}` : "待装填"}
+            icon={Zap}
+            tone={slot.type ? undefined : "text-white/35"}
+          />
+        ))}
         <LiveStat label="剩余生命" value={`× ${hud.lives}`} icon={Heart} />
         <LiveStat label="炸弹存量" value={`× ${hud.bombs}`} icon={Bomb} />
       </div>
@@ -306,10 +317,18 @@ function LivePanel({
       </div>
 
       <div className="flex flex-wrap gap-1.5 text-[10px]">
-        <Chip
-          icon={Crosshair}
-          text={`${WEAPONS[hud.weapon].name} ${hud.weapon} Lv${hud.weaponLevel}`}
-        />
+        {hud.slots.map((slot, index) => (
+          <Chip
+            key={SLOT_LABEL[index]}
+            icon={Crosshair}
+            text={
+              slot.type
+                ? `${SLOT_LABEL[index]} ${WEAPONS[slot.type].name} ${slot.type} Lv${slot.level}`
+                : `${SLOT_LABEL[index]} 空`
+            }
+            muted={slot.type === null}
+          />
+        ))}
         <Chip
           icon={Coins}
           text={`战利品 ${formatCredits(hud.loot)} cr`}
@@ -324,6 +343,8 @@ function LivePanel({
           <Chip icon={LifeBuoy} text={`复活剩 ${revivesLeft} 次`} muted={revivesLeft === 0} />
         ) : null}
       </div>
+
+      <WeaponRack hud={hud} />
 
       <div className="grid grid-cols-2 gap-1.5">
         <LiveStat label="本局已获奖励" value={`+${formatCredits(rewardTotal)} cr`} tone="text-amber-200" />
@@ -341,19 +362,85 @@ function LivePanel({
       <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] leading-relaxed text-white/45">
         <p>
           <span className="text-white/70">拖动画面</span> 移动 · 自动射击 ·{" "}
-          <span className="text-white/70">X / K / 空格</span> 炸弹 · <span className="text-white/70">P</span> 暂停
+          <span className="text-white/70">X / K / 空格</span> 炸弹 ·{" "}
+          <span className="text-white/70">Q / E</span> 换主 / 副槽 · <span className="text-white/70">P</span> 暂停
         </p>
         <p className="mt-0.5">
-          <span className="text-white/70">当前武器</span> {WEAPONS[hud.weapon].name}（{hud.weapon}）Lv
-          {hud.weaponLevel} · {describeWeapon(hud.weapon, hud.weaponLevel)}
+          <span className="text-white/70">双槽同时开火</span>，各自独立冷却：{" "}
+          {hud.slots.map((slot, index) =>
+            slot.type
+              ? `${SLOT_LABEL[index]} ${WEAPONS[slot.type].name} Lv${slot.level}（${describeWeapon(slot.type, slot.level)}）`
+              : `${SLOT_LABEL[index]} 待装填`,
+          ).join(" · ")}
         </p>
-        <p className="mt-0.5 text-white/35">{WEAPONS[hud.weapon].hint}</p>
         <p className="mt-0.5">
           <span className="text-white/70">掉落</span> {BULLET_TYPES.map((t) => `${t} ${WEAPONS[t].name}`).join(" · ")}{" "}
           · B 炸弹 · 金色 cr 战利品
         </p>
-        <p className="mt-0.5">同字母升级，别的字母切换并清空等级；打掉补给箱可重掷字母。</p>
+        <p className="mt-0.5">
+          每种字母各自记等级，互不影响：没学过的字母直接解锁（有空槽就自动装上），已学会的字母只升级自己；
+          打掉补给箱可以重掷字母。
+        </p>
       </div>
+    </div>
+  );
+}
+
+/** 武器架：列出全部七种子弹与各自的独立等级，标出哪两种正上槽。 */
+function WeaponRack({ hud }: { hud: HudSnapshot }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+      <div className="flex items-center justify-between gap-2 text-[10px]">
+        <span className="text-white/60">武器架 · 每种子弹独立记等级</span>
+        <span className="font-mono text-white/35">
+          {hud.owned.length} / {BULLET_TYPES.length}
+        </span>
+      </div>
+      <div className="mt-1.5 space-y-1">
+        {BULLET_TYPES.map((type) => {
+          const level = hud.owned.find((item) => item.type === type)?.level ?? 0;
+          const slotIndex = hud.slots.findIndex((slot) => slot.type === type);
+          const owned = level > 0;
+          return (
+            <div key={type} className="flex items-start gap-1.5 text-[10px]">
+              <span
+                className="mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded border font-mono text-[9px] font-bold"
+                style={{
+                  color: owned ? WEAPONS[type].color : "rgba(255,255,255,0.28)",
+                  borderColor: owned ? `${WEAPONS[type].color}55` : "rgba(255,255,255,0.1)",
+                }}
+              >
+                {type}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className={cn("truncate", owned ? "text-white/75" : "text-white/30")}>
+                  {WEAPONS[type].name}
+                </span>
+                {owned ? (
+                  <span className="mt-px block truncate font-mono text-[9px] text-white/35">
+                    {describeWeapon(type, level)}
+                  </span>
+                ) : null}
+              </span>
+              {slotIndex >= 0 ? (
+                <Badge tone="info">{SLOT_LABEL[slotIndex]}</Badge>
+              ) : (
+                <span
+                  className={cn(
+                    "shrink-0 font-mono text-[9px]",
+                    owned ? "text-white/40" : "text-white/20",
+                  )}
+                >
+                  {owned ? `Lv ${level}` : "未解锁"}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-1.5 text-[9px] leading-relaxed text-white/30">
+        上槽的两种同时开火；捡到第三种字母会存进武器架，用 Q / E 或画面右下角的按钮换装。
+      </p>
     </div>
   );
 }
@@ -635,8 +722,13 @@ function RulesPanel({ config }: { config: RaidenConfig }) {
           · 阵亡后可花 {formatCredits(config.revivePriceCredits)} cr 原地复活，单局最多{" "}
           {config.maxRevives} 次。
         </li>
-        <li>· 五种子弹同时只能装备一种：{BULLET_TYPES.map((t) => `${t} ${WEAPONS[t].name}`).join(" · ")}。</li>
-        <li>· 吃到同字母 → 升到最高 Lv{MAX_WEAPON_LEVEL}，威力、弹数与范围一起涨；吃到别的字母 → 等级清空并切换成它。</li>
+        <li>
+          · 七种子弹：<Badge tone="muted">W/S/M/L/P/T/R</Badge> ={" "}
+          {BULLET_TYPES.map((t) => WEAPONS[t].name).join(" · ")}。开局只带机炮 W，第二种要在关卡里捡到字母解锁。
+        </li>
+        <li>· 主槽与副槽同时开火、各自独立冷却；<span className="text-white/70">Q</span> / <span className="text-white/70">E</span> 分别在两个槽里循环换装，同一种子弹不会占两个槽。</li>
+        <li>· 每种子弹的等级各记各的：吃到已持有的字母只给它自己升级（最高 Lv{MAX_WEAPON_LEVEL}），不会动到别的类型；满级再吃折算成 {MAX_LEVEL_SCORE} 分。</li>
+        <li>· 出击商店的「火力强化」只提升开局机炮 W 的等级，副槽与其余弹种都得靠关卡内拾取。</li>
         <li>· 开火打掉漂浮的补给箱会让它重新随机字母，可以先洗掉不想要的类型（金色战利品箱不受影响）。</li>
         <li>· B 补充炸弹，金色 cr 是战利品；精英敌机与 Boss 的战利品在通关时并入本关奖励（有单关上限）。</li>
         <li>· 机体基础 100 HP：敌弹 -10，撞机/障碍 -34~50，HP 归零才损失一条命。</li>

@@ -12,7 +12,7 @@ import type { BulletType } from "./weapons";
 
 export type StageTheme = "coast" | "city" | "orbit" | "lunar" | "void";
 export type EnemyKind = "drone" | "gunship" | "turret" | "tank" | "heli";
-/** 补给字母：五种子弹类型 + 炸弹。 */
+/** 补给字母：七种子弹类型 + 炸弹。 */
 export type PowerType = BulletType | "B";
 
 export interface EnemySpawn {

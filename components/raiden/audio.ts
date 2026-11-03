@@ -8,6 +8,8 @@ export type SfxName =
   | "laser"
   | "shell"
   | "missile"
+  | "chain"
+  | "rocket"
   | "shuffle"
   | "hit"
   | "explode"
@@ -79,6 +81,16 @@ export class RaidenAudio {
       case "missile":
         this.noise(ctx, master, 0.24, 0.05, 600, 2600, now);
         this.tone(ctx, master, "sine", 300, 700, 0.2, 0.03, now);
+        break;
+      case "chain":
+        // 电链：高频锯齿向下甩 + 一小段白噪，听起来像放电而不是炮响
+        this.tone(ctx, master, "sawtooth", 1900, 700, 0.09, 0.032, now);
+        this.noise(ctx, master, 0.09, 0.035, 4200, 1400, now);
+        break;
+      case "rocket":
+        // 火箭：出膛闷响，随后是逐渐变亮的尾焰嘶声
+        this.tone(ctx, master, "square", 190, 90, 0.16, 0.05, now);
+        this.noise(ctx, master, 0.3, 0.045, 500, 2200, now + 0.02);
         break;
       case "shuffle":
         this.tone(ctx, master, "triangle", 640, 1180, 0.06, 0.045, now);

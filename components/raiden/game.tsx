@@ -45,8 +45,9 @@ import {
   type GameOverResult,
   type HudSnapshot,
   type StageClearResult,
+  type WeaponSlotHud,
 } from "./engine";
-import { MAX_WEAPON_LEVEL, WEAPONS } from "./weapons";
+import { MAX_WEAPON_LEVEL, SLOT_LABEL, WEAPONS } from "./weapons";
 import { formatStageTime, scoreText } from "@/lib/raiden/format";
 import { ConsolePanel } from "./console-panel";
 import { StartScreen } from "./start-screen";
@@ -327,12 +328,16 @@ export function RaidenGame({
     }
   };
 
-  const battleHud = hud ?? {
+  const emptySlots: WeaponSlotHud[] = [
+    { type: "W", level: run?.starting.power ?? 1 },
+    { type: null, level: 0 },
+  ];
+  const battleHud: HudSnapshot = hud ?? {
     score: 0,
     lives: run?.starting.lives ?? 3,
     bombs: run?.starting.bombs ?? 3,
-    weapon: "W" as const,
-    weaponLevel: run?.starting.power ?? 1,
+    slots: emptySlots,
+    owned: emptySlots.slice(0, 1),
     maxWeaponLevel: MAX_WEAPON_LEVEL,
     stage: 1,
     stageCount: RAIDEN_STAGES.length,
@@ -380,7 +385,30 @@ export function RaidenGame({
             <div className="pointer-events-none absolute bottom-2.5 left-2.5 z-10 text-[9px] leading-relaxed text-white/30">
               拖动画面移动 · 自动射击
               <br />
-              X / K / 空格 炸弹 · P 暂停
+              X / K / 空格 炸弹 · Q / E 换装 · P 暂停
+            </div>
+
+            <div className="absolute bottom-[5.4rem] right-3 z-10 flex gap-1.5">
+              {battleHud.slots.map((slot, index) => (
+                <button
+                  key={SLOT_LABEL[index]}
+                  type="button"
+                  aria-label={`切换${SLOT_LABEL[index]}子弹`}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    engineRef.current?.cycleSlot(index);
+                  }}
+                  disabled={battleHud.state !== "playing" || paused}
+                  className="flex h-9 min-w-[3rem] flex-col items-center justify-center rounded-lg border bg-black/45 px-1.5 font-mono text-[9px] leading-tight backdrop-blur-sm transition active:scale-95 disabled:opacity-35"
+                  style={{
+                    color: slot.type ? WEAPONS[slot.type].color : "rgba(255,255,255,0.45)",
+                    borderColor: slot.type ? `${WEAPONS[slot.type].color}66` : "rgba(255,255,255,0.16)",
+                  }}
+                >
+                  <span className="text-white/45">{SLOT_LABEL[index]}</span>
+                  <span className="font-bold">{slot.type ?? "空"}</span>
+                </button>
+              ))}
             </div>
 
             <button
@@ -745,12 +773,20 @@ function HudBar({
             <Bomb className="h-3 w-3 text-amber-300" />
             <span className="font-mono">×{hud.bombs}</span>
           </span>
-          <span className="flex items-center gap-0.5" style={{ color: WEAPONS[hud.weapon].color }}>
-            <Crosshair className="h-3 w-3" />
-            <span className="font-mono">
-              {WEAPONS[hud.weapon].name} {hud.weapon} Lv{hud.weaponLevel}
+          {hud.slots.map((slot, index) => (
+            <span
+              key={SLOT_LABEL[index]}
+              className="flex items-center gap-0.5"
+              style={{ color: slot.type ? WEAPONS[slot.type].color : "rgba(255,255,255,0.3)" }}
+            >
+              <Crosshair className="h-3 w-3" />
+              <span className="font-mono">
+                {slot.type
+                  ? `${SLOT_LABEL[index]} ${WEAPONS[slot.type].name} Lv${slot.level}`
+                  : `${SLOT_LABEL[index]} 空`}
+              </span>
             </span>
-          </span>
+          ))}
           <span className="flex items-center gap-0.5 text-amber-300/90">
             <Coins className="h-3 w-3" />
             <span className="font-mono">{formatCredits(hud.loot)}</span>
