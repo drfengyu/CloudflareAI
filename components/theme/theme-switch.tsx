@@ -20,7 +20,8 @@ import {
 import { useEffect, useState } from "react";
 
 const PRESETS: { id: ThemePreset; label: string }[] = [
-  { id: "default", label: "默认（中性）" },
+  { id: "default", label: "山间来信（米白苔绿）" },
+  { id: "neutral", label: "中性（旧版灰阶）" },
   { id: "anthropic", label: "Anthropic（暖奶油）" },
   { id: "cloudflare", label: "Cloudflare（橙）" },
   { id: "ocean", label: "Ocean（蓝）" },
@@ -30,7 +31,7 @@ const PRESETS: { id: ThemePreset; label: string }[] = [
 ];
 
 export function ThemeSwitch() {
-  const { theme, setTheme } = useTheme();
+  const { setTheme } = useTheme();
   const { preset, setPreset } = useThemePreset();
   const [mounted, setMounted] = useState(false);
 

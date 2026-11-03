@@ -11,7 +11,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeSwitch } from "@/components/theme/theme-switch";
-import { MobileNav } from "./mobile-nav";
 
 interface HeaderUser {
   name?: string | null;
@@ -22,8 +21,6 @@ interface HeaderUser {
 export function AppHeader({
   user,
   signOutAction,
-  userRole,
-  siteName,
 }: {
   user?: HeaderUser;
   signOutAction: () => void;
@@ -34,8 +31,10 @@ export function AppHeader({
   const initial = label.trim().charAt(0).toUpperCase() || "U";
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background px-4">
-      <MobileNav userRole={userRole} siteName={siteName} />
+    <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background/92 px-4 backdrop-blur-md">
+      <span className="font-serif text-sm tracking-[0.06em] text-muted-foreground md:hidden">
+        {label}
+      </span>
       <div className="ml-auto flex items-center gap-1">
         <ThemeSwitch />
       <DropdownMenu>

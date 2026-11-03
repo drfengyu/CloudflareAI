@@ -315,7 +315,7 @@ export default async function DashboardPage({
     <>
       {/* 问候头部 + 时间范围切换 + 搜索/刷新 */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-8 py-5">
-        <h1 className="text-xl font-semibold">
+        <h1 className="font-serif text-xl font-semibold tracking-[0.01em]">
           👋 {cnGreeting()}，{me[0]?.name?.trim() || me[0]?.email?.split("@")[0] || "朋友"}
         </h1>
         <div className="flex items-center gap-2">
@@ -326,7 +326,7 @@ export default async function DashboardPage({
                 href={`?range=${opt.key}`}
                 className={`rounded-lg px-3 py-1.5 text-sm transition-colors ${
                   opt.key === rangeKey
-                    ? "bg-primary text-white"
+                    ? "bg-primary text-primary-foreground"
                     : "border border-border text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -350,7 +350,7 @@ export default async function DashboardPage({
 
         {/* 余额警示 */}
         {balance < 1 && (
-          <Card className="border-warning bg-warning/5">
+          <Card className="border-warning border-l-4 bg-warning/5">
             <CardContent className="pt-5">
               <p className="text-sm text-warning">
                 ⚠️ 余额不足 1 cr，请及时充值以免影响使用

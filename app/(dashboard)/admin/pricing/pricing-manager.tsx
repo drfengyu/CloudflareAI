@@ -273,7 +273,7 @@ function ModelPricingRow({
             disabled={saving}
             className={cn(
               "h-8 rounded-md px-3 text-xs font-medium transition-colors",
-              "bg-[color:var(--primary)] text-white hover:opacity-90 disabled:opacity-50",
+              "bg-[color:var(--primary)] text-primary-foreground hover:opacity-90 disabled:opacity-50",
             )}
           >
             {saving ? "..." : "保存"}

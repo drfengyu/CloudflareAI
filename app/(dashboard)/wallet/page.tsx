@@ -130,7 +130,7 @@ export default async function WalletPage({
         <Card className="border-primary/20 bg-primary/5">
           <CardContent className="flex items-center justify-between pt-5">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
                 <Wallet className="h-6 w-6" />
               </div>
               <div>

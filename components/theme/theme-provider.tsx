@@ -24,6 +24,7 @@ export function ThemeProvider({
 // ── Theme preset (color scheme) — orthogonal to light/dark ──
 export type ThemePreset =
   | "default"
+  | "neutral"
   | "anthropic"
   | "cloudflare"
   | "ocean"

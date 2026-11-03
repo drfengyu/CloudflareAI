@@ -5,6 +5,43 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.17.0] - 2026-11-03
+
+### 变更（界面 UI 第二批：整站视觉重做，版式参考「山间来信」）
+
+参考物是用户自己的 Qoder Site `山间来信`（本地描述文件 `E:\Project\Qoder站点\.山间来信.qoder.site` 里存着整站
+HTML+CSS，线上域名在本机不可达）。借的是它的**设计语言**，不是把它的内容结构搬进控制台。
+
+- **默认配色整站换成「纸面」系**（`app/globals.css` 的 `:root` / `.dark`）：米白纸面 `oklch(.982 .006 85)` +
+  棕墨字 `oklch(.32 .045 52)` + 苔绿点缀 `oklch(.49 .062 147)`，卡片仍是纯白浮在纸上。
+  语义色一起转成同色温：success 苔绿、warning 赭黄、info 灰蓝、destructive 砖红，图表五色换成苔绿/陶土/赭黄/灰蓝/棕灰。
+  深色不是「翻黑」而是同一套色相的烘焙版（深棕纸面 + 提亮的苔绿），浅色深色一眼是同一个产品。
+- **旧的中性灰阶没有丢**：原样搬进 `app/theme-presets.css` 的新 `[data-theme-preset="neutral"]`（含 `.dark` 与
+  `--radius: 1rem`），右上角「外观 → 配色」第一项是「山间来信（米白苔绿）」，第二项「中性（旧版灰阶）」一键切回。
+- **标题走衬线轴**：`CardTitle`、`PageHeader` 标题、看板问候语、侧栏品牌与窄屏头部账号名改用 `font-serif`
+  （Latin 落 Georgia、中文落宋体系），并加 `tracking-[0.01em]` / 品牌 `tracking-[0.06em]`、分组标签 `tracking-[0.14em]`。
+  **数字刻意留在 sans + `tabular-nums`**——Georgia 是旧式数字，金额会一高一低，这条不迁就美学。
+- **尺度与阴影**：`--radius` 1rem → 0.75rem（对齐参考站的 12px）；`shadow-sm/md/lg` 改成带棕调的
+  `rgb(60 42 26 / .07-.13)`，颜色三元组走运行时变量 `--shadow-tint`，深色自动退回中性黑。
+- **窄屏改成底部标签栏**（`components/dashboard/mobile-nav.tsx` 重写 + `app/(dashboard)/layout.tsx`）：
+  参考站的 `.mobile-bar` 是固定底部图标栏而不是汉堡抽屉，控制台照做——看板 / 模型库 / 活动 / 钱包 四个高频入口
+  贴拇指，第五个「菜单」打开原来的完整分组抽屉（21 个入口一个不少）；栏体 `bg-background/92 + backdrop-blur-md`，
+  `main` 加 `pb-14 md:pb-0` 让位，安全区用 `env(safe-area-inset-bottom)`。
+- **顶栏改半透明模糊**（`app-header.tsx`）：与参考站 sticky 导航同一手法；窄屏顶栏左侧显示账号名补位品牌位。
+- **提示卡加左侧色条**：余额不足警示卡 `border-l-4`，对齐参考站地址卡的 4px 强调边。
+- 顺手收掉 4 处写死的 `bg-primary text-white` → `text-primary-foreground`（钱包 / 会话 / 定价管理 / 密钥抽屉），
+  换配色时不会再出现白字压不住的情况；清掉 `theme-switch.tsx` 里未使用的 `theme` 变量。
+
+### 对比度与验证
+
+- 苔绿取的是参考站 `--moss-hover` 那一档（≈#4A6B4D）：对米白 5.7:1、白字压苔绿底 6.1:1；
+  次要文字统一用 `#6B5344` 这一档（对米白 4.5:1），更浅的棕灰只允许出现在边框和装饰上。
+- Playwright 按 WCAG 相对亮度自算对比度，扫 1440×900 与 375×812 下的看板 / 钱包 / 模型库 / 定价 / 历史 / 登录：
+  **0 处不达标**（转盘与雷电是自带深色霓虹面板，扫描器按白底算出的 1:1 属误报）；截断元素仍为 0。
+- 移动端实测：底部栏 5 项、高 56px、贴底 0px；页面滚到底时最后一段内容底边 724 < 栏顶 756（没被盖住）；
+  「菜单」抽屉可打开、能跳到 `/flip` 并自动关闭。
+- `npx tsc --noEmit` 与 `npm run build` 通过（build 前需 `rm -rf .next`，dev 生成的 `types/validator.ts` 会残留脏文件）。
+
 ## [0.16.0] - 2026-11-03
 
 ### 优化（界面 UI 第一批：数字与密度 / 侧栏信息架构 / 视觉一致性）

@@ -346,7 +346,7 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
                           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs hover:bg-secondary"
                         >
                           <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
-                            selected ? "border-primary bg-primary text-white" : "border-border"
+                            selected ? "border-primary bg-primary text-primary-foreground" : "border-border"
                           }`}>
                             {selected && <Check className="h-3 w-3" />}
                           </div>

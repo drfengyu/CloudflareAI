@@ -134,7 +134,7 @@ export function SidebarNav({
       <Link
         href="/dashboard"
         onClick={onNavigate}
-        className="flex items-center gap-2 px-5 py-4 text-sm font-semibold"
+        className="flex items-center gap-2 px-5 py-4 font-serif text-[15px] font-semibold tracking-[0.06em]"
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground">
           <Cpu className="h-4 w-4" />
@@ -151,7 +151,7 @@ export function SidebarNav({
             collapsed[group.title] !== true;
 
           const groupLabel = (
-            <span className="px-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <span className="px-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
               {group.title}
             </span>
           );
