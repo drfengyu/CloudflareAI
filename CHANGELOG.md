@@ -5,6 +5,50 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.20.0] - 2026-11-03
+
+### 新增（雷电行动：双武器槽改为自动装填）
+
+- **自动装填等级最高的两种子弹**（`components/raiden/weapons.ts` 的 `pickTopTypes(levels, unlockOrder, count)`）：
+  按等级降序取前 `WEAPON_SLOTS`（2）名，第一名进主槽、第二名进副槽；**同等级按解锁先后**决胜——
+  引擎新增 `unlockedTypes: BulletType[]`（开局 `["W"]`，之后按捡到的先后追加）记录解锁顺序，
+  保证等级并列时机炮 W 稳定占主槽，槽位不会在两个同等级弹种之间来回跳。
+- **槽位是派生状态**：`engine.ts` 的 `refreshSlots()` 在每次拾取后重算双槽，玩家无法（也不再需要）直接改槽位；
+  被挤出前二的弹种自动退回武器架继续攒等级，一旦等级追上就自动顶回去。换弹的那一槽冷却夹到最多 0.12 秒，
+  不会出现刚上槽却空等一整轮冷却。
+
+### 变更
+
+- **删除 `Q` / `E` 键位与画面内两个换装按钮**（`engine.ts` 的 `cycleSlot()`、`game.tsx` 的槽位按钮组、
+  `weapons.ts` 的 `SLOT_KEYS` 与 `nextOwnedType()` 一并移除）：玩家的操作集中在「打哪个补给箱」来间接决定 build。
+  画面底部提示改为一行「双槽自动装填等级最高的两种子弹」，`drawReady()` 同步。
+- 拾取提示按自动装填的三种结果改写：上槽 → `解锁/提升 电链 · Lv3 → 副槽`，并把被挤掉的那种点名
+  （`· 火箭 退回武器架`）；没进前二 → `存入武器架，追上等级就自动上槽`。
+- HUD、作战面板（`WeaponRack` 的说明与规则条目）、出击商店「火力强化」提示与出击页文案统一改成
+  「等级最高的两种自动上槽」口径；`HudSnapshot` 字段（`slots` / `owned` / `maxWeaponLevel`）不变，
+  服务端 `starting.power` / `raidenRuns.power` 语义不变，因此**无字段变更、无需数据迁移**。
+
+### 文档
+
+- `docs/features/raiden.md`：顶部加 v0.20.0 版本说明；操作小节删掉 `Q` / `E`、补「武器槽位不需要操作」；
+  「子弹类型、双槽与独立等级」改述为自动装填规则，新增「自动装填，没有换装键」与「换弹冷却 ≤0.12 秒」两条；
+  `实现注意` 明确**槽位是派生状态，别处不要直接写 `this.slots[i]`**，并更新 `weapons.ts` 导出的函数清单（删 `SLOT_KEYS`）；
+  `验证` 换成实测的自动装填链路。README 当前版本行、Phase G 活动行与 `package.json` 版本号更新为 v0.20.0。
+
+### 验证
+
+- `npx tsc --noEmit`、`components/raiden` + `lib/raiden` 定向 ESLint、`npm run build` 全部通过
+  （构建前删除临时预览路由与 `.next/types`）。
+- **自动装填链路实测**（临时 `/test/weapons` 路由 + 真实 `ConsolePanel`，脚本化调用引擎私有的
+  `applyWeaponPickup`）：开局 `主槽 W Lv1 / 副槽 空` → 捡 `S` 成双槽 → 捡 `R`（Lv1 排第三）槽位不变、只进武器架 →
+  `R` 升到 Lv3 → `主槽 R Lv3 / 副槽 W Lv1`（`S` 被挤掉）→ `S` 升到 Lv4 → `主槽 S Lv4 / 副槽 R Lv3`（`W` 掉出）→
+  按 `Q` / `E` 槽位与等级均无变化（键位已删）→ `W` 连吃 14 次到 Lv11 后每次折算 1,500 分（该段 +6,000）→
+  再捡 `T` Lv1 保持前二不动。截图与面板读数一致，全程无控制台报错。
+- 本地预览需用 `http://localhost:3000` 打开：Next 16 的跨源开发资源守卫会拦掉 `http://127.0.0.1:3000` 的 HMR 请求，
+  页面只剩服务端 HTML、`useEffect` 不执行，表现为「引擎没挂载」的假故障。
+- 本环境无 `.env.local`，结算与奖励入账链路（用时上下限、`STAGE_SCORE_CAP` / `STAGE_LOOT_CAP` → `reward` →
+  `topup type=11`）仅做代码级复核；自动装填只改客户端槽位规则，不触碰服务端量级校验。
+
 ## [0.19.0] - 2026-11-03
 
 ### 新增（雷电行动：双武器槽 + 7 种子弹，每种字母各自独立升级）

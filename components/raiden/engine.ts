@@ -13,10 +13,9 @@ import {
   MAX_LEVEL_SCORE,
   MAX_WEAPON_LEVEL,
   MIN_WEAPON_LEVEL,
-  nextOwnedType,
+  pickTopTypes,
   randomBulletType,
   rollSupplyDrop,
-  SLOT_KEYS,
   SLOT_LABEL,
   WEAPONS,
   WEAPON_SLOTS,
@@ -31,7 +30,7 @@ import { STAGE_DEFS, stageDef, type EnemyKind, type EnemySpawn, type PowerType, 
  */
 
 export type { BulletType } from "./weapons";
-export { MAX_WEAPON_LEVEL, WEAPONS, WEAPON_SLOTS, SLOT_LABEL, SLOT_KEYS } from "./weapons";
+export { MAX_WEAPON_LEVEL, WEAPONS, WEAPON_SLOTS, SLOT_LABEL } from "./weapons";
 
 export const FIELD_W = 480;
 export const FIELD_H = 720;
@@ -124,7 +123,7 @@ export interface EngineCallbacks {
 
 export interface EngineOptions {
   canvas: HTMLCanvasElement;
-  /** `power` 是出击商店买出来的初始机炮（W）等级（1~11）；副槽靠关卡内拾取解锁。 */
+  /** `power` 是出击商店买出来的初始机炮（W）等级（1~11）；其余弹种靠关卡内拾取，等级最高的两种自动上槽。 */
   starting: { power: number; bombs: number; lives: number; shield: boolean };
   muted?: boolean;
   callbacks: EngineCallbacks;
@@ -337,7 +336,9 @@ export class RaidenEngine {
   private bombs: number;
   /** 每种子弹的独立等级；0 表示尚未持有。 */
   private levels: Record<BulletType, number>;
-  /** 主槽 / 副槽各装备哪种子弹，null 表示空槽。 */
+  /** 解锁顺序（开局 W，之后按捡到的先后追加）；同等级时靠前的占主槽。 */
+  private unlockedTypes: BulletType[];
+  /** 主槽 / 副槽各装备哪种子弹，自动装填等级最高的两种，null 表示空槽。 */
   private slots: (BulletType | null)[];
   /** 两个槽各自的上次开火间隔，双武器互不抢节奏。 */
   private slotCooldown: number[];
@@ -406,11 +407,12 @@ export class RaidenEngine {
 
     this.lives = Math.max(1, options.starting.lives);
     this.bombs = clamp(Math.trunc(options.starting.bombs), 0, MAX_BOMBS);
-    // 开局只带机炮 W 一种，副槽靠关卡里捡到别的字母解锁。
+    // 开局只带机炮 W 一种，副槽要等关卡里捡到别的字母、等级挤进前二才自动装填。
     this.levels = { W: clampWeaponLevel(options.starting.power), S: 0, M: 0, L: 0, P: 0, T: 0, R: 0 };
-    this.slots = this.blankSlots();
-    this.slots[0] = "W";
+    this.unlockedTypes = ["W"];
     this.slotCooldown = Array.from({ length: WEAPON_SLOTS }, () => 0);
+    this.slots = this.blankSlots();
+    this.refreshSlots();
     this.invincible = options.starting.shield ? SHIELD_PURCHASE_SECONDS : 2;
     this.hp = PLAYER_MAX_HP;
 
@@ -446,7 +448,7 @@ export class RaidenEngine {
     return Array.from({ length: WEAPON_SLOTS }, () => null);
   }
 
-  /** 已持有的类型，按 `BULLET_TYPES` 的稳定顺序（面板与换装循环都用它）。 */
+  /** 已持有的类型，按 `BULLET_TYPES` 的稳定顺序（面板与自动装填都用它）。 */
   private ownedTypes(): BulletType[] {
     return BULLET_TYPES.filter((t) => this.levels[t] > 0);
   }
@@ -460,29 +462,20 @@ export class RaidenEngine {
   }
 
   /**
-   * 在指定槽里循环到下一种已持有的子弹（跳过另一槽已占用的类型）。
-   * 只持有一种时换不动，给一条提示，避免玩家以为键位失灵。
+   * 自动装填：等级最高的两种子弹占主副槽，同等级按解锁先后，被反超就退回武器架。
+   * 换弹的那一槽冷却压到 ≤0.12 秒，慢冷却弹（火箭）不会让战机突然停火一整个间隔。
    */
-  cycleSlot(slot: number): void {
-    if (this.state === "ended") return;
-    const index = Math.trunc(slot);
-    if (index < 0 || index >= WEAPON_SLOTS) return;
-    const reserved = this.slots[index === 0 ? 1 : 0] ?? null;
-    const next = nextOwnedType(this.ownedTypes(), this.slots[index], reserved);
-    if (!next || next === this.slots[index]) {
-      this.toast(
-        this.ownedTypes().length < 2
-          ? "目前只有一种子弹，捡到第二个字母才能换装"
-          : "主副槽已各装一种，捡到第三种字母才能换",
-      );
-      return;
-    }
-    this.slots[index] = next;
-    this.slotCooldown[index] = Math.min(this.slotCooldown[index], 0.12);
-    this.audio.play("powerup");
-    this.spawnRing(this.playerX, this.playerY, WEAPONS[next].color, 72, 0.32);
-    this.toast(`${SLOT_LABEL[index]} · ${WEAPONS[next].name} ${next} Lv${this.levels[next]}`);
-    this.emitHud(true);
+  private refreshSlots(): void {
+    const next = this.blankSlots();
+    pickTopTypes(this.levels, this.unlockedTypes).forEach((type, index) => {
+      next[index] = type;
+    });
+    next.forEach((type, index) => {
+      if (type && type !== this.slots[index]) {
+        this.slotCooldown[index] = Math.min(this.slotCooldown[index], 0.12);
+      }
+    });
+    this.slots = next;
   }
 
   useBomb(): void {
@@ -1329,43 +1322,36 @@ export class RaidenEngine {
   }
 
   /**
-   * 武器补给的核心规则：每种字母各自记等级，互不清零。
-   * 未持有 → 解锁 Lv1，有空槽就自动装填；已持有未满级 → 该字母单独升一级；
-   * 满级再吃到不涨等级，折算成分数，避免补给白白消失。
+   * 武器补给的核心规则：每种字母各自记等级、互不清零，等级最高的两种自动占主副槽。
+   * 未持有 → 解锁 Lv1；已持有未满级 → 该字母单独升一级；满级再吃到折算成分数，避免补给白白消失。
    */
   private applyWeaponPickup(type: BulletType): void {
     const label = `${WEAPONS[type].name} ${type}`;
     const owned = this.levels[type];
 
-    if (owned === 0) {
-      this.levels[type] = MIN_WEAPON_LEVEL;
-      const emptySlot = this.slots.findIndex((slot) => slot === null);
-      if (emptySlot >= 0) {
-        this.slots[emptySlot] = type;
-        this.slotCooldown[emptySlot] = Math.min(this.slotCooldown[emptySlot], 0.12);
-        this.toast(`解锁 ${label} · Lv1 → 装填${SLOT_LABEL[emptySlot]}`);
-      } else {
-        this.toast(`解锁 ${label} · Lv1 存入武器架，${SLOT_KEYS.join("/")} 换装`);
-      }
-      this.audio.play("powerup");
-      this.spawnRing(this.playerX, this.playerY, WEAPONS[type].color, 96, 0.4);
+    if (owned >= MAX_WEAPON_LEVEL) {
+      this.addScore(MAX_LEVEL_SCORE);
+      this.toast(`${label} 已满级 · +${MAX_LEVEL_SCORE}`);
+      this.audio.play("coin");
       return;
     }
 
-    if (owned < MAX_WEAPON_LEVEL) {
-      this.levels[type] = owned + 1;
-      this.audio.play("powerup");
-      this.toast(
-        this.isEquipped(type)
-          ? `${label} 提升 · Lv${owned + 1}`
-          : `${label} 存入武器架 · Lv${owned + 1}（${SLOT_KEYS.join("/")} 换装）`,
-      );
-      return;
-    }
+    const verb = owned === 0 ? "解锁" : "提升";
+    this.levels[type] = owned === 0 ? MIN_WEAPON_LEVEL : owned + 1;
+    if (owned === 0) this.unlockedTypes.push(type);
 
-    this.addScore(MAX_LEVEL_SCORE);
-    this.toast(`${label} 已满级 · +${MAX_LEVEL_SCORE}`);
-    this.audio.play("coin");
+    const before = this.equippedTypes();
+    this.refreshSlots();
+
+    const slot = this.slots.indexOf(type);
+    const pushed = before.find((t) => t !== type && !this.isEquipped(t));
+    const detail =
+      slot >= 0
+        ? `${verb} ${label} · Lv${this.levels[type]} → ${SLOT_LABEL[slot]}`
+        : `${verb} ${label} · Lv${this.levels[type]} 存入武器架，追上等级就自动上槽`;
+    this.toast(pushed && slot >= 0 ? `${detail} · ${WEAPONS[pushed].name} 退回武器架` : detail);
+    this.audio.play("powerup");
+    if (owned === 0) this.spawnRing(this.playerX, this.playerY, WEAPONS[type].color, 96, 0.4);
   }
 
   /* ----------------------------- 障碍物 ----------------------------- */
@@ -2644,7 +2630,7 @@ export class RaidenEngine {
     ctx.font = "500 10px ui-sans-serif, system-ui, sans-serif";
     ctx.fillText("拖动画面 / 方向键移动 · 自动射击 · X / K / 空格 炸弹 · P 暂停", FIELD_W / 2, 512);
     ctx.fillStyle = "rgba(160, 220, 245, 0.5)";
-    ctx.fillText(`${SLOT_KEYS.join(" / ")} 换装 · ${loadoutText}`, FIELD_W / 2, 530);
+    ctx.fillText(`双槽自动装填等级最高的两种 · ${loadoutText}`, FIELD_W / 2, 530);
 
     ctx.fillStyle = "rgba(125, 230, 255, 0.2)";
     ctx.fillRect(140, 550, 200, 2);
@@ -4677,14 +4663,6 @@ export class RaidenEngine {
     }
     if (event.code === "KeyX" || event.code === "KeyK" || event.code === "Space") {
       this.useBomb();
-      return;
-    }
-    if (event.code === "KeyQ") {
-      this.cycleSlot(0);
-      return;
-    }
-    if (event.code === "KeyE") {
-      this.cycleSlot(1);
       return;
     }
     if (MOVE_KEYS.has(event.code)) this.keys.add(event.code);

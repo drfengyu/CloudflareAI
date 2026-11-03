@@ -362,8 +362,7 @@ function LivePanel({
       <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] leading-relaxed text-white/45">
         <p>
           <span className="text-white/70">拖动画面</span> 移动 · 自动射击 ·{" "}
-          <span className="text-white/70">X / K / 空格</span> 炸弹 ·{" "}
-          <span className="text-white/70">Q / E</span> 换主 / 副槽 · <span className="text-white/70">P</span> 暂停
+          <span className="text-white/70">X / K / 空格</span> 炸弹 · <span className="text-white/70">P</span> 暂停
         </p>
         <p className="mt-0.5">
           <span className="text-white/70">双槽同时开火</span>，各自独立冷却：{" "}
@@ -439,7 +438,7 @@ function WeaponRack({ hud }: { hud: HudSnapshot }) {
         })}
       </div>
       <p className="mt-1.5 text-[9px] leading-relaxed text-white/30">
-        上槽的两种同时开火；捡到第三种字母会存进武器架，用 Q / E 或画面右下角的按钮换装。
+        主副槽自动装填等级最高的两种（同等级按解锁先后），两种同时开火；没上槽的字母照样记等级，追上就自动顶上。
       </p>
     </div>
   );
@@ -726,7 +725,7 @@ function RulesPanel({ config }: { config: RaidenConfig }) {
           · 七种子弹：<Badge tone="muted">W/S/M/L/P/T/R</Badge> ={" "}
           {BULLET_TYPES.map((t) => WEAPONS[t].name).join(" · ")}。开局只带机炮 W，第二种要在关卡里捡到字母解锁。
         </li>
-        <li>· 主槽与副槽同时开火、各自独立冷却；<span className="text-white/70">Q</span> / <span className="text-white/70">E</span> 分别在两个槽里循环换装，同一种子弹不会占两个槽。</li>
+        <li>· 主槽与副槽同时开火、各自独立冷却；<span className="text-white/70">等级最高的两种自动上槽</span>（同等级按解锁先后），被反超的那一种退回武器架继续攒等级。</li>
         <li>· 每种子弹的等级各记各的：吃到已持有的字母只给它自己升级（最高 Lv{MAX_WEAPON_LEVEL}），不会动到别的类型；满级再吃折算成 {MAX_LEVEL_SCORE} 分。</li>
         <li>· 出击商店的「火力强化」只提升开局机炮 W 的等级，副槽与其余弹种都得靠关卡内拾取。</li>
         <li>· 开火打掉漂浮的补给箱会让它重新随机字母，可以先洗掉不想要的类型（金色战利品箱不受影响）。</li>

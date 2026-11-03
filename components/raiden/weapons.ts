@@ -1,8 +1,8 @@
 /**
  * 雷电行动的武器系统：7 种子弹类型，战机同时装备 2 槽，每种类型的等级各自独立。
  *
- * 规则是「持有即保留」：吃到没学过的字母会解锁该类型（有空槽就自动装上），
- * 吃到已持有的字母只给它自己升级；`Q` / `E` 分别在主槽、副槽里循环换装。
+ * 规则是「持有即保留 + 自动装填」：吃到没学过的字母解锁该类型，吃到已持有的字母只给它自己升级；
+ * 主副槽永远自动装着等级最高的两种（同等级按解锁先后），被反超就退回武器架等下次升级。
  * 引擎的弹道参数与界面文案都从这里取，避免两处各写一份数字。
  */
 
@@ -13,11 +13,8 @@ export const BULLET_TYPES: BulletType[] = ["W", "S", "M", "L", "P", "T", "R"];
 /** 同时装备的武器槽数量（主槽 + 副槽，各自独立冷却、同时开火）。 */
 export const WEAPON_SLOTS = 2;
 
-/** 槽位的中文名，用于 HUD、提示与换装按钮。 */
+/** 槽位的中文名，用于 HUD、提示与结算文案。 */
 export const SLOT_LABEL = ["主槽", "副槽"] as const;
-
-/** 换装按键：与引擎的 keydown 分支一致，写在文案里的也用它。 */
-export const SLOT_KEYS = ["Q", "E"] as const;
 
 /** 等级上限：出击商店买满 10 份火力强化即机炮 Lv11，关卡内捡到同字母继续 +1。 */
 export const MAX_WEAPON_LEVEL = 11;
@@ -123,16 +120,22 @@ export function rollSupplyDrop(equipped: BulletType[], bombAvailable: boolean): 
   return pool[Math.floor(Math.random() * pool.length)] ?? "W";
 }
 
-/** 换装时在某槽里循环到下一个已持有、且没被另一槽占用的类型。 */
-export function nextOwnedType(
-  owned: BulletType[],
-  current: BulletType | null,
-  reserved: BulletType | null,
-): BulletType | null {
-  const candidates = owned.filter((t) => t !== reserved);
-  if (candidates.length === 0) return null;
-  const at = current ? candidates.indexOf(current) : -1;
-  return candidates[(at + 1) % candidates.length] ?? candidates[0] ?? null;
+/**
+ * 自动装填：取等级最高的 `count` 种已持有子弹，同等级按解锁先后（`unlockOrder` 里靠前的优先）。
+ * 主槽拿第一名、副槽拿第二名，玩家通过「选择打哪个补给」间接决定 build，不需要手动换装。
+ */
+export function pickTopTypes(
+  levels: Record<BulletType, number>,
+  unlockOrder: readonly BulletType[],
+  count = WEAPON_SLOTS,
+): BulletType[] {
+  const rank = (type: BulletType): number => {
+    const at = unlockOrder.indexOf(type);
+    return at < 0 ? BULLET_TYPES.length : at;
+  };
+  return BULLET_TYPES.filter((type) => levels[type] > 0)
+    .sort((a, b) => levels[b] - levels[a] || rank(a) - rank(b))
+    .slice(0, Math.max(0, count));
 }
 
 export interface Ballistics {
@@ -156,7 +159,7 @@ export interface Ballistics {
 
 /**
  * 弹道表：Lv1 是「能玩但明显偏弱」，Lv11 是满配；每种类型在不同维度上成长，
- * 保证换装会带来真实的打法变化而不只是数字变化。
+ * 保证上槽的组合会带来真实的打法变化而不只是数字变化。
  */
 export function ballistics(type: BulletType, rawLevel: number): Ballistics {
   const lv = clampWeaponLevel(rawLevel);

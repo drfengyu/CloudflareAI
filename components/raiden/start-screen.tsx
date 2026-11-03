@@ -110,7 +110,7 @@ export function StartScreen({
               <Bomb className="h-3 w-3 text-amber-300/80" /> {initial.bombs} 弹
             </span>
             <span className="flex items-center gap-1">
-              <Zap className="h-3 w-3 text-cyan-300/80" /> 主槽 机炮（W）Lv{initial.power} · 副槽待拾取
+              <Zap className="h-3 w-3 text-cyan-300/80" /> 开局 机炮（W）Lv{initial.power} · 捡到字母后自动装填最高两种
             </span>
           </div>
         </div>

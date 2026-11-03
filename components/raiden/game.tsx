@@ -385,30 +385,9 @@ export function RaidenGame({
             <div className="pointer-events-none absolute bottom-2.5 left-2.5 z-10 text-[9px] leading-relaxed text-white/30">
               拖动画面移动 · 自动射击
               <br />
-              X / K / 空格 炸弹 · Q / E 换装 · P 暂停
-            </div>
-
-            <div className="absolute bottom-[5.4rem] right-3 z-10 flex gap-1.5">
-              {battleHud.slots.map((slot, index) => (
-                <button
-                  key={SLOT_LABEL[index]}
-                  type="button"
-                  aria-label={`切换${SLOT_LABEL[index]}子弹`}
-                  onPointerDown={(event) => {
-                    event.preventDefault();
-                    engineRef.current?.cycleSlot(index);
-                  }}
-                  disabled={battleHud.state !== "playing" || paused}
-                  className="flex h-9 min-w-[3rem] flex-col items-center justify-center rounded-lg border bg-black/45 px-1.5 font-mono text-[9px] leading-tight backdrop-blur-sm transition active:scale-95 disabled:opacity-35"
-                  style={{
-                    color: slot.type ? WEAPONS[slot.type].color : "rgba(255,255,255,0.45)",
-                    borderColor: slot.type ? `${WEAPONS[slot.type].color}66` : "rgba(255,255,255,0.16)",
-                  }}
-                >
-                  <span className="text-white/45">{SLOT_LABEL[index]}</span>
-                  <span className="font-bold">{slot.type ?? "空"}</span>
-                </button>
-              ))}
+              X / K / 空格 炸弹 · P 暂停
+              <br />
+              双槽自动装填等级最高的两种子弹
             </div>
 
             <button
