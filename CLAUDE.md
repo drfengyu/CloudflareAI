@@ -534,9 +534,16 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.18.0（2026-11-03，界面 UI 第三批：页面版式重排，居中版心 + 发丝线分节 + 胶囊筛选）
-**下一版本**：v0.19.0（尚未选型）
+**当前版本**：v0.21.0（2026-11-04，界面 UI 第四批：左侧栏改顶部两级模块导航）
+**下一版本**：v0.22.0（尚未选型）
 
+- v0.21.0 撤掉桌面端左侧栏，改成 `components/dashboard/module-nav.tsx` 的两级顶部导航：第一级五个模块药丸
+  （通用 / 活动中心 / 在线体验 / 个人 / 管理，点击落到该模块首页），第二级只铺当前模块的条目。
+  导航结构与判据集中在 `components/dashboard/nav-data.ts`，抽屉（`SidebarNav`）与顶部导航共用同一份；
+  品牌位移到 `AppHeader` 左侧，`PageBody` 的版心因此在整个视口取中。窄屏仍是底部标签栏 + 菜单抽屉。
+- v0.19.0 ~ v0.20.0 是「雷电行动」双武器槽（7 种子弹各自独立等级 → 改为自动装填等级最高的两种，
+  删 `Q` / `E` 键位），实现见 `components/raiden/weapons.ts`、`engine.ts`、`game.tsx`，
+  设计文档 `docs/features/raiden.md`。
 - v0.18.0 动的是**排版骨架**而不是配色：`components/dashboard/section.tsx` 提供 `PageBody`（`mx-auto max-w-6xl`
   居中版心）、`PageSection`（上沿发丝线 + 居中衬线小节标题 + 轻字重副标题）、`PillTab`（胶囊筛选），
   20+ 个页面原先各自的 `space-y-N p-8` 满铺容器统一换成 `PageBody`；看板改居中 hero + 三节正文，

@@ -1,5 +1,5 @@
-import { Sidebar } from "@/components/dashboard/sidebar";
 import { AppHeader } from "@/components/dashboard/app-header";
+import { ModuleNav } from "@/components/dashboard/module-nav";
 import { MobileNav } from "@/components/dashboard/mobile-nav";
 import { auth, signOut } from "@/auth";
 import { db } from "@/lib/db/d1-http";
@@ -40,18 +40,12 @@ export default async function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar userRole={userRole} siteName={siteName} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <AppHeader
-          user={session?.user}
-          signOutAction={signOutAction}
-          userRole={userRole}
-          siteName={siteName}
-        />
-        {/* 窄屏下底部标签栏会盖住内容，给 main 留出它的高度 */}
-        <main className="flex-1 overflow-y-auto pb-14 md:pb-0">{children}</main>
-      </div>
+    <div className="flex h-screen flex-col overflow-hidden">
+      <AppHeader user={session?.user} signOutAction={signOutAction} siteName={siteName} />
+      {/* 桌面端顶部模块导航取代了原来的左侧栏 */}
+      <ModuleNav userRole={userRole} />
+      {/* 窄屏下底部标签栏会盖住内容，给 main 留出它的高度 */}
+      <main className="flex-1 overflow-y-auto pb-14 md:pb-0">{children}</main>
       <MobileNav userRole={userRole} siteName={siteName} />
     </div>
   );

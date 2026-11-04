@@ -3,113 +3,13 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  LayoutDashboard,
-  Boxes,
-  MessageSquare,
-  Image as ImageIcon,
-  Eye,
-  Languages,
-  History,
-  KeyRound,
-  Settings,
-  Cpu,
-  DollarSign,
-  Wallet,
-  Users,
-  Ticket,
-  Radio,
-  Receipt,
-  Sparkles,
-  Gift,
-  BookOpen,
-  MessagesSquare,
-  PiggyBank,
-  ListChecks,
-  Gamepad2,
-  Crosshair,
-  Layers,
-  ChevronRight,
-} from "lucide-react";
+import { ChevronRight, Cpu } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-interface NavItem {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-}
-
-interface NavGroup {
-  title: string;
-  items: NavItem[];
-  adminOnly?: boolean;
-  /** 可折叠：组内没有当前页时标题变成按钮，点了才收起 */
-  collapsible?: boolean;
-}
-
-const NAV: NavGroup[] = [
-  {
-    title: "通用",
-    items: [
-      { href: "/dashboard", label: "数据看板", icon: LayoutDashboard },
-      { href: "/models", label: "模型库", icon: Boxes },
-      { href: "/pricing", label: "定价", icon: DollarSign },
-      { href: "/docs", label: "API 文档", icon: BookOpen },
-    ],
-  },
-  {
-    title: "活动中心",
-    collapsible: true,
-    items: [
-      { href: "/lottery", label: "限时活动", icon: Sparkles },
-      { href: "/raiden", label: "雷电行动", icon: Gamepad2 },
-      { href: "/flip", label: "翻牌夺宝", icon: Layers },
-      { href: "/cashback", label: "消费返利", icon: PiggyBank },
-      { href: "/tasks", label: "任务成就", icon: ListChecks },
-    ],
-  },
-  {
-    title: "在线体验",
-    collapsible: true,
-    items: [
-      { href: "/chat", label: "AI 对话", icon: MessagesSquare },
-      { href: "/playground/text", label: "文本生成", icon: MessageSquare },
-      { href: "/playground/image", label: "文生图", icon: ImageIcon },
-      { href: "/playground/vision", label: "图像理解", icon: Eye },
-      { href: "/playground/embeddings", label: "嵌入", icon: Boxes },
-      { href: "/playground/translate", label: "翻译", icon: Languages },
-    ],
-  },
-  {
-    title: "个人",
-    items: [
-      { href: "/wallet", label: "我的钱包", icon: Wallet },
-      { href: "/invite", label: "邀请好友", icon: Gift },
-      { href: "/keys", label: "API 密钥", icon: KeyRound },
-      { href: "/history", label: "使用记录", icon: History },
-      { href: "/settings", label: "设置", icon: Settings },
-    ],
-  },
-  {
-    title: "管理",
-    adminOnly: true,
-    collapsible: true,
-    items: [
-      { href: "/admin/channels", label: "渠道管理", icon: Radio },
-      { href: "/admin/users", label: "用户管理", icon: Users },
-      { href: "/admin/redemptions", label: "兑换码", icon: Ticket },
-      { href: "/admin/orders", label: "订单管理", icon: Receipt },
-      { href: "/admin/lottery", label: "活动记录", icon: Sparkles },
-      { href: "/admin/raiden", label: "雷电记录", icon: Crosshair },
-      { href: "/admin/pricing", label: "定价管理", icon: Settings },
-      { href: "/admin/settings", label: "系统设置", icon: Settings },
-    ],
-  },
-];
+import { isNavActive, visibleGroups } from "./nav-data";
 
 /**
- * 共用的导航内容（品牌头 + 分组链接）。桌面端 Sidebar 与移动端 Sheet 都渲染它。
- * onNavigate 在每次点击链接后调用，供移动端关闭抽屉。
+ * 窄屏「菜单」抽屉里的完整分组清单（顶部导航只铺当前模块，这里一次给全）。
+ * onNavigate 在每次点击链接后调用，供抽屉关闭自己。
  */
 export function SidebarNav({
   userRole = 1,
@@ -122,12 +22,9 @@ export function SidebarNav({
 }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const visibleGroups = NAV.filter(
-    (group) => !group.adminOnly || userRole >= 10,
-  );
+  const groups = visibleGroups(userRole);
 
-  const isActive = (href: string) =>
-    pathname === href || (href !== "/dashboard" && pathname.startsWith(href));
+  const isActive = (href: string) => isNavActive(pathname, href);
 
   return (
     <>
@@ -143,42 +40,31 @@ export function SidebarNav({
       </Link>
 
       <nav className="flex-1 space-y-4 overflow-y-auto px-3 py-2">
-        {visibleGroups.map((group) => {
+        {groups.map((group) => {
           // 组里有当前页时强制展开，否则尊重用户的折叠选择
           const open =
-            !group.collapsible ||
             group.items.some((item) => isActive(item.href)) ||
             collapsed[group.title] !== true;
 
-          const groupLabel = (
-            <span className="px-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-              {group.title}
-            </span>
-          );
-
           return (
             <div key={group.title}>
-              {group.collapsible ? (
-                <button
-                  type="button"
-                  aria-expanded={open}
-                  onClick={() =>
-                    setCollapsed((prev) => ({ ...prev, [group.title]: open }))
-                  }
-                  className="flex w-full items-center gap-1.5 px-2 text-[11px] font-medium uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {groupLabel}
-                  <span className="tabular-nums opacity-60">{group.items.length}</span>
-                  <ChevronRight
-                    className={cn(
-                      "ml-auto h-3.5 w-3.5 transition-transform",
-                      open && "rotate-90",
-                    )}
-                  />
-                </button>
-              ) : (
-                groupLabel
-              )}
+              <button
+                type="button"
+                aria-expanded={open}
+                onClick={() =>
+                  setCollapsed((prev) => ({ ...prev, [group.title]: open }))
+                }
+                className="flex w-full items-center gap-1.5 px-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground transition-colors hover:text-foreground"
+              >
+                <span>{group.title}</span>
+                <span className="tabular-nums opacity-60">{group.items.length}</span>
+                <ChevronRight
+                  className={cn(
+                    "ml-auto h-3.5 w-3.5 transition-transform",
+                    open && "rotate-90",
+                  )}
+                />
+              </button>
 
               {open ? (
                 <ul className="mt-1 space-y-0.5">
@@ -210,22 +96,5 @@ export function SidebarNav({
         })}
       </nav>
     </>
-  );
-}
-
-/**
- * 桌面端固定侧边栏（< md 隐藏，由 MobileNav 接管）。
- */
-export function Sidebar({
-  userRole = 1,
-  siteName = "Cloudflare AI",
-}: {
-  userRole?: number;
-  siteName?: string;
-}) {
-  return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
-      <SidebarNav userRole={userRole} siteName={siteName} />
-    </aside>
   );
 }

@@ -5,6 +5,44 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.21.0] - 2026-11-04
+
+### 变更（界面 UI 第四批：左侧栏改顶部模块导航）
+
+用户要求「左侧页面五个模块 改为顶部模块导航」。参考站本来就是顶部导航，这版把控制台唯一的
+左栏残留去掉，版心因此能在**整个视口**上取中（此前是「视口减侧栏」后取中）。
+
+- 新增 `components/dashboard/nav-data.ts`：五个模块（通用 4 / 活动中心 5 / 在线体验 6 / 个人 5 / 管理 8）
+  的导航结构与 `visibleGroups(role)` / `isNavActive()` / `activeGroup()` 三个判据集中一处，
+  顶部导航与窄屏抽屉共用同一份数据，不再两处各自演化。
+- 新增 `components/dashboard/module-nav.tsx`：桌面端两级顶部导航。
+  第一级是五个模块**药丸**（复用 `pillTabClass`，点上去落到该模块首页，当前模块填主色）；
+  第二级只铺**当前模块**的条目，带图标 + 2px 下划线标当前页。整行居中，`md` 以下不渲染。
+- `components/dashboard/sidebar.tsx` 删掉 `Sidebar`（桌面左栏）与重复的 NAV 定义，只留抽屉用的
+  `SidebarNav`（分组可折叠、当前页所在组强制展开的行为保留）。
+- `components/dashboard/app-header.tsx`：品牌位（苔绿 Cpu 徽标 + 站点名，衬线 + `tracking-[0.06em]`）
+  从侧栏搬到顶栏左侧，所有宽度可见；窄屏原来靠账号名补位品牌，现由品牌自己占位，一并清掉
+  没在用的 `userRole` prop。
+- `app/(dashboard)/layout.tsx`：外层由「`flex` 侧栏 + 内容列」改成单列 `flex-col`
+  （AppHeader → ModuleNav → main → MobileNav），`main` 不再被侧栏挤偏。
+- 侧栏撤掉后左对齐的页头会显得歪：`admin/channels` 列表页的标题/描述/「添加渠道」按钮与搜索行
+  改居中（与 `PageHeader` 同一套字阶），`admin/channels/[channelId]` 的标题行同样居中并改衬线。
+- 窄屏不动：底部标签栏（看板/模型库/活动/钱包 + 菜单抽屉 28 个入口）仍是 v0.17.0 那套。
+- 只动导航与版面，不改任何数据口径、`option` 配置与计费逻辑。
+
+### 验证
+
+Playwright 铸会话 cookie 遍历 20 条路由 @1440×2600 + 375：
+
+- 全站 `aside` 为空（`/chat` 的 `<aside>` 是它自己的会话列，不算侧栏），顶部导航 `display: block`；
+- 模块行 5 个药丸、条目行按当前模块给出 4 / 5 / 6 / 8 条，两行相对版心中轴偏移均 **0**；
+  当前模块药丸填主色、当前页条目带 2px 主色下划线（逐路由核对 `aria-current` 命中项）；
+- 版心 1152px 且左右留白差 **0**（侧栏移除后是在整个视口上取中）；被省略号吃掉的元素 **0**、无横向溢出；
+- 点击验证：`活动中心`→`/lottery`、`在线体验`→`/chat`、`个人`→`/wallet`、`管理`→`/admin/channels`，
+  再点条目 `系统设置`→`/admin/settings`，模块高亮与条目下划线跟着换；
+- 375：顶部导航 `display: none`，底部标签栏高 56px 贴底（bottomGap 0），抽屉内 28 个入口齐全；
+- `tsc --noEmit` 与 `npm run build` 通过，改动文件 eslint 0 error（仅存量 `Switch` 未使用告警）。
+
 ## [0.20.0] - 2026-11-03
 
 ### 新增（雷电行动：双武器槽改为自动装填）

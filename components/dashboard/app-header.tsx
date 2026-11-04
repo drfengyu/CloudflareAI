@@ -1,6 +1,7 @@
 "use client";
 
-import { LogOut, User as UserIcon } from "lucide-react";
+import Link from "next/link";
+import { Cpu, LogOut, User as UserIcon } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -21,10 +22,10 @@ interface HeaderUser {
 export function AppHeader({
   user,
   signOutAction,
+  siteName = "Cloudflare AI",
 }: {
   user?: HeaderUser;
   signOutAction: () => void;
-  userRole?: number;
   siteName?: string;
 }) {
   const label = user?.name || user?.email || "未登录";
@@ -32,9 +33,15 @@ export function AppHeader({
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border bg-background/92 px-4 backdrop-blur-md">
-      <span className="font-serif text-sm tracking-[0.06em] text-muted-foreground md:hidden">
-        {label}
-      </span>
+      <Link
+        href="/dashboard"
+        className="flex items-center gap-2 font-serif text-[15px] font-semibold tracking-[0.06em]"
+      >
+        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+          <Cpu className="h-4 w-4" />
+        </span>
+        <span>{siteName}</span>
+      </Link>
       <div className="ml-auto flex items-center gap-1">
         <ThemeSwitch />
       <DropdownMenu>

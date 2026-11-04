@@ -225,14 +225,13 @@ export function ChannelsClient({ initialChannels }: ChannelsClientProps) {
 
   return (
     <PageBody className="space-y-0">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="font-serif text-2xl font-semibold tracking-[0.02em]">AI 供应商渠道</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            管理 AI 模型供应商的连接配置，支持 OpenAI / Anthropic / Azure 等多种渠道
-          </p>
-        </div>
+      {/* Header：与 PageHeader 同一套居中字阶，动作按钮收到标题下方 */}
+      <div className="mb-6 text-center">
+        <h1 className="font-serif text-2xl font-semibold tracking-[0.02em]">AI 供应商渠道</h1>
+        <p className="mx-auto mt-1.5 max-w-2xl text-[13px] font-light text-muted-foreground">
+          管理 AI 模型供应商的连接配置，支持 OpenAI / Anthropic / Azure 等多种渠道
+        </p>
+        <div className="mt-4 flex justify-center">
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button onClick={openCreateDialog}>
@@ -351,10 +350,11 @@ export function ChannelsClient({ initialChannels }: ChannelsClientProps) {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Search / Filter */}
-      <div className="flex items-center gap-4 mb-4">
+      <div className="mb-6 flex flex-wrap items-center justify-center gap-3">
         <Input
           placeholder="搜索渠道名称或类型..."
           value={searchTerm}

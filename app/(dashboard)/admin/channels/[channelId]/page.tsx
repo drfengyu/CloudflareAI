@@ -190,8 +190,8 @@ export default async function ChannelDetailPage({
       </div>
 
       {/* Title */}
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold">{channel.name}</h1>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <h1 className="font-serif text-2xl font-semibold tracking-[0.02em]">{channel.name}</h1>
         <Badge tone={statusInfo.tone}>{statusInfo.label}</Badge>
       </div>
 
