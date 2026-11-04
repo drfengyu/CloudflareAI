@@ -51,6 +51,8 @@ GITHUB_CLIENT_SECRET = your_github_oauth_client_secret
 | "Cannot connect to database" | CF_D1_DATABASE_ID 错误 | 确认 D1 数据库 ID |
 | "Invalid API token" | CF_API_TOKEN 权限不足 | 重新生成 Token（需要 D1/KV/AI 权限）|
 | GitHub 登录失败 | OAuth 配置错误 | 更新 callback URL |
+| 某些页面首次进入白屏/错误页，刷新就好 | 刚发过版：浏览器里那份旧 HTML 还按旧哈希取 `/_next/static/chunks/*.js`，新部署里已经没有这个文件 | 刷新即可（v0.22.0 起错误边界会自动刷新一次）；反复出现时看是否卡在 `_rsc` 或 D1 超时 |
+| 页面转圈很久后报「D1 请求超时」 | Vercel→api.cloudflare.com 链路抖动或 D1 冷查询 | 读请求会自动重试一次；仍失败就稍后再试，不是数据问题 |
 
 ### 第 5 步：快速修复（如果找不到具体错误）
 

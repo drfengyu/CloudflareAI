@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { cfRequest } from "@/lib/cloudflare/http";
 
 /**
  * Low-level Cloudflare REST client (client/v4 API).
@@ -51,15 +52,20 @@ export async function cfFetch<T>(
   init: CfFetchInit = {},
 ): Promise<{ result: T; info?: CfEnvelope<T>["result_info"] }> {
   const { revalidate, headers, ...rest } = init;
-  const res = await fetch(accountPath(path), {
-    ...rest,
-    headers: {
-      Authorization: `Bearer ${env.cloudflare.apiToken}`,
-      "Content-Type": "application/json",
-      ...headers,
+  const res = await cfRequest(
+    accountPath(path),
+    {
+      ...rest,
+      label: "Cloudflare",
+      headers: {
+        Authorization: `Bearer ${env.cloudflare.apiToken}`,
+        "Content-Type": "application/json",
+        ...headers,
+      },
+      ...(revalidate !== undefined ? { next: { revalidate } } : {}),
     },
-    ...(revalidate !== undefined ? { next: { revalidate } } : {}),
-  });
+    false,
+  );
 
   const text = await res.text();
   let body: CfEnvelope<T> | null = null;

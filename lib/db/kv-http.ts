@@ -1,9 +1,10 @@
 import { env } from "@/lib/env";
+import { cfRequest } from "@/lib/cloudflare/http";
 
 /**
  * Cloudflare KV access over the REST API. Used for caching (model catalog) and
  * rate-limit counters. Value GET/PUT/DELETE return raw bodies (not the standard
- * Cloudflare envelope), so we call fetch directly here.
+ * Cloudflare envelope), so responses are read here rather than unwrapped.
  */
 
 function kvUrl(key: string): string {
@@ -13,7 +14,7 @@ function kvUrl(key: string): string {
 const authHeader = () => ({ Authorization: `Bearer ${env.cloudflare.apiToken}` });
 
 export async function kvGet(key: string): Promise<string | null> {
-  const res = await fetch(kvUrl(key), { headers: authHeader() });
+  const res = await cfRequest(kvUrl(key), { headers: authHeader(), label: "KV" }, false);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`KV get failed (${res.status})`);
   return res.text();
@@ -38,11 +39,11 @@ export async function kvPut(
   const url = ttlSeconds
     ? `${kvUrl(key)}?expiration_ttl=${Math.max(60, Math.floor(ttlSeconds))}`
     : kvUrl(key);
-  const res = await fetch(url, {
-    method: "PUT",
-    headers: authHeader(),
-    body: value,
-  });
+  const res = await cfRequest(
+    url,
+    { method: "PUT", headers: authHeader(), body: value, label: "KV" },
+    true,
+  );
   if (!res.ok) throw new Error(`KV put failed (${res.status})`);
 }
 
@@ -51,10 +52,12 @@ export function kvPutJSON(key: string, value: unknown, ttlSeconds?: number) {
 }
 
 export async function kvDelete(key: string): Promise<void> {
-  const res = await fetch(kvUrl(key), {
-    method: "DELETE",
-    headers: authHeader(),
-  });
+  // DELETE 重复执行结果相同，可以放心重试
+  const res = await cfRequest(
+    kvUrl(key),
+    { method: "DELETE", headers: authHeader(), label: "KV" },
+    false,
+  );
   if (!res.ok && res.status !== 404) {
     throw new Error(`KV delete failed (${res.status})`);
   }

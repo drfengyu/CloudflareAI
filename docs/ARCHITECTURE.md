@@ -57,13 +57,13 @@ app/
     cron/sync-models/     定时同步模型目录
 components/
   ui/                     Button / Card / Badge 等轻量原语
-  dashboard/              Sidebar / PageHeader
+  dashboard/              nav-data / ModuleNav（顶部两级模块导航）/ PageHeader / section（PageBody·PageSection·PillTab）
 lib/
   categories.ts           模型分类（task → category）
   env.ts                  环境变量集中访问 + 计费常量
   utils.ts                cn / 数字与货币格式化
-  cloudflare/             ai.ts / catalog.ts / analytics.ts
-  db/                     schema.ts / d1-http.ts / kv-http.ts / queries.ts
+  cloudflare/             ai.ts / catalog.ts / analytics.ts / http.ts（统一超时：读 5s+重试 1 次，写 20s 不重试）
+  db/                     schema.ts / d1-http.ts（按 sqlite-proxy 的 method 分读写档）/ kv-http.ts / queries.ts
   gateway/                openai.ts / anthropic.ts
   usage/                  meter.ts（Neuron 估算与记账）
   auth.ts                 Auth.js 配置

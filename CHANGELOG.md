@@ -5,6 +5,41 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.22.0] - 2026-11-04
+
+### 修复（部分页面「首次进入加载失败」）
+
+现象：有些页面第一次进去是白屏/错误页，刷新就好，且是从今天连发几版之后开始的。
+定位结论：**不是服务端渲染慢**（用真管理员会话打线上，`/lottery 2.7s`、`/flip 2.1s`、`/keys 3.1s`、
+`/chat 3.1s`，没有失败子资源），而是**发版后旧页面仍按旧哈希去取代码块**——那批
+`/_next/static/chunks/*.js` 在新部署里已经不存在，点进没访问过的路由就 404，React 抛错又没有错误
+边界，只剩 Next 默认错误页。v0.21.0 把侧栏换成顶部导航后「当前模块以外的链接不再渲染」，
+也就没了预取，命中率更高。
+
+- 新增 `lib/cloudflare/http.ts`：D1 / KV / Cloudflare REST 三类调用统一走 `cfRequest`。
+  读请求 5s 超时 + 最多重试 1 次（只有 429/5xx/连不上才重试），写请求 20s 超时、**一律不自动重试**
+  ——扣费类 UPDATE 的响应丢了无从判断上游是否已落库，重试就是重复扣钱。
+  此前三处都是裸 `fetch`，既不超时也不重试：一条卡住的 D1 请求能把整页渲染挂到客户端先放弃。
+- `lib/db/d1-http.ts` 按 sqlite-proxy 的 `method` 分读写（`run` 即 insert/update/delete），`d1Run` 走写档；
+  `lib/db/kv-http.ts`（DELETE 幂等，归入可重试）与 `lib/cloudflare/client.ts` 同步接入。
+  网络错误现在带上 `cause`——undici 只说 "fetch failed"，不接原因没法从日志定位。
+- 新增 `app/(dashboard)/error.tsx`：段级错误边界。认出代码块失败（`ChunkLoadError` /
+  `Loading chunk` / `dynamically imported module`）就**自动整页刷新一次**去拿新版 HTML，
+  15s 内不重复刷新以防循环；其余错误给「重试 / 刷新页面」两个按钮加 digest 编号，不再是默认错误页。
+- 新增 `app/(dashboard)/loading.tsx`：整个 `(dashboard)` 段的骨架屏（此前只有 `/wallet` 有）。
+  渲染慢时先把版心和卡片轮廓流式送出去，而不是一片空白等首字节。
+
+### 验证
+
+- 本地生产构建 + Playwright 造故障：拦掉 `/lottery` 的一个代码块 → 边界自动刷新一次并渲染出转盘；
+  拦掉全部 `?_rsc=` → Next 自己退回整页导航，仍能到 `/wallet`（所以 RSC 失败不是这次的病灶）；
+  把 `/wallet` 响应拖慢 2.5s → 骨架先出现。
+- `npx tsx` 打真实 D1：读 758ms；`UPDATE user SET role = role`（值不变的幂等写，只碰管理员自己那一行，
+  不动余额与券包）返回 `changes=1` 且不重试；错误 SQL 377ms 快速失败（400 不属可重试类）；
+  本地桩「第一次 503、第二次 200」下读重试成功、写原样把 503 交回调用方；不可路由地址最坏 10.2s 抛
+  「请求超时」，不再无限挂。
+- `tsc --noEmit`、改动文件 eslint、`npm run build` 全通过。
+
 ## [0.21.0] - 2026-11-04
 
 ### 变更（界面 UI 第四批：左侧栏改顶部模块导航）

@@ -1,5 +1,6 @@
 import { drizzle } from "drizzle-orm/sqlite-proxy";
 import { env } from "@/lib/env";
+import { cfRequest } from "@/lib/cloudflare/http";
 import * as schema from "./schema";
 
 /**
@@ -18,17 +19,23 @@ interface D1Result {
   meta?: { changes?: number; last_row_id?: number };
 }
 
-async function d1Request(sql: string, params: unknown[]): Promise<D1Result | undefined> {
-  const res = await fetch(
+async function d1Request(
+  sql: string,
+  params: unknown[],
+  writable: boolean,
+): Promise<D1Result | undefined> {
+  const res = await cfRequest(
     `${env.cloudflare.apiBase}/accounts/${env.cloudflare.accountId}/d1/database/${env.cloudflare.d1DatabaseId}/query`,
     {
       method: "POST",
+      label: "D1",
       headers: {
         Authorization: `Bearer ${env.cloudflare.apiToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ sql, params }),
     },
+    writable,
   );
   const body = await res.json().catch(() => null);
   if (!res.ok || !body?.success) {
@@ -43,8 +50,9 @@ async function d1Request(sql: string, params: unknown[]): Promise<D1Result | und
 async function d1Query(
   sql: string,
   params: unknown[],
+  writable = false,
 ): Promise<Record<string, unknown>[]> {
-  return (await d1Request(sql, params))?.results ?? [];
+  return (await d1Request(sql, params, writable))?.results ?? [];
 }
 
 /**
@@ -58,13 +66,14 @@ export async function d1Run(
   sql: string,
   params: unknown[] = [],
 ): Promise<{ changes: number }> {
-  const first = await d1Request(sql, params);
+  const first = await d1Request(sql, params, true);
   return { changes: first?.meta?.changes ?? 0 };
 }
 
 export const db = drizzle(
   async (sql, params, method) => {
-    const rows = await d1Query(sql, params);
+    // run 是 insert/update/delete：响应丢了也不知道上游到底落没落，只能超时、不能自动重试
+    const rows = await d1Query(sql, params, method === "run");
     const asArrays = rows.map((r) => Object.values(r));
     return { rows: method === "get" ? (asArrays[0] ?? []) : asArrays };
   },
