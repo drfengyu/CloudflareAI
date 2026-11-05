@@ -18,7 +18,7 @@ export function ModuleNav({ userRole = 1 }: { userRole?: number }) {
 
   return (
     <nav aria-label="模块导航" className="hidden shrink-0 border-b border-border md:block">
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-x-5 gap-y-2 px-8 pt-3">
+      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-x-8 gap-y-2 px-8 pt-3">
         {groups.map((group) => (
           <Link
             key={group.title}
@@ -31,7 +31,7 @@ export function ModuleNav({ userRole = 1 }: { userRole?: number }) {
         ))}
       </div>
 
-      <ul className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-x-6 gap-y-1 px-8 pb-2 pt-1.5">
+      <ul className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-x-6 gap-y-1 px-8 pb-2 pt-1.5 xl:gap-x-8">
         {current.items.map((item) => {
           const active = isNavActive(pathname, item.href);
           const Icon = item.icon;
