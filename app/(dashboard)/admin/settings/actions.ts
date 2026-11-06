@@ -27,6 +27,7 @@ import {
   sanitizeFlipConfig,
 } from "@/lib/flip/config";
 import { setSetting } from "@/lib/settings";
+import { saveSmtpSettings, type SmtpSettings } from "@/lib/email";
 import { sanitizeBonusTiers } from "@/lib/payment/bonus";
 import { TASKS } from "@/lib/tasks/tasks";
 import {
@@ -955,5 +956,22 @@ export async function updateFlipSettings(formData: {
   revalidatePath("/admin/settings");
   revalidatePath("/flip");
 
+  return { success: true };
+}
+
+export async function updateSmtpSettings(input: SmtpSettings & { password: string }) {
+  const currentUserId = await requireUser();
+  const currentUser = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 100) {
+    throw new Error("仅超级管理员可修改 SMTP 设置");
+  }
+
+  await saveSmtpSettings(input);
+  revalidatePath("/admin/settings");
   return { success: true };
 }

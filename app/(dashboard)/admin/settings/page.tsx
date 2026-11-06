@@ -5,7 +5,7 @@ import { users, options } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
-import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, InviteSettingsForm, CashbackSettingsForm, RechargeBonusSettingsForm, TaskSettingsForm, AuthChannelsForm, EpaySettingsForm, LinuxdoSettingsForm } from "./settings-form";
+import { SettingsForm, PricingSettingsForm, CheckinSettingsForm, InviteSettingsForm, CashbackSettingsForm, RechargeBonusSettingsForm, TaskSettingsForm, AuthChannelsForm, EpaySettingsForm, LinuxdoSettingsForm, SmtpSettingsForm } from "./settings-form";
 import { DashboardInfoForm } from "./dashboard-info-form";
 import { LotteryForm } from "./lottery-form";
 import { RaidenForm } from "./raiden-form";
@@ -18,6 +18,7 @@ import { sanitizeBonusTiers } from "@/lib/payment/bonus";
 import type { AnnouncementInput, FaqItem } from "@/lib/settings/dashboard-info";
 
 import { PageBody } from "@/components/dashboard/section";
+import { getPublicSmtpSettings } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,8 @@ export default async function AdminSettingsPage() {
   if (!currentUser[0] || currentUser[0].role < 10) {
     redirect("/dashboard");
   }
+
+  const smtpSettings = currentUser[0].role >= 100 ? await getPublicSmtpSettings() : null;
 
   // 转换为 key-value 对象
   const settings: Record<string, string> = {};
@@ -272,6 +275,17 @@ export default async function AdminSettingsPage() {
             />
           </CardContent>
         </Card>
+
+        {smtpSettings ? (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">邮件通知（SMTP）</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SmtpSettingsForm initialSettings={smtpSettings} />
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card>
           <CardHeader>

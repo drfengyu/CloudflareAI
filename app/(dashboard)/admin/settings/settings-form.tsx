@@ -3,8 +3,78 @@
 import { Button } from "@/components/ui/button";
 import { Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { updateBasicSettings, updatePricingSettings, updateCheckinSettings, updateInviteSettings, updateCashbackSettings, updateRechargeBonusSettings, updateTaskSettings, updateAuthChannels, updateEpaySettings, updateLinuxdoSettings } from "./actions";
+import { updateBasicSettings, updatePricingSettings, updateCheckinSettings, updateInviteSettings, updateCashbackSettings, updateRechargeBonusSettings, updateTaskSettings, updateAuthChannels, updateEpaySettings, updateLinuxdoSettings, updateSmtpSettings } from "./actions";
 import { toast } from "sonner";
+import type { PublicSmtpSettings } from "@/lib/email";
+
+export function SmtpSettingsForm({ initialSettings }: { initialSettings: PublicSmtpSettings }) {
+  const { hasPassword: initialHasPassword, ...initialValues } = initialSettings;
+  const [settings, setSettings] = useState(initialValues);
+  const [password, setPassword] = useState("");
+  const [hasPassword, setHasPassword] = useState(initialHasPassword);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoading(true);
+    try {
+      await updateSmtpSettings({ ...settings, password });
+      setHasPassword(hasPassword || Boolean(password));
+      setPassword("");
+      toast.success("SMTP 设置已保存");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "保存失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" checked={settings.enabled} onChange={(event) => setSettings({ ...settings, enabled: event.target.checked })} />
+        启用 SMTP 邮件通知
+      </label>
+      <p className="text-xs text-muted-foreground">管理员重置密码后自动向用户邮箱发信，同时发送双方站内信；邮件失败会在重置结果中提示。</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {([
+          ["host", "SMTP 服务器", "text"],
+          ["username", "SMTP 用户名", "text"],
+          ["from", "发件邮箱", "email"],
+          ["fromName", "发件人名称（选填）", "text"],
+        ] as const).map(([key, label, type]) => (
+          <label key={key} className="space-y-1 text-sm">
+            <span>{label}</span>
+            <input
+              type={type}
+              value={settings[key]}
+              onChange={(event) => setSettings({ ...settings, [key]: event.target.value })}
+              required={settings.enabled && key !== "fromName"}
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
+            />
+          </label>
+        ))}
+        <label className="space-y-1 text-sm">
+          <span>SMTP 端口</span>
+          <input type="number" min={1} max={65535} required value={settings.port} onChange={(event) => setSettings({ ...settings, port: Number(event.target.value) })} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm" />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span>连接加密</span>
+          <select value={settings.secure ? "tls" : "starttls"} onChange={(event) => setSettings({ ...settings, secure: event.target.value === "tls" })} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm">
+            <option value="tls">TLS（通常端口 465）</option>
+            <option value="starttls">STARTTLS（通常端口 587）</option>
+          </select>
+        </label>
+        <label className="space-y-1 text-sm sm:col-span-2">
+          <span>SMTP 密码 / 授权码</span>
+          <input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} required={settings.enabled && !hasPassword} placeholder={hasPassword ? "已设置，留空保持原密码" : "请输入邮箱的 SMTP 授权码"} className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm" />
+          <span className="block text-xs text-muted-foreground">加密保存，不回显；仅超级管理员可修改。发件邮箱需获 SMTP 服务商允许。</span>
+        </label>
+      </div>
+      <Button type="submit" disabled={loading}>{loading ? "保存中..." : "保存 SMTP 设置"}</Button>
+    </form>
+  );
+}
 
 interface SettingsFormProps {
   initialSettings: {

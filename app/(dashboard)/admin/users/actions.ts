@@ -1,12 +1,14 @@
 "use server";
 
 import bcrypt from "bcryptjs";
+import { z } from "zod";
 import { db } from "@/lib/db/d1-http";
 import { users, topups } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { revalidatePath } from "next/cache";
 import { formatCnWallClock } from "@/lib/date";
+import { sendSecurityEmail } from "@/lib/email";
 import {
   sendMessage,
   validateAttachment,
@@ -140,18 +142,18 @@ function generatePassword(): string {
   return chars.join("");
 }
 
-/**
- * 管理员重置某个用户的登录密码。
- *
- * 库里只写 bcrypt hash，明文**只在这次调用的返回值里出现一次**，界面显示给管理员后就丢掉。
- * 是否把明文一并写进给用户的站内信由 `includePassword` 决定，默认不写。
- */
 export async function resetUserPassword(input: {
   userId: string;
   newPassword?: string;
-  notifyUser: boolean;
   includePassword: boolean;
-}): Promise<{ password: string; notified: boolean }> {
+}): Promise<{ password: string; warnings: string[] }> {
+  const parsed = z.object({
+    userId: z.string().min(1).max(128),
+    newPassword: z.string().optional(),
+    includePassword: z.boolean(),
+  }).safeParse(input);
+  if (!parsed.success) throw new Error("重置密码参数无效");
+  input = parsed.data;
   const actor = await assertAdmin();
   if (actor.role < 100 && input.userId !== actor.id) {
     // 管理员之间互相改密等于提权通道，只让超管做。
@@ -181,24 +183,40 @@ export async function resetUserPassword(input: {
     .set({ passwordHash: await bcrypt.hash(password, 10) })
     .where(eq(users.id, input.userId));
 
-  let notified = false;
-  if (input.notifyUser) {
-    await sendMessage({
-      userId: input.userId,
-      kind: "security",
-      title: "登录密码已被管理员重置",
-      body: [
-        `管理员 ${actor.email ?? "未署名"} 于 ${formatCnWallClock(new Date())} 重置了你的登录密码。`,
-        input.includePassword ? `新密码：${password}` : "新密码已由管理员另行告知你。",
-        "请立即登录并改成只有你知道的密码。如果这不是你发起的操作，请马上联系管理员。",
-      ].join("\n\n"),
-      sentBy: actor.id,
-    });
-    notified = true;
-  }
+  const changedAt = formatCnWallClock(new Date());
+  const title = "登录密码已被管理员重置";
+  const body = [
+    `管理员 ${actor.email ?? "未署名"} 于 ${changedAt} 重置了你的登录密码。`,
+    input.includePassword ? `新密码：${password}` : "请联系管理员获取新密码。",
+    "请立即登录并改成只有你知道的密码。如果这不是你发起的操作，请马上联系管理员。",
+  ].join("\n\n");
+
+  // 密码已生效，通知失败不能吞掉明文结果或诱使管理员重复重置。
+  const [userNotice, adminNotice, email] = await Promise.allSettled([
+    sendMessage({ userId: input.userId, kind: "security", title, body, sentBy: actor.id }),
+    actor.id === input.userId
+      ? Promise.resolve()
+      : sendMessage({
+          userId: actor.id,
+          kind: "security",
+          title: "用户密码重置记录",
+          body: [
+            `你于 ${changedAt} 重置了用户 ${rows[0].email ?? input.userId} 的登录密码。`,
+            input.includePassword ? `新密码：${password}` : "请将新密码安全地告知该用户。",
+            "如非你本人操作，请立即检查账号安全。",
+          ].join("\n\n"),
+          sentBy: actor.id,
+        }),
+    sendSecurityEmail({ to: rows[0].email, subject: title, text: body }),
+  ]);
+  const warnings: string[] = [];
+  if (userNotice.status === "rejected") warnings.push("用户站内信发送失败");
+  if (adminNotice.status === "rejected") warnings.push("管理员站内信发送失败");
+  if (email.status === "rejected") warnings.push("用户邮件发送失败，请检查 SMTP 配置");
+  else if (!email.value.sent) warnings.push(email.value.error ?? "用户邮件发送失败");
 
   revalidatePath("/admin/users");
-  return { password, notified };
+  return { password, warnings };
 }
 
 /** 管理员手动发一封站内信，可带附件奖励（附件在用户点「领取」时才真的入账）。 */

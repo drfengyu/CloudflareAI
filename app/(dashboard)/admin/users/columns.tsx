@@ -4,7 +4,8 @@ import { type ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { zhCN } from "date-fns/locale";
-import { ManageUserDialog } from "./manage-user-dialog";
+import { Button } from "@/components/ui/button";
+import { Settings } from "lucide-react";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 
 export interface UserRow {
@@ -20,7 +21,7 @@ export interface UserRow {
   roleLabel: { label: string; tone: "success" | "warning" | "muted" };
 }
 
-export function createColumns(currentUserId: string): ColumnDef<UserRow>[] {
+export function createColumns(onManage: (user: UserRow) => void): ColumnDef<UserRow>[] {
   return [
     {
       accessorKey: "email",
@@ -81,7 +82,10 @@ export function createColumns(currentUserId: string): ColumnDef<UserRow>[] {
       id: "actions",
       header: "",
       cell: ({ row }) => (
-        <ManageUserDialog user={row.original} currentUserId={currentUserId} />
+        <Button size="sm" variant="outline" onClick={() => onManage(row.original)}>
+          <Settings className="h-3 w-3" />
+          管理
+        </Button>
       ),
     },
   ];

@@ -17,11 +17,15 @@ import { DataTablePagination } from "./pagination";
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  getRowId?: (row: TData) => string;
+  autoResetPageIndex?: boolean;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  getRowId,
+  autoResetPageIndex,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -29,6 +33,8 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
+    getRowId,
+    autoResetPageIndex,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
