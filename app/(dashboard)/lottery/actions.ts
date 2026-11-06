@@ -259,7 +259,7 @@ function planDrawBatch(
       userId,
       amount,
       type: TOPUP_TYPE_LOTTERY,
-      description: `限时活动抽奖 ${label}`,
+      description: `幸运转盘抽奖 ${label}`,
       createdAt,
     });
 
@@ -273,7 +273,7 @@ function planDrawBatch(
           userId,
           amount,
           config.prizeValidDays,
-          `限时活动抽奖奖励 ${amount} cr（有效期 ${config.prizeValidDays} 天）`,
+          `幸运转盘抽奖奖励 ${amount} cr（有效期 ${config.prizeValidDays} 天）`,
         ),
       );
     } else {

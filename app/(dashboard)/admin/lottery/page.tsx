@@ -147,7 +147,7 @@ export default async function AdminLotteryPage({
     <>
       <PageHeader
         title="活动记录"
-        description="限时活动 · 用户参与明细与站点收益"
+        description="幸运转盘 · 用户参与明细与站点收益"
       />
 
       <PageBody className="space-y-6">

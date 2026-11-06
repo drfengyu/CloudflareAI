@@ -171,7 +171,7 @@ export default async function LotteryPage({
   if (windowInfo.status !== "active") {
     const notice =
       windowInfo.status === "disabled"
-        ? { title: "活动未开启", hint: "管理员在「系统设置 → 限时活动」中开启后会在这里显示。" }
+        ? { title: "活动未开启", hint: "管理员在「系统设置 → 限时活动（幸运转盘）」中开启后会在这里显示。" }
         : windowInfo.status === "pending"
           ? { title: "活动尚未开始", hint: `开始时间（北京时间）：${config.startAt || "未设置"}。` }
           : {
@@ -182,7 +182,7 @@ export default async function LotteryPage({
             };
     return (
       <>
-        <PageHeader title="限时活动" description="幸运转盘 · 抽奖券与累抽奖励" />
+        <PageHeader title="幸运转盘" description="抽奖券与累抽奖励" />
         <PageBody className="space-y-6">
           <Notice title={notice.title} hint={notice.hint} />
           {recordsCard}
@@ -195,7 +195,7 @@ export default async function LotteryPage({
 
   return (
     <>
-      <PageHeader title="限时活动" description="幸运转盘 · 抽奖券与累抽奖励" />
+      <PageHeader title="幸运转盘" description="抽奖券与累抽奖励" />
       <PageBody className="space-y-6">
         <LotteryWheel
           innerSectors={innerSectors}

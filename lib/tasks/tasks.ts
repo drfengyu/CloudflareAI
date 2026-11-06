@@ -123,7 +123,7 @@ export const TASKS: TaskDef[] = [
   {
     key: "lottery_first",
     title: "第一次转盘抽奖",
-    hint: "在「限时活动」完成任意一次开奖",
+    hint: "在「幸运转盘」完成任意一次开奖",
     target: 1,
     defaultReward: 5,
     href: "/lottery",
