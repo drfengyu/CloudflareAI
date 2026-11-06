@@ -11,6 +11,7 @@ import {
   getUsageByChannel,
   type UsageWindow,
 } from "@/lib/usage/queries";
+import { getActivitySpend } from "@/lib/usage/activity-spend";
 import { getDashboardInfoRaw } from "@/lib/settings/dashboard-info";
 import { formatCredits } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
@@ -41,6 +42,7 @@ import {
 import { StatGroupCard, type StatItem } from "@/components/dashboard/stat-group-card";
 import { PageBody, PageSection, pillTabClass } from "@/components/dashboard/section";
 import { ModelAnalyticsCard, type AnalyticsPoint } from "@/components/dashboard/model-analytics-card";
+import { ActivitySpendCard } from "@/components/dashboard/activity-spend-card";
 import { DashboardToolbar } from "@/components/dashboard/dashboard-toolbar";
 import { AnnouncementCard } from "@/components/dashboard/announcement-card";
 import { FaqCard } from "@/components/dashboard/faq-card";
@@ -154,6 +156,7 @@ export default async function DashboardPage({
     channelUsage,
     info,
     lotteryStats,
+    activitySpend,
   ] = await Promise.all([
     // 2026-10-28 性能：用户行顺带取 balanceCredits（原先 getUserTotalBalance 内部
     // 串行再查一次用户行 + 临时余额，两跳 D1 往返），临时余额单独并发查。
@@ -198,6 +201,7 @@ export default async function DashboardPage({
       ticketFace: 0,
       net: 0,
     })),
+    getActivitySpend(userId, win).catch(() => []),
   ]);
 
   const balancePermanent = me[0]?.balanceCredits ?? 0;
@@ -355,13 +359,16 @@ export default async function DashboardPage({
         )}
       </PageSection>
 
-      <PageSection title="趋势与分布" subtitle="消耗曲线、调用次数排行与渠道占比">
-        <ModelAnalyticsCard
-          series={series}
-          models={modelCalls}
-          channels={channelUsage}
-          totalCalls={summary.totalCalls}
-        />
+      <PageSection title="趋势与分布" subtitle="消耗曲线、调用次数排行、渠道占比与限时活动投入产出">
+        <div className="space-y-4">
+          <ModelAnalyticsCard
+            series={series}
+            models={modelCalls}
+            channels={channelUsage}
+            totalCalls={summary.totalCalls}
+          />
+          <ActivitySpendCard points={activitySpend} />
+        </div>
       </PageSection>
 
       <PageSection title="站内信息" subtitle="系统公告、常见问答与服务可用性">
