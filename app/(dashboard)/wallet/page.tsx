@@ -38,7 +38,7 @@ export default async function WalletPage({
   const [userRows, tempBalances, payOrders, linuxdoConfig, bonusConfig, topupWhere] = await Promise.all([
     // 获取用户永久余额
     db
-      .select({ balanceCredits: users.balanceCredits })
+      .select({ balanceCredits: users.balanceCredits, role: users.role })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1),
@@ -157,6 +157,7 @@ export default async function WalletPage({
                 </div>
               </div>
               <RedeemCodeDialog
+                canUseEpay={(userRows[0]?.role ?? 0) >= 10}
                 linuxdoEnabled={linuxdoConfig.enabled}
                 linuxdoMin={linuxdoConfig.minCny}
                 linuxdoMax={linuxdoConfig.maxCny}

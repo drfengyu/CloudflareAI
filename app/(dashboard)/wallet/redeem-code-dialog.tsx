@@ -22,12 +22,14 @@ const CHANNELS = [
 const LINUXDO_CHANNEL = { id: "linuxdo", label: "LinuxDO 积分", icon: Coins };
 
 export function RedeemCodeDialog({
+  canUseEpay = false,
   linuxdoEnabled = false,
   linuxdoMin = 1,
   linuxdoMax = 1000,
   bonusTiers = [],
   bonusValidDays = 30,
 }: {
+  canUseEpay?: boolean;
   linuxdoEnabled?: boolean;
   linuxdoMin?: number;
   linuxdoMax?: number;
@@ -41,13 +43,19 @@ export function RedeemCodeDialog({
   const [code, setCode] = useState("");
   const [amount, setAmount] = useState<number>(PRESET_AMOUNTS[0]);
   const [customAmount, setCustomAmount] = useState("");
-  const [channel, setChannel] = useState("alipay");
+  const [selectedChannel, setChannel] = useState("alipay");
 
   /** 取能满足的最高一档；与 lib/payment/bonus.ts 同口径（这里不能引服务端模块）。 */
   const bonusFor = (amt: number) =>
     bonusTiers.reduce((best, t) => (amt >= t.minCny && t.bonus > best ? t.bonus : best), 0);
 
-  const channels = linuxdoEnabled ? [...CHANNELS, LINUXDO_CHANNEL] : CHANNELS;
+  const channels = [
+    ...(canUseEpay ? CHANNELS : []),
+    ...(linuxdoEnabled ? [LINUXDO_CHANNEL] : []),
+  ];
+  const hasOnlineRecharge = channels.length > 0;
+  const activeTab = hasOnlineRecharge ? tab : "redeem";
+  const channel = channels.find((item) => item.id === selectedChannel)?.id ?? channels[0]?.id ?? "";
   const isLinuxdo = channel === "linuxdo";
   const finalAmount = customAmount ? Number(customAmount) : amount;
   const presetAmounts = isLinuxdo
@@ -111,29 +119,31 @@ export function RedeemCodeDialog({
 
         {/* Tab 切换 */}
         <div className="flex gap-1 rounded-lg bg-muted p-1">
-          <button
-            type="button"
-            onClick={() => setTab("online")}
-            className={cn(
-              "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-              tab === "online" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
-            )}
-          >
-            在线充值
-          </button>
+          {hasOnlineRecharge ? (
+            <button
+              type="button"
+              onClick={() => setTab("online")}
+              className={cn(
+                "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+                activeTab === "online" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+              )}
+            >
+              在线充值
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => setTab("redeem")}
             className={cn(
               "flex-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-              tab === "redeem" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
+              activeTab === "redeem" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground"
             )}
           >
             兑换码
           </button>
         </div>
 
-        {tab === "online" ? (
+        {activeTab === "online" ? (
           <form onSubmit={handlePay} className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-2">充值金额</label>
@@ -202,7 +212,7 @@ export function RedeemCodeDialog({
 
             <div>
               <label className="block text-sm font-medium mb-2">支付方式</label>
-              <div className={cn("grid gap-2", channels.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
+              <div className={cn("grid gap-2", channels.length === 3 ? "grid-cols-3" : channels.length === 2 ? "grid-cols-2" : "grid-cols-1")}>
                 {channels.map((ch) => (
                   <button
                     key={ch.id}

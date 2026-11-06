@@ -6,6 +6,7 @@ import {
   redemptions,
   topups,
   temporaryBalances,
+  users,
 } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
@@ -104,14 +105,25 @@ export async function redeemCode(code: string) {
 export async function createPayOrder(amountCny: number, channel: string) {
   const currentUserId = await requireUser();
 
-  // 下单防刷：每用户 1 分钟内最多 5 笔订单（内存限流，单实例有效）
-  if (!(await checkRateLimit(`pay-order:${currentUserId}`, { window: 60_000, limit: 5 }))) {
-    throw new Error("操作过于频繁，请 1 分钟后再试");
-  }
-
   // 校验支付渠道白名单
   if (channel !== "alipay" && channel !== "wechat" && channel !== "qqpay" && channel !== "linuxdo") {
     throw new Error("不支持的支付渠道");
+  }
+
+  if (channel !== "linuxdo") {
+    const currentUser = await db
+      .select({ role: users.role })
+      .from(users)
+      .where(eq(users.id, currentUserId))
+      .limit(1);
+    if (!currentUser[0] || currentUser[0].role < 10) {
+      throw new Error("支付宝、微信等易支付充值仅限管理员使用");
+    }
+  }
+
+  // 下单防刷：每用户 1 分钟内最多 5 笔订单（内存限流，单实例有效）
+  if (!(await checkRateLimit(`pay-order:${currentUserId}`, { window: 60_000, limit: 5 }))) {
+    throw new Error("操作过于频繁，请 1 分钟后再试");
   }
 
   const { orderNo, credits } = await createRechargeOrder(amountCny, channel);
