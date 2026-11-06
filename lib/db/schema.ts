@@ -765,3 +765,46 @@ export const rateLimitBuckets = sqliteTable("rate_limit_bucket", {
   /** 桶的回收时间（窗口结束 + 一段宽限），过期由偶发的清理语句删掉。 */
   expiresAt: integer("expiresAt").notNull(),
 });
+
+/**
+ * 站内信：系统对单个用户发放物品或下达提示（密码被管理员重置、活动补偿、人工发放的奖励…）。
+ *
+ * 生命周期：发出 → 用户读（readAt）→ 带附件的还要领（claimedAt）。
+ * 已读满 `MESSAGE_RETENTION_DAYS` 且没有待领附件的信由 `/api/cron/purge-messages` 删除；
+ * 「读过但还没领」刻意不删，否则奖励会被无声清掉。
+ */
+export const messages = sqliteTable(
+  "message",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** notice=普通通知 / reward=待发物品奖励 / security=安全提示（改密等，界面单独配色）。 */
+    kind: text("kind").$type<"notice" | "reward" | "security">().notNull().default("notice"),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    /** 附件类型；null = 纯文本信。item = 自定义物品，领取只记录不自动发放。 */
+    attachmentKind: text("attachmentKind").$type<
+      "credits" | "tickets" | "redemption" | "item"
+    >(),
+    /**
+     * 附件内容 JSON，按 attachmentKind 取用：
+     * credits `{"credits":50}` / tickets `{"activity":"lottery","count":3}` /
+     * redemption `{"code":"AB12"}` / item `{"label":"内测资格"}`。
+     */
+    attachment: text("attachment"),
+    /** 发放人（管理员 userId）；系统自动发出的为 null。 */
+    sentBy: text("sentBy").references(() => users.id, { onDelete: "set null" }),
+    readAt: integer("readAt", { mode: "timestamp_ms" }),
+    claimedAt: integer("claimedAt", { mode: "timestamp_ms" }),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [
+    index("idx_message_user").on(table.userId, table.createdAt),
+    index("idx_message_unread").on(table.userId, table.readAt),
+    index("idx_message_purge").on(table.readAt, table.claimedAt),
+  ],
+);
+
+export type MessageRow = typeof messages.$inferSelect;

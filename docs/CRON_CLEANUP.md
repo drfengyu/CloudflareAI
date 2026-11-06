@@ -214,3 +214,28 @@ INSERT INTO temporary_balances (
 ## 更新日志
 
 - **2026-06-17**：首次实现，每日凌晨 2:00 UTC 执行
+
+---
+
+# 站内信清理任务（purge-messages）
+
+自 v0.27.0 起，`/api/cron/purge-messages` 每天 4:00 UTC 运行（`vercel.json` 中排在余额清理 2:00、
+订单对账 3:00 之后），删除「读过满 3 天」的站内信：
+
+```sql
+DELETE FROM message
+WHERE readAt IS NOT NULL AND readAt < ?
+  AND (claimedAt IS NOT NULL OR attachmentKind IS NULL)
+```
+
+- 起算点是 `readAt`（第一次打开），不是 `createdAt`；没读过的信不会被清。
+- 带附件但未领取的信**永不清**，避免把还没领的奖励吞掉；只能领取或由用户手删。
+- 可选 `CRON_SECRET`：设置了环境变量时要求 `Authorization: Bearer <secret>`。
+- 手动触发（本地无需 secret）：
+
+```bash
+curl http://localhost:3000/api/cron/purge-messages
+# {"success":true,"deleted":2,"timestamp":"2026-11-06T08:41:40.763Z"}
+```
+
+- 实现：`lib/message/messages.ts` 的 `purgeExpiredMessages()`；功能说明见 `docs/features/messages.md`。

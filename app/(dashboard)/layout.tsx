@@ -6,6 +6,11 @@ import { db } from "@/lib/db/d1-http";
 import { options } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
+import {
+  countUnread,
+  listRecentMessages,
+  type MessagePreview,
+} from "@/lib/message/messages";
 
 /** 站点名缓存 1 小时，避免每次导航都查 option 表。 */
 const getCachedSiteName = unstable_cache(
@@ -33,6 +38,14 @@ export default async function DashboardLayout({
   const userRole = session?.user?.role ?? 1;
 
   const siteName = await getCachedSiteName();
+  const userId = session?.user?.id;
+  // 铃铛要的是「几封没读 + 最近几封」，两条都是走索引的小查询，并发发出去，不串行等。
+  const [unreadCount, recentMessages] = userId
+    ? await Promise.all([
+        countUnread(userId).catch(() => 0),
+        listRecentMessages(userId, 5).catch(() => []),
+      ])
+    : [0, [] as MessagePreview[]];
 
   async function signOutAction() {
     "use server";
@@ -41,7 +54,13 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <AppHeader user={session?.user} signOutAction={signOutAction} siteName={siteName} />
+      <AppHeader
+        user={session?.user}
+        signOutAction={signOutAction}
+        siteName={siteName}
+        unreadCount={unreadCount}
+        recentMessages={recentMessages}
+      />
       {/* 桌面端顶部模块导航取代了原来的左侧栏 */}
       <ModuleNav userRole={userRole} />
       {/* 窄屏下底部标签栏会盖住内容，给 main 留出它的高度 */}

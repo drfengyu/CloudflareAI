@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { PasswordForm } from "./password-form";
 
 import { PageBody } from "@/components/dashboard/section";
 
@@ -52,6 +53,9 @@ export default async function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* 只把「有没有密码」传给客户端，哈希本身不进浏览器 */}
+        <PasswordForm hasPassword={Boolean(user?.passwordHash)} />
       </PageBody>
     </>
   );

@@ -7,6 +7,7 @@ import {
   Gamepad2,
   Gift,
   History,
+  Inbox,
   Image as ImageIcon,
   KeyRound,
   Languages,
@@ -72,6 +73,7 @@ export const NAV: NavGroup[] = [
   {
     title: "个人",
     items: [
+      { href: "/messages", label: "站内信", icon: Inbox },
       { href: "/wallet", label: "我的钱包", icon: Wallet },
       { href: "/invite", label: "邀请好友", icon: Gift },
       { href: "/keys", label: "API 密钥", icon: KeyRound },

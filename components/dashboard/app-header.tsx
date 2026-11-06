@@ -12,6 +12,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ThemeSwitch } from "@/components/theme/theme-switch";
+import { MessageBell } from "@/components/dashboard/message-bell";
+import type { MessagePreview } from "@/lib/message/messages";
 
 interface HeaderUser {
   name?: string | null;
@@ -23,10 +25,15 @@ export function AppHeader({
   user,
   signOutAction,
   siteName = "Cloudflare AI",
+  unreadCount = 0,
+  recentMessages = [],
 }: {
   user?: HeaderUser;
   signOutAction: () => void;
   siteName?: string;
+  /** 站内信未读数；不传（如登录页）时不渲染铃铛。 */
+  unreadCount?: number;
+  recentMessages?: MessagePreview[];
 }) {
   const label = user?.name || user?.email || "未登录";
   const initial = label.trim().charAt(0).toUpperCase() || "U";
@@ -43,6 +50,7 @@ export function AppHeader({
         <span>{siteName}</span>
       </Link>
       <div className="ml-auto flex items-center gap-1">
+        {user ? <MessageBell unreadCount={unreadCount} recent={recentMessages} /> : null}
         <ThemeSwitch />
       <DropdownMenu>
         <DropdownMenuTrigger className="ml-1 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring">

@@ -5,6 +5,49 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.27.0] - 2026-11-06
+
+### 新增（站内信系统 + 用户管理重置密码）
+
+「密码查看」在 bcrypt 下不可能实现 —— 库里只有单向哈希，任何人都拿不回明文。因此管理端做成
+「重置 + 一次性显示」：管理员在用户管理里给账号设一个新密码，明文只在弹窗出现一次，库里仍只存新哈希。
+
+- 迁移 `migrations/021_message.sql`：新增 `message` 表（`id/userId/kind/title/body/attachmentKind/attachment/sentBy/readAt/claimedAt/createdAt`）
+  + 3 个索引（用户时间线、未读、清理），已在生产 D1 执行；`lib/db/schema.ts` 同步 `messages` 与 `MessageRow`。
+- `lib/message/messages.ts` 数据层：`sendMessage` / `listMessages`（全部·未读·待领取 + 分页）/ `countUnread` /
+  `listRecentMessages` / `readMessage` / `claimMessage` / `deleteMessage` / `purgeExpiredMessages`。
+  - 附件四种：`credits`（领取时加 `users.balanceCredits` 并写 `topup type=13`）、`tickets`（`grantTickets`，`source=gift`）、
+    `redemption`（领取后才解密文）、`item`（领取后才显示凭证文字）。
+  - 领取幂等：先 `UPDATE … SET claimedAt=? WHERE id=? AND userId=? AND claimedAt IS NULL AND attachmentKind IS NOT NULL`，
+    `changes !== 1` 直接拒绝；入账失败把 `claimedAt` 回滚为 `NULL`（与消费返利领取同一模式）。
+- 管理端 `/admin/users`「管理」对话框新增两节：
+  - **登录密码**：留空自动生成 12 位可读密码（排除 `O0Il1`，保证大小写 + 数字），也可手填 8–72 位；
+    重置成功后在琥珀色框里一次性显示明文并可复制。可勾选「发站内信通知」（默认开）与「正文附上新密码」（默认关）。
+    管理员（role 10）只能重置普通用户与自己的密码，重置另一个管理员账号需要超管（100）—— 管理员之间互相改密等于提权通道。
+  - **发站内信**：主题 + 正文 + 附件类型（无 / cr 余额 / 抽奖券 / 兑换码 / 自定义物品），
+    服务端 `validateAttachment` 兜底（cr 为正且 ≤ 100000、券为正整数 ≤ 100、兑换码 ≥ 4 字符、物品名非空）。
+- 用户端 `/messages` 主从布局：左列主题 + 正文压平后前 60 字简述 + 相对时间 + 待领取角标，右列正文与附件；
+  移动端点开后列表让位给正文，带「返回列表」。筛选（全部 / 未读 / 待领取）与翻页都在卡内局部刷新，不改 URL。
+- 顶栏铃铛 `MessageBell`：未读数角标 + 最近 5 封；读信才算读过，未读数在布局里服务端算好，导航不额外打 D1。
+- `/settings` 新增「修改 / 设置登录密码」卡片：有密码先验当前密码（8–72 位），改完给自己发一封 `security` 站内信留痕；
+  LinuxDO / OAuth 注册的无密码账号走「设置密码」。
+- 清理口径：**每封信在读过 3 天后删除**；带附件但还没领取的信永不自动清理（否则等于吞奖励），
+  只能领取或由用户手动删除。`/api/cron/purge-messages` 每天 4:00 UTC 执行（排在余额清理与订单对账之后），
+  支持可选 `CRON_SECRET`；`vercel.json` 已登记。
+- 导航「个人」组新增「站内信」。
+
+### 验证
+
+- 铸管理员 / 用户会话在本地 dev 实测：重置密码（自动生成 12 位）→ 弹窗一次性显示的明文与站内信正文一致 →
+  用该密码真实登录成功；管理端连发 4 类附件信，0 cr 的非法附件被服务端拒绝且 D1 无落库。
+- 用户端领取：50 cr → 余额 512.98 → 562.98、`topup type=13` 一条；2 张券 → `lottery_ticket` 11 → 13；
+  兑换码领取前列表与正文均无明文、领取后可见并可复制；物品凭证领取后才显示；已领信件不再出现「领取」按钮。
+- 未读筛选 3 行、待领取筛选 2 行、铃铛未读 8 → 3，375 宽下主从切换与「返回列表」正常。
+- 清理：把「已读无附件」与「已读已领」的两封信 `readAt` 改到 5 天前 → cron 返回 `deleted: 2`；
+  把「读过但附件未领」的 50 cr 信同样改老 → 被保留。
+- 自助改密：错误当前密码被拒；正确后改成新口令并用新口令登录成功，同时收到「登录密码已修改」安全提示。
+- 收尾逐项还原并复验：测试账号消息 0、`topup type=13` 0、抽奖券 11 张、余额 `512.9763575601962`、`test123456` 可登录。
+
 ## [0.26.1] - 2026-11-06
 
 ### 变更（活动消耗收进「模型数据分析」的视角切换）
