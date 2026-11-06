@@ -534,8 +534,14 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.24.1（2026-11-06，转盘玩法改名「幸运转盘」）
-**下一版本**：v0.25.0（尚未选型）
+**当前版本**：v0.25.0（2026-11-06，活动记录统一 10 条/页 + 卡片内局部刷新）
+**下一版本**：v0.26.0（尚未选型）
+
+- v0.25.0 把三处活动记录列表（`/lottery` 我的活动记录、`/flip` 我的牌局、`/admin/lottery` 逐次明细）统一成
+  「每页最多 10 条 + 只刷卡片」：翻页走 `Pagination` 的 `onPageChange` 与三个只读服务端动作
+  （`listMyActivityRecords` / `listMyFlipRounds` / `listAdminDrawRecords`），不再改 URL、不再整页刷新。
+  每页条数与后台时间窗口径收进 `lib/lottery/records.ts`；`drawNetCredits` 挪到 `lib/lottery/prize-math.ts`，
+  因为客户端组件不能 import 带 D1 驱动的 records 层。卡片都带 `key={首行 id}`，开奖后重挂回第 1 页。
 
 - v0.24.1 把转盘自己的名字从「限时活动」改成「幸运转盘」：`nav-data.ts` 的条目、`/lottery` 的 `PageHeader`、
   开奖流水文案、任务提示、后台活动记录副标题五处一起改，「限时活动」退回成 `/admin/settings` 三张卡片的分类前缀。

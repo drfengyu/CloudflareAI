@@ -2,6 +2,7 @@ import { and, desc, eq, gt, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { batchRows, db } from "@/lib/db/d1-http";
 import { lotteryDraws, lotteryTickets, lotteryUserStats, users } from "@/lib/db/schema";
+import { cnLastNDaysStart, cnStartOfToday, cnStartOfTomorrow } from "@/lib/date";
 import { maskUserLabel } from "@/lib/mask";
 import { round2 } from "./prize-math";
 import { LOTTERY_STATS_ALL_SCOPE } from "./stats";
@@ -44,15 +45,6 @@ export interface DrawRecord {
   ticketCredits: number;
   /** 活动轮次标识（startAt 字符串）；历史数据为 null。 */
   activityKey: string | null;
-}
-
-/** 站点在这一注上的净收益：收下的券面 + 倒扣回收 − 发放的中奖。 */
-export function drawNetCredits(
-  record: Pick<DrawRecord, "ticketCredits" | "deltaCredits">,
-): number {
-  return round2(
-    record.ticketCredits + Math.max(0, -record.deltaCredits) - Math.max(0, record.deltaCredits),
-  );
 }
 
 /** 券面值：赠券记 0，所以赠送的抽奖对站点收入没有贡献，只算发奖成本。 */
@@ -354,6 +346,18 @@ function toTicketTotals(row: TicketTotalsRow | undefined): LotteryTicketTotals {
     giftTickets: Number(row?.giftTickets ?? 0),
     prizeTickets: Number(row?.prizeTickets ?? 0),
   };
+}
+
+/** 活动记录每页条数：首屏与卡片内局部翻页共用，超过一页才在卡片底部翻页。 */
+export const DRAW_RECORD_PAGE_SIZE = 10;
+
+/** 后台时间窗按北京时间算，与用量看板一致；「全部」即不加过滤。 */
+export function rangeWindow(range: string): LotteryWindow | undefined {
+  const end = cnStartOfTomorrow();
+  if (range === "today") return { start: cnStartOfToday(), end };
+  if (range === "7d") return { start: cnLastNDaysStart(7), end };
+  if (range === "30d") return { start: cnLastNDaysStart(30), end };
+  return undefined;
 }
 
 /** 逐次明细：用户侧「我的活动记录」与管理侧「最近开奖」共用。 */

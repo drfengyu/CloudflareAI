@@ -1,24 +1,22 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Pagination } from "@/components/dashboard/pagination";
+import { LotteryDetailTable } from "@/components/admin/lottery-detail-table";
 import { db } from "@/lib/db/d1-http";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
 import { formatCredits } from "@/lib/billing/credits";
-import { cnLastNDaysStart, cnStartOfToday, cnStartOfTomorrow, formatCnWallClock } from "@/lib/date";
+import { formatCnWallClock } from "@/lib/date";
 import { getLotteryConfig } from "@/lib/lottery/config";
 import { activityWindow, returnRatePercent, round2 } from "@/lib/lottery/prize-math";
 import {
-  drawNetCredits,
+  DRAW_RECORD_PAGE_SIZE,
   listDrawRecords,
   lotteryBalance,
   lotteryTicketTotals,
   lotteryUserRecords,
-  type DrawRecord,
-  type LotteryWindow,
+  rangeWindow,
 } from "@/lib/lottery/records";
 import { cn } from "@/lib/utils";
 
@@ -26,23 +24,12 @@ import { PageBody } from "@/components/dashboard/section";
 
 export const dynamic = "force-dynamic";
 
-const DETAIL_PAGE_SIZE = 10;
-
 const RANGE_TABS: { value: string; label: string }[] = [
   { value: "today", label: "今日" },
   { value: "7d", label: "近 7 日" },
   { value: "30d", label: "近 30 日" },
   { value: "all", label: "全部" },
 ];
-
-/** 时间窗按北京时间算，与用量看板一致；「全部」即不加过滤。 */
-function resolveWindow(range: string): LotteryWindow | undefined {
-  const end = cnStartOfTomorrow();
-  if (range === "today") return { start: cnStartOfToday(), end };
-  if (range === "7d") return { start: cnLastNDaysStart(7), end };
-  if (range === "30d") return { start: cnLastNDaysStart(30), end };
-  return undefined;
-}
 
 function Metric({
   label,
@@ -91,22 +78,13 @@ function Signed({ value, suffix = " cr" }: { value: number; suffix?: string }) {
   );
 }
 
-const TICKET_LABEL: Record<DrawRecord["ticketSource"], string> = {
-  buy: "购买",
-  gift: "赠送",
-  prize: "抽中",
-  free: "免费",
-  unknown: "已失效",
-};
-
 export default async function AdminLotteryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string; page?: string }>;
+  searchParams: Promise<{ range?: string }>;
 }) {
   const currentUserId = await requireUser();
   const params = await searchParams;
-  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
 
   const currentUser = await db
     .select()
@@ -120,19 +98,19 @@ export default async function AdminLotteryPage({
 
   const rawRange = params.range ?? "all";
   const range = RANGE_TABS.some((t) => t.value === rawRange) ? rawRange : "all";
-  const win = resolveWindow(range);
+  const win = rangeWindow(range);
 
   const [config, balance, perUser, records, ticketTotals] = await Promise.all([
     getLotteryConfig(),
     lotteryBalance({ win }),
     lotteryUserRecords(win),
-    listDrawRecords({ win, limit: DETAIL_PAGE_SIZE, offset: (page - 1) * DETAIL_PAGE_SIZE }),
+    listDrawRecords({ win, limit: DRAW_RECORD_PAGE_SIZE }),
     lotteryTicketTotals(win),
   ]);
 
   // 开奖总注数就是同一窗口的累计统计行，直接当分页总数用，不再 COUNT 明细。
   const detailTotal = balance.draws;
-  const detailTotalPages = Math.max(1, Math.ceil(detailTotal / DETAIL_PAGE_SIZE));
+  const detailTotalPages = Math.max(1, Math.ceil(detailTotal / DRAW_RECORD_PAGE_SIZE));
 
   const activity = activityWindow(config);
   const configuredRate = returnRatePercent(config);
@@ -142,6 +120,10 @@ export default async function AdminLotteryPage({
     : null;
 
   const emailById = new Map(perUser.map((u) => [u.userId, u.email]));
+  const detailRows = records.map((record) => ({
+    ...record,
+    email: emailById.get(record.userId) ?? null,
+  }));
 
   return (
     <>
@@ -255,74 +237,16 @@ export default async function AdminLotteryPage({
             <CardTitle className="text-base">
               逐次明细
               <span className="ml-2 text-xs font-normal text-muted-foreground">
-                共 {detailTotal} 注 · 每页 {DETAIL_PAGE_SIZE} 条 · 收益按单注口径：券面 + 回收 − 发放
+                共 {detailTotal} 注 · 每页 {DRAW_RECORD_PAGE_SIZE} 条 · 收益按单注口径：券面 + 回收 − 发放
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {records.length === 0 ? (
-              <p className="text-sm text-muted-foreground">该时段没有开奖记录。</p>
-            ) : (
-              <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-secondary/50 text-xs text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">时间</th>
-                      <th className="px-3 py-2 font-medium">用户</th>
-                      <th className="px-3 py-2 font-medium">圈层</th>
-                      <th className="px-3 py-2 font-medium">结果</th>
-                      <th className="px-3 py-2 font-medium">用户 cr 变动</th>
-                      <th className="px-3 py-2 font-medium">券</th>
-                      <th className="px-3 py-2 font-medium">站点净收益</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {records.map((r) => (
-                      <tr key={r.id} className="hover:bg-secondary/30">
-                        <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
-                          {r.createdAt ? formatCnWallClock(r.createdAt) : "—"}
-                        </td>
-                        <td className="px-3 py-2">
-                          {emailById.get(r.userId) ?? r.userId.slice(0, 8)}
-                        </td>
-                        <td className="px-3 py-2">
-                          <Badge tone={r.ring === "outer" ? "accent" : "muted"} className="text-[10px]">
-                            {r.ring === "outer" ? "外圈" : "内圈"}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-2">
-                          {r.label}
-                          {r.ring === "outer" && r.multiplier !== null && (
-                            <span className="ml-1 text-xs text-muted-foreground">
-                              （×{r.multiplier}，基数 {formatCredits(r.baseCredits)} cr）
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2">
-                          {r.deltaCredits === 0 && r.grantTickets > 0 ? (
-                            <span className="text-xs text-muted-foreground">不发 cr（赠券档）</span>
-                          ) : (
-                            <Signed value={r.deltaCredits} />
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
-                          {TICKET_LABEL[r.ticketSource]}
-                          {r.ticketSource === "buy" ? ` ${formatCredits(r.ticketCredits)} cr` : ""}
-                        </td>
-                        <td className="px-3 py-2">
-                          <Signed value={drawNetCredits(r)} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <Pagination
-              page={page}
+            <LotteryDetailTable
+              key={range}
+              rows={detailRows}
+              range={range}
               totalPages={detailTotalPages}
-              basePath="/admin/lottery"
-              params={{ range: range === "all" ? undefined : range }}
             />
           </CardContent>
         </Card>

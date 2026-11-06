@@ -34,11 +34,15 @@ function toRoundView(row: FlipRound): FlipRoundView {
   };
 }
 
-/** 本活动轮次的最近若干局明细。 */
+/** 我的牌局每页局数：首屏与卡片内局部翻页共用。 */
+export const FLIP_ROUND_PAGE_SIZE = 10;
+
+/** 本活动轮次的牌局明细，按翻页取。 */
 export async function listMyRounds(
   userId: string,
   activityKey: string | null,
-  limit = 20,
+  limit = FLIP_ROUND_PAGE_SIZE,
+  offset = 0,
 ): Promise<FlipRoundView[]> {
   // 活动没填开始时间时没有「当前轮次」这个口径可统计，历史局留在它自己那一轮里。
   if (!activityKey) return [];
@@ -47,7 +51,8 @@ export async function listMyRounds(
     .from(flipRounds)
     .where(and(eq(flipRounds.userId, userId), eq(flipRounds.activityKey, activityKey)))
     .orderBy(desc(flipRounds.createdAt))
-    .limit(limit);
+    .limit(limit)
+    .offset(offset);
   return rows.map((row) => toRoundView(row as FlipRound));
 }
 

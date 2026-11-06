@@ -8,14 +8,11 @@ import { getUserTotalBalance, requireUser } from "@/lib/usage/meter";
 import { FLIP_CARD_COUNT, flipActivityKey, flipActivityWindow, flipExpectation } from "@/lib/flip/config";
 import { getFlipConfig } from "@/lib/flip/settings";
 import { countRoundsToday, findOpenRound, type PendingRound } from "@/lib/flip/store";
-import { flipGlobalStats, flipSummary, listMyRounds, type FlipGlobalStats, type FlipRoundView, type FlipSummary } from "@/lib/flip/records";
+import { flipGlobalStats, flipSummary, listMyRounds, FLIP_ROUND_PAGE_SIZE, type FlipGlobalStats, type FlipRoundView, type FlipSummary } from "@/lib/flip/records";
 
 import { PageBody } from "@/components/dashboard/section";
 
 export const dynamic = "force-dynamic";
-
-/** 牌局列表一次取多少局；再老的历史进钱包流水查。 */
-const RECENT_ROUNDS = 12;
 
 const EMPTY_SUMMARY: FlipSummary = { rounds: 0, spent: 0, won: 0, best: 0, blanks: 0 };
 const EMPTY_GLOBAL_STATS: FlipGlobalStats = { totalRounds: 0, players: 0, paidOut: 0 };
@@ -73,23 +70,28 @@ export default async function FlipPage() {
     [],
     EMPTY_GLOBAL_STATS,
   ];
-  const [pendingRound, roundsToday, summary, rounds, globalStats] = trackRounds
+  const [pendingRound, roundsToday, summary, fetchedRounds, globalStats] = trackRounds
     ? await Promise.all([
         findOpenRound(userId),
         countRoundsToday(userId),
         flipSummary(userId, activityKey),
-        listMyRounds(userId, activityKey, RECENT_ROUNDS),
+        listMyRounds(userId, activityKey, FLIP_ROUND_PAGE_SIZE + 1),
         flipGlobalStats(activityKey),
       ])
     : idle;
 
+  // 多取的那一条只用来探测「还有下一页」，翻页本身走卡片内的局部刷新。
+  const hasMoreRounds = fetchedRounds.length > FLIP_ROUND_PAGE_SIZE;
+  const rounds = fetchedRounds.slice(0, FLIP_ROUND_PAGE_SIZE);
+
   const recordsCard = (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">我的牌局</CardTitle>
+        <span className="text-xs text-muted-foreground">每页 {FLIP_ROUND_PAGE_SIZE} 局</span>
       </CardHeader>
       <CardContent>
-        <FlipRoundList rounds={rounds} />
+        <FlipRoundList key={rounds[0]?.id ?? "empty"} rounds={rounds} hasNext={hasMoreRounds} />
       </CardContent>
     </Card>
   );

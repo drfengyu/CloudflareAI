@@ -1,11 +1,14 @@
 "use client";
 
+import { useState } from "react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Pagination } from "@/components/dashboard/pagination";
 import { formatCredits } from "@/lib/billing/credits";
 import { formatCnWallClock } from "@/lib/date";
 import { cn } from "@/lib/utils";
+import { listMyActivityRecords } from "./actions";
 import type {
   DrawRecord,
   LotteryBalance,
@@ -109,15 +112,15 @@ function ActivityRoundTable({ records }: { records: DrawRecord[] }) {
  * 我的活动记录：只展示当期活动的战绩与逐次开奖明细。
  *
  * 净收益按**已开奖的券**算（中奖 − 倒扣 − 券面），没开奖的券还挂在券包里，不计盈也不计亏。
+ * 明细每页 10 条，翻页只换这张卡的表格（`listMyActivityRecords`），不改 URL、不整页刷新。
  */
 export function LotteryRecords({
   balance,
   tickets,
-  records,
+  records: initialRecords,
   ticketsLeft,
-  page,
-  totalPages,
-  totalRecords,
+  totalPages: initialTotalPages,
+  totalRecords: initialTotalRecords,
   pageSize,
   activityLabel,
 }: {
@@ -126,13 +129,34 @@ export function LotteryRecords({
   tickets: LotteryTicketTotals;
   records: DrawRecord[];
   ticketsLeft: number;
-  page: number;
   totalPages: number;
   totalRecords: number;
   pageSize: number;
   /** 当期活动的显示标签（通常是开始时间）。 */
   activityLabel: string;
 }) {
+  const [rows, setRows] = useState(initialRecords);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(initialTotalPages);
+  const [totalRecords, setTotalRecords] = useState(initialTotalRecords);
+  const [paging, setPaging] = useState(false);
+
+  const goToPage = async (target: number) => {
+    if (paging || target < 1 || target > totalPages || target === page) return;
+    setPaging(true);
+    try {
+      const result = await listMyActivityRecords(target);
+      setRows(result.records);
+      setTotalRecords(result.totalRecords);
+      setTotalPages(result.totalPages);
+      setPage(target);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "加载活动记录失败");
+    } finally {
+      setPaging(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -144,7 +168,7 @@ export function LotteryRecords({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        {records.length === 0 ? (
+        {rows.length === 0 ? (
           <LotteryEmpty />
         ) : (
           <>
@@ -181,7 +205,7 @@ export function LotteryRecords({
               <p className="mb-2 text-xs font-medium">
                 当期活动明细（共 {totalRecords} 条）
               </p>
-              <ActivityRoundTable records={records} />
+              <ActivityRoundTable records={rows} />
             </div>
 
             <p className="text-[11px] text-muted-foreground">
@@ -190,9 +214,13 @@ export function LotteryRecords({
             </p>
           </>
         )}
-        {/* 放在空态之外：手工把 page 改超界时还能靠「上一页」走回来 */}
         {totalRecords > 0 && (
-          <Pagination page={page} totalPages={totalPages} basePath="/lottery" />
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            onPageChange={goToPage}
+            disabled={paging}
+          />
         )}
       </CardContent>
     </Card>

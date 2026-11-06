@@ -150,6 +150,16 @@ export function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+/** 站点在这一注上的净收益：收下的券面 + 倒扣回收 − 发放的中奖。 */
+export function drawNetCredits(record: {
+  ticketCredits: number;
+  deltaCredits: number;
+}): number {
+  return round2(
+    record.ticketCredits + Math.max(0, -record.deltaCredits) - Math.max(0, record.deltaCredits),
+  );
+}
+
 function sanitizeInner(value: unknown, ticketPrice: number): InnerPrize[] {
   if (!Array.isArray(value)) return [];
   return value

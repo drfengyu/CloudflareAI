@@ -5,6 +5,36 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.25.0] - 2026-11-06
+
+### 变更（活动记录统一 10 条/页 + 卡片内局部刷新）
+
+三个活动记录列表原来各自为政：转盘 10 条但翻页走 `?page=` 整页刷新，翻牌一次取 12 条且没有翻页，
+后台逐次明细 10 条也是整页刷新。现在统一成「每页最多 10 条 + 只刷卡片」。
+
+- `lib/lottery/records.ts`：新增 `DRAW_RECORD_PAGE_SIZE = 10` 与 `rangeWindow(range)`（后台时间窗口径从页面抽出来，
+  翻页动作与首屏共用同一个窗口算法）；`drawNetCredits` 移到 `lib/lottery/prize-math.ts`，
+  因为纯计算要进客户端组件，而 records 层带着 D1 驱动不能进浏览器包。
+- 转盘 `/lottery`：`lottery/actions.ts` 新增 `listMyActivityRecords(page)`，总条数仍取累计统计行的 `draws`（不额外 COUNT）；
+  `lottery-records.tsx` 持有明细行与页码，翻页走 `Pagination` 的 `onPageChange`；`page.tsx` 去掉 `searchParams.page`。
+- 翻牌 `/flip`：`listMyRounds` 加 `offset`，首屏与翻页都按 `FLIP_ROUND_PAGE_SIZE = 10`，多取一条探测下一页；
+  `flip/actions.ts` 新增 `listMyFlipRounds(page)`，`components/flip/round-list.tsx` 改为客户端组件带翻页条，
+  卡片头补「每页 10 局」。
+- 后台 `/admin/lottery`：表格抽成 `components/admin/lottery-detail-table.tsx`，新增 `admin/lottery/actions.ts` 的
+  `listAdminDrawRecords(page, range)`（服务端二次校验 `role >= 10`，邮箱只查这一页涉及的 ≤10 个 userId）；
+  `range` 标签仍是链接跳转（换筛选口径本来就该换一屏），组件用 `key={range}` 让翻页状态跟着归零。
+- 三张卡片都带 `key={首行 id}`：开奖/开局后 `revalidatePath` 送回新首屏数据时，组件重挂回第 1 页，
+  不会停在旧的第 N 页看过期内容。
+
+### 验证
+
+本地 dev 铸管理员会话（只读，全站 7966 注 / 本人 7571 注 / 150 局牌）实测：
+`/lottery` 10 行、翻页条是按钮不是链接，点「下一页」URL 仍是 `/lottery`、页码 1/331→2/331、首行由 00:05 变 00:04；
+`/flip` 10 行、`第 1 页`→`第 2 页`、首行 00:19→00:17；
+`/admin/lottery` 前进 2/797、后退回 1/797 首行复原，切「今日」后 URL 变 `?range=today` 且页码归 1/11；三页控制台零报错。
+375×812 复查 `/lottery`、`/flip`：仍是 10 行 + 翻页条，页面无横向溢出。
+`tsc --noEmit`、改动文件 eslint、`npm run build` 全通过。
+
 ## [0.24.1] - 2026-11-06
 
 ### 变更（转盘活动改名为「幸运转盘」）

@@ -20,6 +20,7 @@ import {
   hasUsedFreeDrawToday,
 } from "@/lib/lottery/store";
 import {
+  DRAW_RECORD_PAGE_SIZE,
   listDrawRecords,
   listRecentBigWins,
   lotteryBalance,
@@ -31,9 +32,6 @@ import { LotteryWheel, type WheelOuter, type WheelSector } from "./lottery-wheel
 import { PageBody } from "@/components/dashboard/section";
 
 export const dynamic = "force-dynamic";
-
-/** 活动记录每页条数；超过一页在卡片底部翻页。 */
-const RECORD_PAGE_SIZE = 10;
 
 const toneOf = (value: number): WheelSector["tone"] =>
   value > 0 ? "positive" : value < 0 ? "negative" : "zero";
@@ -112,14 +110,8 @@ function Notice({ title, hint }: { title: string; hint: string }) {
   );
 }
 
-export default async function LotteryPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ page?: string }>;
-}) {
+export default async function LotteryPage() {
   const userId = await requireUser();
-  const params = await searchParams;
-  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
   const config = await getLotteryConfig();
   const windowInfo = activityWindow(config);
   const activityKey = currentActivityKey(config);
@@ -132,18 +124,14 @@ export default async function LotteryPage({
   // 记录按当前活动轮次过滤，页面只展示当期数据。
   // countConsecutiveMisses 按当前活动轮次过滤，新活动保底重置。
   // currentStats = 当前活动战绩（新活动重计），myStats = 全部活动累计（转盘「累计抽奖」）。
+  // 首屏只出第一页，后续翻页走卡片内的局部刷新（listMyActivityRecords）。
   const [tickets, myStats, currentStats, myTickets, records, balance, freeDrawUsed, consecutiveMisses, bigWins] =
     await Promise.all([
       countUnusedTickets(userId),
       lotteryBalance({ userId }),
       activityKey ? lotteryBalance({ userId, activityKey }) : Promise.resolve(null),
       lotteryTicketTotals(undefined, userId),
-      listDrawRecords({
-        userId,
-        limit: RECORD_PAGE_SIZE,
-        offset: (page - 1) * RECORD_PAGE_SIZE,
-        activityKey,
-      }),
+      listDrawRecords({ userId, limit: DRAW_RECORD_PAGE_SIZE, activityKey }),
       getUserTotalBalance(userId),
       hasUsedFreeDrawToday(userId),
       countConsecutiveMisses(userId, 30, activityKey),
@@ -152,18 +140,18 @@ export default async function LotteryPage({
 
   // 当期口径的开奖总数即累计统计行的 draws，可直接当分页总数，不必再 COUNT 明细。
   const recordTotal = (activityKey ? currentStats?.draws : myStats.draws) ?? 0;
-  const recordTotalPages = Math.max(1, Math.ceil(recordTotal / RECORD_PAGE_SIZE));
+  const recordTotalPages = Math.max(1, Math.ceil(recordTotal / DRAW_RECORD_PAGE_SIZE));
 
   const recordsCard = (
     <LotteryRecords
+      key={records[0]?.id ?? "empty"}
       balance={currentStats}
       tickets={myTickets}
       records={records}
       ticketsLeft={tickets}
-      page={page}
       totalPages={recordTotalPages}
       totalRecords={recordTotal}
-      pageSize={RECORD_PAGE_SIZE}
+      pageSize={DRAW_RECORD_PAGE_SIZE}
       activityLabel={activityKey ?? "历史活动"}
     />
   );

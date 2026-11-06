@@ -52,6 +52,12 @@ import {
   type LotteryStatsDelta,
 } from "@/lib/lottery/stats";
 import { lotteryDraws, temporaryBalances, topups } from "@/lib/db/schema";
+import {
+  DRAW_RECORD_PAGE_SIZE,
+  listDrawRecords,
+  lotteryBalance,
+  type DrawRecord,
+} from "@/lib/lottery/records";
 
 const MAX_TICKETS_PER_PURCHASE = 100;
 
@@ -576,6 +582,37 @@ export async function drawLottery(
     console.error("[drawLottery] Error:", error);
     return { success: false, error: error instanceof Error ? error.message : "开奖失败" };
   }
+}
+
+/**
+ * 「我的活动记录」的局部翻页数据：与首屏同一活动轮次口径。
+ * 总条数直接取累计统计行的 draws（当期口径就是统计行本身），省掉一次明细 COUNT。
+ */
+export async function listMyActivityRecords(
+  page: number,
+): Promise<{ records: DrawRecord[]; totalRecords: number; totalPages: number }> {
+  const userId = await requireUser();
+  const config = await getLotteryConfig();
+  const activityKey = currentActivityKey(config);
+  const safePage = Math.max(1, Math.trunc(Number(page)) || 1);
+
+  const [records, myStats, currentStats] = await Promise.all([
+    listDrawRecords({
+      userId,
+      limit: DRAW_RECORD_PAGE_SIZE,
+      offset: (safePage - 1) * DRAW_RECORD_PAGE_SIZE,
+      activityKey,
+    }),
+    lotteryBalance({ userId }),
+    activityKey ? lotteryBalance({ userId, activityKey }) : Promise.resolve(null),
+  ]);
+
+  const totalRecords = (activityKey ? currentStats?.draws : myStats.draws) ?? 0;
+  return {
+    records,
+    totalRecords,
+    totalPages: Math.max(1, Math.ceil(totalRecords / DRAW_RECORD_PAGE_SIZE)),
+  };
 }
 
 /** 档位赠券的唯一索引冲突是「这一档早领过了」，不是故障，不该拖垮整批。 */
