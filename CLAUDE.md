@@ -223,7 +223,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 - ✅ `/dashboard` 重做：
   - 问候式头部（北京时间 早上好/中午好/… + 用户名），右侧时间范围切换（今日/近 7 日/近 30 日，滚动窗口）
   - 四组核心指标卡：账户数据（余额 + 历史消耗）/ 使用统计（请求次数 + 成功失败）/ 资源消耗（额度 + Tokens）/ 性能指标（RPM + TPM/延迟）
-  - 「模型数据分析」卡：消耗分布 / 调用趋势 / 调用次数分布 / 调用次数排行 / 渠道分布 五个 tab
+  - 「模型数据分析」卡：消耗分布 / 调用趋势 / 调用次数分布 / 调用次数排行 / 渠道分布 / 活动消耗 六个 tab
   - 底部三张信息卡：系统公告 / 常见问答 / 服务可用性（内容存 `option` 表，`lib/settings/dashboard-info.ts`；可用性由 `/api/uptime` 客户端按需拉取——配了地址走 Uptime Kuma，留空则自检本站端点）
 
 **验证通过**：
@@ -534,8 +534,14 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.26.0（2026-11-06，看板「活动消耗」图表）
+**当前版本**：v0.26.1（2026-11-06，活动消耗改成分析卡的第 6 个视角）
 **下一版本**：v0.27.0（尚未选型）
+
+- v0.26.1 把 v0.26.0 那张独立的活动消耗卡并回「模型数据分析」的药丸行：它本质是"第 6 种视角"，
+  做成独立卡片就变成"药丸切换 + 一张永远在的图"两种呈现混在一起，还多占一节高度。
+  组件因此去掉 `Card` 外壳（`activity-spend-card.tsx` → `activity-spend-chart.tsx`，`ActivitySpendChart`），
+  高度对齐其余视角的 280px；`ModelAnalyticsCard` 的 `TABS` 加 `activity`、props 加 `activities`。
+  与其它 tab 一样是纯展示切换 —— 数据仍由服务端一次算好传入，点药丸不重新请求。
 
 - v0.26.0 在看板「趋势与分布」节加了「活动消耗」卡：三个限时玩法各画消耗柱 + 收入柱，净收入用平滑曲线叠在同一坐标系、可为负。
   数据层 `lib/usage/activity-spend.ts` 走 `topup` 账本（`type` 6 / 11 / 12）而不是各玩法的累计表 —— 雷电与翻牌的汇总只按

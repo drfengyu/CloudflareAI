@@ -42,7 +42,6 @@ import {
 import { StatGroupCard, type StatItem } from "@/components/dashboard/stat-group-card";
 import { PageBody, PageSection, pillTabClass } from "@/components/dashboard/section";
 import { ModelAnalyticsCard, type AnalyticsPoint } from "@/components/dashboard/model-analytics-card";
-import { ActivitySpendCard } from "@/components/dashboard/activity-spend-card";
 import { DashboardToolbar } from "@/components/dashboard/dashboard-toolbar";
 import { AnnouncementCard } from "@/components/dashboard/announcement-card";
 import { FaqCard } from "@/components/dashboard/faq-card";
@@ -360,15 +359,13 @@ export default async function DashboardPage({
       </PageSection>
 
       <PageSection title="趋势与分布" subtitle="消耗曲线、调用次数排行、渠道占比与限时活动投入产出">
-        <div className="space-y-4">
-          <ModelAnalyticsCard
-            series={series}
-            models={modelCalls}
-            channels={channelUsage}
-            totalCalls={summary.totalCalls}
-          />
-          <ActivitySpendCard points={activitySpend} />
-        </div>
+        <ModelAnalyticsCard
+          series={series}
+          models={modelCalls}
+          channels={channelUsage}
+          totalCalls={summary.totalCalls}
+          activities={activitySpend}
+        />
       </PageSection>
 
       <PageSection title="站内信息" subtitle="系统公告、常见问答与服务可用性">

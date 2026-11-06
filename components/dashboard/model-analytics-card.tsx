@@ -4,6 +4,8 @@ import { useState } from "react";
 import { AreaChart, BarChart, LineChart, PieChart } from "@/components/charts";
 import { Card, CardContent } from "@/components/ui/card";
 import { PillTab } from "@/components/dashboard/section";
+import { ActivitySpendChart } from "@/components/dashboard/activity-spend-chart";
+import type { ActivitySpendPoint } from "@/lib/usage/activity-spend";
 
 // 图表组件的泛型约束是 Record<string, any>，用具名 interface 会缺索引签名，故用 type 别名。
 export type AnalyticsPoint = {
@@ -30,6 +32,7 @@ const TABS = [
   { key: "calls", label: "调用次数分布" },
   { key: "ranking", label: "调用次数排行" },
   { key: "channel", label: "渠道分布" },
+  { key: "activity", label: "活动消耗" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -40,7 +43,7 @@ function shortModel(model: string) {
 }
 
 /**
- * 模型数据分析：一个卡片内切换五种视角。
+ * 模型数据分析：一个卡片内切换六种视角。
  * 数据全部由服务端算好传入，tab 只决定展示形态，不重新请求。
  * 标题交给所在分节（PageSection），这里只留居中药丸切换 + 图形本身。
  */
@@ -49,6 +52,7 @@ export function ModelAnalyticsCard({
   models,
   channels,
   totalCalls,
+  activities,
 }: {
   series: AnalyticsPoint[];
   /** 按调用次数取的 Top 10 */
@@ -56,6 +60,8 @@ export function ModelAnalyticsCard({
   channels: AnalyticsChannel[];
   /** 窗口内总调用数，用于排行占比 */
   totalCalls: number;
+  /** 同一时间窗内三个限时玩法的消耗 / 收入 / 净收入 */
+  activities: ActivitySpendPoint[];
 }) {
   const [tab, setTab] = useState<TabKey>("credits");
 
@@ -169,6 +175,8 @@ export function ModelAnalyticsCard({
             emptyMessage="暂无渠道数据"
           />
         ) : null}
+
+        {tab === "activity" ? <ActivitySpendChart points={activities} /> : null}
       </CardContent>
     </Card>
   );
