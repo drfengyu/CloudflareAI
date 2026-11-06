@@ -5,6 +5,30 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.26.1] - 2026-11-06
+
+### 变更（活动消耗收进「模型数据分析」的视角切换）
+
+v0.26.0 把活动消耗做成一张独立卡片，排在「模型数据分析」下面。它于是成了第 6 种视角却摆在第 6 个位置之外：
+上面那排药丸（消耗分布 / 调用趋势 / 调用次数分布 / 调用次数排行 / 渠道分布）是"切换同一张卡里的图"，
+下面这张卡却是永远都在，两种呈现方式混在一起，看板也凭空多一节高度。
+
+- `components/dashboard/activity-spend-card.tsx` → `activity-spend-chart.tsx`：去掉 `Card` / `CardHeader` 外壳，
+  只留图形本体与一行口径说明，导出名 `ActivitySpendCard` → `ActivitySpendChart`，高度与其余视角对齐成 280px。
+- `components/dashboard/model-analytics-card.tsx`：`TABS` 增加第 6 项 `activity`「活动消耗」，
+  props 增加 `activities`，切到该视角时渲染 `ActivitySpendChart`。
+  与其它视角一样是纯展示切换 —— 数据仍由服务端一次算好传入，点药丸不重新请求。
+- `app/(dashboard)/dashboard/page.tsx`：不再并排放两张卡，`activities={activitySpend}` 传给分析卡，
+  「趋势与分布」节回到一张卡。
+- 空状态文案改成与其它视角同句式：「该时段没有参加限时活动」（原来是「这段时间没有参加限时活动」）。
+
+### 验证
+
+本地 dev 铸管理员会话实测 `/dashboard?range=week`：药丸共 6 个（1440 单行、375 两行），点「活动消耗」后
+`aria-pressed=true` 落到该药丸、卡内脚注出现 `合计消耗 1640970.00 cr · 收入 1821950.00 cr · 净收入 +180980.00 cr`，
+与 D1 同窗口 SUM 一致；卡内始终只有 1 张宽 svg（切视角是真的换图不是叠加）；切回「渠道分布」脚注消失、
+卡高回到 372px；分节仍是「账户与用量 / 趋势与分布 / 站内信息」三节；1440 与 375 控制台零报错。
+
 ## [0.26.0] - 2026-11-06
 
 ### 新增（看板「活动消耗」图表）
