@@ -5,6 +5,31 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.25.1] - 2026-11-06
+
+### 变更（后台时间窗标签也改局部刷新）
+
+v0.25.0 只把「逐次明细」的翻页改成了局部刷新，`今日 / 近 7 日 / 近 30 日 / 全部` 仍是 `<a href="?range=...">`，
+点一下整页重进。但窗口不只影响明细：概览六个数字、按用户表、明细都跟着窗口变，所以不能只刷一张卡。
+
+- 新增服务端动作 `admin/lottery/actions.ts` 的 `loadActivityReport(range)`：一次返回同一窗口下的
+  `balance`（概览与总数）、`ticketTotals`、`perUser`、明细第一页。明细邮箱直接复用 `perUser` 的 email 映射，
+  不再多查一次 user 表（明细里出现的用户必然在同一窗口的 perUser 里）。
+- 新增 `components/admin/lottery-report.tsx`：三张卡 + 时间窗标签合成一个客户端组件，
+  窗口与页码共用一份状态。切标签走 `loadActivityReport` 并回到第 1 页；翻页走 `listAdminDrawRecords` 只换明细，
+  概览数字保持不动（否则「109 次开奖」配第 2 页明细会自相矛盾）。加载中三块内容 `opacity-60`、标签与翻页按钮 disabled。
+- `page.tsx` 只剩鉴权 + 首屏取数：`?range=` 仍可读（分享链接直达某窗口），但之后不再改 URL；
+  活动状态/起止/券价/外圈概率与「配置口径返还率」是配置量、与窗口无关，服务端算成两条字符串传给组件。
+- 删除 `components/admin/lottery-detail-table.tsx`：表格、翻页与概览同源同状态，留在两个文件里只会来回传 props。
+
+### 验证
+
+本地 dev 铸管理员会话（只读）实测 `/admin/lottery`：四个标签都是 `BUTTON`；
+「全部 → 今日」`7966 次开奖 / 5 人 / 按用户 5 行 / 1 / 797 页` 变 `109 次开奖 / 1 人 / 1 行 / 1 / 11 页`，URL 始终是 `/admin/lottery`；
+在「今日」内点「下一页」→ 明细 `1/11 → 2/11`、首行 00:05 → 00:04，而 `109 次开奖`、`参与人数 1`、按用户行数**都没动**；
+切回「全部」数字复原；控制台零报错。截图核对标签选中态（白底 + shadow-sm）与概览排版。
+`tsc --noEmit`、eslint、`npm run build` 全通过。
+
 ## [0.25.0] - 2026-11-06
 
 ### 变更（活动记录统一 10 条/页 + 卡片内局部刷新）

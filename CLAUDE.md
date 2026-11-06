@@ -534,8 +534,13 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.25.0（2026-11-06，活动记录统一 10 条/页 + 卡片内局部刷新）
+**当前版本**：v0.25.1（2026-11-06，后台时间窗标签也改卡片内局部刷新）
 **下一版本**：v0.26.0（尚未选型）
+
+- v0.25.1 把 `/admin/lottery` 的 `今日 / 近 7 日 / 近 30 日 / 全部` 从 `<a href="?range=">` 改成按钮 + 局部刷新。
+  关键点是**窗口不只管明细**：概览六个数字与按用户表都按窗口算，所以新增 `loadActivityReport(range)` 一次返回整套，
+  三张卡与标签合并成 `components/admin/lottery-report.tsx` 共用一份状态；只翻页时才走 `listAdminDrawRecords` 单换明细，
+  否则会出现「概览写着今日 109 次、明细是全部第 2 页」这种自相矛盾。`?range=` 保留为首屏直达入口。
 
 - v0.25.0 把三处活动记录列表（`/lottery` 我的活动记录、`/flip` 我的牌局、`/admin/lottery` 逐次明细）统一成
   「每页最多 10 条 + 只刷卡片」：翻页走 `Pagination` 的 `onPageChange` 与三个只读服务端动作

@@ -1,15 +1,13 @@
 import { PageHeader } from "@/components/dashboard/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LotteryDetailTable } from "@/components/admin/lottery-detail-table";
+import { LotteryReport } from "@/components/admin/lottery-report";
 import { db } from "@/lib/db/d1-http";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { requireUser } from "@/lib/usage/meter";
 import { redirect } from "next/navigation";
 import { formatCredits } from "@/lib/billing/credits";
-import { formatCnWallClock } from "@/lib/date";
 import { getLotteryConfig } from "@/lib/lottery/config";
-import { activityWindow, returnRatePercent, round2 } from "@/lib/lottery/prize-math";
+import { activityWindow, returnRatePercent } from "@/lib/lottery/prize-math";
 import {
   DRAW_RECORD_PAGE_SIZE,
   listDrawRecords,
@@ -18,65 +16,12 @@ import {
   lotteryUserRecords,
   rangeWindow,
 } from "@/lib/lottery/records";
-import { cn } from "@/lib/utils";
 
 import { PageBody } from "@/components/dashboard/section";
 
 export const dynamic = "force-dynamic";
 
-const RANGE_TABS: { value: string; label: string }[] = [
-  { value: "today", label: "今日" },
-  { value: "7d", label: "近 7 日" },
-  { value: "30d", label: "近 30 日" },
-  { value: "all", label: "全部" },
-];
-
-function Metric({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: string;
-  hint?: string;
-  tone?: "positive" | "negative";
-}) {
-  return (
-    <div className="rounded-lg border border-border px-3 py-2.5">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p
-        className={cn(
-          "mt-1 text-lg font-semibold tabular-nums",
-          tone === "positive" && "text-[color:var(--primary)]",
-          tone === "negative" && "text-[color:var(--destructive)]",
-        )}
-      >
-        {value}
-      </p>
-      {hint && <p className="mt-0.5 text-[11px] text-muted-foreground">{hint}</p>}
-    </div>
-  );
-}
-
-function Signed({ value, suffix = " cr" }: { value: number; suffix?: string }) {
-  return (
-    <span
-      className={cn(
-        "font-medium tabular-nums",
-        value > 0
-          ? "text-[color:var(--primary)]"
-          : value < 0
-            ? "text-[color:var(--destructive)]"
-            : "text-muted-foreground",
-      )}
-    >
-      {value > 0 ? "+" : ""}
-      {formatCredits(value)}
-      {suffix}
-    </span>
-  );
-}
+const RANGE_VALUES = ["today", "7d", "30d", "all"];
 
 export default async function AdminLotteryPage({
   searchParams,
@@ -96,8 +41,9 @@ export default async function AdminLotteryPage({
     redirect("/dashboard");
   }
 
+  // `?range=` 只决定首屏窗口；之后切窗口与翻页都在卡片内局部刷新，不再改 URL。
   const rawRange = params.range ?? "all";
-  const range = RANGE_TABS.some((t) => t.value === rawRange) ? rawRange : "all";
+  const range = RANGE_VALUES.includes(rawRange) ? rawRange : "all";
   const win = rangeWindow(range);
 
   const [config, balance, perUser, records, ticketTotals] = await Promise.all([
@@ -108,22 +54,8 @@ export default async function AdminLotteryPage({
     lotteryTicketTotals(win),
   ]);
 
-  // 开奖总注数就是同一窗口的累计统计行，直接当分页总数用，不再 COUNT 明细。
-  const detailTotal = balance.draws;
-  const detailTotalPages = Math.max(1, Math.ceil(detailTotal / DRAW_RECORD_PAGE_SIZE));
-
   const activity = activityWindow(config);
-  const configuredRate = returnRatePercent(config);
-  // 实际返还率只按已开奖的券算：净发出去的 cr / 收到的券面值。倒扣算在分子里（它抵了奖）。
-  const actualRate = balance.ticketFace > 0
-    ? round2(((balance.paidOut - balance.clawedBack) / balance.ticketFace) * 100)
-    : null;
-
   const emailById = new Map(perUser.map((u) => [u.userId, u.email]));
-  const detailRows = records.map((record) => ({
-    ...record,
-    email: emailById.get(record.userId) ?? null,
-  }));
 
   return (
     <>
@@ -133,123 +65,28 @@ export default async function AdminLotteryPage({
       />
 
       <PageBody className="space-y-6">
-        <Card>
-          <CardHeader className="flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-base">
-              收益概览
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                {activity.status === "disabled"
-                  ? "活动当前未开启"
-                  : `${activity.status === "active" ? "进行中" : activity.status === "pending" ? "未开始" : "已结束"} · ${config.startAt || "—"} ~ ${config.endAt || "—"} · 券价 ${formatCredits(config.ticketPriceCredits)} cr · 外圈 ${config.outerChancePercent}%`}
-              </span>
-            </CardTitle>
-            <div className="flex gap-1 rounded-lg bg-muted p-1">
-              {RANGE_TABS.map((tab) => (
-                <a
-                  key={tab.value}
-                  href={`/admin/lottery${tab.value === "all" ? "" : `?range=${tab.value}`}`}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                    range === tab.value
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {tab.label}
-                </a>
-              ))}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-              <Metric label="站点净收益" value={`${formatCredits(balance.net)} cr`} tone={balance.net >= 0 ? "positive" : "negative"} hint="券面 + 回收 − 发放" />
-              <Metric label="售券收入" value={`${formatCredits(ticketTotals.boughtCredits)} cr`} hint={`${ticketTotals.boughtTickets} 张 · 赠券 档位 ${ticketTotals.giftTickets} / 奖池 ${ticketTotals.prizeTickets} 张`} />
-              <Metric label="中奖发放" value={`${formatCredits(balance.paidOut)} cr`} tone="negative" hint={`${balance.draws} 次开奖`} />
-              <Metric label="倒扣回收" value={`${formatCredits(balance.clawedBack)} cr`} tone="positive" />
-              <Metric label="参与人数" value={`${perUser.length}`} hint={`外圈命中 ${balance.outerHits} 次`} />
-              <Metric
-                label="实际返还率"
-                value={actualRate === null ? "—" : `${actualRate}%`}
-                hint={`${config.multiplierBase === "batch" ? "配置单抽口径" : "配置口径"} ${configuredRate}%`}
-              />
-            </div>
-            <p className="text-[11px] text-muted-foreground">
-              净收益只统计已开奖的券；窗口内还有 {ticketTotals.unusedTickets} 张未开奖（面值{" "}
-              {formatCredits(ticketTotals.unusedCredits)} cr）已收讫未兑现。倒扣回收是把用户已有余额划回，
-              不是新增现金流入；中奖发放走带过期的临时余额，过期未用不会真的付出。
-              赠券档不动 cr，它按「这一注的券面已收、兑付延后」落在净收益里，发出去的券要等它被抽掉才转成成本。
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">按用户</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {perUser.length === 0 ? (
-              <p className="text-sm text-muted-foreground">该时段没有开奖记录。</p>
-            ) : (
-              <div className="overflow-x-auto rounded-lg border border-border">
-                <table className="w-full text-left text-sm">
-                  <thead className="bg-secondary/50 text-xs text-muted-foreground">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">用户</th>
-                      <th className="px-3 py-2 font-medium">抽奖次数</th>
-                      <th className="px-3 py-2 font-medium">外圈命中</th>
-                      <th className="px-3 py-2 font-medium">已开奖券面值</th>
-                      <th className="px-3 py-2 font-medium">中奖发放</th>
-                      <th className="px-3 py-2 font-medium">倒扣回收</th>
-                      <th className="px-3 py-2 font-medium">站点净收益</th>
-                      <th className="px-3 py-2 font-medium">最近参与</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {perUser.map((u) => (
-                      <tr key={u.userId} className="hover:bg-secondary/30">
-                        <td className="px-3 py-2">{u.email}</td>
-                        <td className="px-3 py-2 tabular-nums">{u.draws}</td>
-                        <td className="px-3 py-2 tabular-nums">{u.outerHits}</td>
-                        <td className="px-3 py-2 tabular-nums">{formatCredits(u.ticketFace)} cr</td>
-                        <td className="px-3 py-2 tabular-nums text-[color:var(--destructive)]">
-                          {formatCredits(u.paidOut)} cr
-                        </td>
-                        <td className="px-3 py-2 tabular-nums text-[color:var(--primary)]">
-                          {formatCredits(u.clawedBack)} cr
-                        </td>
-                        <td className="px-3 py-2">
-                          <Signed value={u.net} />
-                        </td>
-                        <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
-                          {u.lastDrawAt ? formatCnWallClock(u.lastDrawAt) : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">
-              逐次明细
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                共 {detailTotal} 注 · 每页 {DRAW_RECORD_PAGE_SIZE} 条 · 收益按单注口径：券面 + 回收 − 发放
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <LotteryDetailTable
-              key={range}
-              rows={detailRows}
-              range={range}
-              totalPages={detailTotalPages}
-            />
-          </CardContent>
-        </Card>
+        <LotteryReport
+          range={range}
+          activitySummary={
+            activity.status === "disabled"
+              ? "活动当前未开启"
+              : `${activity.status === "active" ? "进行中" : activity.status === "pending" ? "未开始" : "已结束"} · ${config.startAt || "—"} ~ ${config.endAt || "—"} · 券价 ${formatCredits(config.ticketPriceCredits)} cr · 外圈 ${config.outerChancePercent}%`
+          }
+          rateHint={`${config.multiplierBase === "batch" ? "配置单抽口径" : "配置口径"} ${returnRatePercent(config)}%`}
+          report={{
+            balance,
+            ticketTotals,
+            perUser,
+            detail: {
+              rows: records.map((record) => ({
+                ...record,
+                email: emailById.get(record.userId) ?? null,
+              })),
+              totalRecords: balance.draws,
+              totalPages: Math.max(1, Math.ceil(balance.draws / DRAW_RECORD_PAGE_SIZE)),
+            },
+          }}
+        />
       </PageBody>
     </>
   );

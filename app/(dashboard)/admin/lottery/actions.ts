@@ -8,11 +8,23 @@ import {
   DRAW_RECORD_PAGE_SIZE,
   listDrawRecords,
   lotteryBalance,
+  lotteryTicketTotals,
+  lotteryUserRecords,
   rangeWindow,
   type DrawRecord,
+  type LotteryBalance,
+  type LotteryTicketTotals,
+  type LotteryUserRecord,
 } from "@/lib/lottery/records";
 
 export type AdminDrawRow = DrawRecord & { email: string | null };
+
+export interface AdminActivityReport {
+  balance: LotteryBalance;
+  ticketTotals: LotteryTicketTotals;
+  perUser: LotteryUserRecord[];
+  detail: { rows: AdminDrawRow[]; totalRecords: number; totalPages: number };
+}
 
 async function assertAdmin(): Promise<void> {
   const currentUserId = await requireUser();
@@ -24,6 +36,38 @@ async function assertAdmin(): Promise<void> {
   if (!currentUser[0] || currentUser[0].role < 10) {
     throw new Error("权限不足");
   }
+}
+
+/**
+ * 整份时间窗报告：概览数字、按用户汇总、逐次明细第一页。
+ * 切「今日 / 近 7 日 / 近 30 日 / 全部」时一次换全套，避免概览跟明细用两个窗口各说各话。
+ */
+export async function loadActivityReport(range: string): Promise<AdminActivityReport> {
+  await assertAdmin();
+  const win = rangeWindow(range);
+
+  const [balance, perUser, ticketTotals, records] = await Promise.all([
+    lotteryBalance({ win }),
+    lotteryUserRecords(win),
+    lotteryTicketTotals(win),
+    listDrawRecords({ win, limit: DRAW_RECORD_PAGE_SIZE }),
+  ]);
+
+  // 明细里出现的用户必然在 perUser 里（同一窗口、同样有开奖），不用再查一次 user 表。
+  const emailById = new Map(perUser.map((u) => [u.userId, u.email]));
+  return {
+    balance,
+    ticketTotals,
+    perUser,
+    detail: {
+      rows: records.map((record) => ({
+        ...record,
+        email: emailById.get(record.userId) ?? null,
+      })),
+      totalRecords: balance.draws,
+      totalPages: Math.max(1, Math.ceil(balance.draws / DRAW_RECORD_PAGE_SIZE)),
+    },
+  };
 }
 
 /**
