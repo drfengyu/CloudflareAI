@@ -1,8 +1,17 @@
 import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db } from "@/lib/db/d1-http";
-import { cashbackClaims, temporaryBalances, topups, usageLogs, users } from "@/lib/db/schema";
+import { cashbackClaims, usageLogs, users } from "@/lib/db/schema";
 import { cnDateString, parseCnWallClock, shiftDateString } from "@/lib/date";
 import { maskUserLabel } from "@/lib/mask";
+import {
+  attachRewardMessage,
+  claimStateOf,
+  discardRewardClaim,
+  listRewardClaims,
+  reserveRewardClaim,
+  type RewardClaimState,
+} from "@/lib/rewards/claims";
+import { sendMessage } from "@/lib/message/messages";
 import type { getCashbackSettings } from "@/lib/settings";
 
 export type CashbackSettings = Awaited<ReturnType<typeof getCashbackSettings>>;
@@ -58,6 +67,8 @@ export interface CashbackDay {
   reward: number;
   /** 已领过 / 未达门槛 / 活动关闭 时不可领。 */
   claimable: boolean;
+  /** none=未发放 / sent=已发到站内信待领 / claimed=已领取。 */
+  claimState: RewardClaimState;
   note: string;
 }
 
@@ -70,79 +81,113 @@ export async function listRecentDays(userId: string, s: CashbackSettings): Promi
   const dates: string[] = [];
   for (let i = 1; i <= s.backfillDays; i++) dates.push(shiftDateString(today, -i));
 
-  const claimedRows = await db
-    .select({ periodDate: cashbackClaims.periodDate })
-    .from(cashbackClaims)
-    .where(and(eq(cashbackClaims.userId, userId), inArray(cashbackClaims.periodDate, dates)));
-  const claimed = new Set(claimedRows.map((r) => r.periodDate));
+  const [claimedRows, rewardClaimMap] = await Promise.all([
+    db
+      .select({ periodDate: cashbackClaims.periodDate })
+      .from(cashbackClaims)
+      .where(and(eq(cashbackClaims.userId, userId), inArray(cashbackClaims.periodDate, dates))),
+    listRewardClaims(userId, "cashback"),
+  ]);
+  const legacyClaimed = new Set(claimedRows.map((r) => r.periodDate));
 
-  const days = await Promise.all(dates.map(async (date) => ({ date, consumed: await consumedOnDay(userId, date) })));
+  const days = await Promise.all(
+    dates.map(async (date) => ({ date, consumed: await consumedOnDay(userId, date) })),
+  );
 
   return days.map(({ date, consumed }) => {
-    const reward = rewardFor(consumed, s);
-    if (claimed.has(date)) return { date, consumed, reward, claimable: false, note: "已领取" };
-    if (!s.enabled) return { date, consumed, reward, claimable: false, note: "活动未开启" };
-    if (reward <= 0) return { date, consumed, reward, claimable: false, note: "未达起返门槛" };
-    return { date, consumed, reward, claimable: true, note: "" };
+    const claim = rewardClaimMap.get(date);
+    // 已发放的返利按发放时锁定的额度展示，之后再改配置不影响这封信。
+    const reward = claim?.rewardCredits ?? rewardFor(consumed, s);
+    const claimState = claimStateOf(claim);
+    if (legacyClaimed.has(date) || claimState === "claimed") {
+      return { date, consumed, reward, claimState: "claimed", claimable: false, note: "已领取" };
+    }
+    if (claimState === "sent") {
+      return { date, consumed, reward, claimState: "sent", claimable: false, note: "已发至站内信" };
+    }
+    if (!s.enabled) {
+      return { date, consumed, reward, claimState: "none", claimable: false, note: "活动未开启" };
+    }
+    if (reward <= 0) {
+      return { date, consumed, reward, claimState: "none", claimable: false, note: "未达起返门槛" };
+    }
+    return { date, consumed, reward, claimState: "none", claimable: true, note: "" };
   });
 }
 
 /**
- * 领取某天的返利。三条写没有事务（D1 不支持），所以先插 `cashback_claim` 占住唯一索引，
- * 发放失败再把这条删掉——反过来先发光，重复点击就会真发双份。
+ * 把某天的返利发到站内信。
+ *
+ * 发放位先写 `reward_claim`（唯一索引挡重复点击），实际到账发生在用户点站内信领取时；
+ * 发信失败把发放位删掉，用户还能重试，不会出现「活动页说已发、站内信里没有」。
  */
-export async function claimCashback(
+export async function issueCashbackReward(
   userId: string,
   date: string,
   s: CashbackSettings,
-): Promise<{ consumed: number; reward: number }> {
+): Promise<{ state: RewardClaimState; consumed: number; reward: number }> {
   if (!s.enabled) throw new Error("消费返利活动未开启");
 
   const today = cnDateString();
   const earliest = shiftDateString(today, -s.backfillDays);
-  if (date >= today || date < earliest) throw new Error("该日期不在可领取范围内");
+  if (date >= today || date < earliest) throw new Error("该日期不在可发放范围内");
+
+  const legacy = await db
+    .select({ id: cashbackClaims.id })
+    .from(cashbackClaims)
+    .where(and(eq(cashbackClaims.userId, userId), eq(cashbackClaims.periodDate, date)))
+    .limit(1);
+  if (legacy[0]) throw new Error("这一天的返利已经领取过了");
+
+  const existingMap = await listRewardClaims(userId, "cashback");
+  const existing = existingMap.get(date);
+  if (existing) {
+    if (existing.claimedAt) throw new Error("这一天的返利已经领取过了");
+    return { state: "sent", consumed: await consumedOnDay(userId, date), reward: existing.rewardCredits };
+  }
 
   const consumed = await consumedOnDay(userId, date);
   const reward = rewardFor(consumed, s);
-  if (reward <= 0) throw new Error(`当日消费 ${consumed.toFixed(2)} cr，未达起返门槛或返利为 0`);
+  if (reward <= 0) {
+    throw new Error(`当日消费 ${round2(consumed).toFixed(2)} cr，未达起返门槛或返利为 0`);
+  }
 
-  const now = new Date();
-  const claimId = crypto.randomUUID();
-  await db.insert(cashbackClaims).values({
-    id: claimId,
+  const reserved = await reserveRewardClaim({
     userId,
-    periodDate: date,
-    consumedCredits: round2(consumed),
+    activityKind: "cashback",
+    tierKey: date,
     rewardCredits: reward,
-    createdAt: now,
+    validDays: s.validDays,
+    topupType: CASHBACK_TOPUP_TYPE,
   });
+  if (!reserved.fresh) return { state: "sent", consumed: round2(consumed), reward };
 
-  const expiresAt = new Date(Date.now() + s.validDays * DAY_MS);
-  const label = `${date} 消费 ${round2(consumed).toFixed(2)} cr`;
   try {
-    await db.insert(temporaryBalances).values({
-      id: crypto.randomUUID(),
+    const messageId = await sendMessage({
       userId,
-      amount: reward,
-      expiresAt,
-      description: `消费返利 ${reward.toFixed(2)} cr（${label}，有效期 ${s.validDays} 天）`,
-      createdAt: now,
+      kind: "reward",
+      title: `消费返利 · ${date}`,
+      body: [
+        `${date} 当日消费 ${round2(consumed).toFixed(2)} cr，可返 ${reward.toFixed(2)} cr。`,
+        `奖励已发放到站内信，请在站内信领取；领取后进入临时余额，有效期 ${s.validDays} 天。`,
+      ].join("\n"),
+      attachment: {
+        kind: "temp_credits",
+        credits: reward,
+        validDays: s.validDays,
+        topupType: CASHBACK_TOPUP_TYPE,
+        rewardClaimId: reserved.id,
+        cashbackDate: date,
+        consumedCredits: round2(consumed),
+      },
     });
-    await db.insert(topups).values({
-      id: crypto.randomUUID(),
-      userId,
-      amount: reward,
-      type: CASHBACK_TOPUP_TYPE,
-      description: `消费返利 ${reward.toFixed(2)} cr（${label}，有效期至 ${expiresAt.toLocaleDateString("zh-CN")}）`,
-      createdAt: now,
-    });
+    await attachRewardMessage(reserved.id, messageId);
   } catch (err) {
-    // 发钱没写成功就把占位删掉，否则这一天被唯一索引永久挡住，用户再也领不了。
-    await db.delete(cashbackClaims).where(eq(cashbackClaims.id, claimId)).catch(() => undefined);
+    await discardRewardClaim(reserved.id);
     throw err;
   }
 
-  return { consumed: round2(consumed), reward };
+  return { state: "sent", consumed: round2(consumed), reward };
 }
 
 export interface ClaimedRow {

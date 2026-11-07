@@ -67,7 +67,7 @@ export default async function WalletPage({
         .limit(PENDING_ORDER_LIMIT),
       getEpayConfig(),
       getLinuxdoConfig(),
-      // 充值阶梯赠送：只在充值弹窗里预告「本单额外赠送」，实际发放由订单结算路径负责
+      // 充值阶梯赠送：活动期内累计充值达标后在「限时返利」页手动领取
       getRechargeBonusSettings(),
       // 最近收支：近 5 天最多 50 笔，与个人账本同一份口径（发放 + API 消费）
       listRecentLedgerByDay(userId),

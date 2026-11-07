@@ -35,6 +35,8 @@ function attachmentLabel(attachment: Attachment, claimed: boolean): string {
   switch (attachment.kind) {
     case "credits":
       return `${formatCredits(attachment.credits)} cr`;
+    case "temp_credits":
+      return `${formatCredits(attachment.credits)} cr（临时余额，${attachment.validDays} 天）`;
     case "tickets":
       return `${attachment.count} 张抽奖券`;
     case "redemption":
@@ -129,16 +131,20 @@ export function MessageInbox({
 
   const remove = async () => {
     if (!detail) return;
-    const gone = await removeMessage(detail.id);
-    if (!gone) {
-      toast.error("删除失败");
-      return;
+    try {
+      const gone = await removeMessage(detail.id);
+      if (!gone) {
+        toast.error("删除失败");
+        return;
+      }
+      toast.success("已删除");
+      setDetail(null);
+      setSelectedId(null);
+      await refreshList(filter, page);
+      router.refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "删除失败");
     }
-    toast.success("已删除");
-    setDetail(null);
-    setSelectedId(null);
-    await refreshList(filter, page);
-    router.refresh();
   };
 
   return (

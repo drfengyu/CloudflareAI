@@ -427,6 +427,41 @@ export const cashbackClaims = sqliteTable(
 );
 
 /**
+ * 活动奖励发放记录：一行 = 一个用户对某个活动的某个档位发过一次奖励。
+ *
+ * 奖励先发到站内信，用户领取后才进临时余额；这张表既做发放幂等（唯一索引），
+ * 也记录 `messageId` 与 `claimedAt`，让活动页能区分「可领 / 已发待领 / 已领取」。
+ * 消费返利的 `tierKey` 是北京自然日，充值档位的 `tierKey` 是门槛金额的规范字符串。
+ */
+export const rewardClaims = sqliteTable(
+  "reward_claim",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** recharge=限时充值 / cashback=消费返利。 */
+    activityKind: text("activityKind").$type<"recharge" | "cashback">().notNull(),
+    /** 充值档位用门槛金额，返利用自然日 `YYYY-MM-DD`。 */
+    tierKey: text("tierKey").notNull(),
+    /** 发放时锁定的 credits，之后改配置不影响这封信。 */
+    rewardCredits: real("rewardCredits").notNull().default(0),
+    /** 到账后的临时余额有效期（天）。 */
+    validDays: integer("validDays").notNull().default(0),
+    /** 领取时写入 topup 的流水类型（8=消费返利 / 10=充值赠送）。 */
+    topupType: integer("topupType").notNull().default(0),
+    /** 站内信 id；站内信被清理后仍保留发放记录。 */
+    messageId: text("messageId"),
+    claimedAt: integer("claimedAt", { mode: "timestamp_ms" }),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [
+    unique("uq_reward_claim").on(table.userId, table.activityKind, table.tierKey),
+    index("idx_reward_claim_user").on(table.userId, table.activityKind),
+  ],
+);
+
+/**
  * 任务成就领取记录：一行 = 一个用户领取过某个任务，之后不再重复发。
  * 完成判定读的是各业务表的现场数据（见 `lib/tasks/tasks.ts`），这张表只记「领过」，不存进度。
  */
@@ -786,11 +821,12 @@ export const messages = sqliteTable(
     body: text("body").notNull(),
     /** 附件类型；null = 纯文本信。item = 自定义物品，领取只记录不自动发放。 */
     attachmentKind: text("attachmentKind").$type<
-      "credits" | "tickets" | "redemption" | "item"
+      "credits" | "temp_credits" | "tickets" | "redemption" | "item"
     >(),
     /**
      * 附件内容 JSON，按 attachmentKind 取用：
-     * credits `{"credits":50}` / tickets `{"activity":"lottery","count":3}` /
+     * credits `{"credits":50}` / temp_credits `{"credits":50,"validDays":7,"topupType":10}` /
+     * tickets `{"activity":"lottery","count":3}` /
      * redemption `{"code":"AB12"}` / item `{"label":"内测资格"}`。
      */
     attachment: text("attachment"),

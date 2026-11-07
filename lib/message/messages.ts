@@ -1,11 +1,18 @@
 import { and, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { db, d1Run } from "@/lib/db/d1-http";
-import { messages, topups, users } from "@/lib/db/schema";
+import {
+  cashbackClaims,
+  messages,
+  rewardClaims,
+  temporaryBalances,
+  topups,
+  users,
+} from "@/lib/db/schema";
 import { grantTickets } from "@/lib/lottery/store";
 import { getLotteryConfig } from "@/lib/lottery/config";
 
 export type MessageKind = "notice" | "reward" | "security";
-export type AttachmentKind = "credits" | "tickets" | "redemption" | "item";
+export type AttachmentKind = "credits" | "temp_credits" | "tickets" | "redemption" | "item";
 
 /** 站内信在钱包流水里占用的类型（1–12 已被兑换码/管理员/签到/注册/充值/抽奖/邀请/返利/任务/赠额/雷电/翻牌占用）。 */
 export const MESSAGE_TOPUP_TYPE = 13;
@@ -21,6 +28,18 @@ const round2 = (v: number) => Math.round(v * 100) / 100;
 
 export type Attachment =
   | { kind: "credits"; credits: number }
+  | {
+      kind: "temp_credits";
+      credits: number;
+      validDays: number;
+      /** 领取时写入 topup 的类型：8=消费返利 / 10=充值赠送。 */
+      topupType: number;
+      /** 活动奖励发放记录 id，领取后回写 claimedAt。 */
+      rewardClaimId?: string;
+      /** 消费返利专用：领取时补写到 cashback_claim，保持历史口径不变。 */
+      cashbackDate?: string;
+      consumedCredits?: number;
+    }
   | { kind: "tickets"; count: number }
   | { kind: "redemption"; code: string }
   | { kind: "item"; label: string };
@@ -74,6 +93,18 @@ function parseAttachment(row: {
   switch (row.attachmentKind) {
     case "credits":
       return { kind: "credits", credits: Number(data.credits ?? 0) };
+    case "temp_credits": {
+      const consumed = Number(data.consumedCredits);
+      return {
+        kind: "temp_credits",
+        credits: Number(data.credits ?? 0),
+        validDays: Number(data.validDays ?? 0),
+        topupType: Number(data.topupType ?? 0),
+        rewardClaimId: typeof data.rewardClaimId === "string" ? data.rewardClaimId : undefined,
+        cashbackDate: typeof data.cashbackDate === "string" ? data.cashbackDate : undefined,
+        consumedCredits: Number.isFinite(consumed) ? consumed : undefined,
+      };
+    }
     case "tickets":
       return { kind: "tickets", count: Number(data.count ?? 0) };
     case "redemption":
@@ -86,15 +117,25 @@ function parseAttachment(row: {
 }
 
 function attachmentJson(attachment: Attachment): string {
-  return JSON.stringify(
-    attachment.kind === "credits"
-      ? { credits: attachment.credits }
-      : attachment.kind === "tickets"
-        ? { count: attachment.count }
-        : attachment.kind === "redemption"
-          ? { code: attachment.code }
-          : { label: attachment.label },
-  );
+  switch (attachment.kind) {
+    case "credits":
+      return JSON.stringify({ credits: attachment.credits });
+    case "temp_credits":
+      return JSON.stringify({
+        credits: attachment.credits,
+        validDays: attachment.validDays,
+        topupType: attachment.topupType,
+        rewardClaimId: attachment.rewardClaimId,
+        cashbackDate: attachment.cashbackDate,
+        consumedCredits: attachment.consumedCredits,
+      });
+    case "tickets":
+      return JSON.stringify({ count: attachment.count });
+    case "redemption":
+      return JSON.stringify({ code: attachment.code });
+    case "item":
+      return JSON.stringify({ label: attachment.label });
+  }
 }
 
 /**
@@ -110,6 +151,28 @@ export function validateAttachment(attachment: Attachment): string | null {
         return "赠送 cr 必须是大于 0 的数字";
       }
       if (attachment.credits > 100_000) return "单封信赠送 cr 上限 100000";
+      return null;
+    case "temp_credits":
+      if (!Number.isFinite(attachment.credits) || attachment.credits <= 0) {
+        return "赠送 cr 必须是大于 0 的数字";
+      }
+      if (attachment.credits > 100_000) return "单封信赠送 cr 上限 100000";
+      if (
+        !Number.isInteger(attachment.validDays) ||
+        attachment.validDays < 1 ||
+        attachment.validDays > 365
+      ) {
+        return "临时余额有效期需在 1 ~ 365 天之间";
+      }
+      if (attachment.topupType !== 8 && attachment.topupType !== 10) {
+        return "临时余额奖励的流水类型必须是 8 或 10";
+      }
+      if (attachment.cashbackDate && !/^\d{4}-\d{2}-\d{2}$/.test(attachment.cashbackDate)) {
+        return "返利日期格式应为 YYYY-MM-DD";
+      }
+      if (!attachment.rewardClaimId || attachment.rewardClaimId.trim().length < 8) {
+        return "缺少活动奖励发放记录 id";
+      }
       return null;
     case "tickets":
       if (!Number.isInteger(attachment.count) || attachment.count <= 0) {
@@ -347,6 +410,7 @@ export async function claimMessage(
     throw new Error("附件内容异常，已退回未领取，请联系管理员");
   }
 
+  let insertedCashbackClaimId: string | null = null;
   try {
     switch (attachment.kind) {
       case "credits": {
@@ -363,6 +427,56 @@ export async function claimMessage(
           createdAt: new Date(),
         });
         return { attachment: { ...attachment, credits: amount }, note: `${amount} cr 已到账` };
+      }
+      case "temp_credits": {
+        const amount = round2(attachment.credits);
+        const now = new Date(nowMs);
+        const description = `站内信奖励：${row.title}`.slice(0, 200);
+        if (attachment.cashbackDate) {
+          // 先占住返利历史行：重复领取会在唯一索引上失败，钱不会发第二遍。
+          insertedCashbackClaimId = crypto.randomUUID();
+          await db.insert(cashbackClaims).values({
+            id: insertedCashbackClaimId,
+            userId,
+            periodDate: attachment.cashbackDate,
+            consumedCredits: round2(attachment.consumedCredits ?? 0),
+            rewardCredits: amount,
+            createdAt: now,
+          });
+        }
+        await db.insert(temporaryBalances).values({
+          id: crypto.randomUUID(),
+          userId,
+          amount,
+          expiresAt: new Date(nowMs + attachment.validDays * DAY_MS),
+          description,
+          createdAt: now,
+        });
+        await db.insert(topups).values({
+          userId,
+          amount,
+          type: attachment.topupType,
+          description,
+          createdAt: now,
+        });
+        // 回写发放状态失败不能影响已发出的钱；活动页还有站内信 claimedAt 兜底。
+        if (attachment.rewardClaimId) {
+          await db
+            .update(rewardClaims)
+            .set({ claimedAt: now })
+            .where(
+              and(
+                eq(rewardClaims.id, attachment.rewardClaimId),
+                eq(rewardClaims.userId, userId),
+                isNull(rewardClaims.claimedAt),
+              ),
+            )
+            .catch((err) => console.error("[claimMessage] 回写活动奖励状态失败:", err));
+        }
+        return {
+          attachment: { ...attachment, credits: amount },
+          note: `${amount} cr 已到账（临时余额，${attachment.validDays} 天内有效）`,
+        };
       }
       case "tickets": {
         // 券只有转盘这一种：翻牌夺宝是按 cr 计价的局，没有券可发。
@@ -382,6 +496,12 @@ export async function claimMessage(
         throw new Error("未知的附件类型");
     }
   } catch (err) {
+    if (insertedCashbackClaimId) {
+      await db
+        .delete(cashbackClaims)
+        .where(eq(cashbackClaims.id, insertedCashbackClaimId))
+        .catch(() => undefined);
+    }
     await d1Run(`UPDATE message SET claimedAt = NULL WHERE id = ?`, [id]);
     throw err;
   }
@@ -389,8 +509,24 @@ export async function claimMessage(
 
 /** 用户主动删除（与 cron 清理同一张表，删除只按 id + userId 双条件，挡不住越权就白做）。 */
 export async function deleteMessage(userId: string, id: string): Promise<boolean> {
-  const { changes } = await d1Run(`DELETE FROM message WHERE id = ? AND userId = ?`, [id, userId]);
-  return changes > 0;
+  // 待领取的附件不能手删：否则用户点一下删除就把奖励吞了，活动页还会显示「已发放」。
+  const { changes } = await d1Run(
+    `DELETE FROM message
+     WHERE id = ? AND userId = ?
+       AND (claimedAt IS NOT NULL OR attachmentKind IS NULL)`,
+    [id, userId],
+  );
+  if (changes > 0) return true;
+
+  const rows = await db
+    .select({ attachmentKind: messages.attachmentKind, claimedAt: messages.claimedAt })
+    .from(messages)
+    .where(and(eq(messages.id, id), eq(messages.userId, userId)))
+    .limit(1);
+  if (rows[0]?.attachmentKind && !rows[0].claimedAt) {
+    throw new Error("附件还没领取，领取后才能删除这封信");
+  }
+  return false;
 }
 
 /**

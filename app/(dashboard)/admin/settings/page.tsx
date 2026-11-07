@@ -14,7 +14,7 @@ import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
 import { sanitizeRaidenConfig } from "@/lib/raiden/config";
 import { sanitizeFlipConfig } from "@/lib/flip/config";
 import { TASKS } from "@/lib/tasks/tasks";
-import { sanitizeBonusTiers } from "@/lib/payment/bonus";
+import { RECHARGE_ACTIVITY_DEFAULT_START, sanitizeBonusTiers } from "@/lib/payment/bonus";
 import type { AnnouncementInput, FaqItem } from "@/lib/settings/dashboard-info";
 
 import { PageBody } from "@/components/dashboard/section";
@@ -196,6 +196,8 @@ export default async function AdminSettingsPage() {
               initialSettings={{
                 enabled: settings.recharge_bonus_enabled === "true" || settings.recharge_bonus_enabled === "1",
                 validDays: settings.recharge_bonus_valid_days || "30",
+                startDate: settings.recharge_bonus_start_date || RECHARGE_ACTIVITY_DEFAULT_START,
+                endDate: settings.recharge_bonus_end_date || "",
                 tiers: bonusTiers,
               }}
             />

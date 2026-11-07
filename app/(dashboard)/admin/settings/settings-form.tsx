@@ -818,6 +818,9 @@ interface RechargeBonusSettingsFormProps {
   initialSettings: {
     enabled: boolean;
     validDays: string;
+    /** 活动窗口（北京时间，含首尾两天）；结束日期留空表示长期开放。 */
+    startDate: string;
+    endDate: string;
     /** 已配好的档位；表单按行编辑，不让管理员手写 JSON。 */
     tiers: Array<{ minCny: number; bonus: number }>;
   };
@@ -826,6 +829,8 @@ interface RechargeBonusSettingsFormProps {
 export function RechargeBonusSettingsForm({ initialSettings }: RechargeBonusSettingsFormProps) {
   const [enabled, setEnabled] = useState(initialSettings.enabled);
   const [validDays, setValidDays] = useState(initialSettings.validDays);
+  const [startDate, setStartDate] = useState(initialSettings.startDate);
+  const [endDate, setEndDate] = useState(initialSettings.endDate);
   const [tiers, setTiers] = useState(() =>
     initialSettings.tiers.map((t) => ({ minCny: String(t.minCny), bonus: String(t.bonus) })),
   );
@@ -838,7 +843,7 @@ export function RechargeBonusSettingsForm({ initialSettings }: RechargeBonusSett
     e.preventDefault();
     setLoading(true);
     try {
-      await updateRechargeBonusSettings({ enabled, validDays, tiers });
+      await updateRechargeBonusSettings({ enabled, validDays, startDate, endDate, tiers });
       toast.success("充值赠送设置已保存");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "保存失败");
@@ -860,7 +865,28 @@ export function RechargeBonusSettingsForm({ initialSettings }: RechargeBonusSett
         <span className="text-sm font-medium">启用充值阶梯赠送（默认关闭）</span>
       </label>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div>
+          <label className="block text-sm font-medium mb-1">活动开始日期</label>
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">活动结束日期</label>
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            disabled={!enabled}
+            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">留空表示长期开放；按北京时间含首尾两天</p>
+        </div>
         <div>
           <label className="block text-sm font-medium mb-1">赠送有效期（天）</label>
           <input
@@ -940,7 +966,7 @@ export function RechargeBonusSettingsForm({ initialSettings }: RechargeBonusSett
           </div>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
-          取实付能满足的<b>最高一档</b>赠送，不叠加；顺序不用管，保存时按门槛从小到大重排。
+          按活动期内<b>累计实付</b>判定，达到多档时每档都可领取一次（不叠加计算）；用户在「限时返利」页逐档发放到站内信，领取后才进临时余额。顺序不用管，保存时按门槛从小到大重排。
         </p>
       </div>
 

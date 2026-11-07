@@ -97,12 +97,7 @@ export function RedeemCodeDialog({
   const credits = rechargeCredits(finalAmount, cfg.rate);
   const amountError = rechargeAmountError(finalAmount, cfg.min, cfg.max, cfg.unit);
 
-  /** 取能满足的最高一档；与 lib/payment/bonus.ts 同口径（这里不能引服务端模块）。 */
-  const bonusFor = (amt: number) =>
-    Number.isFinite(amt)
-      ? bonusTiers.reduce((best, t) => (amt >= t.minCny && t.bonus > best ? t.bonus : best), 0)
-      : 0;
-
+  
   const chooseChannel = (id: string) => {
     setChannel(id);
     const next = configFor(id);
@@ -286,21 +281,11 @@ export function RedeemCodeDialog({
               {bonusTiers.length > 0 ? (
                 <div className="mt-2 rounded-lg border border-primary/20 bg-primary/5 p-2.5 text-xs">
                   <p className="text-muted-foreground">
-                    {amountError ? (
-                      <>输入有效金额后显示本单赠送</>
-                    ) : bonusFor(finalAmount) > 0 ? (
-                      <>
-                        本单额外赠送{" "}
-                        <strong className="text-foreground">{bonusFor(finalAmount).toLocaleString()}</strong> cr
-                        （临时余额，{bonusValidDays} 天内有效）
-                      </>
-                    ) : (
-                      <>当前金额未达到赠送门槛，凑到下面任一档即可获赠</>
-                    )}
+                    充值活动：活动期内累计充值达标后，到「限时返利」页手动领取；奖励发放到站内信，领取后进入临时余额（{bonusValidDays} 天内有效）
                   </p>
                   <p className="mt-1 text-muted-foreground">
                     {bonusTiers
-                      .map((t) => `${t.minCny} → +${t.bonus.toLocaleString()} cr`)
+                      .map((t) => `累计 ${t.minCny} → +${t.bonus.toLocaleString()} cr`)
                       .join("　·　")}
                   </p>
                 </div>

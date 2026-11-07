@@ -1,24 +1,25 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, Loader2 } from "lucide-react";
+import { Check, Inbox, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { claimCashbackAction } from "@/app/(dashboard)/cashback/actions";
+import { sendCashbackRewardAction } from "@/app/(dashboard)/cashback/actions";
 import { Button } from "@/components/ui/button";
 import { formatCredits } from "@/lib/billing/credits";
 import { formatCnDate } from "@/lib/date";
 import type { CashbackDay } from "@/lib/cashback/claims";
 
-/** 可领清单：一天一行，点「领取」后由服务端重算当日消费再发钱。 */
+/** 可发放清单：一天一行，点「发放到站内信」后由服务端重算当日消费再发信。 */
 export function CashbackClaimPanel({ days }: { days: CashbackDay[] }) {
   const router = useRouter();
   const [busyDate, setBusyDate] = useState<string | null>(null);
 
-  async function onClaim(date: string) {
+  async function onSend(date: string) {
     if (busyDate) return;
     setBusyDate(date);
-    const res = await claimCashbackAction({ date });
+    const res = await sendCashbackRewardAction({ date });
     setBusyDate(null);
     if (!res.success) {
       toast.error(res.message);
@@ -46,18 +47,21 @@ export function CashbackClaimPanel({ days }: { days: CashbackDay[] }) {
               +{formatCredits(d.reward)} cr
             </span>
             {d.claimable ? (
-              <Button
-                size="sm"
-                disabled={busyDate !== null}
-                onClick={() => void onClaim(d.date)}
-              >
+              <Button size="sm" disabled={busyDate !== null} onClick={() => void onSend(d.date)}>
                 {busyDate === d.date ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-                领取
+                发放到站内信
+              </Button>
+            ) : d.claimState === "sent" ? (
+              <Button size="sm" variant="outline" asChild>
+                <Link href="/messages?filter=claimable">
+                  <Inbox className="h-3.5 w-3.5" />
+                  去站内信领取
+                </Link>
               </Button>
             ) : (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                {d.note === "已领取" ? <Check className="h-3.5 w-3.5" /> : null}
-                {d.note || "不可领"}
+                {d.claimState === "claimed" ? <Check className="h-3.5 w-3.5" /> : null}
+                {d.note || "不可发放"}
               </span>
             )}
           </div>

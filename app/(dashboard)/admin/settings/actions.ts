@@ -336,6 +336,8 @@ export async function updateCashbackSettings(formData: {
 export async function updateRechargeBonusSettings(formData: {
   enabled: boolean;
   validDays: string;
+  startDate: string;
+  endDate: string;
   tiers: Array<{ minCny: string; bonus: string }>;
 }) {
   const currentUserId = await requireUser();
@@ -353,6 +355,18 @@ export async function updateRechargeBonusSettings(formData: {
   const validDays = parseInt(formData.validDays, 10);
   if (!Number.isFinite(validDays) || validDays < 1 || validDays > 365) {
     throw new Error("赠送有效期需在 1 ~ 365 天之间");
+  }
+
+  const startDate = formData.startDate.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || parseCnWallClock(startDate) === null) {
+    throw new Error("活动开始日期格式不正确");
+  }
+  const endDate = formData.endDate.trim();
+  if (endDate && (!/^\d{4}-\d{2}-\d{2}$/.test(endDate) || parseCnWallClock(endDate) === null)) {
+    throw new Error("活动结束日期格式不正确");
+  }
+  if (endDate && endDate < startDate) {
+    throw new Error("活动结束日期不能早于开始日期");
   }
 
   const rows: Array<{ minCny: number; bonus: number }> = [];
@@ -382,11 +396,14 @@ export async function updateRechargeBonusSettings(formData: {
   await Promise.all([
     setSetting("recharge_bonus_enabled", formData.enabled),
     setSetting("recharge_bonus_valid_days", validDays),
+    setSetting("recharge_bonus_start_date", startDate),
+    setSetting("recharge_bonus_end_date", endDate),
     setSetting("recharge_bonus_tiers", JSON.stringify(tiers)),
   ]);
 
   revalidatePath("/admin/settings");
   revalidatePath("/wallet");
+  revalidatePath("/cashback");
 
   return { success: true };
 }

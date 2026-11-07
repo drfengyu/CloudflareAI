@@ -3,7 +3,7 @@
 ## 用途
 
 - 系统 / 管理员给单个用户发通知（维护公告、补偿说明等）。
-- 带附件的奖励信：cr 余额、抽奖券、兑换码、自定义物品 / 凭证。
+- 带附件的奖励信：cr 余额、临时余额（限时返利 / 充值奖励）、抽奖券、兑换码、自定义物品 / 凭证。
   附件不会在发信时入账，用户点「领取」才真正发放。
 - 安全提示：管理员重置密码、用户自助改密、首次设置密码时自动发一封 `security` 信留痕。
 
@@ -17,8 +17,8 @@
 | `userId` | 收件人，`ON DELETE CASCADE` |
 | `kind` | `notice` / `reward` / `security` |
 | `title` / `body` | 主题与正文（列表简述由正文压平后截 60 字生成，不单独存） |
-| `attachmentKind` | `credits` / `tickets` / `redemption` / `item`，可空 |
-| `attachment` | JSON：`{"credits":50}`、`{"count":2}`、`{"code":"..."}`、`{"label":"..."}` |
+| `attachmentKind` | `credits` / `temp_credits` / `tickets` / `redemption` / `item`，可空 |
+| `attachment` | JSON：`{"credits":50}`、`{"credits":50,"validDays":30,"topupType":10,"rewardClaimId":"..."}`、`{"count":2}`、`{"code":"..."}`、`{"label":"..."}` |
 | `sentBy` | 发信管理员，系统信为 null，`ON DELETE SET NULL` |
 | `readAt` | 第一次打开的毫秒时间戳；清理的起算点 |
 | `claimedAt` | 领取时间；无附件的信恒为 null |
@@ -39,6 +39,9 @@ WHERE id = ? AND userId = ? AND claimedAt IS NULL AND attachmentKind IS NOT NULL
 入账（余额 / 券）抛错时把 `claimedAt` 回滚为 `NULL`，让用户能重试 —— 与消费返利领取同一模式。
 
 - **cr**：`users.balanceCredits` 原子加，并写一条 `topup type=13`（1–12 已被其他来源占用）。
+- **临时余额**（`temp_credits`）：写 `temporary_balance` 与 `topup`（`type` 由附件指定：8 消费返利 / 10 充值赠送），
+  有效期取附件 `validDays`；若带 `cashbackDate` 同时补写 `cashback_claim` 历史行。
+  领取成功后回写 `reward_claim.claimedAt`；回写失败不影响已到账的钱，活动页用站内信 `claimedAt` 兜底。
 - **抽奖券**：`grantTickets(userId, count, { source: "gift", priceCredits: 0 })`。
   翻牌夺宝是按 cr 计价的局，没有券，所以这里只覆盖幸运转盘。
 - **兑换码 / 自定义物品**：领取前 `readMessage` 返回空内容，领取后才返回明文，
@@ -55,7 +58,8 @@ WHERE readAt IS NOT NULL AND readAt < ?
 ```
 
 即「每封信读过满 3 天删除」。**带附件但还没领取的信不删** —— 用户读过却没来得及领，
-删掉等于把奖励吞了，这类信只能领取或由用户自己删。用户可在收件箱里随时手删任意一封。
+删掉等于把奖励吞了。这类信用户也不能手动删除（`deleteMessage` 会拒绝并提示），
+必须先领取；领取后或本来就无附件的信可随时手删。
 
 ## 管理端：重置密码而不是查看
 
