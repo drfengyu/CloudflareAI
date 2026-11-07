@@ -1,5 +1,6 @@
-import { db } from "@/lib/db/d1-http";
+import { batchRows, d1Run, db } from "@/lib/db/d1-http";
 import { temporaryBalances } from "@/lib/db/schema";
+import { TOPUP_TYPE_EXPIRE } from "@/lib/billing/ledger";
 import { sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
@@ -47,18 +48,54 @@ export async function GET(request: Request) {
       return NextResponse.json({
         success: true,
         deleted: 0,
+        journaled: 0,
         message: "No expired temporary balances",
         timestamp: now.toISOString(),
       });
     }
 
-    // 删除过期记录
-    const result = await db
-      .delete(temporaryBalances)
-      .where(sql`${temporaryBalances.expiresAt} <= ${nowMs}`);
+    // 删行前先按行补一笔负数流水：发放时记了收入，过期不记账的话账本永远只有收入。
+    // id 固定为 `expire:<临时余额行 id>`，重跑时 INSERT OR IGNORE 不会重复记；
+    // 写流水失败就抛出、不进入删行，下一轮 cron 会重试。
+    const journalRows = expiredRecords
+      .filter((row) => row.amount > 0)
+      .map((row) => ({
+        id: `expire:${row.id}`,
+        userId: row.userId,
+        amount: -row.amount,
+        type: TOPUP_TYPE_EXPIRE,
+        description: `临时余额过期作废${row.description ? `：${row.description}` : ""}`.slice(0, 300),
+        createdAt: new Date(row.expiresAt).getTime(),
+      }));
+
+    for (const batch of batchRows(journalRows, 6)) {
+      await d1Run(
+        `INSERT OR IGNORE INTO topup (id, userId, amount, type, description, createdAt)
+         VALUES ${batch.map(() => "(?, ?, ?, ?, ?, ?)").join(", ")}`,
+        batch.flatMap((row) => [
+          row.id,
+          row.userId,
+          row.amount,
+          row.type,
+          row.description,
+          row.createdAt,
+        ]),
+      );
+    }
+
+    // 只删刚记过账的这批 id：select 与 delete 之间新到期的行留给下一轮，不会漏流水。
+    for (const batch of batchRows(
+      expiredRecords.map((row) => row.id),
+      1,
+    )) {
+      await d1Run(
+        `DELETE FROM temporary_balance WHERE id IN (${batch.map(() => "?").join(",")})`,
+        batch,
+      );
+    }
 
     console.log(
-      `[cleanup-expired-balances] Deleted ${expiredRecords.length} expired records`,
+      `[cleanup-expired-balances] Journaled ${journalRows.length} and deleted ${expiredRecords.length} expired records`,
       expiredRecords.map((r) => ({
         userId: r.userId,
         amount: r.amount,
@@ -69,6 +106,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       deleted: expiredRecords.length,
+      journaled: journalRows.length,
       message: `Cleaned up ${expiredRecords.length} expired temporary balance(s)`,
       timestamp: now.toISOString(),
       details: expiredRecords.map((r) => ({

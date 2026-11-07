@@ -30,8 +30,8 @@ const amountTone = (value: number) =>
     value > 0 ? "text-success" : value < 0 ? "text-destructive" : "text-muted-foreground",
   );
 
-/** API 消费只有支出，再列「收入/支出」等于一列 0 加一列重复数。 */
-const isExpenseOnly = (filter: LedgerFilter) => filter === "usage";
+/** API 消费与过期作废只有支出，再列「收入/支出」等于一列 0 加一列重复数。 */
+const isExpenseOnly = (filter: LedgerFilter) => filter === "usage" || filter === "expire";
 
 export function LedgerCard({ initial }: { initial: LedgerOverview }) {
   const [overview, setOverview] = useState(initial);
@@ -122,17 +122,23 @@ export function LedgerCard({ initial }: { initial: LedgerOverview }) {
           </div>
         </div>
 
-        {gap !== null && Math.abs(gap) >= 0.01 ? (
+        {filter === "all" ? (
           <p className="text-xs text-muted-foreground">
-            账目净收支与当前余额相差 {signed(Math.abs(gap), gap > 0 ? "+" : "−")} cr：
-            到期作废的临时余额（发放记了收入，到期那笔支出由每日清理任务删行、没有留底）、
-            早期未计量的调用都不进账本，因此合计不等于余额。
+            临时余额到期没用完时，清理任务会在到期日逐笔记一笔「过期作废」支出，累计支出已包含这部分。
           </p>
         ) : null}
 
-        {gap === null ? (
+        {gap !== null ? (
           <p className="text-xs text-muted-foreground">
-            当前只统计「{activeFilterLabel}」，上面三项是本类别合计，不与余额对账；切回「全部」才会显示差额。
+            {gap > 0
+              ? `账目合计比当前余额少 ${formatCredits(gap)} cr：有账外增加的余额变更没进账本，差额如实保留。`
+              : `账目合计比当前余额多 ${formatCredits(-gap)} cr：2026-11-07 前的过期临时余额没有流水，或早期未计量消费、未入账调整；此后的过期会逐日记一笔「过期作废」。`}
+          </p>
+        ) : null}
+
+        {filter !== "all" ? (
+          <p className="text-xs text-muted-foreground">
+            当前只统计「{activeFilterLabel}」，上面三项是本类别合计，不与余额对账；切回「全部」才会按累计收支对账。
           </p>
         ) : null}
 

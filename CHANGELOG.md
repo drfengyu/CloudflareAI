@@ -5,6 +5,24 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.29.3] - 2026-11-07
+
+### 新增
+
+- 过期临时余额从「只有收入」改为逐笔记账：清理任务删行前按每一行补一笔负数 `topup`（`type=14` 过期作废，`createdAt` 用原到期时间），账本天表在到期日看到这笔支出，已过期的兑换码不再只剩一笔发放收入。
+- 个人账本「过期作废」筛选与其它类别一致：按到期日列天表、可翻页、可展开当天分类；不再有「只给汇总金额」的特例。
+
+### 修复
+
+- 账本累计收入 / 支出回到**原始流水合计**：删除 `ledgerSummary()` 按余额差额反推过期作废的做法，顶部只如实单列差额（负差额 = 历史过期或未入账扣减，正差额 = 账外增加），不把差额塞进支出硬凑对平。
+- 钱包结算改用真实 `type=14` 合计（`sumExpiredExpense()`）从收入与支出两头剔除；剩余差额原样标出，不再谎称已对平。最近收支列表排除过期行，避免与结算条重复解释。
+
+### 实现
+
+- `app/api/cron/cleanup-expired-balances/route.ts`：先写流水、后删行；`id = "expire:<临时余额 id>"` + `INSERT OR IGNORE` 保证重跑幂等；写流水失败则本轮不删，下一轮重试。消费 / 回滚路径删临时余额行不补流水（支出已由 `usage_log` 或负数 `topup` 记过）。
+- `lib/billing/ledger.ts`：新增 `TOPUP_TYPE_EXPIRE = 14`、`sumExpiredExpense()`；`ledgerSettlement(balance, totals, expired)` 返回 `gap` 与 `reconciled`；最近收支 SQL 排除 `category <> 'expire'`。
+- 历史过期行已被旧版 cron 删掉，无法逐笔还原；线上超管账号那笔 10 亿兑换码（`YDU5QKKA4TWA89XK`，2026-06-24 到期）需一次性补记才能落到账本，属生产账目写入，单独确认后再执行。
+
 ## [0.29.2] - 2026-11-07
 
 ### 变更

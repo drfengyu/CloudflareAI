@@ -6,10 +6,11 @@
  * - `usage_log.creditsUsed`：API 消费。它只记在用量表里、不进 `topup`，漏掉它就解释不了
  *   余额为什么往下掉。按「当天每个模型」聚合成一笔，重度调用用户一天几百次也不会撑爆小计。
  *
- * **临时余额过期没有做成第三个来源**，因为 `vercel.json` 每天 02:00 UTC 跑
- * `/api/cron/cleanup-expired-balances`，把 `expiresAt <= now` 的行**整行删掉**。过期当天到
- * 清理前这几个小时里查会得到一笔支出，清理后又没了——过去某天的账会自己变，「过期作废」
- * 也几乎永远是空的。所以过期没用完的临时余额并入下面的差额口径，见 `ledgerGap`。
+ * **临时余额过期从 v0.29.3 起逐笔记账**：`vercel.json` 每天 02:00 UTC 跑
+ * `/api/cron/cleanup-expired-balances`，在删掉 `expiresAt <= now` 的临时余额行之前，
+ * 按每一行补一笔负数 `topup`（`type=14` 过期作废，`createdAt` 用原到期时间），
+ * 账本天表才能在到期那天看到这笔支出。历史过期行已被旧版 cron 删掉、无法逐笔还原，
+ * 只会在顶部差额里体现。
  *
  * 两张表 UNION ALL 后在 SQL 里分组，排序一律回到 JS：本仓库已实测 D1 对 `ORDER BY`
  * 聚合别名解析失败。投影列多、又要求按列别名取数，所以走 `d1All` 而不是 sqlite-proxy
@@ -22,7 +23,7 @@ export const LEDGER_PAGE_SIZE = 10;
 
 const DAY_MS = 86_400_000;
 
-export type LedgerCategory = "recharge" | "reward" | "activity" | "usage";
+export type LedgerCategory = "recharge" | "reward" | "activity" | "usage" | "expire";
 export type LedgerFilter = "all" | LedgerCategory;
 
 export const LEDGER_FILTERS: { id: LedgerFilter; label: string }[] = [
@@ -30,8 +31,12 @@ export const LEDGER_FILTERS: { id: LedgerFilter; label: string }[] = [
   { id: "recharge", label: "充值" },
   { id: "reward", label: "赠送与返利" },
   { id: "activity", label: "活动" },
+  { id: "expire", label: "过期作废" },
   { id: "usage", label: "API 消费" },
 ];
+
+/** 过期作废流水的 `topup.type`：cron 删临时余额前按行补记，金额为负。 */
+export const TOPUP_TYPE_EXPIRE = 14;
 
 /** `topup.type` 的界面名，与 `lib/db/schema.ts` 的注释同一份口径。 */
 export const TOPUP_TYPE_LABEL: Record<number, string> = {
@@ -48,24 +53,28 @@ export const TOPUP_TYPE_LABEL: Record<number, string> = {
   11: "雷电行动",
   12: "翻牌夺宝",
   13: "站内信奖励",
+  14: "过期作废",
 };
 
 const DAY_OF = (column: string) => `strftime('%Y-%m-%d', ${column} / 1000, 'unixepoch', '+8 hours')`;
 
 /**
  * 每个类别包含哪些 `topup.type`。活动（6/11/12）正负都有，所以既可能出现在收入也可能出现在支出。
+ * 过期作废（14）由清理 cron 写入，只有负数。
  *
  * 新增发放类型时必须同时登记进 `TOPUP_TYPE_LABEL` 和这里，`tests/ledger.test.ts` 会检查
- * 13 个类型是否恰好各归一类——漏了不会报错，只会静默算进「活动」。
+ * 类型是否恰好各归一类——漏了不会报错，只会静默算进「活动」。
  */
 export const LEDGER_CATEGORY_TYPES: Record<Exclude<LedgerCategory, "usage">, number[]> = {
   recharge: [1, 2, 5, 13],
   reward: [3, 4, 7, 8, 9, 10],
   activity: [6, 11, 12],
+  expire: [TOPUP_TYPE_EXPIRE],
 };
 
 const TOPUP_CATEGORY = `CASE WHEN type IN (${LEDGER_CATEGORY_TYPES.recharge.join(", ")}) THEN 'recharge'
                              WHEN type IN (${LEDGER_CATEGORY_TYPES.reward.join(", ")}) THEN 'reward'
+                             WHEN type IN (${LEDGER_CATEGORY_TYPES.expire.join(", ")}) THEN 'expire'
                              ELSE 'activity' END`;
 
 const TOPUP_INCOME = `CASE WHEN amount > 0 THEN amount ELSE 0 END`;
@@ -230,6 +239,9 @@ export async function listLedgerDayByType(
 /**
  * 钱包页的最近收支：窗口内最近若干条变动，与账本同一份口径。
  * SQL 里已按 `amount <> 0` 过滤，`LIMIT` 就是实际条数。
+ *
+ * 过期作废不进这一列：钱包只回答「还能用的钱怎么进出的」，过期统一去账本看；
+ * 结算条已经把过期从收入和支出两头都剔掉，列表里再出现会让人重复扣一次。
  */
 export async function listRecentLedgerEntries(
   userId: string,
@@ -239,7 +251,7 @@ export async function listRecentLedgerEntries(
   const { sql, params } = ledgerUnion(userId, range);
   const rows = await d1All<Record<string, unknown>>(
     `SELECT ts, category, typeCode, detail, income, expense, calls
-     FROM (${sql}) WHERE ts IS NOT NULL ORDER BY ts DESC LIMIT ?`,
+     FROM (${sql}) WHERE ts IS NOT NULL AND category <> 'expire' ORDER BY ts DESC LIMIT ?`,
     [...params, limit],
   );
   return rows.map((row) => ({
@@ -265,11 +277,11 @@ export function sumLedgerDays(rows: Array<{ income: number; expense: number }>):
  * 账目合计与真实余额的差额。
  *
  * 差额非零是历史事实，不是 bug，来源有三类：
- * 1. **到期作废的临时余额**：发放时记了收入，用完/过期后 `temporary_balance` 的行会被删掉
- *    （每天 02:00 UTC 的 cleanup cron），这笔支出没有任何地方留底，只能体现在差额里。
+ * 1. **2026-11-07 前到期作废的临时余额**：旧版 cron 直接删行、没有流水，无法逐笔还原。
+ *    从 v0.29.3 起，清理前会按行补一笔 `type=14` 负流水，之后的过期都落在到期那天。
  * 2. 早期版本的调用没计量 `creditsUsed`。
  * 3. 历史数据里管理员直接改过余额（2026-11-07 前下调不写 `topup`；之后正负都记 `type=2`）。
- * 所以账本页如实把它单列一行，而不是假装合计等于余额。
+ * 所以账本页如实把差额单列说明，而不是假装合计等于余额。
  */
 export function ledgerGap(actualBalance: number, totals: LedgerTotals): number {
   return round2(actualBalance - (totals.income - totals.expense));
@@ -282,29 +294,46 @@ export function ledgerNet(row: { income: number; expense: number }): number {
 export interface LedgerSettlement {
   /** 累计收入里剔除过期作废部分后的口径：只剩真正留下或被花掉的入账。 */
   effectiveIncome: number;
+  /** 累计支出里同样剔除过期作废：钱包只展示「还能用的钱」怎么进出。 */
   expense: number;
   expired: number;
   balance: number;
+  /** 原始账目合计与余额的差额（正数 = 余额更高），历史遗留时非零。 */
+  gap: number;
+  /** 有效入账 − 支出是否正好等于余额；有历史差额时为 false。 */
+  reconciled: boolean;
+}
+
+/** 全量过期作废支出（正数）：钱包结算要把发放与作废两头一起剔掉。 */
+export async function sumExpiredExpense(userId: string): Promise<number> {
+  const rows = await d1All<Record<string, unknown>>(
+    "SELECT SUM(-amount) AS expired FROM topup WHERE userId = ? AND type = ? AND amount < 0",
+    [userId, TOPUP_TYPE_EXPIRE],
+  );
+  return Math.max(0, num(rows[0]?.expired));
 }
 
 /**
- * 钱包用的「当前结算」口径：过期作废的临时余额不再出现在收入里。
+ * 钱包用的「当前结算」口径：把过期作废的发放与作废两头都从展示里剔除。
  *
- * 过期部分由差额反推（`balance - (income - expense)`），而不是逐行判定：
- * 临时余额过期后行被 cron 删掉，逐行已无法区分「花掉」与「作废」。
- * 反推的前提是差额不为正；正差额意味着有账外的增加，此时不生成过期项。
+ * 过期金额来自 `topup type=14` 的真实流水（v0.29.3 起 cron 逐笔补记），
+ * 不再由余额差额反推；`有效入账 − 支出` 与余额的差只剩历史遗留，页面如实标出。
  */
 export function ledgerSettlement(
   actualBalance: number,
   totals: LedgerTotals,
+  expiredExpense: number,
 ): LedgerSettlement {
-  const gap = ledgerGap(actualBalance, totals);
-  const expired = gap < 0 ? round2(-gap) : 0;
+  const expired = round2(Math.max(0, expiredExpense));
+  const effectiveIncome = round2(totals.income - expired);
+  const expense = round2(totals.expense - expired);
   return {
-    effectiveIncome: round2(totals.income - expired),
-    expense: totals.expense,
+    effectiveIncome,
+    expense,
     expired,
     balance: actualBalance,
+    gap: ledgerGap(actualBalance, totals),
+    reconciled: Math.abs(round2(effectiveIncome - expense) - actualBalance) < 0.01,
   };
 }
 

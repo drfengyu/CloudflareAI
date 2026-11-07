@@ -20,14 +20,12 @@ import {
 export interface LedgerOverview {
   days: LedgerDayRow[];
   hasNext: boolean;
-  /** 当前筛选下的全量累计，与页码无关。 */
+  /** 当前筛选下的全量累计；过期作废已由 cron 逐笔记入 `topup type=14`。 */
   totals: LedgerTotals;
   balance: number;
   /**
-   * 余额 −（累计收入 − 累计支出）。
-   *
-   * 只在「全部」类别下有值：差额是拿账目合计跟**整户余额**对的，筛到某一类时合计天然
-   * 不等于余额（筛 API 消费就只剩支出），印出来只会让人以为账本漏了一大笔。
+   * 账目合计与余额的差额（正数 = 余额更高）。过期作废从 v0.29.3 起有真实流水，
+   * 这里只剩历史遗留；只在「全部」类别下有值，筛选态合计天然不等于余额。
    */
   gap: number | null;
 }
@@ -45,9 +43,9 @@ function safeFilter(filter: unknown): LedgerFilter {
   return FILTER_IDS.has(String(filter)) ? (String(filter) as LedgerFilter) : "all";
 }
 
-const CATEGORY_ORDER: LedgerCategory[] = ["recharge", "reward", "activity", "usage"];
+const CATEGORY_ORDER: LedgerCategory[] = ["recharge", "reward", "activity", "expire", "usage"];
 
-/** 类型小计按「充值 → 赠送与返利 → 活动 → API 消费」排，同类按 type 升序。 */
+/** 类型小计按「充值 → 赠送与返利 → 活动 → 过期作废 → API 消费」排，同类按 type 升序。 */
 function sortTypeRows(rows: LedgerTypeRow[]): LedgerTypeRow[] {
   return [...rows].sort((a, b) => {
     const byCategory = CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category);
@@ -73,13 +71,14 @@ export async function loadLedger(page: number, filter: unknown): Promise<LedgerO
   const safePage = Math.max(1, Math.trunc(Number(page)) || 1);
   const start = (safePage - 1) * LEDGER_PAGE_SIZE;
   const totals = sumLedgerDays(sorted);
+  const gap = category === "all" ? ledgerGap(balance, totals) : null;
 
   return {
     days: sorted.slice(start, start + LEDGER_PAGE_SIZE),
     hasNext: start + LEDGER_PAGE_SIZE < sorted.length,
     totals,
     balance,
-    gap: category === "all" ? ledgerGap(balance, totals) : null,
+    gap: gap !== null && Math.abs(gap) >= 0.01 ? gap : null,
   };
 }
 

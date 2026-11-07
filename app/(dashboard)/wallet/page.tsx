@@ -18,6 +18,7 @@ import {
   listLedgerDays,
   listRecentLedgerEntries,
   recentWindow,
+  sumExpiredExpense,
   sumLedgerDays,
 } from "@/lib/billing/ledger";
 import { getRechargeBonusSettings } from "@/lib/payment/bonus";
@@ -45,7 +46,7 @@ export default async function WalletPage({
 
   // 2026-10-17 性能：这些查询互不依赖（全都只按 userId 取数），原先是一条接一条 await，
   // 串行 5 次 D1 往返 ≈ 2 秒；并发成一波后只剩最慢那条的时间。
-  const [userRows, tempBalances, pendingOrders, linuxdoConfig, bonusConfig, recentLedger, ledgerDays] =
+  const [userRows, tempBalances, pendingOrders, linuxdoConfig, bonusConfig, recentLedger, ledgerDays, expiredExpense] =
     await Promise.all([
       // 永久余额与角色（角色决定充值弹窗里能不能看到易支付）
       db
@@ -74,6 +75,8 @@ export default async function WalletPage({
       listRecentLedgerEntries(userId, RECENT_LEDGER_LIMIT, recentWindow()),
       // 与账本页同一把尺子的全量天表：钱包要拿累计净收支和余额对账
       listLedgerDays(userId),
+      // 过期作废的真实流水：钱包把发放和作废两头一起从展示里剔除
+      sumExpiredExpense(userId),
     ]);
 
   const permanentBalance = userRows[0]?.balanceCredits || 0;
@@ -128,7 +131,7 @@ export default async function WalletPage({
   const serializedOrders = pendingOrders.map(serializePayOrder);
   const recentTotals = sumLedgerDays(recentLedger);
   const ledgerTotals = sumLedgerDays(ledgerDays);
-  const settlement = ledgerSettlement(totalBalance, ledgerTotals);
+  const settlement = ledgerSettlement(totalBalance, ledgerTotals, expiredExpense);
 
   const justReturned = params.paid === "1";
   const highlightOrderNo = params.orderNo ?? undefined;
@@ -145,7 +148,7 @@ export default async function WalletPage({
           {/* 余额卡片 */}
           <Card className="border-primary/20 bg-primary/5">
             <CardContent className="pt-5">
-              <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="flex min-w-0 items-start gap-3">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
                     <Wallet className="h-6 w-6" />
@@ -155,34 +158,6 @@ export default async function WalletPage({
                     <p className="text-2xl font-semibold tabular-nums">
                       {formatCredits(totalBalance)} credits
                     </p>
-                    <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                      <p className="flex flex-wrap items-center gap-x-2">
-                        <span className="font-medium text-foreground tabular-nums">
-                          永久 {formatCredits(displayBalance.displayPermanent)} cr
-                        </span>
-                        <span>充值到账与管理员调整，不过期</span>
-                      </p>
-                      {(temporaryTotal > 0 || permanentBalance < 0) && (
-                        <p className="flex flex-wrap items-center gap-x-2">
-                          <span className="flex items-center gap-1 font-medium text-foreground tabular-nums">
-                            <Clock className="h-3 w-3" />
-                            临时 {formatCredits(displayBalance.displayTemporary)} cr
-                          </span>
-                          <span>
-                            {earliestExpiry
-                              ? `签到、赠送与返利，最早 ${earliestExpiry} 到期`
-                              : "签到、赠送与返利，到期作废"}
-                          </span>
-                        </p>
-                      )}
-                      {compensated > 0 && (
-                        <p className="text-amber-600 dark:text-amber-400">
-                          永久余额实为 −{formatCredits(Math.abs(permanentBalance))} cr，已用{" "}
-                          {formatCredits(compensated)} cr 临时余额抵扣；上方两项是抵扣后的可用额度
-                        </p>
-                      )}
-                      <p>总余额 = 永久 + 未过期临时；消费先扣临时、再扣永久</p>
-                    </div>
                   </div>
                 </div>
                 <RedeemCodeDialog
@@ -195,9 +170,9 @@ export default async function WalletPage({
                 />
               </div>
 
-              <div className="mt-4 space-y-1 rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground tabular-nums">
+              <div className="mt-4 space-y-1 rounded-lg border border-primary/20 bg-background/70 p-3 text-xs text-muted-foreground tabular-nums">
                 <p className="flex flex-wrap items-center gap-x-3">
-                  <span className="font-medium text-foreground">当前余额结算</span>
+                  <span className="font-medium text-foreground">余额结算（不含过期作废）</span>
                   <span className="text-success">
                     有效入账 +{formatCredits(settlement.effectiveIncome)}
                   </span>
@@ -205,14 +180,61 @@ export default async function WalletPage({
                     累计支出 −{formatCredits(settlement.expense)}
                   </span>
                   <span className="font-medium text-foreground">
-                    = {formatCredits(settlement.balance)} cr
+                    = 净额{" "}
+                    {formatCredits(
+                      ledgerNet({
+                        income: settlement.effectiveIncome,
+                        expense: settlement.expense,
+                      }),
+                    )}{" "}
+                    cr
+                  </span>
+                  <span>
+                    当前余额 {formatCredits(settlement.balance)} cr
+                    {settlement.reconciled
+                      ? ""
+                      : `（相差 ${settlement.gap > 0 ? "+" : "−"}${formatCredits(Math.abs(settlement.gap))}）`}
                   </span>
                 </p>
                 <p>
+                  {settlement.reconciled
+                    ? "按账本流水结算，与当前余额一致；"
+                    : settlement.gap > 0
+                      ? `净额比当前余额少 ${formatCredits(settlement.gap)} cr：有账外增加的余额变更没进账本；`
+                      : `净额比当前余额多 ${formatCredits(-settlement.gap)} cr：2026-11-07 前的过期临时余额没有流水，或早期未计量消费、未入账调整；`}
                   {settlement.expired >= 0.01
-                    ? "已剔除过期作废的临时余额（发放记了收入、到期没有流水）；完整流水见个人账本。"
-                    : "按账本流水结算，与当前余额一致；完整流水见个人账本。"}
+                    ? "过期作废已从收入与支出两头剔除，账本「过期作废」类目按到期日逐笔可查。"
+                    : "完整流水见个人账本。"}
                 </p>
+              </div>
+
+              <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                <p className="flex flex-wrap items-center gap-x-2">
+                  <span className="font-medium text-foreground tabular-nums">
+                    永久 {formatCredits(displayBalance.displayPermanent)} cr
+                  </span>
+                  <span>充值到账与管理员调整，不过期</span>
+                </p>
+                {(temporaryTotal > 0 || permanentBalance < 0) && (
+                  <p className="flex flex-wrap items-center gap-x-2">
+                    <span className="flex items-center gap-1 font-medium text-foreground tabular-nums">
+                      <Clock className="h-3 w-3" />
+                      临时 {formatCredits(displayBalance.displayTemporary)} cr
+                    </span>
+                    <span>
+                      {earliestExpiry
+                        ? `签到、赠送与返利，最早 ${earliestExpiry} 到期`
+                        : "签到、赠送与返利，到期作废"}
+                    </span>
+                  </p>
+                )}
+                {compensated > 0 && (
+                  <p className="text-amber-600 dark:text-amber-400">
+                    永久余额实为 −{formatCredits(Math.abs(permanentBalance))} cr，已用{" "}
+                    {formatCredits(compensated)} cr 临时余额抵扣；上方两项是抵扣后的可用额度
+                  </p>
+                )}
+                <p>总余额 = 永久 + 未过期临时；消费先扣临时、再扣永久</p>
               </div>
             </CardContent>
           </Card>

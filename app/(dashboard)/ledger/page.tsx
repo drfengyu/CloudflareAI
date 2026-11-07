@@ -10,7 +10,7 @@ export default async function LedgerPage() {
 
   return (
     <>
-      <PageHeader title="个人账本" description="按天汇总的收支、余额与差额" />
+      <PageHeader title="个人账本" description="按天汇总的收支、余额与过期作废" />
 
       <PageBody className="pt-2">
         <PageSection

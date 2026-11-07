@@ -97,14 +97,15 @@ test("金额为 0 的发放/调整在 SQL 里就挡掉，不占笔数也不占�
   assert.match(sql, /FROM usage_log WHERE userId = \? AND creditsUsed > 0/);
 });
 
-test("13 个发放类型各归一类，漏登记会被问出来", () => {
+test("14 个流水类型各归一类，漏登记会被问出来", () => {
   const { ledger } = harness();
   const buckets = Object.values(ledger.LEDGER_CATEGORY_TYPES).flat();
   const labelled = Object.keys(ledger.TOPUP_TYPE_LABEL).map(Number);
 
   assert.deepEqual([...buckets].sort((a, b) => a - b), [...labelled].sort((a, b) => a - b));
   assert.equal(new Set(buckets).size, buckets.length, "同一个 type 不能落进两个类别");
-  assert.deepEqual(labelled.sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+  assert.deepEqual(labelled.sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+  assert.deepEqual(local(ledger.LEDGER_CATEGORY_TYPES.expire), [ledger.TOPUP_TYPE_EXPIRE]);
 });
 
 test("注册奖励是赠送，不进充值类目", () => {
@@ -187,7 +188,7 @@ test("最近收支按 LIMIT 取满，SQL 里已挡掉 0 进出的行", () => {
     assert.equal(placeholders(queries[0].sql), queries[0].params.length);
     // 超取 3 倍是为了在 JS 里筛 0 行；现在 SQL 已经挡掉，LIMIT 就是实际条数。
     assert.equal(queries[0].params.at(-1), 3);
-    assert.match(queries[0].sql, /WHERE ts IS NOT NULL ORDER BY ts DESC LIMIT \?/);
+    assert.match(queries[0].sql, /WHERE ts IS NOT NULL AND category <> 'expire' ORDER BY ts DESC LIMIT \?/);
     assert.deepEqual(local(entries.map((entry) => entry.ts)), [11, 10, 9]);
     assert.deepEqual(local(entries[0]), {
       ts: 11,
@@ -227,7 +228,7 @@ test("汇总保持原值，净收支与差额才在展示层取整", () => {
   assert.ok(Math.abs(totals.income - 100.01) < 1e-9, "逐行取整会把这一分尾差抹掉，累计就与余额差一分");
   assert.ok(Math.abs(totals.expense - 0.3) < 1e-9);
   assert.equal(ledger.ledgerNet(totals), 99.71);
-  // 余额比账目少 10：到期作废的临时余额没有留底，如实报成差额。
+  // 余额比账目少 10：差额如实保留（历史遗留或缺口），不再反推成过期作废。
   assert.equal(ledger.ledgerGap(89.71, totals), -10);
   assert.equal(ledger.ledgerGap(totals.income - totals.expense, totals), 0);
 });
@@ -256,45 +257,88 @@ test("类型名与条目名：API 消费带次数，缺名字时不写 undefined
   assert.equal(ledger.ledgerEntryLabel({ ...base, category: "reward", typeCode: 3 }), "签到奖励");
 });
 
-test("筛选项与类别登记一致，过期作废不再出现", () => {
-  const { ledger } = harness();
+test("筛选项与类别登记一致，过期作废走真实天表", () => {
+  const { ledger, queries, setRows } = harness();
   const ids = ledger.LEDGER_FILTERS.map((item) => item.id);
-  assert.deepEqual(local(ids), ["all", "recharge", "reward", "activity", "usage"]);
+  assert.deepEqual(local(ids), ["all", "recharge", "reward", "activity", "expire", "usage"]);
   assert.equal(new Set(ids).size, ids.length);
   for (const id of ids) {
+    // API 消费走用量表；其余类别都必须有 topup.type 归属。
     if (id === "all" || id === "usage") continue;
     assert.ok(id in ledger.LEDGER_CATEGORY_TYPES, `${id} 没有登记归属类型`);
   }
+
+  return (async () => {
+    // 过期作废是 cron 补记的真实负流水，筛选它就查天表，和其它类别同一条路。
+    setRows([{ date: "2026-06-24", income: 0, expense: 1_000_000_000, entries: 1 }]);
+    const days = await ledger.listLedgerDays("fixture-user", "expire");
+    assert.deepEqual(local(days), [
+      { date: "2026-06-24", income: 0, expense: 1_000_000_000, entries: 1 },
+    ]);
+    assert.match(queries[0].sql, /WHERE category = \?/);
+    assert.ok(queries[0].params.includes("expire"));
+    assert.match(queries[0].sql, /type IN \(14\)/);
+  })();
 });
 
-test("钱包结算剔除过期作废后，有效入账 − 支出 正好等于余额", () => {
+test("过期作废支出按真实流水汇总：只认 type=14 的负数行", () => {
+  const { ledger, queries, setRows } = harness();
+
+  return (async () => {
+    setRows([{ expired: 1_000_000_000 }]);
+    assert.equal(await ledger.sumExpiredExpense("fixture-user"), 1_000_000_000);
+    assert.match(queries[0].sql, /FROM topup WHERE userId = \? AND type = \? AND amount < 0/);
+    assert.deepEqual(local(queries[0].params), ["fixture-user", 14]);
+
+    // SUM 为 NULL / 异常值时按 0 处理，钱包不会出现 NaN 或负的「过期」。
+    setRows([{ expired: null }]);
+    assert.equal(await ledger.sumExpiredExpense("fixture-user"), 0);
+    setRows([{ expired: -5 }]);
+    assert.equal(await ledger.sumExpiredExpense("fixture-user"), 0);
+  })();
+});
+
+test("钱包结算剔除真实过期流水后，剩余差额如实保留", () => {
   const { ledger } = harness();
 
-  // 线上管理员账号的真实口径：10 亿兑换码过期作废后，剩 5,286,519.43 入账。
-  const expiredCase = ledger.ledgerSettlement(56_385.22, {
-    income: 1_005_347_280.33,
-    expense: 5_230_134.21,
-  });
+  // 线上管理员账号补记 10 亿兑换码过期后的口径：两头各剔 10 亿，净额不变，
+  // 与余额仍差 60,760.90 是 2026-11-07 前的历史遗留。
+  const expiredCase = ledger.ledgerSettlement(
+    56_385.22,
+    { income: 1_005_347_280.33, expense: 1_005_230_134.21 },
+    1_000_000_000,
+  );
   assert.deepEqual(local(expiredCase), {
-    effectiveIncome: 5_286_519.43,
+    effectiveIncome: 5_347_280.33,
     expense: 5_230_134.21,
-    expired: 1_000_060_760.9,
+    expired: 1_000_000_000,
     balance: 56_385.22,
+    gap: -60_760.9,
+    reconciled: false,
   });
+
+  // 没有过期时口径不变，也没有差额。
+  assert.deepEqual(
+    local(ledger.ledgerSettlement(100, { income: 150, expense: 50 }, 0)),
+    { effectiveIncome: 150, expense: 50, expired: 0, balance: 100, gap: 0, reconciled: true },
+  );
+
+  // 账本完全对上时，剔除过期前后应当都平。
   assert.equal(
-    Math.round((expiredCase.effectiveIncome - expiredCase.expense) * 100) / 100,
-    expiredCase.balance,
+    ledger.ledgerSettlement(
+      100,
+      { income: 1_150, expense: 1_050 },
+      1_000,
+    ).reconciled,
+    true,
   );
 
-  // 没有过期时口径不变。
+  // 正差额是账外增加，不能反过来膨胀「有效入账」，也不能谎称已对平。
   assert.deepEqual(
-    local(ledger.ledgerSettlement(100, { income: 150, expense: 50 })),
-    { effectiveIncome: 150, expense: 50, expired: 0, balance: 100 },
+    local(ledger.ledgerSettlement(120, { income: 150, expense: 50 }, 0)),
+    { effectiveIncome: 150, expense: 50, expired: 0, balance: 120, gap: 20, reconciled: false },
   );
 
-  // 正差额是账外增加，不能反过来膨胀「有效入账」。
-  assert.deepEqual(
-    local(ledger.ledgerSettlement(120, { income: 150, expense: 50 })),
-    { effectiveIncome: 150, expense: 50, expired: 0, balance: 120 },
-  );
+  // 不足一分的过期尾差按 0 计，不会让钱包多出一行「过期 0.00 cr」。
+  assert.equal(ledger.ledgerSettlement(0, { income: 0.004, expense: 0 }, 0.004).expired, 0);
 });
