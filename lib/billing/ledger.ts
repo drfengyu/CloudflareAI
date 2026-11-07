@@ -59,8 +59,8 @@ const DAY_OF = (column: string) => `strftime('%Y-%m-%d', ${column} / 1000, 'unix
  * 13 个类型是否恰好各归一类——漏了不会报错，只会静默算进「活动」。
  */
 export const LEDGER_CATEGORY_TYPES: Record<Exclude<LedgerCategory, "usage">, number[]> = {
-  recharge: [1, 2, 4, 5, 13],
-  reward: [3, 7, 8, 9, 10],
+  recharge: [1, 2, 5, 13],
+  reward: [3, 4, 7, 8, 9, 10],
   activity: [6, 11, 12],
 };
 

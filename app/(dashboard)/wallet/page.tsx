@@ -12,7 +12,13 @@ import { TempBalancesCard, type SerializedTempBalance } from "./temp-balances-ca
 import { RecentLedgerCard } from "./recent-ledger-card";
 import { formatCredits } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
-import { ledgerNet, listRecentLedgerEntries, recentWindow, sumLedgerDays } from "@/lib/billing/ledger";
+import {
+  ledgerNet,
+  listLedgerDays,
+  listRecentLedgerEntries,
+  recentWindow,
+  sumLedgerDays,
+} from "@/lib/billing/ledger";
 import { getRechargeBonusSettings } from "@/lib/payment/bonus";
 import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
 import { serializePayOrder } from "@/lib/payment/pay-order-view";
@@ -38,7 +44,7 @@ export default async function WalletPage({
 
   // 2026-10-17 性能：这些查询互不依赖（全都只按 userId 取数），原先是一条接一条 await，
   // 串行 5 次 D1 往返 ≈ 2 秒；并发成一波后只剩最慢那条的时间。
-  const [userRows, tempBalances, pendingOrders, linuxdoConfig, bonusConfig, recentLedger] =
+  const [userRows, tempBalances, pendingOrders, linuxdoConfig, bonusConfig, recentLedger, ledgerDays] =
     await Promise.all([
       // 永久余额与角色（角色决定充值弹窗里能不能看到易支付）
       db
@@ -65,6 +71,8 @@ export default async function WalletPage({
       getRechargeBonusSettings(),
       // 最近几笔收支：与个人账本同一份口径（发放 + API 消费），只扫最近 90 天
       listRecentLedgerEntries(userId, RECENT_LEDGER_LIMIT, recentWindow()),
+      // 与账本页同一把尺子的全量天表：钱包要拿累计净收支和余额对账
+      listLedgerDays(userId),
     ]);
 
   const permanentBalance = userRows[0]?.balanceCredits || 0;
@@ -118,6 +126,7 @@ export default async function WalletPage({
 
   const serializedOrders = pendingOrders.map(serializePayOrder);
   const recentTotals = sumLedgerDays(recentLedger);
+  const ledgerTotals = sumLedgerDays(ledgerDays);
 
   const justReturned = params.paid === "1";
   const highlightOrderNo = params.orderNo ?? undefined;
@@ -165,7 +174,8 @@ export default async function WalletPage({
                     )}
                     {compensated > 0 && (
                       <p className="text-amber-600 dark:text-amber-400">
-                        其中 {formatCredits(compensated)} cr 已用来抵扣永久余额的欠费
+                        永久余额实为 −{formatCredits(Math.abs(permanentBalance))} cr，已用{" "}
+                        {formatCredits(compensated)} cr 临时余额抵扣；上方两项是抵扣后的可用额度
                       </p>
                     )}
                     <p>总余额 = 永久 + 未过期临时；消费先扣临时、再扣永久</p>
@@ -193,6 +203,9 @@ export default async function WalletPage({
               entries={recentLedger}
               totals={recentTotals}
               net={ledgerNet(recentTotals)}
+              limit={RECENT_LEDGER_LIMIT}
+              lifetime={ledgerTotals}
+              balance={totalBalance}
             />
 
             {/* 未到账订单（回跳确认 + 轮询催单） */}

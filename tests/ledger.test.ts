@@ -107,6 +107,17 @@ test("13 个发放类型各归一类，漏登记会被问出来", () => {
   assert.deepEqual(labelled.sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
 });
 
+test("注册奖励是赠送，不进充值类目", () => {
+  const { ledger } = harness();
+
+  assert.equal(ledger.TOPUP_TYPE_LABEL[4], "注册奖励");
+  assert.ok(ledger.LEDGER_CATEGORY_TYPES.reward.includes(4), "注册奖励应归入赠送与返利");
+  assert.ok(!ledger.LEDGER_CATEGORY_TYPES.recharge.includes(4), "注册奖励不是充值");
+  assert.deepEqual(local(ledger.LEDGER_CATEGORY_TYPES.recharge).sort((a, b) => a - b), [
+    1, 2, 5, 13,
+  ]);
+});
+
 test("天表按北京日界分组，类别筛选走占位符", () => {
   const { ledger, queries, setRows } = harness();
   setRows([
