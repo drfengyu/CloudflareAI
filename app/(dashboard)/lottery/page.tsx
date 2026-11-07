@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/dashboard/page-header";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getUserTotalBalance, requireUser } from "@/lib/usage/meter";
 import { getLotteryConfig } from "@/lib/lottery/config";
 import {
@@ -28,6 +28,8 @@ import {
 } from "@/lib/lottery/records";
 import { LotteryRecords } from "./lottery-records";
 import { LotteryWheel, type WheelOuter, type WheelSector } from "./lottery-wheel";
+import { getActivityCouponView } from "@/lib/activity/coupons";
+import { CouponShop } from "@/components/activity/coupon-shop";
 
 import { PageBody } from "@/components/dashboard/section";
 
@@ -125,7 +127,7 @@ export default async function LotteryPage() {
   // countConsecutiveMisses 按当前活动轮次过滤，新活动保底重置。
   // currentStats = 当前活动战绩（新活动重计），myStats = 全部活动累计（转盘「累计抽奖」）。
   // 首屏只出第一页，后续翻页走卡片内的局部刷新（listMyActivityRecords）。
-  const [tickets, myStats, currentStats, myTickets, records, balance, freeDrawUsed, consecutiveMisses, bigWins] =
+  const [tickets, myStats, currentStats, myTickets, records, balance, freeDrawUsed, consecutiveMisses, bigWins, coupon] =
     await Promise.all([
       countUnusedTickets(userId),
       lotteryBalance({ userId }),
@@ -136,6 +138,7 @@ export default async function LotteryPage() {
       hasUsedFreeDrawToday(userId),
       countConsecutiveMisses(userId, 30, activityKey),
       listRecentBigWins({ thresholdCredits: 500, thresholdTickets: 3, hours: 24, limit: 20 }),
+      getActivityCouponView(userId, "lottery"),
     ]);
 
   // 当期口径的开奖总数即累计统计行的 draws，可直接当分页总数，不必再 COUNT 明细。
@@ -156,6 +159,17 @@ export default async function LotteryPage() {
     />
   );
 
+  const couponCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">活动券与珍宝礼包</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <CouponShop activities={[coupon]} />
+      </CardContent>
+    </Card>
+  );
+
   if (windowInfo.status !== "active") {
     const notice =
       windowInfo.status === "disabled"
@@ -173,6 +187,7 @@ export default async function LotteryPage() {
         <PageHeader title="幸运转盘" description="抽奖券与累抽奖励" />
         <PageBody className="space-y-6">
           <Notice title={notice.title} hint={notice.hint} />
+          {couponCard}
           {recordsCard}
         </PageBody>
       </>
@@ -204,6 +219,7 @@ export default async function LotteryPage() {
           bigWins={bigWins}
           balanceCredits={balance.total}
         />
+        {couponCard}
         {recordsCard}
       </PageBody>
     </>

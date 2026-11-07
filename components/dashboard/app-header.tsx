@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ThemeSwitch } from "@/components/theme/theme-switch";
 import { MessageBell } from "@/components/dashboard/message-bell";
+import { CurrencyBar } from "@/components/dashboard/currency-bar";
+import type { CurrencySnapshot } from "@/lib/activity/coupons";
 import type { MessagePreview } from "@/lib/message/messages";
 
 interface HeaderUser {
@@ -27,6 +29,7 @@ export function AppHeader({
   siteName = "Cloudflare AI",
   unreadCount = 0,
   recentMessages = [],
+  currency = null,
 }: {
   user?: HeaderUser;
   signOutAction: () => void;
@@ -34,6 +37,8 @@ export function AppHeader({
   /** 站内信未读数；不传（如登录页）时不渲染铃铛。 */
   unreadCount?: number;
   recentMessages?: MessagePreview[];
+  /** 顶栏货币条数据；读取失败时传 null，让余额位置静默消失而不是拖垮布局。 */
+  currency?: CurrencySnapshot | null;
 }) {
   const label = user?.name || user?.email || "未登录";
   const initial = label.trim().charAt(0).toUpperCase() || "U";
@@ -47,9 +52,10 @@ export function AppHeader({
         <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <Cpu className="h-4 w-4" />
         </span>
-        <span>{siteName}</span>
+        <span className="hidden sm:inline">{siteName}</span>
       </Link>
       <div className="ml-auto flex items-center gap-1">
+        {user && currency ? <CurrencyBar snapshot={currency} /> : null}
         {user ? <MessageBell unreadCount={unreadCount} recent={recentMessages} /> : null}
         <ThemeSwitch />
       <DropdownMenu>

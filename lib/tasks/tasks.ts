@@ -1,156 +1,361 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
-import { db } from "@/lib/db/d1-http";
+import { and, eq, gte, inArray, isNotNull, lt, sql, type AnyColumn } from "drizzle-orm";
+import { db, d1Run } from "@/lib/db/d1-http";
 import {
-  cashbackClaims,
+  activityTaskClaims,
   chatMessages,
   chatSessions,
   checkins,
-  inviteRecords,
+  flipRounds,
   lotteryDraws,
-  temporaryBalances,
+  messages,
+  raidenRuns,
   topups,
   usageLogs,
-  userTasks,
 } from "@/lib/db/schema";
+import { cnDateString, cnStartOfToday, parseCnWallClock, shiftDateString } from "@/lib/date";
 import type { getTaskSettings } from "@/lib/settings";
+import {
+  attachRewardMessage,
+  claimStateOf,
+  discardRewardClaim,
+  listRewardClaims,
+  reserveRewardClaim,
+  type RewardClaimRow,
+  type RewardClaimState,
+} from "@/lib/rewards/claims";
+import { sendMessage, type Attachment } from "@/lib/message/messages";
 
 export type TaskSettings = Awaited<ReturnType<typeof getTaskSettings>>;
+export type TaskPeriod = "daily" | "weekly";
 
 /** 钱包流水里任务成就占用的 type（8=消费返利、10=充值赠送已被占用）。 */
 export const TASK_TOPUP_TYPE = 9;
 
+export const DAILY_TARGET = 100;
+export const WEEKLY_TARGET = 300;
+
 const DAY_MS = 24 * 60 * 60 * 1000;
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
-const countFrom = (rows: Array<{ n: number }>): number => Number(rows[0]?.n ?? 0);
+export interface PeriodWindow {
+  key: string;
+  start: Date;
+  end: Date;
+  label: string;
+}
+
+/** 周任务按北京时间的周一起算；周期 key 用本周一的日期，跨周自然开新一轮。 */
+export function weeklyStartDate(date: string): string {
+  const wall = new Date(`${date}T00:00:00Z`);
+  const dow = wall.getUTCDay();
+  return shiftDateString(date, dow === 0 ? -6 : 1 - dow);
+}
+
+export function periodWindow(period: TaskPeriod): PeriodWindow {
+  const today = cnDateString();
+  if (period === "daily") {
+    const start = cnStartOfToday();
+    return {
+      key: today,
+      start,
+      end: new Date(start.getTime() + DAY_MS),
+      label: `${today} 当日`,
+    };
+  }
+  const key = weeklyStartDate(today);
+  const startMs = parseCnWallClock(key);
+  if (startMs === null) throw new Error(`周起始日期非法：${key}`);
+  return {
+    key,
+    start: new Date(startMs),
+    end: new Date(startMs + 7 * DAY_MS),
+    label: `${key} 起本周`,
+  };
+}
 
 export interface TaskDef {
   key: string;
   title: string;
   hint: string;
-  /** 达标需要的次数，界面按它折算进度。 */
-  target: number;
-  defaultReward: number;
-  /** 引导用户去完成的入口。 */
   href: string;
-  /** 现场读业务表：进度不落库，所以改任务口径不需要迁移历史数据。 */
-  measure: (userId: string) => Promise<number>;
+  target: number;
+  /** 手动领取后计入的活跃度。 */
+  points: number;
+  /** 现场读业务表：进度不落库，改任务口径不需要迁移历史数据。 */
+  measure: (userId: string, w: PeriodWindow) => Promise<number>;
 }
 
-export const TASKS: TaskDef[] = [
-  {
-    key: "first_chat",
-    title: "第一次站内对话",
-    hint: "在「AI 对话」里发出第一条提问",
-    target: 1,
-    defaultReward: 5,
-    href: "/chat",
-    measure: async (userId) =>
-      countFrom(
-        await db
-          .select({ n: sql<number>`count(*)` })
-          .from(chatMessages)
-          .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
-          .where(and(eq(chatSessions.userId, userId), eq(chatMessages.role, "user"))),
+const countFrom = (rows: Array<{ n: number }>): number => Number(rows[0]?.n ?? 0);
+const sumFrom = (rows: Array<{ n: number }>): number => Number(rows[0]?.n ?? 0);
+
+const inWindow = (column: AnyColumn, w: PeriodWindow) => [
+  gte(column, w.start),
+  lt(column, w.end),
+];
+
+const chatPromptCount = async (userId: string, w: PeriodWindow) =>
+  countFrom(
+    await db
+      .select({ n: sql<number>`count(*)` })
+      .from(chatMessages)
+      .innerJoin(chatSessions, eq(chatMessages.sessionId, chatSessions.id))
+      .where(
+        and(
+          eq(chatSessions.userId, userId),
+          eq(chatMessages.role, "user"),
+          ...inWindow(chatMessages.createdAt, w),
+        ),
       ),
-  },
-  {
-    key: "first_api",
-    title: "跑通一次 API",
-    hint: "用 API Key 从 OpenAI / Anthropic 兼容口成功调用一次",
-    target: 1,
-    defaultReward: 10,
-    href: "/docs",
-    measure: async (userId) =>
-      countFrom(
-        await db
-          .select({ n: sql<number>`count(*)` })
-          .from(usageLogs)
-          .where(
-            and(
-              eq(usageLogs.userId, userId),
-              eq(usageLogs.status, "ok"),
-              inArray(usageLogs.channel, ["openai", "anthropic"]),
-            ),
+  );
+
+const apiSuccessCount = async (userId: string, w: PeriodWindow) =>
+  countFrom(
+    await db
+      .select({ n: sql<number>`count(*)` })
+      .from(usageLogs)
+      .where(
+        and(eq(usageLogs.userId, userId), eq(usageLogs.status, "ok"), ...inWindow(usageLogs.createdAt, w)),
+      ),
+  );
+
+const apiSpend = async (userId: string, w: PeriodWindow) =>
+  round2(
+    sumFrom(
+      await db
+        .select({ n: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)` })
+        .from(usageLogs)
+        .where(and(eq(usageLogs.userId, userId), ...inWindow(usageLogs.createdAt, w))),
+    ),
+  );
+
+const activityRuns = async (userId: string, w: PeriodWindow) => {
+  const [draws, flips, runs] = await Promise.all([
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(lotteryDraws)
+      .where(and(eq(lotteryDraws.userId, userId), ...inWindow(lotteryDraws.createdAt, w))),
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(flipRounds)
+      .where(and(eq(flipRounds.userId, userId), ...inWindow(flipRounds.createdAt, w))),
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(raidenRuns)
+      .where(and(eq(raidenRuns.userId, userId), ...inWindow(raidenRuns.startedAt, w))),
+  ]);
+  return countFrom(draws) + countFrom(flips) + countFrom(runs);
+};
+
+const claimedRewardCount = async (userId: string, w: PeriodWindow) =>
+  countFrom(
+    await db
+      .select({ n: sql<number>`count(*)` })
+      .from(messages)
+      .where(
+        and(
+          eq(messages.userId, userId),
+          isNotNull(messages.attachmentKind),
+          isNotNull(messages.claimedAt),
+          ...inWindow(messages.claimedAt, w),
+        ),
+      ),
+  );
+
+const checkinDays = async (userId: string, w: PeriodWindow) =>
+  countFrom(
+    await db
+      .select({ n: sql<number>`COUNT(DISTINCT ${checkins.checkinDate})` })
+      .from(checkins)
+      .where(and(eq(checkins.userId, userId), ...inWindow(checkins.createdAt, w))),
+  );
+
+const topupAmount = async (userId: string, w: PeriodWindow) =>
+  round2(
+    sumFrom(
+      await db
+        .select({ n: sql<number>`COALESCE(SUM(${topups.amount}), 0)` })
+        .from(topups)
+        .where(
+          and(
+            eq(topups.userId, userId),
+            inArray(topups.type, [1, 5]),
+            ...inWindow(topups.createdAt, w),
           ),
-      ),
-  },
+        ),
+    ),
+  );
+
+export const DAILY_TASKS: TaskDef[] = [
   {
-    key: "first_topup",
-    title: "第一次充值",
-    hint: "兑换码或在线支付到账一次",
-    target: 1,
-    defaultReward: 10,
-    href: "/wallet",
-    measure: async (userId) =>
-      countFrom(
-        await db
-          .select({ n: sql<number>`count(*)` })
-          .from(topups)
-          .where(and(eq(topups.userId, userId), inArray(topups.type, [1, 5]))),
-      ),
-  },
-  {
-    key: "checkin_streak",
-    title: "累计签到 7 天",
-    hint: "每天签一次，攒满 7 天",
-    target: 7,
-    defaultReward: 15,
+    key: "daily_checkin",
+    title: "每日签到",
+    hint: "今天签到一次",
     href: "/dashboard",
-    measure: async (userId) =>
+    target: 1,
+    points: 10,
+    measure: async (userId, w) =>
       countFrom(
         await db
           .select({ n: sql<number>`count(*)` })
           .from(checkins)
-          .where(eq(checkins.userId, userId)),
+          .where(and(eq(checkins.userId, userId), ...inWindow(checkins.createdAt, w))),
       ),
   },
   {
-    key: "invite_first",
-    title: "邀到第一位朋友",
-    hint: "邀请链接注册成功的第 1 位好友",
-    target: 1,
-    defaultReward: 20,
-    href: "/invite",
-    measure: async (userId) =>
-      countFrom(
-        await db
-          .select({ n: sql<number>`count(*)` })
-          .from(inviteRecords)
-          .where(eq(inviteRecords.inviterId, userId)),
-      ),
+    key: "daily_chat",
+    title: "站内对话 3 次",
+    hint: "在 AI 对话里发出 3 条提问",
+    href: "/chat",
+    target: 3,
+    points: 15,
+    measure: chatPromptCount,
   },
   {
-    key: "lottery_first",
-    title: "第一次转盘抽奖",
-    hint: "在「幸运转盘」完成任意一次开奖",
-    target: 1,
-    defaultReward: 5,
-    href: "/lottery",
-    measure: async (userId) =>
-      countFrom(
-        await db
-          .select({ n: sql<number>`count(*)` })
-          .from(lotteryDraws)
-          .where(eq(lotteryDraws.userId, userId)),
-      ),
+    key: "daily_api",
+    title: "API 成功调用 5 次",
+    hint: "任意 API Key 成功调用 5 次",
+    href: "/docs",
+    target: 5,
+    points: 20,
+    measure: apiSuccessCount,
   },
   {
-    key: "cashback_first",
-    title: "领到第一笔消费返利",
-    hint: "在「消费返利」领取任意一天的返利",
-    target: 1,
-    defaultReward: 5,
+    key: "daily_spend",
+    title: "消费满 50 cr",
+    hint: "今天累计消耗 50 cr",
+    href: "/wallet",
+    target: 50,
+    points: 20,
+    measure: apiSpend,
+  },
+  {
+    key: "daily_activity",
+    title: "参与限时玩法",
+    hint: "转盘 / 翻牌 / 雷电任意玩一局",
     href: "/cashback",
-    measure: async (userId) =>
-      countFrom(
-        await db
-          .select({ n: sql<number>`count(*)` })
-          .from(cashbackClaims)
-          .where(eq(cashbackClaims.userId, userId)),
-      ),
+    target: 1,
+    points: 15,
+    measure: activityRuns,
+  },
+  {
+    key: "daily_inbox",
+    title: "领取站内信奖励",
+    hint: "领取任意一封带奖励的站内信",
+    href: "/messages",
+    target: 1,
+    points: 20,
+    measure: claimedRewardCount,
   },
 ];
+
+export const WEEKLY_TASKS: TaskDef[] = [
+  {
+    key: "weekly_checkin",
+    title: "本周签到 5 天",
+    hint: "一周内签到满 5 个自然日",
+    href: "/dashboard",
+    target: 5,
+    points: 40,
+    measure: checkinDays,
+  },
+  {
+    key: "weekly_chat",
+    title: "站内对话 20 次",
+    hint: "本周累计发出 20 条提问",
+    href: "/chat",
+    target: 20,
+    points: 40,
+    measure: chatPromptCount,
+  },
+  {
+    key: "weekly_api",
+    title: "API 成功调用 50 次",
+    hint: "本周累计成功调用 50 次",
+    href: "/docs",
+    target: 50,
+    points: 50,
+    measure: apiSuccessCount,
+  },
+  {
+    key: "weekly_spend",
+    title: "本周消费满 500 cr",
+    hint: "本周累计消耗 500 cr",
+    href: "/wallet",
+    target: 500,
+    points: 60,
+    measure: apiSpend,
+  },
+  {
+    key: "weekly_activity",
+    title: "参与限时玩法 10 局",
+    hint: "转盘 / 翻牌 / 雷电合计 10 局",
+    href: "/cashback",
+    target: 10,
+    points: 50,
+    measure: activityRuns,
+  },
+  {
+    key: "weekly_topup",
+    title: "本周充值到账 500 cr",
+    hint: "在线充值或兑换码到账合计 500 cr",
+    href: "/wallet",
+    target: 500,
+    points: 60,
+    measure: topupAmount,
+  },
+];
+
+export interface MilestoneDef {
+  points: number;
+  min: number;
+  max: number;
+}
+
+/** 每 25 活跃度一档，额度逐档递增；周奖励显著更丰厚。 */
+export const DAILY_MILESTONES: MilestoneDef[] = [
+  { points: 25, min: 5, max: 15 },
+  { points: 50, min: 10, max: 30 },
+  { points: 75, min: 20, max: 50 },
+  { points: 100, min: 40, max: 100 },
+];
+
+export const WEEKLY_MILESTONES: MilestoneDef[] = [
+  { points: 50, min: 20, max: 50 },
+  { points: 100, min: 40, max: 100 },
+  { points: 150, min: 70, max: 160 },
+  { points: 200, min: 110, max: 240 },
+  { points: 250, min: 160, max: 340 },
+  { points: 300, min: 240, max: 500 },
+];
+
+export interface MilestoneReward {
+  kind: "temp_credits" | "permanent_credits";
+  credits: number;
+  label: string;
+}
+
+/** 里程碑奖励只发货币（临时 / 永久各 60% / 40%），金额在区间内随机。 */
+export function rollMilestoneReward(
+  milestone: MilestoneDef,
+  random: () => number = Math.random,
+): MilestoneReward {
+  const amount = round2(
+    Math.min(
+      milestone.max,
+      Math.max(milestone.min, milestone.min + random() * (milestone.max - milestone.min)),
+    ),
+  );
+  const permanent = random() < 0.4;
+  return {
+    kind: permanent ? "permanent_credits" : "temp_credits",
+    credits: amount,
+    label: `${amount} cr ${permanent ? "永久" : "临时"}货币`,
+  };
+}
+
+function milestoneKey(period: TaskPeriod, periodKey: string, points: number): string {
+  return `${period}:${periodKey}:${points}`;
+}
 
 export interface TaskView {
   key: string;
@@ -159,126 +364,306 @@ export interface TaskView {
   href: string;
   target: number;
   progress: number;
-  reward: number;
+  points: number;
+  done: boolean;
   claimed: boolean;
   claimable: boolean;
   note: string;
 }
 
-/** 后台覆盖值优先，没覆盖或非法则回到代码默认额度。 */
-export function rewardForTask(key: string, s: TaskSettings): number {
-  const override = s.rewardOverrides[key];
-  const raw = Number.isFinite(override) ? (override as number) : TASKS.find((t) => t.key === key)?.defaultReward;
-  return round2(Math.max(0, raw ?? 0));
+export interface MilestoneView extends MilestoneDef {
+  met: boolean;
+  claimState: RewardClaimState;
+  rewardLabel: string | null;
 }
 
-/**
- * 任务清单：一次读全部已领记录，再并发取每个任务的现场进度。
- * 进度不落库，用户做完什么当场就能看见，不存在「状态同步」这回事。
- */
-export async function listTasks(userId: string, s: TaskSettings): Promise<TaskView[]> {
-  const claimedRows = await db
-    .select({ taskKey: userTasks.taskKey })
-    .from(userTasks)
-    .where(eq(userTasks.userId, userId));
-  const claimed = new Set(claimedRows.map((r) => r.taskKey));
+export interface TaskPeriodView {
+  period: TaskPeriod;
+  periodKey: string;
+  periodLabel: string;
+  target: number;
+  points: number;
+  tasks: TaskView[];
+  milestones: MilestoneView[];
+}
 
-  const progress = await Promise.all(TASKS.map((t) => t.measure(userId)));
+export interface TaskBoard {
+  enabled: boolean;
+  validDays: number;
+  daily: TaskPeriodView;
+  weekly: TaskPeriodView;
+}
 
-  return TASKS.map((task, i) => {
-    const progressValue = progress[i];
-    const done = progressValue >= task.target;
-    const reward = rewardForTask(task.key, s);
-    const view = {
+async function readPeriodClaims(
+  userId: string,
+  period: TaskPeriod,
+  periodKey: string,
+): Promise<Map<string, number>> {
+  const rows = await db
+    .select({ taskKey: activityTaskClaims.taskKey, points: activityTaskClaims.points })
+    .from(activityTaskClaims)
+    .where(
+      and(
+        eq(activityTaskClaims.userId, userId),
+        eq(activityTaskClaims.periodKind, period),
+        eq(activityTaskClaims.periodKey, periodKey),
+      ),
+    );
+  return new Map(rows.map((row) => [row.taskKey, Number(row.points)]));
+}
+
+async function periodPoints(userId: string, period: TaskPeriod, periodKey: string): Promise<number> {
+  const rows = await db
+    .select({ n: sql<number>`COALESCE(SUM(${activityTaskClaims.points}), 0)` })
+    .from(activityTaskClaims)
+    .where(
+      and(
+        eq(activityTaskClaims.userId, userId),
+        eq(activityTaskClaims.periodKind, period),
+        eq(activityTaskClaims.periodKey, periodKey),
+      ),
+    );
+  return Number(rows[0]?.n ?? 0);
+}
+
+function buildTaskViews(
+  defs: TaskDef[],
+  progress: number[],
+  claimed: Map<string, number>,
+  enabled: boolean,
+): TaskView[] {
+  return defs.map((task, index) => {
+    const value = progress[index];
+    const done = value >= task.target;
+    const isClaimed = claimed.has(task.key);
+    const base = {
       key: task.key,
       title: task.title,
       hint: task.hint,
       href: task.href,
       target: task.target,
-      progress: progressValue,
-      reward,
-      claimed: claimed.has(task.key),
+      progress: value,
+      points: task.points,
+      done,
+      claimed: isClaimed,
     };
-    if (view.claimed) return { ...view, claimable: false, note: "已领取" };
-    if (!s.enabled) return { ...view, claimable: false, note: "活动未开启" };
-    if (reward <= 0) return { ...view, claimable: false, note: "奖励已设为 0" };
+    if (isClaimed) return { ...base, claimable: false, note: "已领取" };
+    if (!enabled) return { ...base, claimable: false, note: "活动未开启" };
     if (!done) {
-      return { ...view, claimable: false, note: `还差 ${Math.max(0, task.target - progressValue)} 次` };
+      return {
+        ...base,
+        claimable: false,
+        note: `还差 ${round2(Math.max(0, task.target - value))}`,
+      };
     }
-    return { ...view, claimable: true, note: "" };
+    return { ...base, claimable: true, note: "" };
   });
+}
+
+function milestoneViews(
+  period: TaskPeriod,
+  periodKey: string,
+  defs: MilestoneDef[],
+  points: number,
+  claims: Map<string, RewardClaimRow>,
+  sentLabels: Map<string, string>,
+): MilestoneView[] {
+  return defs.map((milestone) => {
+    const key = milestoneKey(period, periodKey, milestone.points);
+    const claim = claims.get(key);
+    const justSent = sentLabels.get(key);
+    return {
+      ...milestone,
+      met: points >= milestone.points,
+      claimState: claim ? claimStateOf(claim) : justSent ? "sent" : "none",
+      rewardLabel: claim?.rewardLabel ?? justSent ?? null,
+    };
+  });
+}
+
+async function ensureMilestoneRewards(
+  userId: string,
+  period: TaskPeriod,
+  periodKey: string,
+  points: number,
+  settings: TaskSettings,
+  claims: Map<string, RewardClaimRow>,
+): Promise<Map<string, string>> {
+  const sent = new Map<string, string>();
+  if (!settings.enabled) return sent;
+  const defs = period === "daily" ? DAILY_MILESTONES : WEEKLY_MILESTONES;
+
+  for (const milestone of defs) {
+    if (points < milestone.points) continue;
+    const key = milestoneKey(period, periodKey, milestone.points);
+    if (claims.has(key)) continue;
+
+    const reward = rollMilestoneReward(milestone);
+    let reserved: { id: string; fresh: boolean };
+    try {
+      reserved = await reserveRewardClaim({
+        userId,
+        activityKind: "activity",
+        tierKey: key,
+        rewardCredits: reward.credits,
+        validDays: settings.validDays,
+        topupType: TASK_TOPUP_TYPE,
+        rewardKind: reward.kind,
+        rewardLabel: reward.label,
+      });
+    } catch (err) {
+      console.error("[tasks] 活跃度里程碑占位失败:", err);
+      continue;
+    }
+    if (!reserved.fresh) continue;
+
+    const attachment: Attachment =
+      reward.kind === "permanent_credits"
+        ? {
+            kind: "credits",
+            credits: reward.credits,
+            topupType: TASK_TOPUP_TYPE,
+            rewardClaimId: reserved.id,
+          }
+        : {
+            kind: "temp_credits",
+            credits: reward.credits,
+            validDays: settings.validDays,
+            topupType: TASK_TOPUP_TYPE,
+            rewardClaimId: reserved.id,
+          };
+
+    try {
+      const messageId = await sendMessage({
+        userId,
+        kind: "reward",
+        title: `${period === "daily" ? "每日" : "每周"}活跃度 ${milestone.points} 达成`,
+        body: [
+          `你在${period === "daily" ? "今日" : "本周"}已达到 ${milestone.points} 活跃度。`,
+          `随机奖励：${reward.label}，已发放到站内信，请前往领取。`,
+          reward.kind === "temp_credits"
+            ? `领取后进入临时余额，有效期 ${settings.validDays} 天。`
+            : "领取后直接进入永久余额。",
+        ].join("\n"),
+        attachment,
+      });
+      await attachRewardMessage(reserved.id, messageId);
+      sent.set(key, reward.label);
+    } catch (err) {
+      await discardRewardClaim(reserved.id);
+      console.error("[tasks] 活跃度里程碑发信失败:", err);
+    }
+  }
+
+  return sent;
+}
+
+async function buildPeriodView(
+  userId: string,
+  period: TaskPeriod,
+  defs: TaskDef[],
+  target: number,
+  settings: TaskSettings,
+  rewardClaims: Map<string, RewardClaimRow>,
+): Promise<TaskPeriodView> {
+  const window = periodWindow(period);
+  const [claimed, initialPoints, progress] = await Promise.all([
+    readPeriodClaims(userId, period, window.key),
+    periodPoints(userId, period, window.key),
+    Promise.all(defs.map((task) => task.measure(userId, window))),
+  ]);
+
+  const sentLabels = await ensureMilestoneRewards(
+    userId,
+    period,
+    window.key,
+    initialPoints,
+    settings,
+    rewardClaims,
+  );
+
+  return {
+    period,
+    periodKey: window.key,
+    periodLabel: window.label,
+    target,
+    points: initialPoints,
+    tasks: buildTaskViews(defs, progress, claimed, settings.enabled),
+    milestones: milestoneViews(
+      period,
+      window.key,
+      period === "daily" ? DAILY_MILESTONES : WEEKLY_MILESTONES,
+      initialPoints,
+      rewardClaims,
+      sentLabels,
+    ),
+  };
+}
+
+/** 一次读两个周期的任务与活跃度；达到里程碑时顺手补发站内信（唯一索引挡重复）。 */
+export async function listTaskBoard(userId: string, settings: TaskSettings): Promise<TaskBoard> {
+  const rewardClaims = await listRewardClaims(userId, "activity");
+  const [daily, weekly] = await Promise.all([
+    buildPeriodView(userId, "daily", DAILY_TASKS, DAILY_TARGET, settings, rewardClaims),
+    buildPeriodView(userId, "weekly", WEEKLY_TASKS, WEEKLY_TARGET, settings, rewardClaims),
+  ]);
+  return { enabled: settings.enabled, validDays: settings.validDays, daily, weekly };
+}
+
+export interface ClaimTaskResult {
+  title: string;
+  points: number;
+  activityPoints: number;
+  milestones: string[];
 }
 
 /**
- * 领取任务奖励。与消费返利同一套防重放写法：先插 `user_task` 占住唯一索引，
- * 发钱失败再删掉这条占位——反过来先发光，连点两次就真发两份。
+ * 手动领取任务：只加活跃度，不直接发钱；活跃度跨过里程碑后由
+ * `ensureMilestoneRewards` 自动发站内信。唯一索引挡住双击与并发。
  */
 export async function claimTask(
   userId: string,
+  period: TaskPeriod,
   key: string,
-  s: TaskSettings,
-): Promise<{ title: string; reward: number }> {
-  const task = TASKS.find((t) => t.key === key);
+  settings: TaskSettings,
+): Promise<ClaimTaskResult> {
+  if (!settings.enabled) throw new Error("任务活动未开启");
+  const defs = period === "daily" ? DAILY_TASKS : WEEKLY_TASKS;
+  const task = defs.find((item) => item.key === key);
   if (!task) throw new Error("任务不存在");
-  if (!s.enabled) throw new Error("任务活动未开启");
 
-  const reward = rewardForTask(key, s);
-  if (reward <= 0) throw new Error("该任务当前奖励为 0");
+  const window = periodWindow(period);
+  const claimed = await readPeriodClaims(userId, period, window.key);
+  if (claimed.has(key)) throw new Error("该任务本期已领取");
 
-  const already = await db
-    .select({ id: userTasks.id })
-    .from(userTasks)
-    .where(and(eq(userTasks.userId, userId), eq(userTasks.taskKey, key)))
-    .limit(1);
-  if (already.length > 0) throw new Error("该任务奖励已领取");
-
-  const progress = await task.measure(userId);
-  if (progress < task.target) throw new Error(`还没完成：需要 ${task.target} 次，当前 ${progress} 次`);
-
-  const now = new Date();
-  const claimId = crypto.randomUUID();
-  await db.insert(userTasks).values({
-    id: claimId,
-    userId,
-    taskKey: key,
-    rewardCredits: reward,
-    createdAt: now,
-  });
-
-  const expiresAt = new Date(now.getTime() + s.validDays * DAY_MS);
-  try {
-    await db.insert(temporaryBalances).values({
-      id: crypto.randomUUID(),
-      userId,
-      amount: reward,
-      expiresAt,
-      description: `任务奖励 ${reward.toFixed(2)} cr（${task.title}，有效期 ${s.validDays} 天）`,
-      createdAt: now,
-    });
-    await db.insert(topups).values({
-      id: crypto.randomUUID(),
-      userId,
-      amount: reward,
-      type: TASK_TOPUP_TYPE,
-      description: `任务奖励 ${reward.toFixed(2)} cr（${task.title}，有效期至 ${expiresAt.toLocaleDateString("zh-CN")}）`,
-      createdAt: now,
-    });
-  } catch (err) {
-    await db.delete(userTasks).where(eq(userTasks.id, claimId)).catch(() => undefined);
-    throw err;
+  const progress = await task.measure(userId, window);
+  if (progress < task.target) {
+    throw new Error(`还没完成：需要 ${round2(task.target)}，当前 ${round2(progress)}`);
   }
 
-  return { title: task.title, reward };
-}
+  const { changes } = await d1Run(
+    `INSERT OR IGNORE INTO activity_task_claim
+       (id, userId, periodKind, periodKey, taskKey, points, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [crypto.randomUUID(), userId, period, window.key, key, task.points, Date.now()],
+  );
+  if (changes !== 1) throw new Error("该任务本期已领取");
 
-/** 已领取的任务数与累计额度，用于页头两个数字。 */
-export async function taskSummary(userId: string): Promise<{ claimed: number; credits: number }> {
-  const rows = await db
-    .select({ rewardCredits: userTasks.rewardCredits })
-    .from(userTasks)
-    .where(eq(userTasks.userId, userId));
+  const points = await periodPoints(userId, period, window.key);
+  const rewardClaims = await listRewardClaims(userId, "activity");
+  const sent = await ensureMilestoneRewards(
+    userId,
+    period,
+    window.key,
+    points,
+    settings,
+    rewardClaims,
+  );
+
   return {
-    claimed: rows.length,
-    credits: round2(rows.reduce((sum, r) => sum + r.rewardCredits, 0)),
+    title: task.title,
+    points: task.points,
+    activityPoints: points,
+    milestones: [...sent.values()],
   };
 }

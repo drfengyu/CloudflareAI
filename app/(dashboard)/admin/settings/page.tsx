@@ -13,7 +13,7 @@ import { FlipForm } from "./flip-form";
 import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
 import { sanitizeRaidenConfig } from "@/lib/raiden/config";
 import { sanitizeFlipConfig } from "@/lib/flip/config";
-import { TASKS } from "@/lib/tasks/tasks";
+import { sanitizeCashbackTiers } from "@/lib/cashback/config";
 import { RECHARGE_ACTIVITY_DEFAULT_START, sanitizeBonusTiers } from "@/lib/payment/bonus";
 import type { AnnouncementInput, FaqItem } from "@/lib/settings/dashboard-info";
 
@@ -73,26 +73,10 @@ export default async function AdminSettingsPage() {
   const raidenConfig = parseConfig(settings.raiden_config, sanitizeRaidenConfig);
   const flipConfig = parseConfig(settings.flip_config, sanitizeFlipConfig);
 
-  // 充值赠送档位与任务奖励覆盖在库里是 JSON，交给表单前先还原成结构化值：
-  // 表单按行/按任务显示数字，管理员不需要也不应该看到 JSON 文本。
+  // 充值赠送与消费返利档位在库里是 JSON，交给表单前先还原成结构化值：
+  // 表单按行显示数字，管理员不需要也不应该看到 JSON 文本。
   const bonusTiers = sanitizeBonusTiers(parseArray<unknown>(settings.recharge_bonus_tiers));
-  const taskRewardOverrides = (() => {
-    const raw = settings.task_reward_overrides;
-    if (!raw) return {};
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch {
-      return {};
-    }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    const out: Record<string, number> = {};
-    for (const [key, value] of Object.entries(parsed)) {
-      const n = Number(value);
-      if (Number.isFinite(n)) out[key] = n;
-    }
-    return out;
-  })();
+  const cashbackTiers = parseConfig(settings.cashback_tiers, sanitizeCashbackTiers);
 
   return (
     <>
@@ -176,12 +160,9 @@ export default async function AdminSettingsPage() {
             <CashbackSettingsForm
               initialSettings={{
                 enabled: settings.cashback_enabled === "true" || settings.cashback_enabled === "1",
-                rate: settings.cashback_rate || "0.1",
-                minCredits: settings.cashback_min_credits || "20",
-                cap: settings.cashback_cap || "200",
                 validDays: settings.cashback_valid_days || "7",
-                backfillDays: settings.cashback_backfill_days || "3",
                 leaderboardDays: settings.cashback_leaderboard_days || "7",
+                tiers: cashbackTiers,
               }}
             />
           </CardContent>
@@ -213,14 +194,7 @@ export default async function AdminSettingsPage() {
               initialSettings={{
                 enabled: settings.tasks_enabled === "true" || settings.tasks_enabled === "1",
                 validDays: settings.tasks_valid_days || "30",
-                rewards: taskRewardOverrides,
               }}
-              catalog={TASKS.map((t) => ({
-                key: t.key,
-                title: t.title,
-                target: t.target,
-                defaultReward: t.defaultReward,
-              }))}
             />
           </CardContent>
         </Card>

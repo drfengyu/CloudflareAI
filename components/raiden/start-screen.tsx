@@ -1,6 +1,6 @@
 "use client";
 
-import { Bomb, Coins, Gamepad2, Heart, Trophy, Volume2, VolumeX, Zap } from "lucide-react";
+import { Bomb, Coins, Gamepad2, Gem, Heart, Trophy, Volume2, VolumeX, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCredits } from "@/lib/billing/credits";
@@ -27,6 +27,7 @@ export function StartScreen({
   config,
   status,
   balance,
+  couponCredits,
   runsLeft,
   loadout,
   starting,
@@ -37,6 +38,7 @@ export function StartScreen({
   config: RaidenConfig;
   status: RaidenActivityStatus;
   balance: number;
+  couponCredits: number;
   runsLeft: number;
   loadout: RaidenLoadout;
   starting: boolean;
@@ -46,7 +48,7 @@ export function StartScreen({
 }) {
   const cost = loadoutCost(config, loadout);
   const initial = startingStats(loadout);
-  const insufficient = cost > balance;
+  const insufficient = cost > balance + couponCredits;
   const closed = status !== "active";
   const noRuns = runsLeft <= 0;
   const disabled = starting || closed || noRuns || insufficient;
@@ -59,7 +61,7 @@ export function StartScreen({
     : noRuns
       ? "今日出击次数已用完"
       : insufficient
-        ? `余额不足，还差 ${formatCredits(cost - balance)} cr`
+        ? `余额不足，还差 ${formatCredits(cost - balance - couponCredits)} cr`
         : null;
 
   return (
@@ -87,6 +89,12 @@ export function StartScreen({
           <span>
             今日 <span className="font-mono text-white/90">{runsLeft}</span>/{config.dailyRuns} 次
           </span>
+          {couponCredits > 0 ? (
+            <span className="flex items-center gap-1 text-cyan-200/70">
+              <Gem className="h-3 w-3" />
+              券 <span className="font-mono text-white/90">{formatCredits(couponCredits)}</span> cr
+            </span>
+          ) : null}
           <span className="text-cyan-200/50">首通奖励进入临时余额</span>
         </div>
       </div>

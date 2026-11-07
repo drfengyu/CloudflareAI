@@ -201,7 +201,7 @@ export const topups = sqliteTable("topup", {
     .references(() => users.id, { onDelete: "cascade" }),
   /** 变动金额（credits，可正可负，支持小数）。 */
   amount: real("amount").notNull(),
-  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励 / 8=消费返利 / 9=任务成就 / 10=充值赠送 / 11=雷电行动（装备/复活为负、通关奖励为正） / 12=翻牌夺宝（票价为负、中奖为正） / 13=站内信奖励 / 14=过期作废（清理 cron 补记，金额为负，createdAt 用原到期时间）。 */
+  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励 / 8=消费返利 / 9=任务成就 / 10=充值赠送 / 11=雷电行动（装备/复活为负、通关奖励为正） / 12=翻牌夺宝（票价为负、中奖为正） / 13=站内信奖励 / 14=过期作废（清理 cron 补记，金额为负，createdAt 用原到期时间） / 15=活动券兑换（付出 cr 记负）。 */
   type: integer("type").notNull(),
   /** 描述：如"兑换码 ABC123"、"管理员充值"、"后台调整"。 */
   description: text("description"),
@@ -440,16 +440,23 @@ export const rewardClaims = sqliteTable(
     userId: text("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    /** recharge=限时充值 / cashback=消费返利。 */
-    activityKind: text("activityKind").$type<"recharge" | "cashback">().notNull(),
-    /** 充值档位用门槛金额，返利用自然日 `YYYY-MM-DD`。 */
+    /** recharge=限时充值 / cashback=消费返利 / activity=每日每周活跃度里程碑。 */
+    activityKind: text("activityKind").$type<"recharge" | "cashback" | "activity">().notNull(),
+    /** 档位唯一键：充值/消费用门槛金额，活跃度里程碑用 `${periodKind}:${periodKey}:${points}`。 */
     tierKey: text("tierKey").notNull(),
     /** 发放时锁定的 credits，之后改配置不影响这封信。 */
     rewardCredits: real("rewardCredits").notNull().default(0),
     /** 到账后的临时余额有效期（天）。 */
     validDays: integer("validDays").notNull().default(0),
-    /** 领取时写入 topup 的流水类型（8=消费返利 / 10=充值赠送）。 */
+    /** 领取时写入 topup 的流水类型（8=消费返利 / 9=任务成就 / 10=充值赠送）。 */
     topupType: integer("topupType").notNull().default(0),
+    /** 奖励形态：临时货币 / 永久货币 / 抽奖券 / 活动券。 */
+    rewardKind: text("rewardKind")
+      .$type<"temp_credits" | "permanent_credits" | "tickets" | "coupon">()
+      .notNull()
+      .default("temp_credits"),
+    /** 发放时的展示名（如「抽奖券 ×2」「星轨券 88 cr」），改配置不影响已发记录。 */
+    rewardLabel: text("rewardLabel"),
     /** 站内信 id；站内信被清理后仍保留发放记录。 */
     messageId: text("messageId"),
     claimedAt: integer("claimedAt", { mode: "timestamp_ms" }),
@@ -460,6 +467,74 @@ export const rewardClaims = sqliteTable(
     index("idx_reward_claim_user").on(table.userId, table.activityKind),
   ],
 );
+
+/**
+ * 活动券：一种活动一种券，按活动轮次（配置 startAt）隔离。
+ *
+ * 券是「已预付的 credits」：兑换或礼包购买时从余额扣 cr（流水 type=15），
+ * 之后在该玩法的付费点上先抵扣券、再扣临时/永久余额，抵扣不写 cr 流水。
+ * 活动轮次变更后旧行保留但不参与展示与支付，等同作废。
+ */
+export const activityCoupons = sqliteTable(
+  "activity_coupon",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** lottery=幸运转盘 / flip=翻牌夺宝 / raiden=雷电行动。 */
+    activityKind: text("activityKind").$type<ActivityKind>().notNull(),
+    /** 活动轮次标识（活动 startAt 字符串）；轮次变更后旧券失效。 */
+    activityKey: text("activityKey").notNull(),
+    /** 当期券名；由轮次确定，下一期换名。 */
+    couponName: text("couponName").notNull(),
+    /** 券面余额（credits）。 */
+    credits: real("credits").notNull().default(0),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+    updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [
+    unique("uq_activity_coupon").on(table.userId, table.activityKind, table.activityKey),
+    index("idx_activity_coupon_user").on(table.userId, table.activityKind),
+  ],
+);
+
+/**
+ * 每日/每周任务领取记录：一行 = 某周期内领过某个任务。
+ * 活跃度不单独存，直接按这张表的 points 求和；周期换 key 后自然从 0 开始。
+ */
+export const activityTaskClaims = sqliteTable(
+  "activity_task_claim",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** daily=每日 / weekly=每周。 */
+    periodKind: text("periodKind").$type<"daily" | "weekly">().notNull(),
+    /** daily=北京日期 YYYY-MM-DD / weekly=本周一日期 YYYY-MM-DD。 */
+    periodKey: text("periodKey").notNull(),
+    taskKey: text("taskKey").notNull(),
+    /** 领取时计入的活跃度，配置调整不影响历史周期。 */
+    points: integer("points").notNull().default(0),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [
+    unique("uq_activity_task_claim").on(
+      table.userId,
+      table.periodKind,
+      table.periodKey,
+      table.taskKey,
+    ),
+    index("idx_activity_task_claim_period").on(
+      table.userId,
+      table.periodKind,
+      table.periodKey,
+    ),
+  ],
+);
+
+export type ActivityKind = "lottery" | "flip" | "raiden";
 
 /**
  * 任务成就领取记录：一行 = 一个用户领取过某个任务，之后不再重复发。
@@ -821,7 +896,7 @@ export const messages = sqliteTable(
     body: text("body").notNull(),
     /** 附件类型；null = 纯文本信。item = 自定义物品，领取只记录不自动发放。 */
     attachmentKind: text("attachmentKind").$type<
-      "credits" | "temp_credits" | "tickets" | "redemption" | "item"
+      "credits" | "temp_credits" | "tickets" | "coupon" | "redemption" | "item"
     >(),
     /**
      * 附件内容 JSON，按 attachmentKind 取用：

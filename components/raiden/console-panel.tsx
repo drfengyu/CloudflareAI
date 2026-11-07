@@ -7,6 +7,7 @@ import {
   Coins,
   Crosshair,
   Gamepad2,
+  Gem,
   Heart,
   LifeBuoy,
   ListOrdered,
@@ -43,9 +44,11 @@ import {
   WEAPONS,
 } from "./weapons";
 import { formatStageTime, scoreText } from "@/lib/raiden/format";
+import type { ActivityCouponView } from "@/lib/activity/coupons";
+import { CouponShop } from "@/components/activity/coupon-shop";
 import { LoadoutShop } from "./loadout-shop";
 
-type TabKey = "loadout" | "records" | "rank" | "rules" | "live";
+type TabKey = "loadout" | "coupon" | "records" | "rank" | "rules" | "live";
 
 const STATUS_LABEL: Record<RaidenActivityStatus, string> = {
   active: "进行中",
@@ -63,6 +66,7 @@ const STATUS_TONE: Record<RaidenActivityStatus, "success" | "muted" | "warning" 
 
 const IDLE_TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "loadout", label: "装备", icon: Gamepad2 },
+  { key: "coupon", label: "券", icon: Gem },
   { key: "records", label: "记录", icon: ScrollText },
   { key: "rank", label: "排行", icon: ListOrdered },
   { key: "rules", label: "规则", icon: Swords },
@@ -79,6 +83,7 @@ export function ConsolePanel({
   config,
   status,
   balance,
+  coupon,
   runsLeft,
   summary,
   leaderboard,
@@ -95,6 +100,7 @@ export function ConsolePanel({
   config: RaidenConfig;
   status: RaidenActivityStatus;
   balance: number;
+  coupon: ActivityCouponView;
   runsLeft: number;
   summary: MyRaidenSummary;
   leaderboard: LeaderboardRow[];
@@ -182,6 +188,8 @@ export function ConsolePanel({
           />
         ) : active === "loadout" ? (
           <LoadoutShop config={config} loadout={loadout} onChange={onLoadoutChange} />
+        ) : active === "coupon" ? (
+          <CouponShop activities={[coupon]} tone="dark" />
         ) : active === "records" ? (
           <RecordsPanel summary={summary} />
         ) : active === "rank" ? (

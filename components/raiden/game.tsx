@@ -33,6 +33,7 @@ import {
 } from "@/lib/raiden/config";
 import type { StartedRun, StageSettlement } from "@/lib/raiden/store";
 import type { BigWinRow, LeaderboardRow, MyRaidenSummary } from "@/lib/raiden/records";
+import type { ActivityCouponView } from "@/lib/activity/coupons";
 import {
   endRaidenRun as endRaidenRunAction,
   reviveRaidenRun as reviveRaidenRunAction,
@@ -89,6 +90,7 @@ export function RaidenGame({
   summary,
   leaderboard,
   firstClears,
+  coupon,
 }: {
   config: RaidenConfig;
   status: RaidenActivityStatus;
@@ -97,6 +99,7 @@ export function RaidenGame({
   summary: MyRaidenSummary;
   leaderboard: LeaderboardRow[];
   firstClears: BigWinRow[];
+  coupon: ActivityCouponView;
 }) {
   const router = useRouter();
   const [loadout, setLoadout] = useState<RaidenLoadout>({ ...EMPTY_LOADOUT });
@@ -640,6 +643,7 @@ export function RaidenGame({
             config={config}
             status={status}
             balance={balance}
+            couponCredits={coupon.credits}
             runsLeft={runsLeft}
             loadout={loadout}
             starting={starting}
@@ -654,6 +658,7 @@ export function RaidenGame({
           config={config}
           status={status}
           balance={balance}
+          coupon={coupon}
           runsLeft={runsLeft}
           summary={summary}
           leaderboard={leaderboard}

@@ -7,12 +7,20 @@ import {
   temporaryBalances,
   topups,
   users,
+  type ActivityKind,
 } from "@/lib/db/schema";
 import { grantTickets } from "@/lib/lottery/store";
 import { getLotteryConfig } from "@/lib/lottery/config";
+import { grantCouponToRound } from "@/lib/activity/coupons";
 
 export type MessageKind = "notice" | "reward" | "security";
-export type AttachmentKind = "credits" | "temp_credits" | "tickets" | "redemption" | "item";
+export type AttachmentKind =
+  | "credits"
+  | "temp_credits"
+  | "tickets"
+  | "redemption"
+  | "item"
+  | "coupon";
 
 /** 站内信在钱包流水里占用的类型（1–12 已被兑换码/管理员/签到/注册/充值/抽奖/邀请/返利/任务/赠额/雷电/翻牌占用）。 */
 export const MESSAGE_TOPUP_TYPE = 13;
@@ -27,22 +35,37 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
 export type Attachment =
-  | { kind: "credits"; credits: number }
+  | {
+      kind: "credits";
+      credits: number;
+      /** 领取时写入 topup 的类型；活动奖励用 8，缺省 13=站内信奖励。 */
+      topupType?: number;
+      /** 活动奖励发放记录 id，领取后回写 claimedAt。 */
+      rewardClaimId?: string;
+    }
   | {
       kind: "temp_credits";
       credits: number;
       validDays: number;
-      /** 领取时写入 topup 的类型：8=消费返利 / 10=充值赠送。 */
+      /** 领取时写入 topup 的类型：8=消费返利 / 9=任务成就 / 10=充值赠送。 */
       topupType: number;
       /** 活动奖励发放记录 id，领取后回写 claimedAt。 */
       rewardClaimId?: string;
-      /** 消费返利专用：领取时补写到 cashback_claim，保持历史口径不变。 */
+      /** 消费返利旧版按日结算字段；历史信仍可领取。 */
       cashbackDate?: string;
       consumedCredits?: number;
     }
-  | { kind: "tickets"; count: number }
+  | { kind: "tickets"; count: number; rewardClaimId?: string }
   | { kind: "redemption"; code: string }
-  | { kind: "item"; label: string };
+  | { kind: "item"; label: string }
+  | {
+      kind: "coupon";
+      activityKind: ActivityKind;
+      activityKey: string;
+      couponName: string;
+      credits: number;
+      rewardClaimId?: string;
+    };
 
 export interface MessageDetail {
   id: string;
@@ -92,7 +115,12 @@ function parseAttachment(row: {
   const data = (parsed ?? {}) as Record<string, unknown>;
   switch (row.attachmentKind) {
     case "credits":
-      return { kind: "credits", credits: Number(data.credits ?? 0) };
+      return {
+        kind: "credits",
+        credits: Number(data.credits ?? 0),
+        topupType: Number.isFinite(Number(data.topupType)) ? Number(data.topupType) : undefined,
+        rewardClaimId: typeof data.rewardClaimId === "string" ? data.rewardClaimId : undefined,
+      };
     case "temp_credits": {
       const consumed = Number(data.consumedCredits);
       return {
@@ -106,7 +134,23 @@ function parseAttachment(row: {
       };
     }
     case "tickets":
-      return { kind: "tickets", count: Number(data.count ?? 0) };
+      return {
+        kind: "tickets",
+        count: Number(data.count ?? 0),
+        rewardClaimId: typeof data.rewardClaimId === "string" ? data.rewardClaimId : undefined,
+      };
+    case "coupon": {
+      const kind = String(data.activityKind ?? "");
+      if (kind !== "lottery" && kind !== "flip" && kind !== "raiden") return null;
+      return {
+        kind: "coupon",
+        activityKind: kind,
+        activityKey: String(data.activityKey ?? ""),
+        couponName: String(data.couponName ?? ""),
+        credits: Number(data.credits ?? 0),
+        rewardClaimId: typeof data.rewardClaimId === "string" ? data.rewardClaimId : undefined,
+      };
+    }
     case "redemption":
       return { kind: "redemption", code: String(data.code ?? "") };
     case "item":
@@ -119,7 +163,11 @@ function parseAttachment(row: {
 function attachmentJson(attachment: Attachment): string {
   switch (attachment.kind) {
     case "credits":
-      return JSON.stringify({ credits: attachment.credits });
+      return JSON.stringify({
+        credits: attachment.credits,
+        topupType: attachment.topupType,
+        rewardClaimId: attachment.rewardClaimId,
+      });
     case "temp_credits":
       return JSON.stringify({
         credits: attachment.credits,
@@ -130,7 +178,15 @@ function attachmentJson(attachment: Attachment): string {
         consumedCredits: attachment.consumedCredits,
       });
     case "tickets":
-      return JSON.stringify({ count: attachment.count });
+      return JSON.stringify({ count: attachment.count, rewardClaimId: attachment.rewardClaimId });
+    case "coupon":
+      return JSON.stringify({
+        activityKind: attachment.activityKind,
+        activityKey: attachment.activityKey,
+        couponName: attachment.couponName,
+        credits: attachment.credits,
+        rewardClaimId: attachment.rewardClaimId,
+      });
     case "redemption":
       return JSON.stringify({ code: attachment.code });
     case "item":
@@ -145,12 +201,23 @@ function attachmentJson(attachment: Attachment): string {
  * 加一个 NaN 或做无意义的扣减，比发错钱更难收拾。
  */
 export function validateAttachment(attachment: Attachment): string | null {
+  const claimId = "rewardClaimId" in attachment ? attachment.rewardClaimId : undefined;
+  const badClaimId =
+    claimId !== undefined && (typeof claimId !== "string" || claimId.trim().length < 8);
+  if (badClaimId) return "活动奖励发放记录 id 不合法";
+
   switch (attachment.kind) {
     case "credits":
       if (!Number.isFinite(attachment.credits) || attachment.credits <= 0) {
         return "赠送 cr 必须是大于 0 的数字";
       }
       if (attachment.credits > 100_000) return "单封信赠送 cr 上限 100000";
+      if (
+        attachment.topupType !== undefined &&
+        ![8, 9, 10, MESSAGE_TOPUP_TYPE].includes(attachment.topupType)
+      ) {
+        return "永久货币奖励的流水类型必须是 8 / 9 / 10 / 13";
+      }
       return null;
     case "temp_credits":
       if (!Number.isFinite(attachment.credits) || attachment.credits <= 0) {
@@ -164,8 +231,8 @@ export function validateAttachment(attachment: Attachment): string | null {
       ) {
         return "临时余额有效期需在 1 ~ 365 天之间";
       }
-      if (attachment.topupType !== 8 && attachment.topupType !== 10) {
-        return "临时余额奖励的流水类型必须是 8 或 10";
+      if (![8, 9, 10].includes(attachment.topupType)) {
+        return "临时余额奖励的流水类型必须是 8 / 9 / 10";
       }
       if (attachment.cashbackDate && !/^\d{4}-\d{2}-\d{2}$/.test(attachment.cashbackDate)) {
         return "返利日期格式应为 YYYY-MM-DD";
@@ -179,6 +246,15 @@ export function validateAttachment(attachment: Attachment): string | null {
         return "抽奖券数量必须是正整数";
       }
       if (attachment.count > 100) return "单封信赠券上限 100 张";
+      return null;
+    case "coupon":
+      if (!Number.isFinite(attachment.credits) || attachment.credits <= 0) {
+        return "活动券面额必须是大于 0 的数字";
+      }
+      if (attachment.credits > 100_000) return "单封信活动券上限 100000";
+      if (!attachment.activityKey.trim()) return "活动券缺少活动轮次";
+      if (!attachment.couponName.trim()) return "活动券缺少券名";
+      if (!attachment.rewardClaimId) return "缺少活动奖励发放记录 id";
       return null;
     case "redemption":
       return attachment.code.trim().length >= 4 ? null : "兑换码至少 4 个字符";
@@ -374,6 +450,29 @@ export async function readMessage(userId: string, id: string): Promise<MessageDe
 }
 
 /**
+ * 回写活动奖励的领取状态。失败不影响已经发出的钱：活动页还有站内信 claimedAt 兜底，
+ * 下一次读 `listRewardClaims` 会把信的领取时间合进来。
+ */
+async function markRewardClaimed(
+  claimId: string | undefined,
+  userId: string,
+  now: Date,
+): Promise<void> {
+  if (!claimId) return;
+  await db
+    .update(rewardClaims)
+    .set({ claimedAt: now })
+    .where(
+      and(
+        eq(rewardClaims.id, claimId),
+        eq(rewardClaims.userId, userId),
+        isNull(rewardClaims.claimedAt),
+      ),
+    )
+    .catch((err) => console.error("[claimMessage] 回写活动奖励状态失败:", err));
+}
+
+/**
  * 领取附件。
  *
  * 先用一条条件 UPDATE 抢占领取位（`claimedAt IS NULL` 才写得上），`changes` 不是 1 就说明
@@ -422,10 +521,11 @@ export async function claimMessage(
         await db.insert(topups).values({
           userId,
           amount,
-          type: MESSAGE_TOPUP_TYPE,
+          type: attachment.topupType ?? MESSAGE_TOPUP_TYPE,
           description: `站内信奖励：${row.title}`.slice(0, 200),
           createdAt: new Date(),
         });
+        await markRewardClaimed(attachment.rewardClaimId, userId, new Date(nowMs));
         return { attachment: { ...attachment, credits: amount }, note: `${amount} cr 已到账` };
       }
       case "temp_credits": {
@@ -460,19 +560,7 @@ export async function claimMessage(
           createdAt: now,
         });
         // 回写发放状态失败不能影响已发出的钱；活动页还有站内信 claimedAt 兜底。
-        if (attachment.rewardClaimId) {
-          await db
-            .update(rewardClaims)
-            .set({ claimedAt: now })
-            .where(
-              and(
-                eq(rewardClaims.id, attachment.rewardClaimId),
-                eq(rewardClaims.userId, userId),
-                isNull(rewardClaims.claimedAt),
-              ),
-            )
-            .catch((err) => console.error("[claimMessage] 回写活动奖励状态失败:", err));
-        }
+        await markRewardClaimed(attachment.rewardClaimId, userId, now);
         return {
           attachment: { ...attachment, credits: amount },
           note: `${amount} cr 已到账（临时余额，${attachment.validDays} 天内有效）`,
@@ -486,7 +574,23 @@ export async function claimMessage(
           priceCredits: 0,
           activityKey: config.startAt || null,
         });
+        await markRewardClaimed(attachment.rewardClaimId, userId, new Date(nowMs));
         return { attachment, note: `${attachment.count} 张抽奖券已入账` };
+      }
+      case "coupon": {
+        const amount = round2(attachment.credits);
+        await grantCouponToRound(
+          userId,
+          attachment.activityKind,
+          attachment.activityKey,
+          attachment.couponName,
+          amount,
+        );
+        await markRewardClaimed(attachment.rewardClaimId, userId, new Date(nowMs));
+        return {
+          attachment: { ...attachment, credits: amount },
+          note: `${attachment.couponName} ${amount} cr 已入账（当期活动结束后作废）`,
+        };
       }
       case "redemption":
         return { attachment, note: "兑换码已解锁，去钱包页输入即可兑换" };

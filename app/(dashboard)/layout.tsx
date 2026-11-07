@@ -11,6 +11,7 @@ import {
   listRecentMessages,
   type MessagePreview,
 } from "@/lib/message/messages";
+import { getCurrencySnapshot, type CurrencySnapshot } from "@/lib/activity/coupons";
 
 /** 站点名缓存 1 小时，避免每次导航都查 option 表。 */
 const getCachedSiteName = unstable_cache(
@@ -39,13 +40,15 @@ export default async function DashboardLayout({
 
   const siteName = await getCachedSiteName();
   const userId = session?.user?.id;
-  // 铃铛要的是「几封没读 + 最近几封」，两条都是走索引的小查询，并发发出去，不串行等。
-  const [unreadCount, recentMessages] = userId
+  // 铃铛要的是「几封没读 + 最近几封」，顶栏货币条要余额与三种活动券；
+  // 都是走索引的小查询，并发发出去，不串行等。
+  const [unreadCount, recentMessages, currency] = userId
     ? await Promise.all([
         countUnread(userId).catch(() => 0),
         listRecentMessages(userId, 5).catch(() => []),
+        getCurrencySnapshot(userId).catch(() => null),
       ])
-    : [0, [] as MessagePreview[]];
+    : [0, [] as MessagePreview[], null as CurrencySnapshot | null];
 
   async function signOutAction() {
     "use server";
@@ -60,6 +63,7 @@ export default async function DashboardLayout({
         siteName={siteName}
         unreadCount={unreadCount}
         recentMessages={recentMessages}
+        currency={currency}
       />
       {/* 桌面端顶部模块导航取代了原来的左侧栏 */}
       <ModuleNav userRole={userRole} />

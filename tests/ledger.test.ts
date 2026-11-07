@@ -103,15 +103,19 @@ test("金额为 0 的发放/调整在 SQL 里就挡掉，不占笔数也不占�
   assert.match(sql, /FROM usage_log WHERE userId = \? AND creditsUsed > 0/);
 });
 
-test("14 个流水类型各归一类，漏登记会被问出来", () => {
+test("15 个流水类型各归一类，漏登记会被问出来", () => {
   const { ledger } = harness();
   const buckets = Object.values(ledger.LEDGER_CATEGORY_TYPES).flat();
   const labelled = Object.keys(ledger.TOPUP_TYPE_LABEL).map(Number);
 
   assert.deepEqual([...buckets].sort((a, b) => a - b), [...labelled].sort((a, b) => a - b));
   assert.equal(new Set(buckets).size, buckets.length, "同一个 type 不能落进两个类别");
-  assert.deepEqual(labelled.sort((a, b) => a - b), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+  assert.deepEqual(labelled.sort((a, b) => a - b), [
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+  ]);
   assert.deepEqual(local(ledger.LEDGER_CATEGORY_TYPES.expire), [ledger.TOPUP_TYPE_EXPIRE]);
+  // 活动券兑换是付出 cr 买券，属于活动类目的资金流出。
+  assert.ok(ledger.LEDGER_CATEGORY_TYPES.activity.includes(15));
 });
 
 test("注册奖励是赠送，不进充值类目", () => {
@@ -251,8 +255,22 @@ test("最近收支按 5 天窗口取数，SQL 里挡掉过期作废与 0 进出"
         income: 100,
         expense: 12.5,
         rows: [
-          { category: "recharge", label: "充值", entries: 1, income: 100, expense: 0 },
-          { category: "usage", label: "API 消费", entries: 4, income: 0, expense: 12.5 },
+          {
+            category: "recharge",
+            subtype: "online-unknown",
+            label: "在线充值",
+            entries: 1,
+            income: 100,
+            expense: 0,
+          },
+          {
+            category: "usage",
+            subtype: "type-0",
+            label: "API 消费",
+            entries: 4,
+            income: 0,
+            expense: 12.5,
+          },
         ],
       },
       {
@@ -260,7 +278,16 @@ test("最近收支按 5 天窗口取数，SQL 里挡掉过期作废与 0 进出"
         entries: 1,
         income: 0,
         expense: 30,
-        rows: [{ category: "activity", label: "活动", entries: 1, income: 0, expense: 30 }],
+        rows: [
+          {
+            category: "activity",
+            subtype: "type-6",
+            label: "幸运转盘",
+            entries: 1,
+            income: 0,
+            expense: 30,
+          },
+        ],
       },
     ]);
   })();
@@ -285,8 +312,13 @@ test("最近收支最多 50 笔，按天聚合后小计闭合", () => {
   assert.equal(days[0].entries, 50);
   assert.equal(days[0].expense, 50);
   assert.deepEqual(local(days[0].rows), [
-    { category: "activity", label: "活动", entries: 50, income: 0, expense: 50 },
+    { category: "activity", subtype: "type-6", label: "幸运转盘", entries: 50, income: 0, expense: 50 },
   ]);
+
+  // 钱包页传 null（默认）时不截断：近 5 天多少笔就显示多少笔。
+  const all = ledger.groupRecentLedgerDays(entries);
+  assert.equal(all[0].entries, 60);
+  assert.equal(all[0].expense, 60);
 });
 
 test("最近窗口是含今天在内的 5 个北京日历日", () => {

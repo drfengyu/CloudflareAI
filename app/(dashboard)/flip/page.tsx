@@ -9,6 +9,8 @@ import { FLIP_CARD_COUNT, flipActivityKey, flipActivityWindow, flipExpectation }
 import { getFlipConfig } from "@/lib/flip/settings";
 import { countRoundsToday, findOpenRound, type PendingRound } from "@/lib/flip/store";
 import { flipGlobalStats, flipSummary, listMyRounds, FLIP_ROUND_PAGE_SIZE, type FlipGlobalStats, type FlipRoundView, type FlipSummary } from "@/lib/flip/records";
+import { getActivityCouponView } from "@/lib/activity/coupons";
+import { CouponShop } from "@/components/activity/coupon-shop";
 
 import { PageBody } from "@/components/dashboard/section";
 
@@ -55,7 +57,11 @@ function Stat({
 
 export default async function FlipPage() {
   const userId = await requireUser();
-  const [config, balance] = await Promise.all([getFlipConfig(), getUserTotalBalance(userId)]);
+  const [config, balance, coupon] = await Promise.all([
+    getFlipConfig(),
+    getUserTotalBalance(userId),
+    getActivityCouponView(userId, "flip"),
+  ]);
   const windowInfo = flipActivityWindow(config);
   const activityKey = flipActivityKey(config);
   const expectation = flipExpectation(config);
@@ -92,6 +98,17 @@ export default async function FlipPage() {
       </CardHeader>
       <CardContent>
         <FlipRoundList key={rounds[0]?.id ?? "empty"} rounds={rounds} hasNext={hasMoreRounds} />
+      </CardContent>
+    </Card>
+  );
+
+  const couponCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">活动券与珍宝礼包</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <CouponShop activities={[coupon]} />
       </CardContent>
     </Card>
   );
@@ -135,6 +152,7 @@ export default async function FlipPage() {
         <PageHeader title="翻牌夺宝" description="12 张牌一桌 · 翻开一张就结算" />
         <PageBody className="space-y-4">
           <Notice title={notice.title} hint={notice.hint} />
+          {couponCard}
           {trackRounds ? recordsCard : null}
           {rulesCard}
         </PageBody>
@@ -198,6 +216,7 @@ export default async function FlipPage() {
           </CardContent>
         </Card>
 
+        {couponCard}
         {recordsCard}
         {rulesCard}
       </PageBody>

@@ -1,7 +1,7 @@
 import { and, asc, eq, gte, sql } from "drizzle-orm";
 import { d1Run, db } from "@/lib/db/d1-http";
 import { flipRounds, temporaryBalances, topups, type FlipRound } from "@/lib/db/schema";
-import { refundPermanentCredits, spendCredits } from "@/lib/billing/spend";
+import { payWithCoupon, refundCouponPayment } from "@/lib/activity/coupons";
 import { cnStartOfToday } from "@/lib/date";
 import {
   dealFlipBoard,
@@ -100,10 +100,11 @@ export async function openRound(
   }
 
   const price = round2(config.roundPriceCredits);
-  const spend = await spendCredits(userId, price);
-  if (!spend.ok) {
+  const paid = await payWithCoupon(userId, "flip", activityKey, price);
+  if (!paid.ok) {
     throw new FlipError(`余额不足：开一局需要 ${price} cr`);
   }
+  const payment = paid.payment;
 
   const roundId = crypto.randomUUID();
   try {
@@ -119,19 +120,23 @@ export async function openRound(
       createdAt: now,
       settledAt: null,
     });
-    await db.insert(topups).values({
-      id: crypto.randomUUID(),
-      userId,
-      amount: -price,
-      type: TOPUP_TYPE_FLIP,
-      description: `翻牌夺宝开局（${price} cr）`,
-      createdAt: now,
-    });
+    // 券是买券时已付过的 cr，流水只记本次真实现金支出，账本合计才和余额减少对得上。
+    if (payment.creditPart > 0) {
+      await db.insert(topups).values({
+        id: crypto.randomUUID(),
+        userId,
+        amount: -payment.creditPart,
+        type: TOPUP_TYPE_FLIP,
+        description:
+          payment.couponPart > 0
+            ? `翻牌夺宝开局（${price} cr，活动券抵 ${payment.couponPart} cr）`
+            : `翻牌夺宝开局（${price} cr）`,
+        createdAt: now,
+      });
+    }
   } catch (error) {
     await db.delete(flipRounds).where(eq(flipRounds.id, roundId)).catch(() => undefined);
-    await refundPermanentCredits(userId, price, `翻牌夺宝开局失败退回（${price} cr）`).catch(
-      () => undefined,
-    );
+    await refundCouponPayment(userId, payment, `翻牌夺宝开局失败退回（${payment.creditPart} cr）`);
     throw error;
   }
 

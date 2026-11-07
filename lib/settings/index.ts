@@ -1,6 +1,7 @@
 import { db } from "@/lib/db/d1-http";
 import { options } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
+import { DEFAULT_CASHBACK_TIERS, sanitizeCashbackTiers } from "@/lib/cashback/config";
 
 /** 值缺失/为空时给默认值，否则按默认值的类型解释库里存的那一列文本。 */
 function coerceSettingValue<T>(raw: string | null | undefined, defaultValue: T): T {
@@ -121,65 +122,48 @@ function num(raw: number, fallback: number, min: number, max: number): number {
 }
 
 /**
- * 消费返利配置。默认**关闭**：部署本身不发钱，开与不开、比例多少都由后台决定。
- *
- * 口径是「按北京自然日结算、用户手动领取」：返利只算已结束的日子（今天不算），
- * `backfillDays` 限制最多能往前补领几天，避免攒很久后一次性领走大额。
+ * 消费返利配置：与充值活动同一时间段，按活动期内累计消费逐档发放随机奖励。
+ * 默认**关闭**；档位只在后台按数值编辑，存库仍是 JSON（`cashback_tiers`），
+ * 但读侧统一走 `sanitizeCashbackTiers`，脏值不会算出负数或倒挂区间。
  */
 export async function getCashbackSettings() {
   const cfg = await getSettingsMap({
     cashback_enabled: false,
-    cashback_rate: 0.1,
-    cashback_min_credits: 20,
-    cashback_cap: 200,
     cashback_valid_days: 7,
-    cashback_backfill_days: 3,
     cashback_leaderboard_days: 7,
     cashback_leaderboard_size: 20,
+    cashback_tiers: JSON.stringify(DEFAULT_CASHBACK_TIERS),
   });
+
+  let tiers = DEFAULT_CASHBACK_TIERS;
+  try {
+    tiers = sanitizeCashbackTiers(JSON.parse(cfg.cashback_tiers));
+  } catch {
+    tiers = [];
+  }
 
   return {
     enabled: cfg.cashback_enabled,
-    rate: num(cfg.cashback_rate, 0.1, 0, 1),
-    minCredits: num(cfg.cashback_min_credits, 20, 0, 1_000_000),
-    cap: num(cfg.cashback_cap, 200, 0, 1_000_000),
     validDays: num(cfg.cashback_valid_days, 7, 1, 365),
-    backfillDays: num(cfg.cashback_backfill_days, 3, 1, 31),
     leaderboardDays: num(cfg.cashback_leaderboard_days, 7, 1, 90),
     leaderboardSize: num(cfg.cashback_leaderboard_size, 20, 1, 50),
+    tiers,
   };
 }
 
 /**
- * 任务成就配置。默认**关闭**：任务清单与默认额度写在代码里（`lib/tasks/tasks.ts`），
- * 后台只决定开不开、临时余额给几天、以及按任务 key 覆盖额度——完成判定永远读业务表现场数据，
+ * 任务成就配置。默认**关闭**：每日/每周任务清单、活跃度与里程碑额度都写在代码里
+ * （`lib/tasks/tasks.ts`），后台只决定开不开、临时余额给几天——完成判定永远读业务表现场数据，
  * 所以这里没有任何需要跟数据同步的状态。
  */
 export async function getTaskSettings() {
   const cfg = await getSettingsMap({
     tasks_enabled: false,
     tasks_valid_days: 30,
-    task_reward_overrides: "{}",
   });
-
-  let rewardOverrides: Record<string, number> = {};
-  try {
-    const parsed: unknown = JSON.parse(cfg.task_reward_overrides);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      for (const [key, raw] of Object.entries(parsed)) {
-        const n = Number(raw);
-        if (Number.isFinite(n) && n >= 0 && n <= 100_000) {
-          rewardOverrides[key] = Math.round(n * 100) / 100;
-        }
-      }
-    }
-  } catch {
-    rewardOverrides = {};
-  }
 
   return {
     enabled: cfg.tasks_enabled,
     validDays: num(cfg.tasks_valid_days, 30, 1, 365),
-    rewardOverrides,
   };
 }

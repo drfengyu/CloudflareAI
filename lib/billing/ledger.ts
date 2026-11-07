@@ -63,6 +63,7 @@ export const TOPUP_TYPE_LABEL: Record<number, string> = {
   12: "翻牌夺宝",
   13: "站内信奖励",
   14: "过期作废",
+  15: "活动券兑换",
 };
 
 const DAY_OF = (column: string) => `strftime('%Y-%m-%d', ${column} / 1000, 'unixepoch', '+8 hours')`;
@@ -77,7 +78,7 @@ const DAY_OF = (column: string) => `strftime('%Y-%m-%d', ${column} / 1000, 'unix
 export const LEDGER_CATEGORY_TYPES: Record<Exclude<LedgerCategory, "usage">, number[]> = {
   recharge: [1, 2, 5, 13],
   reward: [3, 4, 7, 8, 9, 10],
-  activity: [6, 11, 12],
+  activity: [6, 11, 12, 15],
   expire: [TOPUP_TYPE_EXPIRE],
 };
 
@@ -126,11 +127,16 @@ export interface LedgerRecentEntry {
   income: number;
   expense: number;
   calls: number;
+  /** 细分键与展示名；缺省时回退到类型名。 */
+  subtype?: string;
+  label?: string;
 }
 
 /** 最近收支按天展开时的一类小计。 */
 export interface LedgerRecentCategoryRow {
   category: LedgerCategory;
+  /** 细分键：充值渠道 / 过期来源 / 流水类型，用于 React key。 */
+  subtype: string;
   label: string;
   entries: number;
   income: number;
@@ -148,11 +154,8 @@ export interface LedgerRecentDay {
 
 type DayRange = { from: number; to: number };
 
-/** 钱包「最近收支」的窗口：含今天在内的 5 个北京日历日。 */
+/** 钱包「最近收支」的窗口：含今天在内的 5 个北京日历日，不限条数。 */
 const RECENT_WINDOW_DAYS = 5;
-
-/** 钱包「最近收支」最多展示的笔数（API 消费按当天每模型一条计）。 */
-export const RECENT_LEDGER_LIMIT = 50;
 
 const CN_OFFSET_MS = 8 * 60 * 60 * 1000;
 
@@ -351,6 +354,21 @@ async function loadOrderChannels(orderNos: string[]): Promise<Map<string, OrderC
 }
 
 /**
+ * 一行的细分口径：过期看发放来源、充值看渠道、其余按流水类型。
+ * 账本天表明细与钱包「最近收支」共用，保证两边看到的细项名称一致。
+ */
+function resolveLedgerSubtype(
+  category: LedgerCategory,
+  typeCode: number,
+  detail: string | null,
+  orders: Map<string, OrderChannel>,
+): { subtype: string; label: string } {
+  if (category === "expire") return ledgerExpireSubtype(detail);
+  if (category === "recharge") return ledgerRechargeSubtype(typeCode, detail, orders);
+  return { subtype: `type-${typeCode}`, label: ledgerTypeLabel({ category, typeCode }) };
+}
+
+/**
  * 某一天的分类型小计；`filter` 非 all 时只留那一类。
  *
  * 过期作废与在线充值还要再细分来源：前者看流水描述里的发放出处，后者要回查
@@ -382,12 +400,7 @@ export async function listLedgerDayByType(
     const category = String(row.category) as LedgerCategory;
     const typeCode = num(row.typeCode);
     const detail = text(row.detail);
-    const subtype =
-      category === "expire"
-        ? ledgerExpireSubtype(detail)
-        : category === "recharge"
-          ? ledgerRechargeSubtype(typeCode, detail, orders)
-          : { subtype: `type-${typeCode}`, label: ledgerTypeLabel({ category, typeCode }) };
+    const subtype = resolveLedgerSubtype(category, typeCode, detail, orders);
     const key = `${category}|${typeCode}|${subtype.subtype}`;
     const current = grouped.get(key) ?? {
       category,
@@ -410,33 +423,41 @@ export async function listLedgerDayByType(
 const CATEGORY_ORDER: LedgerCategory[] = ["recharge", "reward", "activity", "usage", "expire"];
 
 /**
- * 把最近变动按北京日期分组，最多保留 `limit` 笔。
+ * 把最近变动按北京日期分组，可按 `limit` 截断；钱包页传 null 表示不限条数。
  *
- * 聚合只在 JS 里做：先截断到最近 50 笔再按类汇总，折叠行的日小计与展开后的
+ * 聚合只在 JS 里做：先截断再按类汇总，折叠行的日小计与展开后的
  * 分类小计永远相加闭合，不会出现「日合计包含被截掉的笔数」。
  */
 export function groupRecentLedgerDays(
   entries: LedgerRecentEntry[],
-  limit = RECENT_LEDGER_LIMIT,
+  limit: number | null = null,
 ): LedgerRecentDay[] {
   const sorted = [...entries]
     .filter((entry) => Number.isFinite(entry.ts))
-    .sort((a, b) => b.ts - a.ts)
-    .slice(0, limit);
+    .sort((a, b) => b.ts - a.ts);
+  const limited = limit === null ? sorted : sorted.slice(0, limit);
 
   const days = new Map<string, LedgerRecentDay>();
-  for (const entry of sorted) {
+  for (const entry of limited) {
     const date = cnDateOf(entry.ts);
     let day = days.get(date);
     if (!day) {
       day = { date, entries: 0, income: 0, expense: 0, rows: [] };
       days.set(date, day);
     }
-    let row = day.rows.find((item) => item.category === entry.category);
+    const subtype = entry.subtype ?? `type-${entry.typeCode}`;
+    let row = day.rows.find(
+      (item) => item.category === entry.category && item.subtype === subtype,
+    );
     if (!row) {
       row = {
         category: entry.category,
-        label: LEDGER_CATEGORY_LABEL[entry.category],
+        subtype,
+        label:
+          entry.label ??
+          (entry.category === "usage"
+            ? LEDGER_CATEGORY_LABEL.usage
+            : (TOPUP_TYPE_LABEL[entry.typeCode] ?? LEDGER_CATEGORY_LABEL[entry.category])),
         entries: 0,
         income: 0,
         expense: 0,
@@ -452,7 +473,11 @@ export function groupRecentLedgerDays(
     .map((day) => {
       const rows = day.rows
         .filter(ledgerHasMovement)
-        .sort((a, b) => CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category));
+        .sort((a, b) => {
+          const byCategory = CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category);
+          if (byCategory !== 0) return byCategory;
+          return a.label.localeCompare(b.label, "zh-CN");
+        });
       const totals = sumLedgerDays(rows);
       return {
         date: day.date,
@@ -467,7 +492,7 @@ export function groupRecentLedgerDays(
 }
 
 /**
- * 钱包页的最近收支：近 5 天、最多 50 笔，与账本同一份口径，按天分组。
+ * 钱包页的最近收支：近 5 天全部逐笔，与账本同一份细分口径，按天分组。
  *
  * 过期作废不进这一列：钱包只回答「还能用的钱怎么进出的」，过期统一去账本看；
  * 结算条已经把过期从收入和支出两头都剔掉，列表里再出现会让人重复扣一次。
@@ -475,7 +500,6 @@ export function groupRecentLedgerDays(
 export async function listRecentLedgerByDay(
   userId: string,
   now = Date.now(),
-  limit = RECENT_LEDGER_LIMIT,
 ): Promise<LedgerRecentDay[]> {
   const { sql, params } = ledgerUnion(userId, recentDayWindow(now));
   const rows = await d1All<Record<string, unknown>>(
@@ -483,8 +507,18 @@ export async function listRecentLedgerByDay(
      FROM (${sql}) WHERE ts IS NOT NULL AND category <> 'expire' ORDER BY ts DESC`,
     params,
   );
-  const entries: LedgerRecentEntry[] = rows
-    .map((row) => ({
+
+  const orderNos: string[] = [];
+  for (const row of rows) {
+    if (String(row.category) !== "recharge" || num(row.typeCode) !== 5) continue;
+    const orderNo = text(row.detail)?.match(ORDER_NO_PATTERN)?.[1];
+    if (orderNo) orderNos.push(orderNo);
+  }
+  const orders = orderNos.length > 0 ? await loadOrderChannels(orderNos) : new Map<string, OrderChannel>();
+
+  const entries: LedgerRecentEntry[] = [];
+  for (const row of rows) {
+    const entry = {
       ts: num(row.ts),
       category: String(row.category) as LedgerCategory,
       typeCode: num(row.typeCode),
@@ -492,9 +526,12 @@ export async function listRecentLedgerByDay(
       income: num(row.income),
       expense: num(row.expense),
       calls: num(row.calls),
-    }))
-    .filter(ledgerHasMovement);
-  return groupRecentLedgerDays(entries, limit);
+    };
+    if (!ledgerHasMovement(entry)) continue;
+    const subtype = resolveLedgerSubtype(entry.category, entry.typeCode, entry.detail, orders);
+    entries.push({ ...entry, subtype: subtype.subtype, label: subtype.label });
+  }
+  return groupRecentLedgerDays(entries);
 }
 
 /** 天表行与当天类型行都能直接汇总；汇总保持原值，取整只在展示层做一次。 */

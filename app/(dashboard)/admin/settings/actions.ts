@@ -29,7 +29,7 @@ import {
 import { setSetting } from "@/lib/settings";
 import { saveSmtpSettings, type SmtpSettings } from "@/lib/email";
 import { sanitizeBonusTiers } from "@/lib/payment/bonus";
-import { TASKS } from "@/lib/tasks/tasks";
+import { sanitizeCashbackTiers } from "@/lib/cashback/config";
 import {
   ANNOUNCEMENT_MAX,
   ANNOUNCEMENT_TYPES,
@@ -268,14 +268,12 @@ export async function updateInviteSettings(formData: {
   return { success: true };
 }
 
+/** 消费返利：与充值活动共用时间段，档位按「累计消费门槛 / 随机奖励区间」逐行编辑。 */
 export async function updateCashbackSettings(formData: {
   enabled: boolean;
-  rate: string;
-  minCredits: string;
-  cap: string;
   validDays: string;
-  backfillDays: string;
   leaderboardDays: string;
+  tiers: Array<{ minCredits: string; minReward: string; maxReward: string }>;
 }) {
   const currentUserId = await requireUser();
 
@@ -289,41 +287,48 @@ export async function updateCashbackSettings(formData: {
     throw new Error("权限不足");
   }
 
-  const rate = parseFloat(formData.rate);
-  const minCredits = parseFloat(formData.minCredits);
-  const cap = parseFloat(formData.cap);
   const validDays = parseInt(formData.validDays, 10);
-  const backfillDays = parseInt(formData.backfillDays, 10);
   const leaderboardDays = parseInt(formData.leaderboardDays, 10);
 
-  if (!Number.isFinite(rate) || rate < 0 || rate > 1) {
-    throw new Error("返利比例需在 0 ~ 1 之间（0.1 表示 10%）");
-  }
-  if (!Number.isFinite(minCredits) || minCredits < 0 || minCredits > 1_000_000) {
-    throw new Error("起返门槛需在 0 ~ 1000000 credits 之间");
-  }
-  if (!Number.isFinite(cap) || cap < 0 || cap > 1_000_000) {
-    throw new Error("单日封顶需在 0 ~ 1000000 credits 之间");
-  }
   if (!Number.isFinite(validDays) || validDays < 1 || validDays > 365) {
-    throw new Error("返利有效期需在 1 ~ 365 天之间");
-  }
-  if (!Number.isFinite(backfillDays) || backfillDays < 1 || backfillDays > 31) {
-    throw new Error("可补领天数需在 1 ~ 31 天之间");
+    throw new Error("奖励有效期需在 1 ~ 365 天之间");
   }
   if (!Number.isFinite(leaderboardDays) || leaderboardDays < 1 || leaderboardDays > 90) {
     throw new Error("冲榜窗口需在 1 ~ 90 天之间");
   }
 
-  // 七个键并发单条 upsert：走 upsertOption 会变成「每条先 SELECT 再写」共 14 次串行往返。
+  const rows: Array<{ minCredits: number; minReward: number; maxReward: number }> = [];
+  for (const [i, row] of formData.tiers.entries()) {
+    // 三个格子全空 = 这一档还没配，跳过（新加一行的默认状态）
+    if (!row.minCredits.trim() && !row.minReward.trim() && !row.maxReward.trim()) continue;
+    const minCredits = Number(row.minCredits);
+    const minReward = Number(row.minReward);
+    const maxReward = Number(row.maxReward);
+    if (!row.minCredits.trim() || !Number.isFinite(minCredits) || minCredits <= 0) {
+      throw new Error(`第 ${i + 1} 档的「累计满」需要填一个大于 0 的 credits`);
+    }
+    if (!row.minReward.trim() || !Number.isFinite(minReward) || minReward <= 0) {
+      throw new Error(`第 ${i + 1} 档的「最少奖励」需要填一个大于 0 的 credits`);
+    }
+    if (!row.maxReward.trim() || !Number.isFinite(maxReward) || maxReward < minReward) {
+      throw new Error(`第 ${i + 1} 档的「最多奖励」不能小于最少奖励`);
+    }
+    rows.push({ minCredits, minReward, maxReward });
+  }
+
+  const tiers = sanitizeCashbackTiers(rows);
+  if (tiers.length !== rows.length) {
+    throw new Error("有两档的「累计满」金额相同，请改成不同金额");
+  }
+  if (formData.enabled && tiers.length === 0) {
+    throw new Error("开启消费返利需要至少一个有效档位");
+  }
+
   await Promise.all([
     setSetting("cashback_enabled", formData.enabled),
-    setSetting("cashback_rate", rate),
-    setSetting("cashback_min_credits", minCredits),
-    setSetting("cashback_cap", cap),
     setSetting("cashback_valid_days", validDays),
-    setSetting("cashback_backfill_days", backfillDays),
     setSetting("cashback_leaderboard_days", leaderboardDays),
+    setSetting("cashback_tiers", JSON.stringify(tiers)),
   ]);
 
   revalidatePath("/admin/settings");
@@ -409,13 +414,13 @@ export async function updateRechargeBonusSettings(formData: {
 }
 
 /**
- * 任务成就配置：开关、临时余额有效期、每个任务的一次性额度。
- * 额度按任务 key 逐项提交，留空表示用代码默认值；出现未知 key 直接报错而不是悄悄丢掉。
+ * 任务成就配置：只决定开不开与临时余额有效期。
+ * 每日/每周任务清单、活跃度和里程碑额度都写死在 `lib/tasks/tasks.ts`，
+ * 进度现场读业务表，后台改窗口不会造成历史对不上。
  */
 export async function updateTaskSettings(formData: {
   enabled: boolean;
   validDays: string;
-  rewards: Record<string, string>;
 }) {
   const currentUserId = await requireUser();
 
@@ -434,24 +439,9 @@ export async function updateTaskSettings(formData: {
     throw new Error("奖励有效期需在 1 ~ 365 天之间");
   }
 
-  const known = new Map(TASKS.map((t) => [t.key, t]));
-  const overrides: Record<string, number> = {};
-  for (const [key, raw] of Object.entries(formData.rewards)) {
-    const text = String(raw ?? "").trim();
-    if (!text) continue;
-    const task = known.get(key);
-    if (!task) throw new Error(`未知任务：${key}`);
-    const reward = Number(text);
-    if (!Number.isFinite(reward) || reward < 0 || reward > 100_000) {
-      throw new Error(`「${task.title}」的奖励需在 0 ~ 100000 credits 之间`);
-    }
-    overrides[key] = Math.round(reward * 100) / 100;
-  }
-
   await Promise.all([
     setSetting("tasks_enabled", formData.enabled),
     setSetting("tasks_valid_days", validDays),
-    setSetting("task_reward_overrides", JSON.stringify(overrides)),
   ]);
 
   revalidatePath("/admin/settings");

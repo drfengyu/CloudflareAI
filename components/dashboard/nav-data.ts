@@ -56,7 +56,7 @@ export const NAV: NavGroup[] = [
       { href: "/lottery", label: "幸运转盘", icon: Sparkles },
       { href: "/raiden", label: "雷电行动", icon: Gamepad2 },
       { href: "/flip", label: "翻牌夺宝", icon: Layers },
-      { href: "/cashback", label: "限时返利", icon: PiggyBank },
+      { href: "/cashback", label: "活动总览", icon: PiggyBank },
       { href: "/tasks", label: "任务成就", icon: ListChecks },
     ],
   },

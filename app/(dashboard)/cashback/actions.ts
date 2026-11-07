@@ -1,9 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { issueCashbackReward } from "@/lib/cashback/claims";
+import { issueCashbackTierReward } from "@/lib/cashback/claims";
 import { issueRechargeTierReward } from "@/lib/rewards/claims";
-import { getCashbackSettings } from "@/lib/settings";
 import { requireUser } from "@/lib/usage/meter";
 
 function failureMessage(err: unknown): string {
@@ -34,21 +33,20 @@ export async function sendRechargeTierRewardAction(input: {
   }
 }
 
-/** 把某一天的消费返利发到站内信；重复点击由 reward_claim 唯一索引挡下。 */
-export async function sendCashbackRewardAction(input: {
-  date: string;
-}): Promise<{ success: boolean; message: string; reward: number | null }> {
+/** 把某一档消费返利发到站内信；随机结果在服务端发放时锁定。 */
+export async function sendCashbackTierRewardAction(input: {
+  tierKey: string;
+}): Promise<{ success: boolean; message: string; rewardLabel: string | null }> {
   try {
     const userId = await requireUser();
-    const settings = await getCashbackSettings();
-    const result = await issueCashbackReward(userId, input.date, settings);
+    const result = await issueCashbackTierReward(userId, input.tierKey);
     revalidateRewardPages();
     return {
       success: true,
-      message: `${result.reward.toFixed(2)} cr 已发放到站内信，请前往领取`,
-      reward: result.reward,
+      message: `${result.rewardLabel} 已发放到站内信，请前往领取`,
+      rewardLabel: result.rewardLabel,
     };
   } catch (err) {
-    return { success: false, message: failureMessage(err), reward: null };
+    return { success: false, message: failureMessage(err), rewardLabel: null };
   }
 }

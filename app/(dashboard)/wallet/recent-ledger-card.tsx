@@ -42,8 +42,8 @@ function netClass(net: number): string {
 }
 
 /**
- * 钱包页的「最近收支」：近 5 天、最多 50 笔，按北京日期分组。
- * 折叠时只看当天净额，点开看当天各类收支小计；完整账目在 /ledger。
+ * 钱包页的「最近收支」：近 5 天全部记录，按北京日期分组。
+ * 折叠时只看当天净额，点开看当天各细分收支小计；完整账目在 /ledger。
  */
 export function RecentLedgerCard({ days }: { days: LedgerRecentDay[] }) {
   const [openDate, setOpenDate] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export function RecentLedgerCard({ days }: { days: LedgerRecentDay[] }) {
       <CardHeader className="flex flex-row items-center justify-between space-y-0">
         <div className="space-y-0.5">
           <CardTitle className="text-base">最近收支</CardTitle>
-          <p className="text-xs text-muted-foreground">近 5 天 · 最多 50 笔 · 按天汇总</p>
+          <p className="text-xs text-muted-foreground">近 5 天 · 全部记录 · 与个人账本同一口径</p>
         </div>
         <Link href="/ledger" className="text-xs text-muted-foreground hover:text-foreground">
           查看个人账本 →
@@ -107,7 +107,7 @@ export function RecentLedgerCard({ days }: { days: LedgerRecentDay[] }) {
                   <div className="border-t border-border px-3 pb-2.5 pt-1">
                     {day.rows.map((row) => (
                       <div
-                        key={row.category}
+                        key={`${row.category}-${row.subtype}`}
                         className="flex items-center justify-between gap-3 py-1.5 text-xs"
                       >
                         <p className="min-w-0">
@@ -136,7 +136,7 @@ export function RecentLedgerCard({ days }: { days: LedgerRecentDay[] }) {
 
         {days.length > 0 ? (
           <p className="flex flex-wrap gap-x-3 pt-1 text-xs text-muted-foreground tabular-nums">
-            <span>以上为近 5 天最近 50 笔，不是余额合计</span>
+            <span>以上为近 5 天全部收支，不是余额合计</span>
             <span className="text-success">收入 +{formatCredits(totals.income)}</span>
             <span className="text-destructive">支出 −{formatCredits(totals.expense)}</span>
             <span className={netClass(net)}>净 {net > 0 ? "+" : net < 0 ? "−" : ""}{formatCredits(Math.abs(net))} cr</span>

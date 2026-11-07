@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/dashboard/page-header";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
 import { users, temporaryBalances, paymentOrders } from "@/lib/db/schema";
@@ -25,6 +25,8 @@ import { getEpayConfig } from "@/lib/payment/epay";
 import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
 import { serializePayOrder } from "@/lib/payment/pay-order-view";
 import { formatCnDate } from "@/lib/date";
+import { listActivityCoupons } from "@/lib/activity/coupons";
+import { CouponShop } from "@/components/activity/coupon-shop";
 import { PageBody, PageSection } from "@/components/dashboard/section";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +37,7 @@ const PENDING_ORDER_LIMIT = 20;
 export default async function WalletPage({
   searchParams,
 }: {
-  searchParams: Promise<{ paid?: string; orderNo?: string }>;
+  searchParams: Promise<{ paid?: string; orderNo?: string; recharge?: string }>;
 }) {
   const userId = await requireUser();
   const params = await searchParams;
@@ -43,7 +45,7 @@ export default async function WalletPage({
 
   // 2026-10-17 性能：这些查询互不依赖（全都只按 userId 取数），原先是一条接一条 await，
   // 串行 5 次 D1 往返 ≈ 2 秒；并发成一波后只剩最慢那条的时间。
-  const [userRows, tempBalances, pendingOrders, epayConfig, linuxdoConfig, bonusConfig, recentLedger, ledgerDays, expiredExpense] =
+  const [userRows, tempBalances, pendingOrders, epayConfig, linuxdoConfig, bonusConfig, recentLedger, ledgerDays, expiredExpense, coupons] =
     await Promise.all([
       // 永久余额与角色（角色决定充值弹窗里能不能看到易支付）
       db
@@ -69,12 +71,14 @@ export default async function WalletPage({
       getLinuxdoConfig(),
       // 充值阶梯赠送：活动期内累计充值达标后在「限时返利」页手动领取
       getRechargeBonusSettings(),
-      // 最近收支：近 5 天最多 50 笔，与个人账本同一份口径（发放 + API 消费）
+      // 最近收支：近 5 天全部记录，与个人账本同一份口径（发放 + API 消费）
       listRecentLedgerByDay(userId),
       // 与账本页同一把尺子的全量天表：钱包要拿累计净收支和余额对账
       listLedgerDays(userId),
       // 过期作废的真实流水：钱包把发放和作废两头一起从展示里剔除
       sumExpiredExpense(userId),
+      // 当期三种活动券余额与珍宝礼包：充值位同时是券礼包入口
+      listActivityCoupons(userId),
     ]);
 
   const permanentBalance = userRows[0]?.balanceCredits || 0;
@@ -158,6 +162,7 @@ export default async function WalletPage({
                   </div>
                 </div>
                 <RedeemCodeDialog
+                  defaultOpen={params.recharge === "1"}
                   canUseEpay={(userRows[0]?.role ?? 0) >= 10}
                   epayRate={epayConfig.rate}
                   epayMin={epayConfig.minCny}
@@ -240,6 +245,17 @@ export default async function WalletPage({
 
           {/* 签到日历 */}
           <CheckinCalendarCard />
+
+          {/* 活动券与珍宝礼包：充值位同时也是券礼包入口 */}
+          <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base">活动券与珍宝礼包</CardTitle>
+              <span className="text-xs text-muted-foreground">当期有效 · 活动结束作废</span>
+            </CardHeader>
+            <CardContent>
+              <CouponShop activities={coupons} />
+            </CardContent>
+          </Card>
         </PageSection>
 
         <PageSection title="收支与临时余额" subtitle="最近几笔收支变动、未到账订单与临时余额有效期">

@@ -638,38 +638,36 @@ export function InviteSettingsForm({ initialSettings }: InviteSettingsFormProps)
 interface CashbackSettingsFormProps {
   initialSettings: {
     enabled: boolean;
-    rate: string;
-    minCredits: string;
-    cap: string;
     validDays: string;
-    backfillDays: string;
     leaderboardDays: string;
+    /** 已配好的档位；表单按行编辑，不让管理员手写 JSON。 */
+    tiers: Array<{ minCredits: number; minReward: number; maxReward: number }>;
   };
 }
 
 export function CashbackSettingsForm({ initialSettings }: CashbackSettingsFormProps) {
   const [enabled, setEnabled] = useState(initialSettings.enabled);
-  const [rate, setRate] = useState(initialSettings.rate);
-  const [minCredits, setMinCredits] = useState(initialSettings.minCredits);
-  const [cap, setCap] = useState(initialSettings.cap);
   const [validDays, setValidDays] = useState(initialSettings.validDays);
-  const [backfillDays, setBackfillDays] = useState(initialSettings.backfillDays);
   const [leaderboardDays, setLeaderboardDays] = useState(initialSettings.leaderboardDays);
+  const [tiers, setTiers] = useState(() =>
+    initialSettings.tiers.map((t) => ({
+      minCredits: String(t.minCredits),
+      minReward: String(t.minReward),
+      maxReward: String(t.maxReward),
+    })),
+  );
   const [loading, setLoading] = useState(false);
+
+  const patchTier = (
+    index: number,
+    next: Partial<{ minCredits: string; minReward: string; maxReward: string }>,
+  ) => setTiers((prev) => prev.map((row, i) => (i === index ? { ...row, ...next } : row)));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await updateCashbackSettings({
-        enabled,
-        rate,
-        minCredits,
-        cap,
-        validDays,
-        backfillDays,
-        leaderboardDays,
-      });
+      await updateCashbackSettings({ enabled, validDays, leaderboardDays, tiers });
       toast.success("消费返利设置已保存");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "保存失败");
@@ -688,85 +686,24 @@ export function CashbackSettingsForm({ initialSettings }: CashbackSettingsFormPr
           onChange={(e) => setEnabled(e.target.checked)}
           className="h-4 w-4 rounded border-border"
         />
-        <span className="text-sm font-medium">启用消费返利（默认关闭）</span>
+        <span className="text-sm font-medium">启用累计消费返利（默认关闭）</span>
       </label>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="block text-sm font-medium mb-1">返利比例（0–1）</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            max="1"
-            value={rate}
-            onChange={(e) => setRate(e.target.value)}
-            disabled={!enabled}
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
-            placeholder="0.1"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">0.1 表示按当日消费的 10% 返</p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">单日封顶（credits）</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={cap}
-            onChange={(e) => setCap(e.target.value)}
-            disabled={!enabled}
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
-            placeholder="200"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">每人每天最多返多少</p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">起返门槛（credits）</label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            value={minCredits}
-            onChange={(e) => setMinCredits(e.target.value)}
-            disabled={!enabled}
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
-            placeholder="20"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">当日消费不满这个数不返</p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">返利有效期（天）</label>
+          <label className="block text-sm font-medium mb-1">奖励有效期（天）</label>
           <input
             type="number"
             min="1"
+            max="365"
             value={validDays}
             onChange={(e) => setValidDays(e.target.value)}
             disabled={!enabled}
             className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
             placeholder="7"
           />
-          <p className="mt-1 text-xs text-muted-foreground">返到临时余额，过期作废</p>
+          <p className="mt-1 text-xs text-muted-foreground">发到临时货币时按这个有效期作废</p>
         </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1">可补领天数</label>
-          <input
-            type="number"
-            min="1"
-            max="31"
-            value={backfillDays}
-            onChange={(e) => setBackfillDays(e.target.value)}
-            disabled={!enabled}
-            className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
-            placeholder="3"
-          />
-          <p className="mt-1 text-xs text-muted-foreground">最多能往前补领几天的返利</p>
-        </div>
-
         <div>
           <label className="block text-sm font-medium mb-1">冲榜窗口（天）</label>
           <input
@@ -783,15 +720,94 @@ export function CashbackSettingsForm({ initialSettings }: CashbackSettingsFormPr
         </div>
       </div>
 
+      <div>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <label className="block text-sm font-medium">累计消费档位</label>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={!enabled}
+            onClick={() =>
+              setTiers((prev) => [...prev, { minCredits: "", minReward: "", maxReward: "" }])
+            }
+          >
+            <Plus className="mr-1 h-3.5 w-3.5" />
+            添加档位
+          </Button>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="w-14 shrink-0">档位</span>
+          <span className="flex-1">累计满（cr）</span>
+          <span className="flex-1">最少奖励（cr）</span>
+          <span className="flex-1">最多奖励（cr）</span>
+          <span className="w-10 shrink-0" />
+        </div>
+        {tiers.length === 0 ? (
+          <p className="mt-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
+            还没有档位。开启返利需要至少一档：活动期内累计消费满 X，随机发 Y–Z cr（货币或活动券）或 1–3 张抽奖券。
+          </p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {tiers.map((row, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <span className="w-14 shrink-0 text-xs text-muted-foreground tabular-nums">
+                  第 {i + 1} 档
+                </span>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={row.minCredits}
+                  onChange={(e) => patchTier(i, { minCredits: e.target.value })}
+                  disabled={!enabled}
+                  className={ROW_INPUT}
+                  placeholder="500"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={row.minReward}
+                  onChange={(e) => patchTier(i, { minReward: e.target.value })}
+                  disabled={!enabled}
+                  className={ROW_INPUT}
+                  placeholder="10"
+                />
+                <input
+                  type="number"
+                  step="0.01"
+                  value={row.maxReward}
+                  onChange={(e) => patchTier(i, { maxReward: e.target.value })}
+                  disabled={!enabled}
+                  className={ROW_INPUT}
+                  placeholder="100"
+                />
+                <button
+                  type="button"
+                  onClick={() => setTiers((prev) => prev.filter((_, idx) => idx !== i))}
+                  disabled={!enabled}
+                  className={ROW_DELETE}
+                  title="删除这一档"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="mt-2 text-xs text-muted-foreground">
+          与充值阶梯赠送共用同一个活动时间段；按活动期内<b>累计消费</b>判定，达到多档时每档都可领取一次。每档随机发放临时货币 / 永久货币 / 当期活动券 / 1–3 张抽奖券，奖励区间随档位递增。顺序不用管，保存时按门槛从小到大重排。
+        </p>
+      </div>
+
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
         <p className="text-xs text-muted-foreground">
           <strong>口径：</strong>
           <br />
-          • 按北京自然日结算，只算已经结束的日子；今天的消费次日才可领
+          • 活动时间与充值赠送一致（开始 / 结束日期在「充值阶梯赠送」里配）
           <br />
           • 消费取 <code className="font-mono">usage_log.creditsUsed</code> 的真实值，失败调用记 0，不参与返利
           <br />
-          • 领取时把当日消费与实发额度快照进 <code className="font-mono">cashback_claim</code>，之后改比例/改价不影响历史
+          • 用户在活动页逐档发放到站内信，领取后才进余额或券包
           <br />
           • 钱包流水记 type=8「消费返利」
         </p>
@@ -981,31 +997,19 @@ interface TaskSettingsFormProps {
   initialSettings: {
     enabled: boolean;
     validDays: string;
-    /** 已覆盖的任务额度（key → cr）；没覆盖的任务留空，表示用代码默认值。 */
-    rewards: Record<string, number>;
   };
-  /** 代码里的任务清单：决定表单里有几行、默认额度是多少。 */
-  catalog: Array<{ key: string; title: string; target: number; defaultReward: number }>;
 }
 
-export function TaskSettingsForm({ initialSettings, catalog }: TaskSettingsFormProps) {
+export function TaskSettingsForm({ initialSettings }: TaskSettingsFormProps) {
   const [enabled, setEnabled] = useState(initialSettings.enabled);
   const [validDays, setValidDays] = useState(initialSettings.validDays);
-  const [rewards, setRewards] = useState<Record<string, string>>(() => {
-    const rows: Record<string, string> = {};
-    for (const task of catalog) {
-      const override = initialSettings.rewards[task.key];
-      rows[task.key] = override === undefined ? "" : String(override);
-    }
-    return rows;
-  });
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      await updateTaskSettings({ enabled, validDays, rewards });
+      await updateTaskSettings({ enabled, validDays });
       toast.success("任务成就设置已保存");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "保存失败");
@@ -1024,7 +1028,7 @@ export function TaskSettingsForm({ initialSettings, catalog }: TaskSettingsFormP
           onChange={(e) => setEnabled(e.target.checked)}
           className="h-4 w-4 rounded border-border"
         />
-        <span className="text-sm font-medium">启用任务成就奖励（默认关闭）</span>
+        <span className="text-sm font-medium">启用每日 / 每周任务（默认关闭）</span>
       </label>
 
       <div className="grid grid-cols-2 gap-4">
@@ -1040,43 +1044,21 @@ export function TaskSettingsForm({ initialSettings, catalog }: TaskSettingsFormP
             className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
             placeholder="30"
           />
-          <p className="mt-1 text-xs text-muted-foreground">任务奖励进临时余额，到期作废</p>
+          <p className="mt-1 text-xs text-muted-foreground">里程碑奖励进临时货币时按这个有效期作废</p>
         </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-2">每个任务的一次性奖励（cr）</label>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="flex-1">任务</span>
-          <span className="w-24 shrink-0 text-right">默认</span>
-          <span className="w-28 shrink-0 text-right">改成</span>
-        </div>
-        <div className="mt-2 space-y-2">
-          {catalog.map((task) => (
-            <div key={task.key} className="flex items-center gap-2">
-              <span className="min-w-0 flex-1 text-sm">
-                {task.title}
-                {task.target > 1 ? (
-                  <span className="ml-1 text-xs text-muted-foreground">（{task.target} 次）</span>
-                ) : null}
-              </span>
-              <span className="w-24 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
-                {task.defaultReward} cr
-              </span>
-              <input
-                type="number"
-                step="1"
-                value={rewards[task.key] ?? ""}
-                onChange={(e) => setRewards((prev) => ({ ...prev, [task.key]: e.target.value }))}
-                disabled={!enabled}
-                className="w-28 shrink-0 rounded-lg border border-border bg-card px-2 py-1.5 text-right text-sm tabular-nums disabled:opacity-50"
-                placeholder="留空"
-              />
-            </div>
-          ))}
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          「改成」留空即用默认额度；已领过的任务不受改数影响。
+      <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+        <p className="text-xs text-muted-foreground">
+          <strong>任务规则（写死在代码里）：</strong>
+          <br />
+          • 每日 6 项任务，手动领取后累计活跃度，满分 100
+          <br />
+          • 每周 6 项任务，满分 300，奖励显著更丰厚
+          <br />
+          • 每日每 25 / 每周每 50 活跃度一档，达到后自动发站内信随机奖励（金额逐档递增，随机临时 / 永久货币）
+          <br />
+          • 进度现场读签到、对话、API、消费、玩法与站内信领取记录，不改历史数据
         </p>
       </div>
 

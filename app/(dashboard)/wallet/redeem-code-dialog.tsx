@@ -41,6 +41,7 @@ function displayCredits(value: number): string {
 }
 
 export function RedeemCodeDialog({
+  defaultOpen = false,
   canUseEpay = false,
   epayRate = 10,
   epayMin = 1,
@@ -52,6 +53,8 @@ export function RedeemCodeDialog({
   bonusTiers = [],
   bonusValidDays = 30,
 }: {
+  /** 顶栏「+」跳转 `/wallet?recharge=1` 时直接展开。 */
+  defaultOpen?: boolean;
   canUseEpay?: boolean;
   /** 1 元 = ? credits（后台 recharge_rate）。 */
   epayRate?: number;
@@ -66,7 +69,7 @@ export function RedeemCodeDialog({
   bonusTiers?: { minCny: number; bonus: number }[];
   bonusValidDays?: number;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [tab, setTab] = useState<"online" | "redeem">("online");
   const [loading, setLoading] = useState(false);
   const [code, setCode] = useState("");

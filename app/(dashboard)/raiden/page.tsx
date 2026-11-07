@@ -7,12 +7,17 @@ import {
   myRaidenSummary,
 } from "@/lib/raiden/records";
 import { RaidenGame } from "@/components/raiden/game";
+import { getActivityCouponView } from "@/lib/activity/coupons";
 
 export const dynamic = "force-dynamic";
 
 export default async function RaidenPage() {
   const userId = await requireUser();
-  const [config, balance] = await Promise.all([getRaidenConfig(), getUserTotalBalance(userId)]);
+  const [config, balance, coupon] = await Promise.all([
+    getRaidenConfig(),
+    getUserTotalBalance(userId),
+    getActivityCouponView(userId, "raiden"),
+  ]);
   const windowInfo = raidenActivityWindow(config);
   const activityKey = raidenActivityKey(config);
 
@@ -33,6 +38,7 @@ export default async function RaidenPage() {
       summary={summary}
       leaderboard={leaderboard}
       firstClears={firstClears}
+      coupon={coupon}
     />
   );
 }

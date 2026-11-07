@@ -1,7 +1,7 @@
 import { and, eq, gte, sql } from "drizzle-orm";
 import { d1Run, db } from "@/lib/db/d1-http";
 import { raidenClears, raidenRuns, temporaryBalances, topups } from "@/lib/db/schema";
-import { refundPermanentCredits, spendCredits } from "@/lib/billing/spend";
+import { payWithCoupon, refundCouponPayment } from "@/lib/activity/coupons";
 import { cnStartOfToday } from "@/lib/date";
 import {
   describeLoadout,
@@ -83,10 +83,11 @@ export async function startRun(
     throw new RaidenError(`今日出击次数已用完（${config.dailyRuns} 次），明天再来`);
   }
 
-  const spend = await spendCredits(userId, cost);
-  if (!spend.ok) {
+  const paid = await payWithCoupon(userId, "raiden", activityKey, cost);
+  if (!paid.ok) {
     throw new RaidenError(`余额不足：本次装备需要 ${cost} cr`);
   }
+  const payment = paid.payment;
 
   const now = new Date();
   const runId = crypto.randomUUID();
@@ -107,27 +108,28 @@ export async function startRun(
       bombs: starting.bombs,
       lives: starting.lives,
       revives: 0,
-      creditsSpent: cost,
+      creditsSpent: payment.creditPart,
       stage: 0,
       score: 0,
       startedAt: now,
       lastSettleAt: now,
     });
-    if (cost > 0) {
+    if (payment.creditPart > 0) {
       await db.insert(topups).values({
         id: crypto.randomUUID(),
         userId,
-        amount: -cost,
+        amount: -payment.creditPart,
         type: TOPUP_TYPE_RAIDEN,
-        description: `雷电行动出击 · ${describeLoadout(config, loadout)}（${cost} cr）`,
+        description:
+          payment.couponPart > 0
+            ? `雷电行动出击 · ${describeLoadout(config, loadout)}（${cost} cr，活动券抵 ${payment.couponPart} cr）`
+            : `雷电行动出击 · ${describeLoadout(config, loadout)}（${cost} cr）`,
         createdAt: now,
       });
     }
   } catch (error) {
     await db.delete(raidenRuns).where(eq(raidenRuns.id, runId)).catch(() => undefined);
-    if (cost > 0) {
-      await refundPermanentCredits(userId, cost, `雷电行动出击失败退回（${cost} cr）`).catch(() => undefined);
-    }
+    await refundCouponPayment(userId, payment, `雷电行动出击失败退回（${payment.creditPart} cr）`);
     throw error;
   }
 
@@ -419,38 +421,48 @@ export async function reviveRun(
   }
 
   const reserved = await d1Run(
-    "UPDATE raiden_run SET revives = revives + 1, creditsSpent = creditsSpent + ? " +
+    "UPDATE raiden_run SET revives = revives + 1 " +
       "WHERE id = ? AND userId = ? AND status = 'active' AND revives < ?",
-    [price, runId, userId, config.maxRevives],
+    [runId, userId, config.maxRevives],
   );
   if (reserved.changes !== 1) throw new RaidenError("复活次数已用完");
 
-  const spend = await spendCredits(userId, price);
-  if (!spend.ok) {
+  const paid = await payWithCoupon(userId, "raiden", activityKey, price);
+  if (!paid.ok) {
     await d1Run(
-      "UPDATE raiden_run SET revives = revives - 1, creditsSpent = creditsSpent - ? WHERE id = ?",
-      [price, runId],
+      "UPDATE raiden_run SET revives = revives - 1 WHERE id = ?",
+      [runId],
     ).catch(() => undefined);
     throw new RaidenError(`余额不足：复活需要 ${price} cr`);
   }
+  const payment = paid.payment;
+
+  // 券抵的部分在买券时已扣过余额，这里只把真实现金累加进本局投入。
+  await d1Run(
+    "UPDATE raiden_run SET creditsSpent = creditsSpent + ? WHERE id = ?",
+    [payment.creditPart, runId],
+  ).catch(() => undefined);
 
   const topupId = crypto.randomUUID();
   try {
-    await db.insert(topups).values({
-      id: topupId,
-      userId,
-      amount: -price,
-      type: TOPUP_TYPE_RAIDEN,
-      description: `雷电行动 · 阵亡复活（${price} cr）`,
-      createdAt: new Date(),
-    });
+    if (payment.creditPart > 0) {
+      await db.insert(topups).values({
+        id: topupId,
+        userId,
+        amount: -payment.creditPart,
+        type: TOPUP_TYPE_RAIDEN,
+        description:
+          payment.couponPart > 0
+            ? `雷电行动 · 阵亡复活（${price} cr，活动券抵 ${payment.couponPart} cr）`
+            : `雷电行动 · 阵亡复活（${price} cr）`,
+        createdAt: new Date(),
+      });
+    }
   } catch (error) {
-    await refundPermanentCredits(userId, price, `雷电行动复活失败退回（${price} cr）`).catch(
-      () => undefined,
-    );
+    await refundCouponPayment(userId, payment, `雷电行动复活失败退回（${payment.creditPart} cr）`);
     await d1Run(
       "UPDATE raiden_run SET revives = revives - 1, creditsSpent = creditsSpent - ? WHERE id = ?",
-      [price, runId],
+      [payment.creditPart, runId],
     ).catch(() => undefined);
     throw error;
   }

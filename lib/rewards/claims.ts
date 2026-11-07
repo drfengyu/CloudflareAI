@@ -9,8 +9,9 @@ import {
 } from "@/lib/payment/bonus";
 import { sendMessage } from "@/lib/message/messages";
 
-export type RewardActivityKind = "recharge" | "cashback";
+export type RewardActivityKind = "recharge" | "cashback" | "activity";
 export type RewardClaimState = "none" | "sent" | "claimed";
+export type RewardKind = "temp_credits" | "permanent_credits" | "tickets" | "coupon";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -20,6 +21,8 @@ export interface RewardClaimRow {
   rewardCredits: number;
   validDays: number;
   topupType: number;
+  rewardKind: RewardKind;
+  rewardLabel: string | null;
   messageId: string | null;
   claimedAt: Date | null;
   createdAt: Date | null;
@@ -56,6 +59,8 @@ export async function listRewardClaims(
         rewardCredits: row.rewardCredits,
         validDays: row.validDays,
         topupType: row.topupType,
+        rewardKind: row.rewardKind,
+        rewardLabel: row.rewardLabel,
         messageId: row.messageId,
         claimedAt: row.claimedAt ?? (row.messageId ? (claimedByMessage.get(row.messageId) ?? null) : null),
         createdAt: row.createdAt,
@@ -79,12 +84,14 @@ export async function reserveRewardClaim(input: {
   rewardCredits: number;
   validDays: number;
   topupType: number;
+  rewardKind?: RewardKind;
+  rewardLabel?: string | null;
 }): Promise<{ id: string; fresh: boolean }> {
   const id = crypto.randomUUID();
   const { changes } = await d1Run(
     `INSERT OR IGNORE INTO reward_claim
-       (id, userId, activityKind, tierKey, rewardCredits, validDays, topupType, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, userId, activityKind, tierKey, rewardCredits, validDays, topupType, rewardKind, rewardLabel, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.userId,
@@ -93,6 +100,8 @@ export async function reserveRewardClaim(input: {
       input.rewardCredits,
       input.validDays,
       input.topupType,
+      input.rewardKind ?? "temp_credits",
+      input.rewardLabel ?? null,
       Date.now(),
     ],
   );
@@ -149,11 +158,41 @@ export interface RechargeActivityView {
   tiers: RechargeTierView[];
 }
 
-function activityBounds(startDate: string, endDate: string): { startMs: number; endMs: number | null } {
+export interface ActivityWindow {
+  status: RechargeActivityStatus;
+  /** 开始日 00:00（北京）。 */
+  startMs: number;
+  /** 结束日次日 00:00（北京）；null = 未设结束日期。 */
+  endMs: number | null;
+}
+
+/** 活动窗口口径：开始日 00:00 起、结束日次日 00:00 止（北京时间）。 */
+export function activityBounds(
+  startDate: string,
+  endDate: string,
+): { startMs: number; endMs: number | null } {
   const startMs = parseCnWallClock(startDate);
-  if (startMs === null) throw new Error(`充值活动开始日期非法：${startDate}`);
+  if (startMs === null) throw new Error(`活动开始日期非法：${startDate}`);
   const endMs = endDate ? parseCnWallClock(endDate) : null;
   return { startMs, endMs: endMs === null ? null : endMs + DAY_MS };
+}
+
+/** 充值/消费活动共用同一段时间：开始、结束与状态一次算清。 */
+export function activityWindowOf(
+  enabled: boolean,
+  startDate: string,
+  endDate: string,
+  now = Date.now(),
+): ActivityWindow {
+  const { startMs, endMs } = activityBounds(startDate, endDate);
+  const status: RechargeActivityStatus = !enabled
+    ? "disabled"
+    : now < startMs
+      ? "upcoming"
+      : endMs !== null && now >= endMs
+        ? "ended"
+        : "active";
+  return { status, startMs, endMs };
 }
 
 /** 活动期内的累计已支付金额（元 / LinuxDO 积分同口径）。 */
@@ -179,15 +218,7 @@ export async function rechargeCumulative(
 
 export async function getRechargeActivity(userId: string): Promise<RechargeActivityView> {
   const settings = await getRechargeBonusSettings();
-  const { startMs, endMs } = activityBounds(settings.startDate, settings.endDate);
-  const now = Date.now();
-  const status: RechargeActivityStatus = !settings.enabled
-    ? "disabled"
-    : now < startMs
-      ? "upcoming"
-      : endMs !== null && now >= endMs
-        ? "ended"
-        : "active";
+  const { status } = activityWindowOf(settings.enabled, settings.startDate, settings.endDate);
   const [cumulative, claims] = await Promise.all([
     rechargeCumulative(userId, settings.startDate, settings.endDate),
     listRewardClaims(userId, "recharge"),
