@@ -8,6 +8,8 @@ import { users } from "@/lib/db/schema";
 import { requireUser } from "@/lib/usage/meter";
 import { formatCnWallClock } from "@/lib/date";
 import { sendMessage } from "@/lib/message/messages";
+import { normalizeNickname } from "@/lib/user/nickname";
+import { unstable_update } from "@/auth";
 
 /**
  * 用户自己改登录密码。
@@ -54,4 +56,17 @@ export async function changeMyPassword(input: {
 
   revalidatePath("/settings");
   return { firstTime: !hasPassword };
+}
+
+/** 修改昵称：写库后同步刷新会话里的 name，顶栏不必等重新登录。 */
+export async function changeMyNickname(input: { name: string }): Promise<{ name: string }> {
+  const userId = await requireUser();
+  const name = normalizeNickname(input.name);
+
+  await db.update(users).set({ name }).where(eq(users.id, userId));
+  await unstable_update({ user: { name } });
+
+  revalidatePath("/settings");
+  revalidatePath("/dashboard");
+  return { name };
 }

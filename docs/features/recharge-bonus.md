@@ -13,6 +13,10 @@
 `minCny` 与订单 `amountCny` 同口径：支付宝 / 微信是元，LinuxDO 积分通道就是积分数。
 充值弹窗里那张档位表因此对两种通道都成立，不需要分开配。
 
+充值弹窗的金额上下限取自当前渠道配置（`recharge_min/max` 或 `ldpay_min/max`），不写死；
+预设卡与自定义金额都显示倍率角标与 `≈ N cr` 折算（`lib/payment/recharge-display.ts`），
+超出范围时禁用支付并提示该渠道的上下限。
+
 **赠送进临时余额**（有效期 `recharge_bonus_valid_days`，默认 30 天），不并进永久余额：
 付费用户的主充值本来就是永久的，赠送带期限既能做促销又不让存量无限堆积。
 钱包流水记 `type=10`，在个人账本里归「赠送与返利」（`lib/billing/ledger.ts` 的 `LEDGER_CATEGORY_TYPES`）。

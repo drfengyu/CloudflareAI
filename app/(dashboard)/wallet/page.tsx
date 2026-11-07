@@ -16,12 +16,12 @@ import {
   ledgerNet,
   ledgerSettlement,
   listLedgerDays,
-  listRecentLedgerEntries,
-  recentWindow,
+  listRecentLedgerByDay,
   sumExpiredExpense,
   sumLedgerDays,
 } from "@/lib/billing/ledger";
 import { getRechargeBonusSettings } from "@/lib/payment/bonus";
+import { getEpayConfig } from "@/lib/payment/epay";
 import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
 import { serializePayOrder } from "@/lib/payment/pay-order-view";
 import { formatCnDate } from "@/lib/date";
@@ -31,9 +31,6 @@ export const dynamic = "force-dynamic";
 
 /** 未到账订单是钱包唯一留下的订单视图，条数上限按这个兜住。 */
 const PENDING_ORDER_LIMIT = 20;
-
-/** 钱包只展示最近几笔收支，完整账目在 /ledger。 */
-const RECENT_LEDGER_LIMIT = 8;
 
 export default async function WalletPage({
   searchParams,
@@ -46,7 +43,7 @@ export default async function WalletPage({
 
   // 2026-10-17 性能：这些查询互不依赖（全都只按 userId 取数），原先是一条接一条 await，
   // 串行 5 次 D1 往返 ≈ 2 秒；并发成一波后只剩最慢那条的时间。
-  const [userRows, tempBalances, pendingOrders, linuxdoConfig, bonusConfig, recentLedger, ledgerDays, expiredExpense] =
+  const [userRows, tempBalances, pendingOrders, epayConfig, linuxdoConfig, bonusConfig, recentLedger, ledgerDays, expiredExpense] =
     await Promise.all([
       // 永久余额与角色（角色决定充值弹窗里能不能看到易支付）
       db
@@ -68,11 +65,12 @@ export default async function WalletPage({
         .where(and(eq(paymentOrders.userId, userId), inArray(paymentOrders.status, [0, 1])))
         .orderBy(desc(paymentOrders.createdAt))
         .limit(PENDING_ORDER_LIMIT),
+      getEpayConfig(),
       getLinuxdoConfig(),
       // 充值阶梯赠送：只在充值弹窗里预告「本单额外赠送」，实际发放由订单结算路径负责
       getRechargeBonusSettings(),
-      // 最近几笔收支：与个人账本同一份口径（发放 + API 消费），只扫最近 90 天
-      listRecentLedgerEntries(userId, RECENT_LEDGER_LIMIT, recentWindow()),
+      // 最近收支：近 5 天最多 50 笔，与个人账本同一份口径（发放 + API 消费）
+      listRecentLedgerByDay(userId),
       // 与账本页同一把尺子的全量天表：钱包要拿累计净收支和余额对账
       listLedgerDays(userId),
       // 过期作废的真实流水：钱包把发放和作废两头一起从展示里剔除
@@ -129,7 +127,6 @@ export default async function WalletPage({
   }));
 
   const serializedOrders = pendingOrders.map(serializePayOrder);
-  const recentTotals = sumLedgerDays(recentLedger);
   const ledgerTotals = sumLedgerDays(ledgerDays);
   const settlement = ledgerSettlement(totalBalance, ledgerTotals, expiredExpense);
 
@@ -162,7 +159,11 @@ export default async function WalletPage({
                 </div>
                 <RedeemCodeDialog
                   canUseEpay={(userRows[0]?.role ?? 0) >= 10}
+                  epayRate={epayConfig.rate}
+                  epayMin={epayConfig.minCny}
+                  epayMax={epayConfig.maxCny}
                   linuxdoEnabled={linuxdoConfig.enabled}
+                  linuxdoRate={linuxdoConfig.rate}
                   linuxdoMin={linuxdoConfig.minCny}
                   linuxdoMax={linuxdoConfig.maxCny}
                   bonusTiers={bonusConfig.enabled ? bonusConfig.tiers : []}
@@ -243,12 +244,7 @@ export default async function WalletPage({
 
         <PageSection title="收支与临时余额" subtitle="最近几笔收支变动、未到账订单与临时余额有效期">
           <div className="space-y-6">
-            <RecentLedgerCard
-              entries={recentLedger}
-              totals={recentTotals}
-              net={ledgerNet(recentTotals)}
-              limit={RECENT_LEDGER_LIMIT}
-            />
+            <RecentLedgerCard days={recentLedger} />
 
             {/* 未到账订单（回跳确认 + 轮询催单） */}
             <RechargeOrdersCard

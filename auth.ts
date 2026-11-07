@@ -24,7 +24,7 @@ import {
  * (required by the Credentials provider) — the adapter still backs GitHub
  * account/user creation and the quota row.
  */
-export const { handlers, auth, signIn, signOut } = NextAuth({
+export const { handlers, auth, signIn, signOut, unstable_update } = NextAuth({
   ...authConfig,
   adapter: DrizzleAdapter(db, {
     usersTable: users,
@@ -130,7 +130,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
       return true;
     },
-    async jwt({ token, user, account, profile, trigger }) {
+    async jwt({ token, user, account, profile, trigger, session }) {
+      // 设置页改昵称后立刻刷新顶栏，不必等重新登录。
+      if (trigger === "update" && session?.user?.name !== undefined) {
+        token.name = session.user.name ? String(session.user.name) : null;
+      }
+
       // 首次登录时，将用户信息保存到 token
       if (user) {
         // LinuxDO OAuth: user.id 是我们在 signIn callback 中设置的 UUID

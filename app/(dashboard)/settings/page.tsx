@@ -5,6 +5,7 @@ import { db } from "@/lib/db/d1-http";
 import { users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { PasswordForm } from "./password-form";
+import { NicknameForm } from "./nickname-form";
 
 import { PageBody } from "@/components/dashboard/section";
 
@@ -40,10 +41,6 @@ export default async function SettingsPage() {
                 <span className="text-muted-foreground">邮箱</span>
                 <span className="text-[11px]">{user?.email}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">昵称</span>
-                <span className="text-[11px]">{user?.name}</span>
-              </div>
               {user?.linuxdoTrustLevel !== null && user?.linuxdoTrustLevel !== undefined && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">LinuxDO 信任等级</span>
@@ -53,6 +50,8 @@ export default async function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        <NicknameForm initialName={user?.name ?? null} />
 
         {/* 只把「有没有密码」传给客户端，哈希本身不进浏览器 */}
         <PasswordForm hasPassword={Boolean(user?.passwordHash)} />

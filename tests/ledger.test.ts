@@ -193,40 +193,111 @@ test("天表与当天小计用同一把尺子筛行：都按未取整的原值�
   })();
 });
 
-test("最近收支按 LIMIT 取满，SQL 里已挡掉 0 进出的行", () => {
+test("最近收支按 5 天窗口取数，SQL 里挡掉过期作废与 0 进出", () => {
   const { ledger, queries, setRows } = harness();
+  const now = Date.parse("2026-11-07T12:00:00+08:00");
   setRows([
-    { ts: 11, category: "recharge", typeCode: 5, detail: "在线充值", income: 100, expense: 0, calls: 1 },
-    { ts: 10, category: "activity", typeCode: 6, detail: "买券", income: 0, expense: 12.5, calls: 1 },
-    { ts: 9, category: "usage", typeCode: 0, detail: "gpt", income: null, expense: undefined, calls: 4 },
-  ]);
-
-  return (async () => {
-    const entries = await ledger.listRecentLedgerEntries("fixture-user", 3, { from: 1, to: 2 });
-    assert.equal(placeholders(queries[0].sql), queries[0].params.length);
-    // 超取 3 倍是为了在 JS 里筛 0 行；现在 SQL 已经挡掉，LIMIT 就是实际条数。
-    assert.equal(queries[0].params.at(-1), 3);
-    assert.match(queries[0].sql, /WHERE ts IS NOT NULL AND category <> 'expire' ORDER BY ts DESC LIMIT \?/);
-    assert.deepEqual(local(entries.map((entry) => entry.ts)), [11, 10, 9]);
-    assert.deepEqual(local(entries[0]), {
-      ts: 11,
+    {
+      ts: Date.parse("2026-11-07T10:00:00+08:00"),
       category: "recharge",
       typeCode: 5,
       detail: "在线充值",
       income: 100,
       expense: 0,
       calls: 1,
-    });
-    // 聚合出来的 SUM 可能是 NULL（当天没有该类别的行），不能把 NaN 带进界面。
-    assert.equal(entries[2].income, 0);
-    assert.equal(entries[2].expense, 0);
+    },
+    {
+      ts: Date.parse("2026-11-07T09:00:00+08:00"),
+      category: "usage",
+      typeCode: 0,
+      detail: "gpt",
+      income: null,
+      expense: 12.5,
+      calls: 4,
+    },
+    {
+      ts: Date.parse("2026-11-06T20:00:00+08:00"),
+      category: "activity",
+      typeCode: 6,
+      detail: "买券",
+      income: 0,
+      expense: 30,
+      calls: 1,
+    },
+  ]);
+
+  return (async () => {
+    const days = await ledger.listRecentLedgerByDay("fixture-user", now);
+    assert.equal(placeholders(queries[0].sql), queries[0].params.length);
+    // 截断放在 JS 里做：先按类聚合再截断，日小计才会与展开后的分类小计闭合。
+    assert.doesNotMatch(queries[0].sql, /LIMIT/);
+    assert.match(
+      queries[0].sql,
+      /WHERE ts IS NOT NULL AND category <> 'expire' ORDER BY ts DESC/,
+    );
+    assert.deepEqual(local(queries[0].params), [
+      "fixture-user",
+      Date.parse("2026-11-03T00:00:00+08:00"),
+      now,
+      "fixture-user",
+      Date.parse("2026-11-03T00:00:00+08:00"),
+      now,
+    ]);
+
+    assert.deepEqual(local(days), [
+      {
+        date: "2026-11-07",
+        entries: 5,
+        income: 100,
+        expense: 12.5,
+        rows: [
+          { category: "recharge", label: "充值", entries: 1, income: 100, expense: 0 },
+          { category: "usage", label: "API 消费", entries: 4, income: 0, expense: 12.5 },
+        ],
+      },
+      {
+        date: "2026-11-06",
+        entries: 1,
+        income: 0,
+        expense: 30,
+        rows: [{ category: "activity", label: "活动", entries: 1, income: 0, expense: 30 }],
+      },
+    ]);
   })();
 });
 
-test("最近窗口按天回退，右边界是当下", () => {
+test("最近收支最多 50 笔，按天聚合后小计闭合", () => {
   const { ledger } = harness();
   const now = Date.parse("2026-11-07T12:00:00+08:00");
-  assert.deepEqual(local(ledger.recentWindow(now, 90)), { from: now - 90 * 86_400_000, to: now });
+  const entries = Array.from({ length: 60 }, (_, index) => ({
+    ts: now - index * 1000,
+    category: "activity" as const,
+    typeCode: 6,
+    detail: null,
+    income: 0,
+    expense: 1,
+    calls: 1,
+  }));
+
+  const days = ledger.groupRecentLedgerDays(entries, 50);
+  assert.equal(days.length, 1);
+  assert.equal(days[0].date, "2026-11-07");
+  assert.equal(days[0].entries, 50);
+  assert.equal(days[0].expense, 50);
+  assert.deepEqual(local(days[0].rows), [
+    { category: "activity", label: "活动", entries: 50, income: 0, expense: 50 },
+  ]);
+});
+
+test("最近窗口是含今天在内的 5 个北京日历日", () => {
+  const { ledger } = harness();
+  const now = Date.parse("2026-11-07T12:00:00+08:00");
+  assert.deepEqual(local(ledger.recentDayWindow(now)), {
+    from: Date.parse("2026-11-03T00:00:00+08:00"),
+    to: now,
+  });
+  // 北京时间 11-07 00:30 仍属于 11-07，而不是 UTC 的 11-06。
+  assert.equal(ledger.cnDateOf(Date.parse("2026-11-06T16:30:00Z")), "2026-11-07");
 });
 
 test("金额为 0 的行不算进出", () => {
