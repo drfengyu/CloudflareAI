@@ -317,6 +317,37 @@ test("钱包结算剔除真实过期流水后，剩余差额如实保留", () =>
     reconciled: false,
   });
 
+  // 2026-11-07 历史补记后的线上口径：合计带半分以下尾数。
+  // 若先把过期总额取整再相减，有效入账与支出会各偏 0.01，钱包三笔数就闭不上。
+  assert.deepEqual(
+    local(
+      ledger.ledgerSettlement(
+        56_385.215861,
+        { income: 1_005_347_280.331604, expense: 1_005_290_895.115743 },
+        1_000_060_760.903216,
+      ),
+    ),
+    {
+      effectiveIncome: 5_286_519.43,
+      expense: 5_230_134.21,
+      expired: 1_000_060_760.9,
+      balance: 56_385.22,
+      gap: 0,
+      reconciled: true,
+    },
+  );
+
+  // 顶部四格同样按分闭合：收入与余额取整后，支出倒推，差一分只落在展示层。
+  const shown = ledger.ledgerDisplayTotals(
+    { income: 1_005_347_280.331604, expense: 1_005_290_895.115743 },
+    56_385.215861,
+  );
+  assert.deepEqual(local(shown), {
+    income: 1_005_347_280.33,
+    expense: 1_005_290_895.11,
+  });
+  assert.equal(ledger.ledgerNet(shown), 56_385.22);
+
   // 没有过期时口径不变，也没有差额。
   assert.deepEqual(
     local(ledger.ledgerSettlement(100, { income: 150, expense: 50 }, 0)),

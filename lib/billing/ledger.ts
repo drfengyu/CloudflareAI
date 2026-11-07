@@ -9,8 +9,9 @@
  * **临时余额过期从 v0.29.3 起逐笔记账**：`vercel.json` 每天 02:00 UTC 跑
  * `/api/cron/cleanup-expired-balances`，在删掉 `expiresAt <= now` 的临时余额行之前，
  * 按每一行补一笔负数 `topup`（`type=14` 过期作废，`createdAt` 用原到期时间），
- * 账本天表才能在到期那天看到这笔支出。历史过期行已被旧版 cron 删掉、无法逐笔还原，
- * 只会在顶部差额里体现。
+ * 账本天表才能在到期那天看到这笔支出。历史过期行已被旧版 cron 删掉，2026-11-07
+ * 按可证记录一次性补记（id 前缀 `expire:backfill:`，只补流水、不动余额），
+ * 之后的新过期继续由 cron 逐笔记账。
  *
  * 两张表 UNION ALL 后在 SQL 里分组，排序一律回到 JS：本仓库已实测 D1 对 `ORDER BY`
  * 聚合别名解析失败。投影列多、又要求按列别名取数，所以走 `d1All` 而不是 sqlite-proxy
@@ -277,8 +278,8 @@ export function sumLedgerDays(rows: Array<{ income: number; expense: number }>):
  * 账目合计与真实余额的差额。
  *
  * 差额非零是历史事实，不是 bug，来源有三类：
- * 1. **2026-11-07 前到期作废的临时余额**：旧版 cron 直接删行、没有流水，无法逐笔还原。
- *    从 v0.29.3 起，清理前会按行补一笔 `type=14` 负流水，之后的过期都落在到期那天。
+ * 1. **2026-11-07 前到期作废的临时余额**：旧版 cron 直接删行、没有流水。2026-11-07
+ *    已按可证记录一次性补记（`expire:backfill:` 前缀），现存负差额只剩无法归因的早期数据。
  * 2. 早期版本的调用没计量 `creditsUsed`。
  * 3. 历史数据里管理员直接改过余额（2026-11-07 前下调不写 `topup`；之后正负都记 `type=2`）。
  * 所以账本页如实把差额单列说明，而不是假装合计等于余额。
@@ -324,17 +325,31 @@ export function ledgerSettlement(
   totals: LedgerTotals,
   expiredExpense: number,
 ): LedgerSettlement {
-  const expired = round2(Math.max(0, expiredExpense));
-  const effectiveIncome = round2(totals.income - expired);
-  const expense = round2(totals.expense - expired);
+  // 先按原始值剔除：过期总额本身可能带半分以下尾数，先取整再减会让
+  // 有效入账/支出各偏 0.01，钱包三笔数在 10 亿量级下看起来差一分。
+  const expiredRaw = Math.max(0, expiredExpense);
+  const effectiveIncomeRaw = totals.income - expiredRaw;
+  const expenseRaw = totals.expense - expiredRaw;
   return {
-    effectiveIncome,
-    expense,
-    expired,
-    balance: actualBalance,
+    effectiveIncome: round2(effectiveIncomeRaw),
+    expense: round2(expenseRaw),
+    expired: round2(expiredRaw),
+    balance: round2(actualBalance),
     gap: ledgerGap(actualBalance, totals),
-    reconciled: Math.abs(round2(effectiveIncome - expense) - actualBalance) < 0.01,
+    reconciled: Math.abs(round2(effectiveIncomeRaw - expenseRaw) - actualBalance) < 0.01,
   };
+}
+
+/**
+ * 账本顶部四格的展示口径。
+ *
+ * D1 的 REAL 合计常带半分尾数（例如支出 1,005,290,895.1157），收入、支出、净收支、余额
+ * 各自四舍五入后可能差 1 分。原始差额已不足一分时，支出改由「收入 − 余额」倒推，
+ * 四格在按分展示后仍能加减闭合；只影响展示，天表与判差额都用原值。
+ */
+export function ledgerDisplayTotals(totals: LedgerTotals, balance: number): LedgerTotals {
+  const income = round2(totals.income);
+  return { income, expense: round2(income - balance) };
 }
 
 /** 类型行的界面名：发放/活动按 `topup.type` 取名，API 消费按类别取名。 */

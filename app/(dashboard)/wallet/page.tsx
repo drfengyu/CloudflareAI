@@ -201,7 +201,7 @@ export default async function WalletPage({
                     ? "按账本流水结算，与当前余额一致；"
                     : settlement.gap > 0
                       ? `净额比当前余额少 ${formatCredits(settlement.gap)} cr：有账外增加的余额变更没进账本；`
-                      : `净额比当前余额多 ${formatCredits(-settlement.gap)} cr：2026-11-07 前的过期临时余额没有流水，或早期未计量消费、未入账调整；`}
+                      : `净额比当前余额多 ${formatCredits(-settlement.gap)} cr：有支出没进账本（早期未计量消费、未入账调整，或过期流水补记失败）；`}
                   {settlement.expired >= 0.01
                     ? "过期作废已从收入与支出两头剔除，账本「过期作废」类目按到期日逐笔可查。"
                     : "完整流水见个人账本。"}

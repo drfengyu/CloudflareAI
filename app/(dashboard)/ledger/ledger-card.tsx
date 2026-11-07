@@ -11,6 +11,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { loadLedger, loadLedgerDay, type LedgerDayDetail, type LedgerOverview } from "./actions";
 import {
   LEDGER_FILTERS,
+  ledgerDisplayTotals,
   ledgerNet,
   ledgerTypeLabel,
   type LedgerDayRow,
@@ -89,7 +90,10 @@ export function LedgerCard({ initial }: { initial: LedgerOverview }) {
   };
 
   const { totals, balance, gap } = overview;
-  const net = ledgerNet(totals);
+  // 「全部」且原始差额已不足一分时，四格按分闭合显示；筛选态仍用原值，不与余额对账。
+  const shownTotals =
+    filter === "all" && gap === null ? ledgerDisplayTotals(totals, balance) : totals;
+  const net = ledgerNet(shownTotals);
   const showInOut = !isExpenseOnly(filter);
   const columns = showInOut ? 6 : 4;
   const incomeLabel = filter === "all" ? "累计收入" : "本类收入";
@@ -110,11 +114,11 @@ export function LedgerCard({ initial }: { initial: LedgerOverview }) {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{incomeLabel}</p>
-            <p className="font-semibold text-success tabular-nums">{signed(totals.income, "+")}</p>
+            <p className="font-semibold text-success tabular-nums">{signed(shownTotals.income, "+")}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{expenseLabel}</p>
-            <p className="font-semibold text-destructive tabular-nums">{signed(-totals.expense, "−")}</p>
+            <p className="font-semibold text-destructive tabular-nums">{signed(-shownTotals.expense, "−")}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{filter === "all" ? "净收支" : "本类净收支"}</p>
@@ -132,7 +136,7 @@ export function LedgerCard({ initial }: { initial: LedgerOverview }) {
           <p className="text-xs text-muted-foreground">
             {gap > 0
               ? `账目合计比当前余额少 ${formatCredits(gap)} cr：有账外增加的余额变更没进账本，差额如实保留。`
-              : `账目合计比当前余额多 ${formatCredits(-gap)} cr：2026-11-07 前的过期临时余额没有流水，或早期未计量消费、未入账调整；此后的过期会逐日记一笔「过期作废」。`}
+              : `账目合计比当前余额多 ${formatCredits(-gap)} cr：有支出没进账本（早期未计量消费、未入账调整，或过期流水补记失败），差额如实保留。`}
           </p>
         ) : null}
 
