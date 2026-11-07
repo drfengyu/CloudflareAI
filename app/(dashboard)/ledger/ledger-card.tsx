@@ -13,7 +13,6 @@ import {
   LEDGER_FILTERS,
   ledgerDisplayTotals,
   ledgerNet,
-  ledgerTypeLabel,
   type LedgerDayRow,
   type LedgerFilter,
   type LedgerTotals,
@@ -207,7 +206,7 @@ export function LedgerCard({ initial }: { initial: LedgerOverview }) {
 
         <Pagination
           page={page}
-          hasNext={overview.hasNext}
+          totalPages={overview.totalPages}
           onPageChange={(target) => void apply(target, filter)}
           disabled={paging}
         />
@@ -263,11 +262,14 @@ function DayRows({
         ) : (
           <>
             {detail.rows.map((row) => (
-              <tr key={`${row.category}-${row.typeCode}`} className="border-t border-border/60 bg-muted/30 text-xs">
+              <tr
+                key={`${row.category}-${row.typeCode}-${row.subtype}`}
+                className="border-t border-border/60 bg-muted/30 text-xs"
+              >
                 <AmountCells
                   row={row}
                   showInOut={showInOut}
-                  label={ledgerTypeLabel(row)}
+                  label={row.label}
                   entries={row.entries}
                   indent
                 />

@@ -534,8 +534,13 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.29.4（2026-11-07，历史过期流水补记 + 结算取整修正）
+**当前版本**：v0.29.5（2026-11-07，账本当天分类细分 + 分页页码）
 **下一版本**：v0.30.0（尚未选型）
+
+- v0.29.5 账本当天分类细分：过期作废按流水描述还原发放出处（兑换码 / 转盘 / 翻牌 / 签到 / 充值赠送 /
+  邀请 / 消费返利 / 任务 / 雷电 / 站内信，历史补记单列），充值按 `payment_order.channel` 拆出
+  支付宝 / 微信 / QQ / LinuxDO，回调 `type=mock` 的标「模拟」；分页显示「第 X / 共 Y 页」；
+  钱包结算说明精简，永久余额不再提管理员调整。细分在 JS 里聚合，订单渠道 50 个一批回查。
 
 - v0.29.4 历史过期临时余额一次性补记：向生产 `topup` 写 6 笔负数 `type=14`
   （详见 `docs/features/personal-ledger.md`），id 前缀 `expire:backfill:`、`INSERT OR IGNORE`、只补流水不改余额；

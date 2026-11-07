@@ -86,7 +86,7 @@ export function Pagination({
     <div className="mt-4 flex items-center justify-center gap-2">
       {prev}
       <span className={cn("px-3 text-xs text-muted-foreground")}>
-        {totalPages !== undefined ? `${page} / ${totalPages}` : `第 ${page} 页`}
+        {totalPages !== undefined ? `第 ${page} / 共 ${totalPages} 页` : `第 ${page} 页`}
       </span>
       {next}
     </div>

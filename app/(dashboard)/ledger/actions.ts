@@ -19,7 +19,7 @@ import {
 
 export interface LedgerOverview {
   days: LedgerDayRow[];
-  hasNext: boolean;
+  totalPages: number;
   /** 当前筛选下的全量累计；过期作废已由 cron 逐笔记入 `topup type=14`。 */
   totals: LedgerTotals;
   balance: number;
@@ -45,11 +45,13 @@ function safeFilter(filter: unknown): LedgerFilter {
 
 const CATEGORY_ORDER: LedgerCategory[] = ["recharge", "reward", "activity", "expire", "usage"];
 
-/** 类型小计按「充值 → 赠送与返利 → 活动 → 过期作废 → API 消费」排，同类按 type 升序。 */
+/** 类型小计按「充值 → 赠送与返利 → 活动 → 过期作废 → API 消费」排，同类按 type、再按细分名。 */
 function sortTypeRows(rows: LedgerTypeRow[]): LedgerTypeRow[] {
   return [...rows].sort((a, b) => {
     const byCategory = CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category);
-    return byCategory !== 0 ? byCategory : a.typeCode - b.typeCode;
+    if (byCategory !== 0) return byCategory;
+    if (a.typeCode !== b.typeCode) return a.typeCode - b.typeCode;
+    return a.label.localeCompare(b.label, "zh-CN");
   });
 }
 
@@ -68,14 +70,15 @@ export async function loadLedger(page: number, filter: unknown): Promise<LedgerO
   ]);
 
   const sorted = [...days].sort((a, b) => b.date.localeCompare(a.date));
-  const safePage = Math.max(1, Math.trunc(Number(page)) || 1);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / LEDGER_PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, Math.trunc(Number(page)) || 1), totalPages);
   const start = (safePage - 1) * LEDGER_PAGE_SIZE;
   const totals = sumLedgerDays(sorted);
   const gap = category === "all" ? ledgerGap(balance, totals) : null;
 
   return {
     days: sorted.slice(start, start + LEDGER_PAGE_SIZE),
-    hasNext: start + LEDGER_PAGE_SIZE < sorted.length,
+    totalPages,
     totals,
     balance,
     gap: gap !== null && Math.abs(gap) >= 0.01 ? gap : null,

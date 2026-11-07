@@ -91,10 +91,14 @@ export interface LedgerDayRow {
   entries: number;
 }
 
-/** 某一天的一个类型（`topup.type` / API 消费）的收支小计。 */
+/** 某一天的一个类型（`topup.type` / API 消费）的收支小计；同类型再按来源细分。 */
 export interface LedgerTypeRow {
   category: LedgerCategory;
   typeCode: number;
+  /** 细分键（过期来源 / 充值渠道），用于 React key 与排序，不直接展示。 */
+  subtype: string;
+  /** 直接展示的名称，例如「支付宝模拟」「兑换码到期」。 */
+  label: string;
   entries: number;
   income: number;
   expense: number;
@@ -213,7 +217,109 @@ export async function listLedgerDays(
     .filter(ledgerHasMovement);
 }
 
-/** 某一天的分类型小计；`filter` 非 all 时只留那一类。 */
+/** 充值渠道的展示名；`mock` 来自易支付回调的 `type=mock`（测试网关）。 */
+const RECHARGE_CHANNEL_LABEL: Record<string, { pay: string; mock: string }> = {
+  alipay: { pay: "支付宝支付", mock: "支付宝模拟" },
+  wechat: { pay: "微信支付", mock: "微信模拟" },
+  qqpay: { pay: "QQ 支付", mock: "QQ 模拟" },
+  linuxdo: { pay: "LinuxDO 积分", mock: "LinuxDO 积分" },
+};
+
+/** 类型=5 的流水描述里只带订单号，渠道要去 `payment_order` 取。 */
+const ORDER_NO_PATTERN = /订单\s+(TU[0-9A-Za-z]+)/;
+
+interface OrderChannel {
+  channel: string | null;
+  simulated: boolean;
+}
+
+/** 过期流水描述里带着原临时余额的发放来源，按关键词还原。 */
+const EXPIRE_SOURCE_LABEL: { pattern: RegExp; label: string }[] = [
+  { pattern: /兑换码/, label: "兑换码到期" },
+  { pattern: /幸运转盘|限时活动抽奖/, label: "转盘赠送到期" },
+  { pattern: /翻牌夺宝/, label: "翻牌夺宝到期" },
+  { pattern: /每日签到|签到奖励/, label: "签到赠送到期" },
+  { pattern: /充值赠送/, label: "充值赠送到期" },
+  { pattern: /邀请/, label: "邀请返利到期" },
+  { pattern: /消费返利/, label: "消费返利到期" },
+  { pattern: /任务/, label: "任务奖励到期" },
+  { pattern: /雷电行动/, label: "雷电行动到期" },
+  { pattern: /站内信/, label: "站内信奖励到期" },
+];
+
+const HISTORY_PREFIX = "历史补记";
+
+/** 过期作废按「兑换码 / 转盘 / ...」细分；无法归因的历史行单独标补记。 */
+export function ledgerExpireSubtype(detail: string | null): { subtype: string; label: string } {
+  const description = detail ?? "";
+  const matched = EXPIRE_SOURCE_LABEL.find((item) => item.pattern.test(description));
+  if (matched) {
+    const historical = description.startsWith(HISTORY_PREFIX);
+    return {
+      subtype: `${matched.label}-${historical ? "history" : "live"}`,
+      label: historical ? `${matched.label}（补记）` : matched.label,
+    };
+  }
+  if (description.startsWith(HISTORY_PREFIX)) {
+    return { subtype: "history", label: "历史补记" };
+  }
+  return { subtype: "other", label: "其他临时余额到期" };
+}
+
+/** 充值按实际渠道细分；回调 `type=mock` 的单独标「模拟」。 */
+export function ledgerRechargeSubtype(
+  typeCode: number,
+  detail: string | null,
+  orders: Map<string, OrderChannel>,
+): { subtype: string; label: string } {
+  if (typeCode === 1) return { subtype: "type-1", label: "兑换码充值" };
+  if (typeCode !== 5) {
+    return { subtype: `type-${typeCode}`, label: TOPUP_TYPE_LABEL[typeCode] ?? "充值" };
+  }
+  const orderNo = detail?.match(ORDER_NO_PATTERN)?.[1];
+  const order = orderNo ? orders.get(orderNo) : undefined;
+  const channel = order?.channel ? RECHARGE_CHANNEL_LABEL[order.channel] : undefined;
+  if (!order?.channel || !channel) {
+    return { subtype: "online-unknown", label: "在线充值" };
+  }
+  return order.simulated
+    ? { subtype: `${order.channel}-mock`, label: channel.mock }
+    : { subtype: order.channel, label: channel.pay };
+}
+
+/**
+ * 充值渠道只在 `payment_order` 里；按 50 个一批查，避开 D1 单条语句 100 个绑定上限。
+ * 查不到的订单（历史脏行 / 已删订单）退回「在线充值」，不影响当天小计。
+ */
+async function loadOrderChannels(orderNos: string[]): Promise<Map<string, OrderChannel>> {
+  const map = new Map<string, OrderChannel>();
+  const unique = [...new Set(orderNos)];
+  for (let start = 0; start < unique.length; start += 50) {
+    const chunk = unique.slice(start, start + 50);
+    const rows = await d1All<Record<string, unknown>>(
+      `SELECT orderNo, channel, json_extract(notifyPayload, '$.type') AS notifyType
+       FROM payment_order WHERE orderNo IN (${chunk.map(() => "?").join(", ")})`,
+      chunk,
+    );
+    for (const row of rows) {
+      const orderNo = text(row.orderNo);
+      if (!orderNo) continue;
+      map.set(orderNo, {
+        channel: text(row.channel),
+        simulated: text(row.notifyType) === "mock",
+      });
+    }
+  }
+  return map;
+}
+
+/**
+ * 某一天的分类型小计；`filter` 非 all 时只留那一类。
+ *
+ * 过期作废与在线充值还要再细分来源：前者看流水描述里的发放出处，后者要回查
+ * `payment_order.channel` 与回调里的 `type=mock`。细分只能在 JS 里做，所以这一天
+ * 的原始行先取回来再按 `category + typeCode + subtype` 聚合；窗口只有一天，量可控。
+ */
 export async function listLedgerDayByType(
   userId: string,
   range: DayRange,
@@ -222,19 +328,46 @@ export async function listLedgerDayByType(
   const { sql, params } = ledgerUnion(userId, range);
   const categoryFilter = filter === "all" ? "" : " WHERE category = ?";
   const rows = await d1All<Record<string, unknown>>(
-    `SELECT category, typeCode, SUM(calls) AS entries, SUM(income) AS income, SUM(expense) AS expense
-     FROM (${sql})${categoryFilter} GROUP BY category, typeCode`,
+    `SELECT category, typeCode, detail, income, expense, calls FROM (${sql})${categoryFilter}`,
     categoryFilter ? [...params, filter] : params,
   );
-  return rows
-    .map((row) => ({
-      category: String(row.category) as LedgerCategory,
-      typeCode: num(row.typeCode),
-      entries: num(row.entries),
-      income: num(row.income),
-      expense: num(row.expense),
-    }))
-    .filter(ledgerHasMovement);
+
+  const orderNos: string[] = [];
+  for (const row of rows) {
+    if (String(row.category) !== "recharge" || num(row.typeCode) !== 5) continue;
+    const orderNo = text(row.detail)?.match(ORDER_NO_PATTERN)?.[1];
+    if (orderNo) orderNos.push(orderNo);
+  }
+  const orders = orderNos.length > 0 ? await loadOrderChannels(orderNos) : new Map<string, OrderChannel>();
+
+  const grouped = new Map<string, LedgerTypeRow>();
+  for (const row of rows) {
+    const category = String(row.category) as LedgerCategory;
+    const typeCode = num(row.typeCode);
+    const detail = text(row.detail);
+    const subtype =
+      category === "expire"
+        ? ledgerExpireSubtype(detail)
+        : category === "recharge"
+          ? ledgerRechargeSubtype(typeCode, detail, orders)
+          : { subtype: `type-${typeCode}`, label: ledgerTypeLabel({ category, typeCode }) };
+    const key = `${category}|${typeCode}|${subtype.subtype}`;
+    const current = grouped.get(key) ?? {
+      category,
+      typeCode,
+      subtype: subtype.subtype,
+      label: subtype.label,
+      entries: 0,
+      income: 0,
+      expense: 0,
+    };
+    current.entries += num(row.calls);
+    current.income += num(row.income);
+    current.expense += num(row.expense);
+    grouped.set(key, current);
+  }
+
+  return [...grouped.values()].filter(ledgerHasMovement);
 }
 
 /**

@@ -20,11 +20,14 @@ interface Harness {
   ledger: typeof import("@/lib/billing/ledger");
   queries: Captured[];
   setRows: (rows: Record<string, unknown>[]) => void;
+  /** 充值渠道回查的固定响应；默认空，表示订单不存在。 */
+  setOrderRows: (rows: Record<string, unknown>[]) => void;
 }
 
 function harness(): Harness {
   const queries: Captured[] = [];
   let rows: Record<string, unknown>[] = [];
+  let orderRows: Record<string, unknown>[] = [];
   const exports: Record<string, unknown> = {};
   runInNewContext(compiled, {
     exports,
@@ -33,7 +36,7 @@ function harness(): Harness {
       return {
         d1All: async (sql: string, params: unknown[]) => {
           queries.push({ sql, params });
-          return rows;
+          return /FROM payment_order/.test(sql) ? orderRows : rows;
         },
       };
     },
@@ -43,6 +46,9 @@ function harness(): Harness {
     queries,
     setRows: (next) => {
       rows = next;
+    },
+    setOrderRows: (next) => {
+      orderRows = next;
     },
   };
 }
@@ -145,7 +151,7 @@ test("天表按北京日界分组，类别筛选走占位符", () => {
 
 test("全部类别不追加 WHERE，其他类别追加且参数化", () => {
   const { ledger, queries, setRows } = harness();
-  setRows([{ category: "usage", typeCode: 0, entries: 2, income: 0, expense: 5 }]);
+  setRows([{ category: "usage", typeCode: 0, calls: 2, income: 0, expense: 5 }]);
 
   return (async () => {
     await ledger.listLedgerDayByType("fixture-user", { from: 1, to: 2 }, "all");
@@ -154,9 +160,21 @@ test("全部类别不追加 WHERE，其他类别追加且参数化", () => {
     await ledger.listLedgerDayByType("fixture-user", { from: 1, to: 2 }, "recharge");
     assert.match(queries[1].sql, /WHERE category = \?/);
     assert.ok(queries[1].params.includes("recharge"));
+    // 当天没有 type=5 行时不去查订单，省一次 D1 往返。
+    assert.equal(queries.length, 2);
 
     const rows = await ledger.listLedgerDayByType("fixture-user", { from: 1, to: 2 }, "all");
-    assert.deepEqual(local(rows), [{ category: "usage", typeCode: 0, entries: 2, income: 0, expense: 5 }]);
+    assert.deepEqual(local(rows), [
+      {
+        category: "usage",
+        typeCode: 0,
+        subtype: "type-0",
+        label: "API 消费",
+        entries: 2,
+        income: 0,
+        expense: 5,
+      },
+    ]);
   })();
 });
 
@@ -170,7 +188,7 @@ test("天表与当天小计用同一把尺子筛行：都按未取整的原值�
     const days = await ledger.listLedgerDays("fixture-user", "all");
     assert.deepEqual(local(days), [{ date: "2026-11-07", income: 0.006, expense: 0, entries: 1 }]);
 
-    setRows([{ category: "reward", typeCode: 3, entries: 1, income: 0.004, expense: 0 }]);
+    setRows([{ category: "reward", typeCode: 3, calls: 1, income: 0.004, expense: 0 }]);
     assert.deepEqual(local(await ledger.listLedgerDayByType("fixture-user", { from: 1, to: 2 })), []);
   })();
 });
@@ -255,6 +273,105 @@ test("类型名与条目名：API 消费带次数，缺名字时不写 undefined
   assert.equal(ledger.ledgerEntryLabel(base), "API 消费");
   assert.equal(ledger.ledgerEntryLabel({ ...base, detail: "gpt-4o", calls: 12 }), "API 消费 · gpt-4o × 12");
   assert.equal(ledger.ledgerEntryLabel({ ...base, category: "reward", typeCode: 3 }), "签到奖励");
+});
+
+test("过期作废按流水描述还原发放来源", () => {
+  const { ledger } = harness();
+  const cases: [string | null, string][] = [
+    ["临时余额过期作废：兑换码充值: ABCD", "兑换码到期"],
+    ["临时余额过期作废：幸运转盘抽奖奖励 100 cr", "转盘赠送到期"],
+    ["临时余额过期作废：限时活动抽奖奖励 200 cr", "转盘赠送到期"],
+    ["临时余额过期作废：翻牌夺宝 第 3 张中奖 +200 cr", "翻牌夺宝到期"],
+    ["临时余额过期作废：每日签到奖励 5 cr", "签到赠送到期"],
+    ["临时余额过期作废：历史补记：充值赠送 10 cr", "充值赠送到期"],
+    ["历史补记：兑换码 ABCD 的临时余额到期作废", "兑换码到期（补记）"],
+    ["历史补记：过期临时余额等未入账扣减，无法逐笔还原", "历史补记"],
+    [null, "其他临时余额到期"],
+  ];
+  for (const [detail, label] of cases) {
+    assert.equal(ledger.ledgerExpireSubtype(detail).label, label, `${detail} 应归为 ${label}`);
+  }
+});
+
+test("充值细分按订单渠道与模拟回调标注", () => {
+  const { ledger } = harness();
+  const orders = new Map([
+    ["TUALIPAY", { channel: "alipay", simulated: false }],
+    ["TUMOCK", { channel: "alipay", simulated: true }],
+    ["TUWECHAT", { channel: "wechat", simulated: true }],
+    ["TULINUXDO", { channel: "linuxdo", simulated: false }],
+  ]);
+
+  assert.deepEqual(local(ledger.ledgerRechargeSubtype(1, "兑换码充值: X", orders)), {
+    subtype: "type-1",
+    label: "兑换码充值",
+  });
+  assert.deepEqual(local(ledger.ledgerRechargeSubtype(2, "管理员手动充值", orders)), {
+    subtype: "type-2",
+    label: "管理员调整",
+  });
+  assert.deepEqual(
+    local(ledger.ledgerRechargeSubtype(5, "在线充值 ¥10（订单 TUALIPAY）", orders)),
+    { subtype: "alipay", label: "支付宝支付" },
+  );
+  assert.deepEqual(
+    local(ledger.ledgerRechargeSubtype(5, "在线充值 ¥10（订单 TUMOCK）", orders)),
+    { subtype: "alipay-mock", label: "支付宝模拟" },
+  );
+  assert.deepEqual(
+    local(ledger.ledgerRechargeSubtype(5, "在线充值 10 积分（订单 TUWECHAT）", orders)),
+    { subtype: "wechat-mock", label: "微信模拟" },
+  );
+  assert.deepEqual(
+    local(ledger.ledgerRechargeSubtype(5, "在线充值 10 积分（订单 TULINUXDO）", orders)),
+    { subtype: "linuxdo", label: "LinuxDO 积分" },
+  );
+  assert.deepEqual(
+    local(ledger.ledgerRechargeSubtype(5, "在线充值 ¥10（订单 TUNKNOWN）", orders)),
+    { subtype: "online-unknown", label: "在线充值" },
+  );
+});
+
+test("当天分类把过期来源与充值渠道拆成多行，金额与笔数不变", () => {
+  const { ledger, queries, setRows, setOrderRows } = harness();
+  setOrderRows([
+    { orderNo: "TUMOCK", channel: "alipay", notifyType: "mock" },
+    { orderNo: "TUALIPAY", channel: "alipay", notifyType: null },
+  ]);
+  setRows([
+    { category: "recharge", typeCode: 5, detail: "在线充值 ¥128（订单 TUMOCK）", income: 100, expense: 0, calls: 1 },
+    { category: "recharge", typeCode: 5, detail: "在线充值 ¥10（订单 TUALIPAY）", income: 50, expense: 0, calls: 1 },
+    { category: "expire", typeCode: 14, detail: "临时余额过期作废：兑换码充值: X", income: 0, expense: 30, calls: 1 },
+    { category: "expire", typeCode: 14, detail: "临时余额过期作废：幸运转盘抽奖奖励 5 cr", income: 0, expense: 20, calls: 1 },
+  ]);
+
+  return (async () => {
+    const rows = await ledger.listLedgerDayByType("fixture-user", { from: 1, to: 2 }, "all");
+    const byLabel = Object.fromEntries(local(rows).map((row) => [row.label, row]));
+    assert.deepEqual(byLabel["支付宝模拟"], {
+      category: "recharge",
+      typeCode: 5,
+      subtype: "alipay-mock",
+      label: "支付宝模拟",
+      entries: 1,
+      income: 100,
+      expense: 0,
+    });
+    assert.deepEqual(byLabel["兑换码到期"], {
+      category: "expire",
+      typeCode: 14,
+      subtype: "兑换码到期-live",
+      label: "兑换码到期",
+      entries: 1,
+      income: 0,
+      expense: 30,
+    });
+
+    const lookup = queries.find((item) => /FROM payment_order/.test(item.sql));
+    assert.ok(lookup, "有 type=5 行时必须回查订单渠道");
+    assert.equal(placeholders(lookup.sql), lookup.params.length);
+    assert.deepEqual(local(lookup.params).sort(), ["TUALIPAY", "TUMOCK"]);
+  })();
 });
 
 test("筛选项与类别登记一致，过期作废走真实天表", () => {

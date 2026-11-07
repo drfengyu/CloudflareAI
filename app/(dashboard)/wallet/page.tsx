@@ -198,13 +198,11 @@ export default async function WalletPage({
                 </p>
                 <p>
                   {settlement.reconciled
-                    ? "按账本流水结算，与当前余额一致；"
+                    ? "与当前余额一致。"
                     : settlement.gap > 0
-                      ? `净额比当前余额少 ${formatCredits(settlement.gap)} cr：有账外增加的余额变更没进账本；`
-                      : `净额比当前余额多 ${formatCredits(-settlement.gap)} cr：有支出没进账本（早期未计量消费、未入账调整，或过期流水补记失败）；`}
-                  {settlement.expired >= 0.01
-                    ? "过期作废已从收入与支出两头剔除，账本「过期作废」类目按到期日逐笔可查。"
-                    : "完整流水见个人账本。"}
+                      ? `另有 ${formatCredits(settlement.gap)} cr 未入账。`
+                      : `另有 ${formatCredits(-settlement.gap)} cr 支出未入账。`}
+                  {settlement.expired >= 0.01 ? "过期作废不计入收支。" : ""}
                 </p>
               </div>
 
@@ -213,7 +211,7 @@ export default async function WalletPage({
                   <span className="font-medium text-foreground tabular-nums">
                     永久 {formatCredits(displayBalance.displayPermanent)} cr
                   </span>
-                  <span>充值到账与管理员调整，不过期</span>
+                  <span>充值到账，不过期</span>
                 </p>
                 {(temporaryTotal > 0 || permanentBalance < 0) && (
                   <p className="flex flex-wrap items-center gap-x-2">
@@ -234,7 +232,7 @@ export default async function WalletPage({
                     {formatCredits(compensated)} cr 临时余额抵扣；上方两项是抵扣后的可用额度
                   </p>
                 )}
-                <p>总余额 = 永久 + 未过期临时；消费先扣临时、再扣永久</p>
+                <p>消费先扣临时，再扣永久。</p>
               </div>
             </CardContent>
           </Card>
