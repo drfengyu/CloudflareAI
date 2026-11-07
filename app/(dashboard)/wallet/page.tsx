@@ -3,23 +3,29 @@ import { Card, CardContent } from "@/components/ui/card";
 import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
 import { users, temporaryBalances, paymentOrders } from "@/lib/db/schema";
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import { Wallet, Clock } from "lucide-react";
 import { RedeemCodeDialog } from "./redeem-code-dialog";
 import { CheckinCalendarCard } from "./checkin-calendar-card";
 import { RechargeOrdersCard } from "./recharge-orders-card";
 import { TempBalancesCard, type SerializedTempBalance } from "./temp-balances-card";
-import { TopupRecordsCard } from "./topup-records-card";
+import { RecentLedgerCard } from "./recent-ledger-card";
 import { formatCredits } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
-import { listWalletTopupPage, walletTopupWhere } from "@/lib/billing/grant-expiry";
+import { ledgerNet, listRecentLedgerEntries, recentWindow, sumLedgerDays } from "@/lib/billing/ledger";
 import { getRechargeBonusSettings } from "@/lib/payment/bonus";
 import { getLinuxdoConfig } from "@/lib/payment/linuxdo";
-import { PAY_ORDER_PAGE_SIZE, serializePayOrder } from "@/lib/payment/pay-order-view";
-import { formatCnDate, cnDaysAgoStart } from "@/lib/date";
+import { serializePayOrder } from "@/lib/payment/pay-order-view";
+import { formatCnDate } from "@/lib/date";
 import { PageBody, PageSection } from "@/components/dashboard/section";
 
 export const dynamic = "force-dynamic";
+
+/** 未到账订单是钱包唯一留下的订单视图，条数上限按这个兜住。 */
+const PENDING_ORDER_LIMIT = 20;
+
+/** 钱包只展示最近几笔收支，完整账目在 /ledger。 */
+const RECENT_LEDGER_LIMIT = 8;
 
 export default async function WalletPage({
   searchParams,
@@ -30,39 +36,36 @@ export default async function WalletPage({
   const params = await searchParams;
   const now = new Date();
 
-  // 充值流水只保留近三个月，更早的历史不再展示。
-  const historyCutoff = cnDaysAgoStart(90);
-
   // 2026-10-17 性能：这些查询互不依赖（全都只按 userId 取数），原先是一条接一条 await，
-  // 串行 5 次 D1 往返 ≈ 2 秒；并发成一波后只剩最慢那条的时间。取数口径一字未改。
-  const [userRows, tempBalances, payOrders, linuxdoConfig, bonusConfig, topupWhere] = await Promise.all([
-    // 获取用户永久余额
-    db
-      .select({ balanceCredits: users.balanceCredits, role: users.role })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1),
-    // 获取未过期的临时余额（过期判定下沉到 SQL，不再把已失效的行读进内存）
-    db
-      .select()
-      .from(temporaryBalances)
-      .where(and(eq(temporaryBalances.userId, userId), gt(temporaryBalances.expiresAt, now)))
-      .orderBy(temporaryBalances.expiresAt),
-    // 在线充值订单（含回跳订单号置顶逻辑交给客户端组件；翻页也在卡片内局部刷新）
-    // 这里不按 historyCutoff 裁剪：待支付/支付确认中的订单可以陈旧到任意久，而这张卡是
-    // 用户唯一能自查并手动「查询」催单的地方，裁剪会把未到账订单从视野里抹掉。
-    db
-      .select()
-      .from(paymentOrders)
-      .where(eq(paymentOrders.userId, userId))
-      .orderBy(desc(paymentOrders.createdAt))
-      .limit(PAY_ORDER_PAGE_SIZE + 1),
-    getLinuxdoConfig(),
-    // 充值阶梯赠送：只在充值弹窗里预告「本单额外赠送」，实际发放由订单结算路径负责
-    getRechargeBonusSettings(),
-    // 充值流水的可见性条件（含近三个月裁剪 + 发放到期过滤，活动流水整类排除）
-    walletTopupWhere(userId, historyCutoff, now),
-  ]);
+  // 串行 5 次 D1 往返 ≈ 2 秒；并发成一波后只剩最慢那条的时间。
+  const [userRows, tempBalances, pendingOrders, linuxdoConfig, bonusConfig, recentLedger] =
+    await Promise.all([
+      // 永久余额与角色（角色决定充值弹窗里能不能看到易支付）
+      db
+        .select({ balanceCredits: users.balanceCredits, role: users.role })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1),
+      // 获取未过期的临时余额（过期判定下沉到 SQL，不再把已失效的行读进内存）
+      db
+        .select()
+        .from(temporaryBalances)
+        .where(and(eq(temporaryBalances.userId, userId), gt(temporaryBalances.expiresAt, now)))
+        .orderBy(temporaryBalances.expiresAt),
+      // 只留未到账的订单：这是用户唯一能自查、手动「查询」催单的地方，裁剪会把它们抹掉。
+      // 已到账与已关闭的历史不在钱包铺开——到账那一笔在个人账本按天汇总里看得到。
+      db
+        .select()
+        .from(paymentOrders)
+        .where(and(eq(paymentOrders.userId, userId), inArray(paymentOrders.status, [0, 1])))
+        .orderBy(desc(paymentOrders.createdAt))
+        .limit(PENDING_ORDER_LIMIT),
+      getLinuxdoConfig(),
+      // 充值阶梯赠送：只在充值弹窗里预告「本单额外赠送」，实际发放由订单结算路径负责
+      getRechargeBonusSettings(),
+      // 最近几笔收支：与个人账本同一份口径（发放 + API 消费），只扫最近 90 天
+      listRecentLedgerEntries(userId, RECENT_LEDGER_LIMIT, recentWindow()),
+    ]);
 
   const permanentBalance = userRows[0]?.balanceCredits || 0;
 
@@ -100,13 +103,10 @@ export default async function WalletPage({
   }
 
   const totalBalance = permanentBalance + temporaryTotal;
-
-  // 签到奖励与兑换码发的是一次性临时余额，到期之后不再作为「可用余额来源」显示。
-  // 过期判定已下沉进 SQL，LIMIT 取到的就是可见行；翻页由卡片内 server action 复用同一入口。
-  const topupPage = await listWalletTopupPage(topupWhere, 1);
-
-  const hasMorePayOrders = payOrders.length > PAY_ORDER_PAGE_SIZE;
-  const serializedOrders = payOrders.slice(0, PAY_ORDER_PAGE_SIZE).map(serializePayOrder);
+  const compensated = Math.min(Math.max(0, -permanentBalance), temporaryTotal);
+  const earliestExpiry = displayTempBalances[0]
+    ? formatCnDate(displayTempBalances[0].expiresAt)
+    : null;
 
   const serializedTempBalances: SerializedTempBalance[] = displayTempBalances.map((tb) => ({
     id: tb.id,
@@ -116,6 +116,9 @@ export default async function WalletPage({
     expiresAtLabel: formatCnDate(tb.expiresAt),
   }));
 
+  const serializedOrders = pendingOrders.map(serializePayOrder);
+  const recentTotals = sumLedgerDays(recentLedger);
+
   const justReturned = params.paid === "1";
   const highlightOrderNo = params.orderNo ?? undefined;
 
@@ -123,7 +126,7 @@ export default async function WalletPage({
     <>
       <PageHeader
         title="我的钱包"
-        description="余额、充值、流水记录"
+        description="余额、充值与最近收支"
       />
 
       <PageBody className="pt-2">
@@ -131,28 +134,41 @@ export default async function WalletPage({
           {/* 余额卡片 */}
           <Card className="border-primary/20 bg-primary/5">
             <CardContent className="flex flex-wrap items-center justify-between gap-4 pt-5">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <div className="flex min-w-0 items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
                   <Wallet className="h-6 w-6" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm text-muted-foreground">总余额</p>
                   <p className="text-2xl font-semibold tabular-nums">
                     {formatCredits(totalBalance)} credits
                   </p>
-                  <div className="mt-1 flex flex-wrap gap-3 text-xs text-muted-foreground tabular-nums">
-                    <span>永久: {formatCredits(displayBalance.displayPermanent)} cr</span>
+                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+                    <p className="flex flex-wrap items-center gap-x-2">
+                      <span className="font-medium text-foreground tabular-nums">
+                        永久 {formatCredits(displayBalance.displayPermanent)} cr
+                      </span>
+                      <span>充值到账与管理员调整，不过期</span>
+                    </p>
                     {(temporaryTotal > 0 || permanentBalance < 0) && (
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        临时: {formatCredits(displayBalance.displayTemporary)} cr
-                      </span>
+                      <p className="flex flex-wrap items-center gap-x-2">
+                        <span className="flex items-center gap-1 font-medium text-foreground tabular-nums">
+                          <Clock className="h-3 w-3" />
+                          临时 {formatCredits(displayBalance.displayTemporary)} cr
+                        </span>
+                        <span>
+                          {earliestExpiry
+                            ? `签到、赠送与返利，最早 ${earliestExpiry} 到期`
+                            : "签到、赠送与返利，到期作废"}
+                        </span>
+                      </p>
                     )}
-                    {permanentBalance < 0 && temporaryTotal > 0 && (
-                      <span className="text-amber-600 dark:text-amber-400">
-                        (已用临时余额补正)
-                      </span>
+                    {compensated > 0 && (
+                      <p className="text-amber-600 dark:text-amber-400">
+                        其中 {formatCredits(compensated)} cr 已用来抵扣永久余额的欠费
+                      </p>
                     )}
+                    <p>总余额 = 永久 + 未过期临时；消费先扣临时、再扣永久</p>
                   </div>
                 </div>
               </div>
@@ -171,24 +187,23 @@ export default async function WalletPage({
           <CheckinCalendarCard />
         </PageSection>
 
-        <PageSection title="充值与流水" subtitle="在线充值订单、临时余额明细与充值记录">
-          {/* 在线充值订单（回跳确认 + 轮询 + 卡片内翻页） */}
+        <PageSection title="收支与临时余额" subtitle="最近几笔收支变动、未到账订单与临时余额有效期">
           <div className="space-y-6">
+            <RecentLedgerCard
+              entries={recentLedger}
+              totals={recentTotals}
+              net={ledgerNet(recentTotals)}
+            />
+
+            {/* 未到账订单（回跳确认 + 轮询催单） */}
             <RechargeOrdersCard
               orders={serializedOrders}
-              initialHasNext={hasMorePayOrders}
               highlightOrderNo={highlightOrderNo}
               justReturned={justReturned}
             />
 
             {/* 临时余额明细（卡片内本地分页） */}
             <TempBalancesCard balances={serializedTempBalances} />
-
-            {/* 充值流水（卡片内局部翻页） */}
-            <TopupRecordsCard
-              records={topupPage.records}
-              initialHasNext={topupPage.hasNext}
-            />
           </div>
         </PageSection>
       </PageBody>

@@ -58,9 +58,6 @@ function fixture(role: number | null) {
         return { orderNo: "fixture-order", credits: 10 };
       },
     },
-    "@/lib/payment/pay-order-view": {},
-    "@/lib/billing/grant-expiry": {},
-    "@/lib/date": {},
     "@/lib/rate-limit": { checkRateLimit: async () => { state.rateChecks++; return true; } },
   };
   const exports: { createPayOrder?: (amount: number, channel: string) => Promise<{ payUrl: string }> } = {};

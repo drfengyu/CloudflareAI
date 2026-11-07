@@ -4,10 +4,9 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Pagination } from "@/components/dashboard/pagination";
 import { toast } from "sonner";
 import { RefreshCw, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
-import { checkOrderStatus, listMyPayOrders } from "./actions";
+import { checkOrderStatus } from "./actions";
 import { type SerializedPayOrder } from "@/lib/payment/pay-order-view";
 import { cn } from "@/lib/utils";
 import { formatCnDateTime } from "@/lib/date";
@@ -21,20 +20,16 @@ const STATUS_META: Record<number, { label: string; tone: "default" | "success" |
 };
 
 interface Props {
+  /** 只含未到账（待支付 / 支付确认中）的订单；到账与关闭的历史在个人账本里看。 */
   orders: SerializedPayOrder[];
-  /** 服务端多取一条探测出的「还有下一页」 */
-  initialHasNext?: boolean;
   /** 回跳时携带的订单号（?paid=1&orderNo=xxx） */
   highlightOrderNo?: string;
   /** 是否刚从支付页回跳（?paid=1） */
   justReturned?: boolean;
 }
 
-export function RechargeOrdersCard({ orders, initialHasNext, highlightOrderNo, justReturned }: Props) {
+export function RechargeOrdersCard({ orders, highlightOrderNo, justReturned }: Props) {
   const [items, setItems] = useState(orders);
-  const [page, setPage] = useState(1);
-  const [hasNext, setHasNext] = useState(Boolean(initialHasNext));
-  const [paging, setPaging] = useState(false);
   const [refreshing, setRefreshing] = useState<string | null>(null);
 
   // 有回跳订单号时，初次挂载主动查一次 + 置顶
@@ -42,22 +37,7 @@ export function RechargeOrdersCard({ orders, initialHasNext, highlightOrderNo, j
     ? items.find((o) => o.orderNo === highlightOrderNo) ?? null
     : null;
 
-  // 局部翻页：只换这张卡的数据，不改 URL、不整页刷新。
-  const goToPage = async (target: number) => {
-    if (paging || target === page) return;
-    setPaging(true);
-    try {
-      const result = await listMyPayOrders(target);
-      setItems(result.orders);
-      setHasNext(result.hasNext);
-      setPage(target);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "加载订单失败");
-    } finally {
-      setPaging(false);
-    }
-  };
-
+  // 手动催单：服务端会向支付网关对账，回调丢失时在这里补到账。
   const refresh = async (orderNo: string) => {
     setRefreshing(orderNo);
     try {
@@ -102,14 +82,14 @@ export function RechargeOrdersCard({ orders, initialHasNext, highlightOrderNo, j
     }, 4000);
     return () => clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.map((o) => o.status).join(","), highlightOrderNo, page]);
+  }, [items.map((o) => o.status).join(","), highlightOrderNo]);
 
-  if (items.length === 0 && page === 1) return null;
+  if (items.length === 0) return null;
 
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base">在线充值订单</CardTitle>
+        <CardTitle className="text-base">未到账订单</CardTitle>
         {activeOrder && activeOrder.status === 0 && (
           <Badge tone="warning">等待支付</Badge>
         )}
@@ -136,10 +116,7 @@ export function RechargeOrdersCard({ orders, initialHasNext, highlightOrderNo, j
           </div>
         )}
 
-        {items.length === 0 ? (
-          <p className="text-sm text-muted-foreground">暂无订单</p>
-        ) : (
-          items.map((order) => {
+        {items.map((order) => {
             const meta = STATUS_META[order.status] ?? STATUS_META[9];
             const isHighlight = highlightOrderNo === order.orderNo;
             return (
@@ -177,17 +154,8 @@ export function RechargeOrdersCard({ orders, initialHasNext, highlightOrderNo, j
                   )}
                 </div>
               </div>
-            );
-          })
-        )}
-
-        <Pagination
-          page={page}
-          hasNext={hasNext}
-          basePath="/wallet"
-          onPageChange={goToPage}
-          disabled={paging}
-        />
+          );
+        })}
       </CardContent>
     </Card>
   );

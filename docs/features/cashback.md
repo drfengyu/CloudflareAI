@@ -13,7 +13,8 @@
   攒很久再一次性领走大额的路径被这个窗口堵死。
 - 单日返利 = `min(当日消费 × rate, cap)`，且当日消费需 ≥ `minCredits` 才起返。默认 `rate=0.1`、`minCredits=20`、`cap=200`。
 - 发放进**临时余额**（`temporary_balance`），有效期 `cashback_valid_days`（默认 7 天），到期自动作废；
-  钱包流水记 `type=8`，`lib/billing/grant-expiry.ts` 的 CASE / NOT IN 都已登记这一类，否则流水要么永挂要么整类消失。
+  钱包账本记 `type=8` 并归入「赠送与返利」（`lib/billing/ledger.ts` 的 `LEDGER_CATEGORY_TYPES`）；
+  新增发放类型要同时登记 `TOPUP_TYPE_LABEL` 与该表，否则会被静默算进「活动」。
 - 「当日消费」取 `usage_log.creditsUsed` 汇总。失败调用记 0 cr，所以不需要按 `status` 过滤。
 - 领取时把当日消费与实发额度**快照**进 `cashback_claim`：之后改比例、改定价都不会让历史返利变数。
 
@@ -38,7 +39,7 @@ SQL 只做 `GROUP BY`——D1 上 `ORDER BY` 聚合表达式或 SELECT 别名会
 | 配置 | `lib/settings/index.ts` → `getCashbackSettings()`，键前缀 `cashback_*` |
 | 页面 | `app/(dashboard)/cashback/{page,actions}.tsx`、`components/cashback/claim-panel.tsx` |
 | 后台 | `app/(dashboard)/admin/settings/settings-form.tsx` → `CashbackSettingsForm` |
-| 账本 | `lib/billing/grant-expiry.ts`（type=8 到期过滤）、`wallet/topup-records-card.tsx`（标签） |
+| 账本 | `lib/billing/ledger.ts`（type=8 归「赠送与返利」）、`app/(dashboard)/ledger/`（按天汇总与分类小计） |
 
 ## 已知边界
 

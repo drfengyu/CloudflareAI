@@ -19,6 +19,7 @@ import {
   PiggyBank,
   Radio,
   Receipt,
+  ScrollText,
   Settings,
   Sparkles,
   Ticket,
@@ -75,6 +76,7 @@ export const NAV: NavGroup[] = [
     items: [
       { href: "/messages", label: "站内信", icon: Inbox },
       { href: "/wallet", label: "我的钱包", icon: Wallet },
+      { href: "/ledger", label: "个人账本", icon: ScrollText },
       { href: "/invite", label: "邀请好友", icon: Gift },
       { href: "/keys", label: "API 密钥", icon: KeyRound },
       { href: "/history", label: "使用记录", icon: History },

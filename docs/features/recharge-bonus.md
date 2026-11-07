@@ -15,7 +15,7 @@
 
 **赠送进临时余额**（有效期 `recharge_bonus_valid_days`，默认 30 天），不并进永久余额：
 付费用户的主充值本来就是永久的，赠送带期限既能做促销又不让存量无限堆积。
-钱包流水记 `type=10`，已在 `lib/billing/grant-expiry.ts` 的 CASE / NOT IN 登记。
+钱包流水记 `type=10`，在个人账本里归「赠送与返利」（`lib/billing/ledger.ts` 的 `LEDGER_CATEGORY_TYPES`）。
 
 ## 发放时机与失败面
 
@@ -33,7 +33,7 @@
 | 配置 | `option` 键 `recharge_bonus_enabled` / `recharge_bonus_tiers` / `recharge_bonus_valid_days` |
 | 界面 | `app/(dashboard)/wallet/redeem-code-dialog.tsx`（选金额时实时预告「本单额外赠送 X cr」+ 档位表）、`wallet/page.tsx` 传参 |
 | 后台 | `admin/settings/settings-form.tsx` → `RechargeBonusSettingsForm` |
-| 账本 | `lib/billing/grant-expiry.ts`、`wallet/topup-records-card.tsx`（标签） |
+| 账本 | `lib/billing/ledger.ts`（type=10 归「赠送与返利」）、`app/(dashboard)/ledger/`（按天汇总与分类小计） |
 
 ## 验证状态（如实记录）
 

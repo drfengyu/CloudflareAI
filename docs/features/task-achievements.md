@@ -45,7 +45,7 @@
 | 配置 | `lib/settings/index.ts` → `getTaskSettings()`，键 `tasks_enabled` / `tasks_valid_days` / `task_reward_overrides` |
 | 页面 | `app/(dashboard)/tasks/{page,actions}.tsx`、`components/tasks/task-list.tsx`、`components/dashboard/sidebar.tsx` |
 | 后台 | `admin/settings/settings-form.tsx` → `TaskSettingsForm`（含任务 key 与默认额度对照表） |
-| 账本 | `lib/billing/grant-expiry.ts`（type=9 到期过滤）、`wallet/topup-records-card.tsx`（标签） |
+| 账本 | `lib/billing/ledger.ts`（type=9 归「赠送与返利」）、`app/(dashboard)/ledger/`（按天汇总与分类小计） |
 
 ## 实测（2026-10-30）
 

@@ -70,6 +70,22 @@ export async function d1Run(
   return { changes: first?.meta?.changes ?? 0 };
 }
 
+/**
+ * 只读原始查询，按列别名取行。
+ *
+ * sqlite-proxy 那条路会把结果压成位置数组（`Object.values`），跨表 `UNION ALL` +
+ * `GROUP BY` 这类投影多、列名多的查询读起来很容易错位；个人账本（`lib/billing/ledger.ts`）
+ * 需要按别名取数，所以直接吃 D1 的对象行。只允许 SELECT，写语句一律走 `d1Run`。
+ */
+export async function d1All<T = Record<string, unknown>>(
+  sql: string,
+  params: unknown[] = [],
+): Promise<T[]> {
+  if (!/^\s*select\b/i.test(sql)) throw new Error("d1All only accepts SELECT statements");
+  const rows = await d1Query(sql, params, false);
+  return rows as T[];
+}
+
 export const db = drizzle(
   async (sql, params, method) => {
     // run 是 insert/update/delete：响应丢了也不知道上游到底落没落，只能超时、不能自动重试

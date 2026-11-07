@@ -48,7 +48,7 @@ export function TempBalancesCard({ balances }: { balances: SerializedTempBalance
                   {formatCredits(tb.displayAmount)} credits
                   {tb.usedForCompensation > 0 && (
                     <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
-                      ({formatCredits(tb.usedForCompensation)} 已用于补正)
+                      （{formatCredits(tb.usedForCompensation)} 已抵扣永久余额的欠费）
                     </span>
                   )}
                 </p>
