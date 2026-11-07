@@ -1,4 +1,5 @@
 import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db/d1-http";
 import { rewardClaims, usageLogs, users } from "@/lib/db/schema";
 import { cnStartOfToday, parseCnWallClock } from "@/lib/date";
@@ -287,23 +288,35 @@ export function leaderboardStartMs(s: CashbackSettings): number {
 /**
  * 用量冲榜：窗口内按用户汇总消耗。
  * D1 上 `ORDER BY` 聚合表达式或 SELECT 别名都会解析失败，所以 SQL 只 group，排序放 JS。
+ *
+ * 这是全站级扫描（不按 userId 过滤），而榜单只做展示、返利发放不依赖它；
+ * 聚合结果按「窗口起点」缓存 2 分钟，避免每次打开活动页都重扫一遍窗口内的 `usage_log`。
  */
+const loadLeaderboardTotals = unstable_cache(
+  async (startMs: number): Promise<{ userId: string; credits: number }[]> => {
+    const rows = await db
+      .select({
+        userId: usageLogs.userId,
+        credits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
+      })
+      .from(usageLogs)
+      .where(gte(usageLogs.createdAt, new Date(startMs)))
+      .groupBy(usageLogs.userId);
+    return rows.map((row) => ({ userId: row.userId, credits: Number(row.credits) }));
+  },
+  ["cashback-leaderboard"],
+  { revalidate: 120 },
+);
+
 export async function getUsageLeaderboard(
   s: CashbackSettings,
   selfUserId: string,
 ): Promise<LeaderboardRow[]> {
-  const rows = await db
-    .select({
-      userId: usageLogs.userId,
-      credits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
-    })
-    .from(usageLogs)
-    .where(gte(usageLogs.createdAt, new Date(leaderboardStartMs(s))))
-    .groupBy(usageLogs.userId);
+  const rows = await loadLeaderboardTotals(leaderboardStartMs(s));
 
   const ranked = rows
-    .filter((r) => Number(r.credits) > 0)
-    .sort((a, b) => Number(b.credits) - Number(a.credits))
+    .filter((r) => r.credits > 0)
+    .sort((a, b) => b.credits - a.credits)
     .slice(0, s.leaderboardSize);
   if (ranked.length === 0) return [];
 

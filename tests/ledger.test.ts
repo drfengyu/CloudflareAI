@@ -132,24 +132,45 @@ test("注册奖励是赠送，不进充值类目", () => {
 test("天表按北京日界分组，类别筛选走占位符", () => {
   const { ledger, queries, setRows } = harness();
   setRows([
-    { date: "2026-11-07", income: 100.004, expense: 33.336, entries: 3 },
-    { date: "2026-11-06", income: 0, expense: 0, entries: 2 },
-    { date: 2026, income: 1, expense: 1, entries: 1 },
+    { date: "2026-11-07", category: "usage", income: 60.125, expense: 20.5, entries: 2 },
+    { date: "2026-11-07", category: "reward", income: 40.25, expense: 13.375, entries: 1 },
+    { date: "2026-11-06", category: "usage", income: 0, expense: 0, entries: 2 },
+    { date: 2026, category: "usage", income: 1, expense: 1, entries: 1 },
   ]);
 
   return (async () => {
     const days = await ledger.listLedgerDays("fixture-user", "usage");
+    // 夹具不按类别过滤，两个类别的同日行会折成一行；筛选条件只在 SQL 里校验。
     // 2026-11-06 那天既不加钱也不扣钱，不该占一行；缺日期的行（date 非字符串）也不进表。
     // 留在行里的仍是原值：取整只在展示层做一次，逐日取整会让累计差出一分尾数。
-    assert.deepEqual(local(days), [{ date: "2026-11-07", income: 100.004, expense: 33.336, entries: 3 }]);
+    assert.deepEqual(local(days), [{ date: "2026-11-07", income: 100.375, expense: 33.875, entries: 3 }]);
 
     const { sql, params } = queries[0];
     assert.match(sql, /strftime\('%Y-%m-%d', ts \/ 1000, 'unixepoch', '\+8 hours'\)/);
-    assert.match(sql, /GROUP BY date/);
+    // 日 + 类别分组：同一段历史一次扫描，天表与过期合计共用这份结果。
+    assert.match(sql, /GROUP BY date, category/);
     // 筛选值只能是参数：直接拼进 SQL 就是注入面。
     assert.match(sql, /WHERE category = \?/);
     assert.ok(params.includes("usage"));
     assert.doesNotMatch(sql, /category = 'usage'/);
+  })();
+});
+
+test("同日多类别折成一行，过期合计从天表结果直接折出", () => {
+  const { ledger, setRows } = harness();
+  setRows([
+    { date: "2026-11-07", category: "recharge", income: 100, expense: 0, entries: 1 },
+    { date: "2026-11-07", category: "usage", income: 0, expense: 30, entries: 5 },
+    { date: "2026-11-06", category: "expire", income: 0, expense: 12.5, entries: 1 },
+  ]);
+
+  return (async () => {
+    const overview = await ledger.listLedgerOverview("fixture-user");
+    assert.deepEqual(local(overview.days), [
+      { date: "2026-11-07", income: 100, expense: 30, entries: 6 },
+      { date: "2026-11-06", income: 0, expense: 12.5, entries: 1 },
+    ]);
+    assert.equal(overview.expired, 12.5);
   })();
 });
 
@@ -186,7 +207,7 @@ test("天表与当天小计用同一把尺子筛行：都按未取整的原值�
   const { ledger, setRows } = harness();
   // 0.006 cr 算进出（界面按 formatCredits 显 0.0060），0.004 不算。两边口径必须一致，
   // 否则会出现「这天列进表里、点开却一行小计都没有」。
-  setRows([{ date: "2026-11-07", income: 0.006, expense: 0, entries: 1 }]);
+  setRows([{ date: "2026-11-07", category: "usage", income: 0.006, expense: 0, entries: 1 }]);
 
   return (async () => {
     const days = await ledger.listLedgerDays("fixture-user", "all");
@@ -490,7 +511,7 @@ test("筛选项与类别登记一致，过期作废走真实天表", () => {
 
   return (async () => {
     // 过期作废是 cron 补记的真实负流水，筛选它就查天表，和其它类别同一条路。
-    setRows([{ date: "2026-06-24", income: 0, expense: 1_000_000_000, entries: 1 }]);
+    setRows([{ date: "2026-06-24", category: "expire", income: 0, expense: 1_000_000_000, entries: 1 }]);
     const days = await ledger.listLedgerDays("fixture-user", "expire");
     assert.deepEqual(local(days), [
       { date: "2026-06-24", income: 0, expense: 1_000_000_000, entries: 1 },
@@ -501,20 +522,23 @@ test("筛选项与类别登记一致，过期作废走真实天表", () => {
   })();
 });
 
-test("过期作废支出按真实流水汇总：只认 type=14 的负数行", () => {
+test("过期作废合计从天表同一把尺子折出，空值与负值按 0 处理", () => {
   const { ledger, queries, setRows } = harness();
 
   return (async () => {
-    setRows([{ expired: 1_000_000_000 }]);
-    assert.equal(await ledger.sumExpiredExpense("fixture-user"), 1_000_000_000);
-    assert.match(queries[0].sql, /FROM topup WHERE userId = \? AND type = \? AND amount < 0/);
-    assert.deepEqual(local(queries[0].params), ["fixture-user", 14]);
+    setRows([
+      { date: "2026-06-24", category: "expire", income: 0, expense: 1_000_000_000, entries: 1 },
+    ]);
+    assert.equal((await ledger.listLedgerOverview("fixture-user")).expired, 1_000_000_000);
+    // 和天表同一次扫描，不再单独 SUM 一遍 topup。
+    assert.match(queries[0].sql, /GROUP BY date, category/);
+    assert.doesNotMatch(queries[0].sql, /AND amount < 0/);
 
-    // SUM 为 NULL / 异常值时按 0 处理，钱包不会出现 NaN 或负的「过期」。
-    setRows([{ expired: null }]);
-    assert.equal(await ledger.sumExpiredExpense("fixture-user"), 0);
-    setRows([{ expired: -5 }]);
-    assert.equal(await ledger.sumExpiredExpense("fixture-user"), 0);
+    // SUM 为 NULL / 异常负值时按 0 处理，钱包不会出现 NaN 或负的「过期」。
+    setRows([{ date: "2026-06-24", category: "expire", income: 0, expense: null, entries: 1 }]);
+    assert.equal((await ledger.listLedgerOverview("fixture-user")).expired, 0);
+    setRows([{ date: "2026-06-24", category: "expire", income: 0, expense: -5, entries: 1 }]);
+    assert.equal((await ledger.listLedgerOverview("fixture-user")).expired, 0);
   })();
 });
 

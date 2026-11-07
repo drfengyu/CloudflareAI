@@ -5,6 +5,19 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.32.1] - 2026-11-07
+
+### 性能
+
+- 钱包结算的全量天表与过期作废合计合并为一次 D1 扫描：天表内部改为按「北京日 + 类别」分组，`listLedgerOverview` 从同一份结果折出日表与过期合计，删除单独扫一遍 `topup` 的 `sumExpiredExpense`。
+- 活动页「用量冲榜」的全站窗口聚合加 2 分钟缓存（`unstable_cache`），不再每次打开 `/cashback` 都重扫窗口内的 `usage_log`；榜单只做展示，不参与返利发放。
+- 迁移 024：`topup` 新增 `(userId, type, createdAt)` 复合索引，任务「本周充值」与看板「活动消耗」按类型取数时只扫命中行，不再先取出用户全部流水再逐行过滤。
+
+### 验证
+
+- `npm run typecheck`、`npm run build` 通过；`npx tsx --test tests/*.test.ts` 共 82 项全部通过。
+- 迁移 024 只新增一个索引、不改数据，与迁移 023 剩余语句一起在 D1 额度恢复后执行。
+
 ## [0.32.0] - 2026-11-07
 
 ### 新增

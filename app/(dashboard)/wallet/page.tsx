@@ -15,9 +15,8 @@ import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 import {
   ledgerNet,
   ledgerSettlement,
-  listLedgerDays,
+  listLedgerOverview,
   listRecentLedgerByDay,
-  sumExpiredExpense,
   sumLedgerDays,
 } from "@/lib/billing/ledger";
 import { getRechargeBonusSettings } from "@/lib/payment/bonus";
@@ -45,7 +44,7 @@ export default async function WalletPage({
 
   // 2026-10-17 性能：这些查询互不依赖（全都只按 userId 取数），原先是一条接一条 await，
   // 串行 5 次 D1 往返 ≈ 2 秒；并发成一波后只剩最慢那条的时间。
-  const [userRows, tempBalances, pendingOrders, epayConfig, linuxdoConfig, bonusConfig, recentLedger, ledgerDays, expiredExpense, coupons] =
+  const [userRows, tempBalances, pendingOrders, epayConfig, linuxdoConfig, bonusConfig, recentLedger, ledgerOverview, coupons] =
     await Promise.all([
       // 永久余额与角色（角色决定充值弹窗里能不能看到易支付）
       db
@@ -73,10 +72,8 @@ export default async function WalletPage({
       getRechargeBonusSettings(),
       // 最近收支：近 5 天全部记录，与个人账本同一份口径（发放 + API 消费）
       listRecentLedgerByDay(userId),
-      // 与账本页同一把尺子的全量天表：钱包要拿累计净收支和余额对账
-      listLedgerDays(userId),
-      // 过期作废的真实流水：钱包把发放和作废两头一起从展示里剔除
-      sumExpiredExpense(userId),
+      // 全量天表 + 过期作废合计：一次扫描同时供累计收支与余额对账使用
+      listLedgerOverview(userId),
       // 当期三种活动券余额与珍宝礼包：充值位同时是券礼包入口
       listActivityCoupons(userId),
     ]);
@@ -131,8 +128,8 @@ export default async function WalletPage({
   }));
 
   const serializedOrders = pendingOrders.map(serializePayOrder);
-  const ledgerTotals = sumLedgerDays(ledgerDays);
-  const settlement = ledgerSettlement(totalBalance, ledgerTotals, expiredExpense);
+  const ledgerTotals = sumLedgerDays(ledgerOverview.days);
+  const settlement = ledgerSettlement(totalBalance, ledgerTotals, ledgerOverview.expired);
 
   const justReturned = params.paid === "1";
   const highlightOrderNo = params.orderNo ?? undefined;

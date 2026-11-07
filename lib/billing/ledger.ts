@@ -227,6 +227,55 @@ export function ledgerHasMovement(row: { income: number; expense: number }): boo
   return Math.abs(row.income) >= 0.005 || Math.abs(row.expense) >= 0.005;
 }
 
+interface LedgerCategoryDayRow {
+  date: string;
+  category: LedgerCategory;
+  income: number;
+  expense: number;
+  entries: number;
+}
+
+/**
+ * 天表的第一层：按「北京日 + 类别」汇总。
+ *
+ * 钱包要的过期作废合计与账本要的日表都从这一份结果折出来——同一段历史只扫一遍，
+ * 不再让日表查询和单独的过期合计各扫一次全量流水。
+ */
+async function listLedgerCategoryDays(
+  userId: string,
+  filter: LedgerFilter,
+): Promise<LedgerCategoryDayRow[]> {
+  const { sql, params } = ledgerUnion(userId, null);
+  const categoryFilter = filter === "all" ? "" : " WHERE category = ?";
+  const rows = await d1All<Record<string, unknown>>(
+    `SELECT ${DAY_OF("ts")} AS date, category, SUM(income) AS income, SUM(expense) AS expense, SUM(calls) AS entries
+     FROM (${sql})${categoryFilter} GROUP BY date, category`,
+    categoryFilter ? [...params, filter] : params,
+  );
+  return rows
+    .filter((row) => typeof row.date === "string")
+    .map((row) => ({
+      date: row.date as string,
+      category: String(row.category) as LedgerCategory,
+      income: num(row.income),
+      expense: num(row.expense),
+      entries: num(row.entries),
+    }));
+}
+
+/** 把「日 + 类别」折回一天一行；取整仍留给展示层，先按原值判断有没有真实进出。 */
+function foldLedgerDays(rows: LedgerCategoryDayRow[]): LedgerDayRow[] {
+  const days = new Map<string, LedgerDayRow>();
+  for (const row of rows) {
+    const day = days.get(row.date) ?? { date: row.date, income: 0, expense: 0, entries: 0 };
+    day.income += row.income;
+    day.expense += row.expense;
+    day.entries += row.entries;
+    days.set(row.date, day);
+  }
+  return [...days.values()].filter(ledgerHasMovement);
+}
+
 /**
  * 天表按北京日界分组，一天一行；`filter` 只统计某一类。
  * 返回全部有收支的日子（一天一行，量级是活跃天数），排序与分页在调用方 JS 里做。
@@ -238,23 +287,25 @@ export async function listLedgerDays(
   userId: string,
   filter: LedgerFilter = "all",
 ): Promise<LedgerDayRow[]> {
-  const { sql, params } = ledgerUnion(userId, null);
-  const categoryFilter = filter === "all" ? "" : " WHERE category = ?";
-  const rows = await d1All<Record<string, unknown>>(
-    `SELECT ${DAY_OF("ts")} AS date, SUM(income) AS income, SUM(expense) AS expense, SUM(calls) AS entries
-     FROM (${sql})${categoryFilter} GROUP BY date`,
-    categoryFilter ? [...params, filter] : params,
-  );
-  return rows
-    .filter((row) => typeof row.date === "string")
-    .map((row) => ({
-      date: row.date as string,
-      income: num(row.income),
-      expense: num(row.expense),
-      entries: num(row.entries),
-    }))
-    // 先按原值判有没有进出；取整留给展示层，天表与当天小计才不会一个显示、一个不显示。
-    .filter(ledgerHasMovement);
+  return foldLedgerDays(await listLedgerCategoryDays(userId, filter));
+}
+
+export interface LedgerOverview {
+  days: LedgerDayRow[];
+  /** 全量过期作废支出（正数）：钱包结算要把发放与作废两头一起剔除。 */
+  expired: number;
+}
+
+/**
+ * 钱包结算要的两样东西一次取齐：天表（算累计收支）与过期作废合计。
+ * 过期行已在同一份 UNION 里按类别分好组，不必再单独扫一遍 `topup`。
+ */
+export async function listLedgerOverview(userId: string): Promise<LedgerOverview> {
+  const rows = await listLedgerCategoryDays(userId, "all");
+  const expired = rows
+    .filter((row) => row.category === "expire")
+    .reduce((sum, row) => sum + row.expense, 0);
+  return { days: foldLedgerDays(rows), expired: Math.max(0, expired) };
 }
 
 /** 充值渠道的展示名；`mock` 来自易支付回调的 `type=mock`（测试网关）。 */
@@ -571,15 +622,6 @@ export interface LedgerSettlement {
   gap: number;
   /** 有效入账 − 支出是否正好等于余额；有历史差额时为 false。 */
   reconciled: boolean;
-}
-
-/** 全量过期作废支出（正数）：钱包结算要把发放与作废两头一起剔掉。 */
-export async function sumExpiredExpense(userId: string): Promise<number> {
-  const rows = await d1All<Record<string, unknown>>(
-    "SELECT SUM(-amount) AS expired FROM topup WHERE userId = ? AND type = ? AND amount < 0",
-    [userId, TOPUP_TYPE_EXPIRE],
-  );
-  return Math.max(0, num(rows[0]?.expired));
 }
 
 /**
