@@ -14,6 +14,7 @@ import { formatCredits } from "@/lib/billing/credits";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 import {
   ledgerNet,
+  ledgerSettlement,
   listLedgerDays,
   listRecentLedgerEntries,
   recentWindow,
@@ -127,6 +128,7 @@ export default async function WalletPage({
   const serializedOrders = pendingOrders.map(serializePayOrder);
   const recentTotals = sumLedgerDays(recentLedger);
   const ledgerTotals = sumLedgerDays(ledgerDays);
+  const settlement = ledgerSettlement(totalBalance, ledgerTotals);
 
   const justReturned = params.paid === "1";
   const highlightOrderNo = params.orderNo ?? undefined;
@@ -142,54 +144,76 @@ export default async function WalletPage({
         <PageSection title="余额与签到" subtitle="永久与临时余额构成，签到和兑换码发放的额度" className="border-t-0 pt-0">
           {/* 余额卡片 */}
           <Card className="border-primary/20 bg-primary/5">
-            <CardContent className="flex flex-wrap items-center justify-between gap-4 pt-5">
-              <div className="flex min-w-0 items-start gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
-                  <Wallet className="h-6 w-6" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm text-muted-foreground">总余额</p>
-                  <p className="text-2xl font-semibold tabular-nums">
-                    {formatCredits(totalBalance)} credits
-                  </p>
-                  <div className="mt-2 space-y-1 text-xs text-muted-foreground">
-                    <p className="flex flex-wrap items-center gap-x-2">
-                      <span className="font-medium text-foreground tabular-nums">
-                        永久 {formatCredits(displayBalance.displayPermanent)} cr
-                      </span>
-                      <span>充值到账与管理员调整，不过期</span>
+            <CardContent className="pt-5">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <Wallet className="h-6 w-6" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm text-muted-foreground">总余额</p>
+                    <p className="text-2xl font-semibold tabular-nums">
+                      {formatCredits(totalBalance)} credits
                     </p>
-                    {(temporaryTotal > 0 || permanentBalance < 0) && (
+                    <div className="mt-2 space-y-1 text-xs text-muted-foreground">
                       <p className="flex flex-wrap items-center gap-x-2">
-                        <span className="flex items-center gap-1 font-medium text-foreground tabular-nums">
-                          <Clock className="h-3 w-3" />
-                          临时 {formatCredits(displayBalance.displayTemporary)} cr
+                        <span className="font-medium text-foreground tabular-nums">
+                          永久 {formatCredits(displayBalance.displayPermanent)} cr
                         </span>
-                        <span>
-                          {earliestExpiry
-                            ? `签到、赠送与返利，最早 ${earliestExpiry} 到期`
-                            : "签到、赠送与返利，到期作废"}
-                        </span>
+                        <span>充值到账与管理员调整，不过期</span>
                       </p>
-                    )}
-                    {compensated > 0 && (
-                      <p className="text-amber-600 dark:text-amber-400">
-                        永久余额实为 −{formatCredits(Math.abs(permanentBalance))} cr，已用{" "}
-                        {formatCredits(compensated)} cr 临时余额抵扣；上方两项是抵扣后的可用额度
-                      </p>
-                    )}
-                    <p>总余额 = 永久 + 未过期临时；消费先扣临时、再扣永久</p>
+                      {(temporaryTotal > 0 || permanentBalance < 0) && (
+                        <p className="flex flex-wrap items-center gap-x-2">
+                          <span className="flex items-center gap-1 font-medium text-foreground tabular-nums">
+                            <Clock className="h-3 w-3" />
+                            临时 {formatCredits(displayBalance.displayTemporary)} cr
+                          </span>
+                          <span>
+                            {earliestExpiry
+                              ? `签到、赠送与返利，最早 ${earliestExpiry} 到期`
+                              : "签到、赠送与返利，到期作废"}
+                          </span>
+                        </p>
+                      )}
+                      {compensated > 0 && (
+                        <p className="text-amber-600 dark:text-amber-400">
+                          永久余额实为 −{formatCredits(Math.abs(permanentBalance))} cr，已用{" "}
+                          {formatCredits(compensated)} cr 临时余额抵扣；上方两项是抵扣后的可用额度
+                        </p>
+                      )}
+                      <p>总余额 = 永久 + 未过期临时；消费先扣临时、再扣永久</p>
+                    </div>
                   </div>
                 </div>
+                <RedeemCodeDialog
+                  canUseEpay={(userRows[0]?.role ?? 0) >= 10}
+                  linuxdoEnabled={linuxdoConfig.enabled}
+                  linuxdoMin={linuxdoConfig.minCny}
+                  linuxdoMax={linuxdoConfig.maxCny}
+                  bonusTiers={bonusConfig.enabled ? bonusConfig.tiers : []}
+                  bonusValidDays={bonusConfig.validDays}
+                />
               </div>
-              <RedeemCodeDialog
-                canUseEpay={(userRows[0]?.role ?? 0) >= 10}
-                linuxdoEnabled={linuxdoConfig.enabled}
-                linuxdoMin={linuxdoConfig.minCny}
-                linuxdoMax={linuxdoConfig.maxCny}
-                bonusTiers={bonusConfig.enabled ? bonusConfig.tiers : []}
-                bonusValidDays={bonusConfig.validDays}
-              />
+
+              <div className="mt-4 space-y-1 rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground tabular-nums">
+                <p className="flex flex-wrap items-center gap-x-3">
+                  <span className="font-medium text-foreground">当前余额结算</span>
+                  <span className="text-success">
+                    有效入账 +{formatCredits(settlement.effectiveIncome)}
+                  </span>
+                  <span className="text-destructive">
+                    累计支出 −{formatCredits(settlement.expense)}
+                  </span>
+                  <span className="font-medium text-foreground">
+                    = {formatCredits(settlement.balance)} cr
+                  </span>
+                </p>
+                <p>
+                  {settlement.expired >= 0.01
+                    ? "已剔除过期作废的临时余额（发放记了收入、到期没有流水）；完整流水见个人账本。"
+                    : "按账本流水结算，与当前余额一致；完整流水见个人账本。"}
+                </p>
+              </div>
             </CardContent>
           </Card>
 
@@ -204,8 +228,6 @@ export default async function WalletPage({
               totals={recentTotals}
               net={ledgerNet(recentTotals)}
               limit={RECENT_LEDGER_LIMIT}
-              lifetime={ledgerTotals}
-              balance={totalBalance}
             />
 
             {/* 未到账订单（回跳确认 + 轮询催单） */}

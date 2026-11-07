@@ -268,7 +268,7 @@ export function sumLedgerDays(rows: Array<{ income: number; expense: number }>):
  * 1. **到期作废的临时余额**：发放时记了收入，用完/过期后 `temporary_balance` 的行会被删掉
  *    （每天 02:00 UTC 的 cleanup cron），这笔支出没有任何地方留底，只能体现在差额里。
  * 2. 早期版本的调用没计量 `creditsUsed`。
- * 3. 管理员直接改余额（下调不写 `topup`）。
+ * 3. 历史数据里管理员直接改过余额（2026-11-07 前下调不写 `topup`；之后正负都记 `type=2`）。
  * 所以账本页如实把它单列一行，而不是假装合计等于余额。
  */
 export function ledgerGap(actualBalance: number, totals: LedgerTotals): number {
@@ -277,6 +277,35 @@ export function ledgerGap(actualBalance: number, totals: LedgerTotals): number {
 
 export function ledgerNet(row: { income: number; expense: number }): number {
   return round2(row.income - row.expense);
+}
+
+export interface LedgerSettlement {
+  /** 累计收入里剔除过期作废部分后的口径：只剩真正留下或被花掉的入账。 */
+  effectiveIncome: number;
+  expense: number;
+  expired: number;
+  balance: number;
+}
+
+/**
+ * 钱包用的「当前结算」口径：过期作废的临时余额不再出现在收入里。
+ *
+ * 过期部分由差额反推（`balance - (income - expense)`），而不是逐行判定：
+ * 临时余额过期后行被 cron 删掉，逐行已无法区分「花掉」与「作废」。
+ * 反推的前提是差额不为正；正差额意味着有账外的增加，此时不生成过期项。
+ */
+export function ledgerSettlement(
+  actualBalance: number,
+  totals: LedgerTotals,
+): LedgerSettlement {
+  const gap = ledgerGap(actualBalance, totals);
+  const expired = gap < 0 ? round2(-gap) : 0;
+  return {
+    effectiveIncome: round2(totals.income - expired),
+    expense: totals.expense,
+    expired,
+    balance: actualBalance,
+  };
 }
 
 /** 类型行的界面名：发放/活动按 `topup.type` 取名，API 消费按类别取名。 */

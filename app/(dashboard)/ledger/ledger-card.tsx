@@ -126,7 +126,7 @@ export function LedgerCard({ initial }: { initial: LedgerOverview }) {
           <p className="text-xs text-muted-foreground">
             账目净收支与当前余额相差 {signed(Math.abs(gap), gap > 0 ? "+" : "−")} cr：
             到期作废的临时余额（发放记了收入，到期那笔支出由每日清理任务删行、没有留底）、
-            早期未计量的调用、管理员直接调整过的余额都不进账本，因此合计不等于余额。
+            早期未计量的调用都不进账本，因此合计不等于余额。
           </p>
         ) : null}
 

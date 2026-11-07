@@ -266,3 +266,35 @@ test("筛选项与类别登记一致，过期作废不再出现", () => {
     assert.ok(id in ledger.LEDGER_CATEGORY_TYPES, `${id} 没有登记归属类型`);
   }
 });
+
+test("钱包结算剔除过期作废后，有效入账 − 支出 正好等于余额", () => {
+  const { ledger } = harness();
+
+  // 线上管理员账号的真实口径：10 亿兑换码过期作废后，剩 5,286,519.43 入账。
+  const expiredCase = ledger.ledgerSettlement(56_385.22, {
+    income: 1_005_347_280.33,
+    expense: 5_230_134.21,
+  });
+  assert.deepEqual(local(expiredCase), {
+    effectiveIncome: 5_286_519.43,
+    expense: 5_230_134.21,
+    expired: 1_000_060_760.9,
+    balance: 56_385.22,
+  });
+  assert.equal(
+    Math.round((expiredCase.effectiveIncome - expiredCase.expense) * 100) / 100,
+    expiredCase.balance,
+  );
+
+  // 没有过期时口径不变。
+  assert.deepEqual(
+    local(ledger.ledgerSettlement(100, { income: 150, expense: 50 })),
+    { effectiveIncome: 150, expense: 50, expired: 0, balance: 100 },
+  );
+
+  // 正差额是账外增加，不能反过来膨胀「有效入账」。
+  assert.deepEqual(
+    local(ledger.ledgerSettlement(120, { income: 150, expense: 50 })),
+    { effectiveIncome: 150, expense: 50, expired: 0, balance: 120 },
+  );
+});

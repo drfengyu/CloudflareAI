@@ -60,15 +60,15 @@ export async function adjustUserBalance(formData: {
     .set({ balanceCredits: newBalance })
     .where(eq(users.id, formData.userId));
 
-  // 记录充值流水（只记录正数）
-  if (formData.amount > 0) {
-    await db.insert(topups).values({
-      userId: formData.userId,
-      amount: formData.amount,
-      type: 2, // 管理员充值
-      description: formData.description || "管理员手动充值",
-    });
-  }
+  // 正负都记流水：扣减不落账会让账本合计与余额对不上
+  await db.insert(topups).values({
+    userId: formData.userId,
+    amount: formData.amount,
+    type: 2, // 管理员调整
+    description:
+      formData.description ||
+      (formData.amount > 0 ? "管理员手动充值" : "管理员手动扣减"),
+  });
 
   revalidatePath("/admin/users");
   return { success: true, newBalance };
