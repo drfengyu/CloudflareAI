@@ -159,6 +159,10 @@
 - `npm run typecheck`、`npm run build` 通过；`npx tsx --test tests/*.test.ts` 共 81 项全部通过。
 - 新增 `tests/activity-currency.test.ts`：消费返利档位清洗与随机区间、活动券命名稳定性、礼包比例、每日 100 / 每周 300 活跃度、周一起算日期与里程碑奖励边界。
 - 生产迁移 023 只新增 `activity_coupon` / `activity_task_claim` 两张空表和 `reward_claim` 两个带默认值的列，不回填、不改历史；回滚为 `DROP TABLE` 两张新表并保留新增列（旧代码可继续运行）。
+- 迁移 023 于 2026-11-08 在线上 D1（`cf-ai-console`）执行完成。执行前线上是**半应用状态**：`rewardKind` 已加、`rewardLabel` 与两张新表都缺，
+  所以按文件逐条补跑并跳过已生效的首条 `ALTER`（整文件重跑会在第一条 `duplicate column` 处中止）。执行后核对：两张表的 DDL 与
+  `migrations/023_activity_currency.sql` 逐字一致，索引 `uq_activity_coupon` / `idx_activity_coupon_user` / `uq_activity_task_claim` /
+  `idx_activity_task_claim_period` 全部存在，`reward_claim` 列序 `…, rewardKind, rewardLabel` 与 `lib/db/schema.ts` 的定义对齐。
 
 ## [0.31.0] - 2026-11-07
 
