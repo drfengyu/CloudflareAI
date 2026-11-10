@@ -44,6 +44,16 @@ function exact(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
+/** 券抵玩法费用按 cr 1:1，顶栏只按「张」展示，不出现券面金额。 */
+function ticketCount(coupon: ActivityCouponView): number {
+  const unit = coupon.unitCredits > 0 ? coupon.unitCredits : 1;
+  return Math.round((coupon.credits / unit) * 100) / 100;
+}
+
+function ticketsText(value: number): string {
+  return `${Math.round(value * 100) / 100} 张`;
+}
+
 function compensate(permanent: number, temporary: number) {
   if (permanent >= 0) return { permanent, temporary };
   const deficit = Math.abs(permanent);
@@ -66,17 +76,15 @@ function CouponChip({ coupon }: { coupon: ActivityCouponView }) {
   return (
     <Link
       href={coupon.href}
-      title={`${coupon.couponName}（${coupon.label}）余额 ${exact(coupon.credits)} cr 券面，1 张 = ${exact(
-        coupon.unitCredits,
-      )} cr${active ? "，点击兑换或查看礼包" : "，活动未开启"}`}
+      title={`${coupon.couponName}（${coupon.label}）余额 ${ticketsText(ticketCount(coupon))}${
+        active ? "，点击兑换或查看礼包" : "，活动未开启"
+      }`}
       className={`flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-medium tabular-nums transition-colors hover:bg-secondary ${
         active ? "text-foreground" : "text-muted-foreground/60"
       }`}
     >
       <Icon className={`h-3.5 w-3.5 shrink-0 ${KIND_COLOR[coupon.kind]}`} />
-      <span>
-        {formatCredits(coupon.credits)} cr
-      </span>
+      <span>{ticketsText(ticketCount(coupon))}</span>
       {active ? <PlusBadge /> : null}
     </Link>
   );
@@ -84,7 +92,7 @@ function CouponChip({ coupon }: { coupon: ActivityCouponView }) {
 
 export function CurrencyBar({ snapshot }: { snapshot: CurrencySnapshot }) {
   const display = compensate(snapshot.permanent, snapshot.temporary);
-  const couponTotal = snapshot.coupons.reduce((sum, coupon) => sum + coupon.credits, 0);
+  const couponTickets = snapshot.coupons.reduce((sum, coupon) => sum + ticketCount(coupon), 0);
 
   return (
     <div className="flex items-center gap-0.5">
@@ -111,14 +119,14 @@ export function CurrencyBar({ snapshot }: { snapshot: CurrencySnapshot }) {
         ))}
       </div>
 
-      {/* 窄屏放不下三张券，收进一个下拉；余额合计仍直接显示。 */}
+      {/* 窄屏放不下三张券，收进一个下拉；张数合计仍直接显示。 */}
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label="活动券余额"
           className="flex items-center gap-0.5 whitespace-nowrap rounded-md px-0.5 py-0.5 text-[10px] font-medium tabular-nums text-foreground transition-colors hover:bg-secondary md:hidden md:gap-1 md:px-1 md:text-[11px]"
         >
           <Ticket className="h-3 w-3 shrink-0 text-primary md:h-3.5 md:w-3.5" />
-          <span>{formatCredits(couponTotal)} cr</span>
+          <span>{ticketsText(couponTickets)}</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel className="normal-case">活动券</DropdownMenuLabel>
@@ -136,7 +144,7 @@ export function CurrencyBar({ snapshot }: { snapshot: CurrencySnapshot }) {
                     </span>
                   </span>
                   <span className="shrink-0 text-sm tabular-nums">
-                    {exact(coupon.credits)} cr
+                    {ticketsText(ticketCount(coupon))}
                   </span>
                 </Link>
               </DropdownMenuItem>

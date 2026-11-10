@@ -534,8 +534,11 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.36.0（2026-11-10，礼包自定义档位 + 每档赠券 / 赠 tcr）
+**当前版本**：v0.36.1（2026-11-10，顶栏活动券改按张数显示）
 **下一版本**：v0.37.0（尚未选型）
+
+- v0.36.1 顶栏货币条的活动券改显示张数（`credits / unitCredits` 折算），窄屏下拉与 tooltip 同步，
+  券面 cr 不再出现在顶栏；cr / tcr 余额仍按完整金额 + 单位显示。
 
 - v0.36.0 珍宝礼包自定义档位：`lib/activity/pack-config.ts` 的配置结构升级为 `{ packs: [...] }`
   （1–6 档，每档 `key / name / priceCredits / ratioPercent / dailyLimit / totalLimit / bonusTickets /
