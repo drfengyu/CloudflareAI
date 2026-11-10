@@ -17,6 +17,12 @@ import { flipActivityKey, flipActivityWindow } from "@/lib/flip/config";
 import { getFlipConfig } from "@/lib/flip/settings";
 import { raidenActivityKey, raidenActivityWindow } from "@/lib/raiden/config";
 import { getRaidenConfig } from "@/lib/raiden/settings";
+import {
+  COUPON_PACK_META,
+  getCouponPackConfig,
+  type CouponPackConfig,
+  type CouponPackKey,
+} from "./pack-config";
 
 /**
  * 活动券：一种玩法一种券，按活动轮次隔离。
@@ -69,27 +75,40 @@ export function couponNameFor(kind: ActivityKind, activityKey: string | null): s
 }
 
 export interface CouponPack {
-  key: "small" | "medium" | "large";
+  key: CouponPackKey;
   name: string;
   priceCredits: number;
-  /** 券面 / 实付，200% = 2 倍。 */
-  ratio: number;
+  /** 倍率百分比：200 = 200%。 */
+  ratioPercent: number;
   /** 每北京自然日限购份数；null = 不限。 */
   dailyLimit: number | null;
   /** 累计限购份数；null = 不限。 */
   totalLimit: number | null;
 }
 
-/** 三档珍宝礼包；比例按需求固定为 200% / 500% / 1000%，倍率越高限购越紧。 */
-export const COUPON_PACKS: CouponPack[] = [
-  { key: "small", name: "小份珍宝", priceCredits: 10, ratio: 2, dailyLimit: null, totalLimit: null },
-  { key: "medium", name: "中份珍宝", priceCredits: 50, ratio: 5, dailyLimit: 2, totalLimit: 20 },
-  { key: "large", name: "大份珍宝", priceCredits: 100, ratio: 10, dailyLimit: 1, totalLimit: 10 },
-];
+const PACK_KEYS: CouponPackKey[] = ["small", "medium", "large"];
+
+/** 礼包身份（名称 / 实付价）固定，倍率与限购读管理端配置。 */
+export function buildCouponPacks(config: CouponPackConfig): CouponPack[] {
+  return PACK_KEYS.map((key) => {
+    const meta = COUPON_PACK_META[key];
+    const setting = config[key];
+    return {
+      key,
+      name: meta.name,
+      priceCredits: meta.priceCredits,
+      ratioPercent: setting.ratioPercent,
+      dailyLimit: setting.dailyLimit > 0 ? setting.dailyLimit : null,
+      totalLimit: setting.totalLimit > 0 ? setting.totalLimit : null,
+    };
+  });
+}
 
 export interface CouponPackView extends CouponPack {
   boughtToday: number;
   boughtTotal: number;
+  /** 本次购买到账的券面 cr。 */
+  couponCredits: number;
 }
 
 interface PackUsage {
@@ -116,11 +135,12 @@ async function readPackUsage(userId: string): Promise<Map<string, PackUsage>> {
   );
 }
 
-function packViews(usage: Map<string, PackUsage>): CouponPackView[] {
-  return COUPON_PACKS.map((pack) => ({
+function packViews(config: CouponPackConfig, usage: Map<string, PackUsage>): CouponPackView[] {
+  return buildCouponPacks(config).map((pack) => ({
     ...pack,
     boughtToday: usage.get(pack.key)?.today ?? 0,
     boughtTotal: usage.get(pack.key)?.total ?? 0,
+    couponCredits: round2((pack.priceCredits * pack.ratioPercent) / 100),
   }));
 }
 
@@ -215,17 +235,18 @@ async function readCouponRows(
  */
 export async function listActivityCoupons(userId: string): Promise<ActivityCouponView[]> {
   const activities = await resolveActivities();
-  const [balances, usage] = await Promise.all([
+  const [balances, usage, packConfig] = await Promise.all([
     readCouponRows(
       userId,
       activities.map((item) => ({ kind: item.kind, activityKey: item.activityKey })),
     ),
     readPackUsage(userId),
+    getCouponPackConfig(),
   ]);
   return activities.map((item) => ({
     ...item,
     credits: item.activityKey ? round2(balances.get(`${item.kind}|${item.activityKey}`) ?? 0) : 0,
-    packs: packViews(usage),
+    packs: packViews(packConfig, usage),
   }));
 }
 
@@ -258,18 +279,19 @@ export async function getActivityCouponView(
   kind: ActivityKind,
 ): Promise<ActivityCouponView> {
   const activity = await resolveActivity(kind);
-  const [balances, usage] = await Promise.all([
+  const [balances, usage, packConfig] = await Promise.all([
     activity.activityKey
       ? readCouponRows(userId, [{ kind, activityKey: activity.activityKey }])
       : Promise.resolve(new Map<string, number>()),
     readPackUsage(userId),
+    getCouponPackConfig(),
   ]);
   return {
     ...activity,
     credits: activity.activityKey
       ? round2(balances.get(`${kind}|${activity.activityKey}`) ?? 0)
       : 0,
-    packs: packViews(usage),
+    packs: packViews(packConfig, usage),
   };
 }
 
@@ -345,13 +367,14 @@ export async function exchangeCoupon(
   return { credits: amount, tickets, couponName: activity.couponName };
 }
 
-/** 珍宝礼包：花 cr 买券面，200% / 500% / 1000% 三档；倍率越高限购越紧。 */
+/** 珍宝礼包：花 cr 买券面，倍率与限购读后台配置（0 = 不限）。 */
 export async function buyCouponPack(
   userId: string,
   kind: ActivityKind,
   packKey: string,
 ): Promise<{ credits: number; price: number; couponName: string }> {
-  const pack = COUPON_PACKS.find((item) => item.key === packKey);
+  const packConfig = await getCouponPackConfig();
+  const pack = buildCouponPacks(packConfig).find((item) => item.key === packKey);
   if (!pack) throw new Error("礼包不存在");
   const activity = await resolveActivity(kind);
   const activityKey = assertActive(activity);
@@ -368,7 +391,7 @@ export async function buyCouponPack(
   const spend = await spendCredits(userId, pack.priceCredits);
   if (!spend.ok) throw new Error(`${spend.reason}：礼包需要 ${pack.priceCredits} cr`);
 
-  const credits = round2(pack.priceCredits * pack.ratio);
+  const credits = round2((pack.priceCredits * pack.ratioPercent) / 100);
   const purchaseId = crypto.randomUUID();
   const now = new Date();
   let recorded = false;

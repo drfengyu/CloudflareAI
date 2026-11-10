@@ -26,6 +26,12 @@ import {
   FLIP_MAX_REWARD,
   sanitizeFlipConfig,
 } from "@/lib/flip/config";
+import {
+  COUPON_PACK_CONFIG_KEY,
+  COUPON_PACK_META,
+  type CouponPackConfig,
+  type CouponPackKey,
+} from "@/lib/activity/pack-config";
 import { setSetting } from "@/lib/settings";
 import { saveSmtpSettings, type SmtpSettings } from "@/lib/email";
 import { sanitizeBonusTiers } from "@/lib/payment/bonus";
@@ -971,6 +977,60 @@ export async function updateFlipSettings(formData: {
 
   revalidatePath("/admin/settings");
   revalidatePath("/flip");
+
+  return { success: true };
+}
+
+/** 珍宝礼包配置的保存入口：三个活动共用一份，0 表示不限购。 */
+export async function updateCouponPackSettings(formData: {
+  packs: {
+    key: string;
+    ratioPercent: number;
+    dailyLimit: number;
+    totalLimit: number;
+  }[];
+}) {
+  const currentUserId = await requireUser();
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const byKey = new Map((formData.packs ?? []).map((pack) => [pack?.key, pack]));
+  const config = {} as CouponPackConfig;
+  for (const key of Object.keys(COUPON_PACK_META) as CouponPackKey[]) {
+    const name = COUPON_PACK_META[key].name;
+    const pack = byKey.get(key);
+    if (!pack) throw new Error(`缺少${name}的配置`);
+
+    const ratioPercent = Math.round(
+      requireNumber(pack.ratioPercent, `${name}倍率（%）`, 0.01, 100_000) * 100,
+    ) / 100;
+    const dailyLimit = Math.trunc(
+      requireNumber(pack.dailyLimit, `${name}每日限购`, 0, 1_000_000),
+    );
+    const totalLimit = Math.trunc(
+      requireNumber(pack.totalLimit, `${name}累计限购`, 0, 1_000_000),
+    );
+    if (dailyLimit > 0 && totalLimit > 0 && dailyLimit > totalLimit) {
+      throw new Error(`${name}每日限购不能大于累计限购`);
+    }
+    config[key] = { ratioPercent, dailyLimit, totalLimit };
+  }
+
+  await upsertOption(COUPON_PACK_CONFIG_KEY, JSON.stringify(config));
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/cashback");
+  revalidatePath("/wallet");
+  revalidatePath("/lottery");
+  revalidatePath("/flip");
+  revalidatePath("/raiden");
 
   return { success: true };
 }

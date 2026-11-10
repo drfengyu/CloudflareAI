@@ -10,9 +10,11 @@ import { DashboardInfoForm } from "./dashboard-info-form";
 import { LotteryForm } from "./lottery-form";
 import { RaidenForm } from "./raiden-form";
 import { FlipForm } from "./flip-form";
+import { CouponPackForm } from "./pack-form";
 import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
 import { sanitizeRaidenConfig } from "@/lib/raiden/config";
 import { sanitizeFlipConfig } from "@/lib/flip/config";
+import { sanitizeCouponPackConfig } from "@/lib/activity/pack-config";
 import { sanitizeCashbackTiers } from "@/lib/cashback/config";
 import { RECHARGE_ACTIVITY_DEFAULT_START, sanitizeBonusTiers } from "@/lib/payment/bonus";
 import type { AnnouncementInput, FaqItem } from "@/lib/settings/dashboard-info";
@@ -72,6 +74,7 @@ export default async function AdminSettingsPage() {
   const lotteryConfig = parseConfig(settings.lottery_config, sanitizeLotteryConfig);
   const raidenConfig = parseConfig(settings.raiden_config, sanitizeRaidenConfig);
   const flipConfig = parseConfig(settings.flip_config, sanitizeFlipConfig);
+  const packConfig = parseConfig(settings.coupon_pack_config, sanitizeCouponPackConfig);
 
   // 充值赠送与消费返利档位在库里是 JSON，交给表单前先还原成结构化值：
   // 表单按行显示数字，管理员不需要也不应该看到 JSON 文本。
@@ -303,6 +306,15 @@ export default async function AdminSettingsPage() {
           </CardHeader>
           <CardContent>
             <FlipForm initialConfig={flipConfig} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">珍宝礼包（活动券通用）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CouponPackForm initialConfig={packConfig} />
           </CardContent>
         </Card>
       </PageBody>

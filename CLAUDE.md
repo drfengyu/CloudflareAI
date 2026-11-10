@@ -534,8 +534,14 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.33.0（2026-11-10，货币单位 cr / tcr + 活动仅券参与 + 券单价设置 + 礼包限购）
-**下一版本**：v0.34.0（尚未选型）
+**当前版本**：v0.34.0（2026-11-10，珍宝礼包倍率与限购后台可设）
+**下一版本**：v0.35.0（尚未选型）
+
+- v0.34.0 珍宝礼包配置化：`lib/activity/pack-config.ts` 读写 `option.coupon_pack_config`，
+  三档分别存 `ratioPercent`（%）、`dailyLimit`、`totalLimit`（0 = 不限）；`buildCouponPacks`
+  把配置展开成礼包视图，购买券面按配置实时计算，后台「珍宝礼包（活动券通用）」卡片用
+  `pack-form.tsx` 三行数字表单编辑并实时预览到账 cr。名称与实付价保持固定，避免改价影响历史记录；
+  三个活动共用同一份限购额度，仍依赖迁移 025 的 `coupon_pack_purchase`。
 
 - v0.33.0 货币单位：永久货币 `cr`、临时货币 `tcr`，`lib/billing/units.ts` 提供
   `formatAmount / formatPermanent / formatTemporary / formatCombined`，`formatCredits` 委托 `formatAmount`

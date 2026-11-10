@@ -17,12 +17,6 @@ const STATUS_TEXT: Record<ActivityCouponView["status"], string> = {
   ended: "已结束",
 };
 
-const PACK_RATIO_LABEL: Record<string, string> = {
-  small: "200%",
-  medium: "500%",
-  large: "1000%",
-};
-
 /**
  * 活动券的兑换与珍宝礼包：活动页与钱包充值位共用。
  * 兑换按活动配置的「1 张 = X cr」整张购买，券只在当期活动内有效；
@@ -199,7 +193,7 @@ function CouponShopItem({
                     )}
                   >
                     {formatCredits(pack.priceCredits)} cr
-                    <span className="ml-1 text-success">{PACK_RATIO_LABEL[pack.key]}</span>
+                    <span className="ml-1 text-success">{pack.ratioPercent}%</span>
                   </span>
                   <span
                     className={cn(
@@ -207,7 +201,7 @@ function CouponShopItem({
                       dark ? "text-cyan-300/80" : "text-primary",
                     )}
                   >
-                    得 {formatCredits(pack.priceCredits * pack.ratio)} cr
+                    得 {formatCredits(pack.couponCredits)} cr
                   </span>
                   <span
                     className={cn(

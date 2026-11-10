@@ -6,7 +6,11 @@ import {
   rollCashbackReward,
   sanitizeCashbackTiers,
 } from "../lib/cashback/config";
-import { ACTIVITY_KINDS, COUPON_PACKS, couponNameFor } from "../lib/activity/coupons";
+import { ACTIVITY_KINDS, buildCouponPacks, couponNameFor } from "../lib/activity/coupons";
+import {
+  DEFAULT_COUPON_PACK_CONFIG,
+  sanitizeCouponPackConfig,
+} from "../lib/activity/pack-config";
 import {
   DEFAULT_LOTTERY_CONFIG,
   sanitizeLotteryConfig,
@@ -111,15 +115,39 @@ test("活动券：同一轮次名字稳定，三种活动各自有券", () => {
   );
 });
 
-test("珍宝礼包：三档比例固定为 200% / 500% / 1000%", () => {
+test("珍宝礼包：默认 200% / 500% / 1000%，倍率与限购可配置、0 = 不限", () => {
   assert.deepEqual(
-    COUPON_PACKS.map((pack) => [pack.key, pack.priceCredits, pack.ratio]),
+    buildCouponPacks(DEFAULT_COUPON_PACK_CONFIG).map((pack) => [
+      pack.key,
+      pack.priceCredits,
+      pack.ratioPercent,
+      pack.dailyLimit,
+      pack.totalLimit,
+    ]),
     [
-      ["small", 10, 2],
-      ["medium", 50, 5],
-      ["large", 100, 10],
+      ["small", 10, 200, null, null],
+      ["medium", 50, 500, 2, 20],
+      ["large", 100, 1000, 1, 10],
     ],
   );
+
+  const custom = sanitizeCouponPackConfig({
+    medium: { ratioPercent: 650.5, dailyLimit: 3, totalLimit: 0 },
+  });
+  assert.deepEqual(custom.medium, { ratioPercent: 650.5, dailyLimit: 3, totalLimit: 0 });
+  assert.deepEqual(custom.small, DEFAULT_COUPON_PACK_CONFIG.small);
+  assert.equal(
+    sanitizeCouponPackConfig({ large: { ratioPercent: 9e9 } }).large.ratioPercent,
+    100_000,
+  );
+  assert.equal(
+    sanitizeCouponPackConfig({ large: { ratioPercent: -5 } }).large.ratioPercent,
+    1000,
+  );
+
+  const packs = buildCouponPacks(custom);
+  assert.equal(packs[1].dailyLimit, 3);
+  assert.equal(packs[1].totalLimit, null);
 });
 
 test("活动券单价：三种活动默认 1 cr / 张，脏值回落、超限封顶", () => {
