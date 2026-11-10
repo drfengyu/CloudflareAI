@@ -18,7 +18,7 @@ export function GenerateCodesDialog() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [count, setCount] = useState(10);
-  const [quota, setQuota] = useState(10); // 默认 10 credits
+  const [quota, setQuota] = useState(10); // 默认 10 tcr
   const [maxUses, setMaxUses] = useState(1);
   const [expiresInDays, setExpiresInDays] = useState<number | null>(30);
   const [balanceValidDays, setBalanceValidDays] = useState<number | null>(365);
@@ -75,7 +75,7 @@ export function GenerateCodesDialog() {
 
           <div>
             <label className="block text-sm font-medium mb-1">
-              每个额度（credits）
+              每个额度（tcr）
             </label>
             <input
               type="number"
@@ -87,7 +87,7 @@ export function GenerateCodesDialog() {
               required
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              单码额度上限 {MAX_REDEMPTION_QUOTA.toLocaleString()} cr
+              单码额度上限 {MAX_REDEMPTION_QUOTA.toLocaleString()} tcr
             </p>
           </div>
 

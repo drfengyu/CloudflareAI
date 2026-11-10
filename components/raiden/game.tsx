@@ -85,7 +85,7 @@ const REASON_LABEL: Record<FinalState["reason"], { title: string; hint: string }
 export function RaidenGame({
   config,
   status,
-  balance,
+  couponCredits,
   runsLeft,
   summary,
   leaderboard,
@@ -94,7 +94,8 @@ export function RaidenGame({
 }: {
   config: RaidenConfig;
   status: RaidenActivityStatus;
-  balance: number;
+  /** 当期活动券余额（cr 券面），装备与复活只扣券。 */
+  couponCredits: number;
   runsLeft: number;
   summary: MyRaidenSummary;
   leaderboard: LeaderboardRow[];
@@ -426,7 +427,7 @@ export function RaidenGame({
                 </p>
                 <p className="mt-2 text-[11px] text-white/40">
                   本局装备{" "}
-                  {run.cost > 0 ? `已付 ${formatCredits(run.cost)} cr` : "标准配备 · 0 cr"} · 复活{" "}
+                  {run.cost > 0 ? `已付 ${formatCredits(run.cost)} cr 券面` : "标准配备 · 0 cr"} · 复活{" "}
                   {revivesUsed}/{config.maxRevives} 次
                 </p>
                 <div className="mt-6 space-y-2">
@@ -498,13 +499,13 @@ export function RaidenGame({
                       <div className="flex items-center justify-center gap-2">
                         <Coins className="h-4 w-4 text-amber-300" />
                         <span className="font-mono text-xl font-bold text-amber-200">
-                          +{formatCredits(clear.settlement.reward)} cr
+                          +{formatCredits(clear.settlement.reward)} tcr
                         </span>
                         {clear.settlement.firstClear ? <Badge tone="warning">首通</Badge> : null}
                       </div>
                       {clear.settlement.loot > 0 ? (
                         <p className="mt-1 text-center text-[10px] text-amber-300/80">
-                          其中精英 / Boss 战利品 +{formatCredits(clear.settlement.loot)} cr
+                          其中精英 / Boss 战利品 +{formatCredits(clear.settlement.loot)} tcr
                         </p>
                       ) : null}
                       <p className="mt-1 text-center text-[11px] text-white/55">
@@ -584,7 +585,7 @@ export function RaidenGame({
                   {revivesLeft > 0 ? (
                     <>
                       <p className="text-sm font-medium text-cyan-100">
-                        原地复活 · {formatCredits(config.revivePriceCredits)} cr
+                        原地复活 · {formatCredits(config.revivePriceCredits)} cr 券面
                       </p>
                       <p className="mt-1 text-[11px] leading-relaxed text-white/55">
                         复活后以 1 条命继续本关，获得 3 秒无敌并清除周围弹幕。本局还可复活{" "}
@@ -612,7 +613,7 @@ export function RaidenGame({
                       <Heart className="h-4 w-4" />
                     )}
                     {revivesLeft > 0
-                      ? `消耗 ${formatCredits(config.revivePriceCredits)} cr 复活`
+                      ? `消耗 ${formatCredits(config.revivePriceCredits)} cr 券面复活`
                       : "无法继续复活"}
                   </Button>
                   <Button
@@ -642,8 +643,7 @@ export function RaidenGame({
           <StartScreen
             config={config}
             status={status}
-            balance={balance}
-            couponCredits={coupon.credits}
+            couponCredits={couponCredits}
             runsLeft={runsLeft}
             loadout={loadout}
             starting={starting}
@@ -657,7 +657,6 @@ export function RaidenGame({
         <ConsolePanel
           config={config}
           status={status}
-          balance={balance}
           coupon={coupon}
           runsLeft={runsLeft}
           summary={summary}
@@ -725,7 +724,7 @@ function HudBar({
             {scoreText(hud.score)}
           </p>
           <span className="font-mono text-[10px] text-amber-300/90">
-            +{formatCredits(rewards)} cr
+            +{formatCredits(rewards)} tcr
           </span>
         </div>
         <div className="mt-1 flex items-center gap-2 text-[10px] tracking-wider text-cyan-200/80">
@@ -851,7 +850,7 @@ function ResultScreen({
         <div className="grid w-full max-w-[300px] grid-cols-2 gap-2 text-left">
           <ResultStat label="总得分" value={scoreText(final.score)} mono />
           <ResultStat label="抵达关卡" value={`STAGE ${Math.max(1, final.stage)}`} />
-          <ResultStat label="本次奖励" value={`${formatCredits(final.rewards)} cr`} />
+          <ResultStat label="本次奖励" value={`${formatCredits(final.rewards)} tcr`} />
           <ResultStat label="首通关卡" value={`${final.firstClears} 关`} />
         </div>
 

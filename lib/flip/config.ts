@@ -30,6 +30,8 @@ export interface FlipConfig {
   endAt: string;
   /** 开一局的价格（cr）。 */
   roundPriceCredits: number;
+  /** 1 张活动券兑换所需的 cr（券面单价）；兑换与展示都按它折算张数。 */
+  couponUnitCredits: number;
   /**
    * 牌桌上 12 张牌的奖项（cr），长度恒为 `FLIP_CARD_COUNT`，0 = 空牌。
    * 顺序就是配置里的第几张格子的金额；开局时服务端洗牌决定它落在哪个位置。
@@ -52,6 +54,7 @@ export const DEFAULT_FLIP_CONFIG: FlipConfig = {
   startAt: "",
   endAt: "",
   roundPriceCredits: 100,
+  couponUnitCredits: 1,
   cardRewards: [300, 180, 120, 60, 40, 20, 0, 0, 0, 0, 0, 0],
   rewardValidDays: 7,
   dailyRounds: 20,
@@ -91,6 +94,10 @@ export function sanitizeFlipConfig(raw: unknown): FlipConfig {
     startAt: typeof it.startAt === "string" ? it.startAt.trim() : "",
     endAt: typeof it.endAt === "string" ? it.endAt.trim() : "",
     roundPriceCredits: round2(positiveNumber(it.roundPriceCredits, d.roundPriceCredits)),
+    couponUnitCredits: Math.min(
+      1_000_000,
+      round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
+    ),
     cardRewards: sanitizeCardRewards(it.cardRewards),
     rewardValidDays: boundedInteger(it.rewardValidDays, d.rewardValidDays, 1, 3650),
     dailyRounds: boundedInteger(it.dailyRounds, d.dailyRounds, 1, 1000),
@@ -157,7 +164,7 @@ export function flipExpectation(config: FlipConfig): FlipExpectation {
 
 export function formatFlipReward(value: number): string {
   const n = round2(value);
-  return n > 0 ? `+${n} cr` : "空牌";
+  return n > 0 ? `+${n} tcr` : "空牌";
 }
 
 /**

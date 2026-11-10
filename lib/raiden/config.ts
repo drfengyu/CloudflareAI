@@ -93,6 +93,8 @@ export interface RaidenConfig {
   repeatDailyCap: number;
   /** 阵亡后原地复活的价格（cr）。 */
   revivePriceCredits: number;
+  /** 1 张活动券兑换所需的 cr（券面单价）；兑换与展示都按它折算张数。 */
+  couponUnitCredits: number;
   /** 单局最多付费复活次数。 */
   maxRevives: number;
   /** 服务端结算时，单关最短用时（秒）；防瞬通作弊，正常关卡约 70~90 秒。 */
@@ -116,6 +118,7 @@ export const DEFAULT_RAIDEN_CONFIG: RaidenConfig = {
   rewardValidDays: 30,
   repeatDailyCap: 30,
   revivePriceCredits: 30,
+  couponUnitCredits: 1,
   maxRevives: 3,
   minStageSeconds: 30,
   maxStageSeconds: 1800,
@@ -311,6 +314,10 @@ export function sanitizeRaidenConfig(raw: unknown): RaidenConfig {
     rewardValidDays: boundedInteger(it.rewardValidDays, d.rewardValidDays, 1, 3650),
     repeatDailyCap: round2(Math.max(0, Number(it.repeatDailyCap ?? d.repeatDailyCap) || 0)),
     revivePriceCredits: round2(positiveNumber(it.revivePriceCredits, d.revivePriceCredits)),
+    couponUnitCredits: Math.min(
+      1_000_000,
+      round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
+    ),
     maxRevives: boundedInteger(it.maxRevives, d.maxRevives, 0, 10),
     minStageSeconds: boundedInteger(it.minStageSeconds, d.minStageSeconds, 5, 600),
     maxStageSeconds: boundedInteger(it.maxStageSeconds, d.maxStageSeconds, 120, 7200),

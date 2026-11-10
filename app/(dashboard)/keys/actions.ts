@@ -139,7 +139,7 @@ export async function updateApiKeyAction(
       if (data.quotaCredits > userBalance) {
         return {
           success: false,
-          error: `API Key 额度不能超过账户余额（${Math.round(userBalance).toLocaleString()} credits）`,
+          error: `API Key 额度不能超过账户余额（${Math.round(userBalance).toLocaleString()} cr）`,
         };
       }
     }

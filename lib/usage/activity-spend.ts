@@ -1,15 +1,20 @@
 import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db } from "@/lib/db/d1-http";
 import { topups } from "@/lib/db/schema";
+import { COUPON_TOPUP_TYPE } from "@/lib/activity/coupons";
 import { TOPUP_TYPE_LOTTERY } from "@/lib/lottery/prize-math";
 import { TOPUP_TYPE_RAIDEN } from "@/lib/raiden/config";
 import { TOPUP_TYPE_FLIP } from "@/lib/flip/config";
 
-/** 限时活动的账本类型：三个玩法都往 `topup` 记流水，负数=玩家付出、正数=玩家拿到。 */
+/**
+ * 限时活动的账本类型：6/11/12 是历史玩法流水（v0.33.0 之前的直付），
+ * v0.33.0 起玩法只扣活动券，货币支出统一记在 type=15 的兑换/礼包流水上。
+ */
 const ACTIVITIES = [
   { type: TOPUP_TYPE_LOTTERY, name: "幸运转盘" },
   { type: TOPUP_TYPE_RAIDEN, name: "雷电行动" },
   { type: TOPUP_TYPE_FLIP, name: "翻牌夺宝" },
+  { type: COUPON_TOPUP_TYPE, name: "活动券兑换" },
 ] as const;
 
 export interface ActivitySpendPoint {

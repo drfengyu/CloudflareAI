@@ -232,7 +232,7 @@ export function KeySheet({ apiKey, onClose, channelsProp = [], modelsProp = [] }
           {/* 总额度 */}
           <div>
             <label className="mb-1.5 block text-sm font-medium">
-              总额度（credits）
+              总额度（cr）
             </label>
             <input
               type="number"

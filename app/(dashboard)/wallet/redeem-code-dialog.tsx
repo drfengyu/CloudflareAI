@@ -124,7 +124,7 @@ export function RedeemCodeDialog({
       const result = await redeemCode(code);
       const expiresDate = new Date(result.expiresAt).toLocaleDateString();
       toast.success(
-        `充值成功！已获得 ${result.amount.toLocaleString()} cr，有效期至 ${expiresDate}`
+        `充值成功！已获得 ${result.amount.toLocaleString()} tcr，有效期至 ${expiresDate}`
       );
       setCode("");
       setOpen(false);
@@ -288,7 +288,7 @@ export function RedeemCodeDialog({
                   </p>
                   <p className="mt-1 text-muted-foreground">
                     {bonusTiers
-                      .map((t) => `累计 ${t.minCny} → +${t.bonus.toLocaleString()} cr`)
+                      .map((t) => `累计 ${t.minCny} → +${t.bonus.toLocaleString()} tcr`)
                       .join("　·　")}
                   </p>
                 </div>

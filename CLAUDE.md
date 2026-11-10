@@ -534,8 +534,16 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.32.1（2026-11-07，读路径优化：钱包单次扫描 + 冲榜缓存 + topup 复合索引）
-**下一版本**：v0.33.0（尚未选型）
+**当前版本**：v0.33.0（2026-11-10，货币单位 cr / tcr + 活动仅券参与 + 券单价设置 + 礼包限购）
+**下一版本**：v0.34.0（尚未选型）
+
+- v0.33.0 货币单位：永久货币 `cr`、临时货币 `tcr`，`lib/billing/units.ts` 提供
+  `formatAmount / formatPermanent / formatTemporary / formatCombined`，`formatCredits` 委托 `formatAmount`
+  保持旧小数规则；界面文案全部按单位标注。限时活动只认活动券（`payWithCoupon` 只扣券面，
+  `CouponPayment` 收敛为 `couponId + couponPart`），三玩法删除货币直付分支；每个活动新增
+  `couponUnitCredits`（1 张 = X cr，默认 1），兑换按整张 × 单价，券面仍按 cr 1:1 抵扣。
+  珍宝礼包限购：中份每日 2 / 累计 20、大份每日 1 / 累计 10，按「用户 + 礼包」跨活动统计，
+  新表 `coupon_pack_purchase`（迁移 025）用单条 `INSERT ... SELECT ... WHERE` 复查计数防并发超卖。
 
 - v0.32.1 钱包结算的日表与过期作废合计合并为一次 D1 扫描（`listLedgerOverview`，日表按「北京日 + 类别」
   分组后折回一天一行，删除 `sumExpiredExpense`）；活动页用量冲榜的全站窗口聚合加 2 分钟 `unstable_cache`；

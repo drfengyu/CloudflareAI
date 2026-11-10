@@ -25,7 +25,8 @@ const PACK_RATIO_LABEL: Record<string, string> = {
 
 /**
  * 活动券的兑换与珍宝礼包：活动页与钱包充值位共用。
- * 券只在当期活动内有效，兑换与买礼包都按「先临时余额、再永久余额」扣款。
+ * 兑换按活动配置的「1 张 = X cr」整张购买，券只在当期活动内有效；
+ * 兑换与买礼包都按「先临时余额、再永久余额」扣款。
  */
 export function CouponShop({
   activities,
@@ -55,6 +56,13 @@ function CouponShopItem({
   const [busy, setBusy] = useState<string | null>(null);
   const active = activity.status === "active";
   const dark = tone === "dark";
+  const unitCredits = activity.unitCredits > 0 ? activity.unitCredits : 1;
+  const couponTickets = Math.round((activity.credits / unitCredits) * 100) / 100;
+  const amountNumber = Number(amount);
+  const exchangeCost =
+    Number.isInteger(amountNumber) && amountNumber > 0
+      ? Math.round(amountNumber * unitCredits * 100) / 100
+      : 0;
 
   async function handleExchange() {
     if (busy) return;
@@ -100,13 +108,18 @@ function CouponShopItem({
             {activity.label} · {STATUS_TEXT[activity.status]}
           </p>
         </div>
-        <span
-          className={cn(
-            "shrink-0 text-sm font-semibold tabular-nums",
-            dark ? "text-amber-200" : "text-foreground",
-          )}
-        >
-          {formatCredits(activity.credits)} cr
+        <span className="shrink-0 text-right">
+          <span
+            className={cn(
+              "block text-sm font-semibold tabular-nums",
+              dark ? "text-amber-200" : "text-foreground",
+            )}
+          >
+            {formatCredits(activity.credits)} cr
+          </span>
+          <span className={cn("block text-[10px] tabular-nums", dark ? "text-white/40" : "text-muted-foreground")}>
+            ≈ {formatCredits(couponTickets)} 张 · 1 张 = {formatCredits(unitCredits)} cr
+          </span>
         </span>
       </div>
 
@@ -120,7 +133,7 @@ function CouponShopItem({
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
               disabled={busy !== null}
-              placeholder="兑换数量"
+              placeholder="兑换张数"
               className={cn(
                 "min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 text-sm tabular-nums outline-none",
                 dark
@@ -132,57 +145,91 @@ function CouponShopItem({
               type="button"
               size="sm"
               onClick={() => void handleExchange()}
-              disabled={busy !== null || !amount.trim()}
+              disabled={busy !== null || exchangeCost <= 0}
             >
               {busy === "exchange" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
               兑换
             </Button>
           </div>
+          <p className={cn("text-[11px] tabular-nums", dark ? "text-white/40" : "text-muted-foreground")}>
+            1 张 = {formatCredits(unitCredits)} cr
+            {exchangeCost > 0 ? ` · 本次需 ${formatCredits(exchangeCost)} cr` : " · 输入要兑换的整张数"}
+          </p>
 
           <div className="grid grid-cols-3 gap-2">
-            {activity.packs.map((pack) => (
-              <button
-                key={pack.key}
-                type="button"
-                onClick={() => void handlePack(pack.key)}
-                disabled={busy !== null}
-                className={cn(
-                  "rounded-lg border px-2 py-1.5 text-left transition-colors disabled:opacity-50",
-                  dark
-                    ? "border-white/10 bg-white/[0.02] hover:bg-white/[0.06]"
-                    : "border-border bg-card hover:bg-secondary",
-                )}
-              >
-                <span
+            {activity.packs.map((pack) => {
+              const soldOut =
+                (pack.dailyLimit !== null && pack.boughtToday >= pack.dailyLimit) ||
+                (pack.totalLimit !== null && pack.boughtTotal >= pack.totalLimit);
+              const limitText =
+                pack.dailyLimit === null && pack.totalLimit === null
+                  ? "不限购"
+                  : [
+                      pack.dailyLimit !== null ? `今日 ${pack.boughtToday}/${pack.dailyLimit}` : null,
+                      pack.totalLimit !== null ? `累计 ${pack.boughtTotal}/${pack.totalLimit}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ");
+              return (
+                <button
+                  key={pack.key}
+                  type="button"
+                  onClick={() => void handlePack(pack.key)}
+                  disabled={busy !== null || soldOut}
+                  title={soldOut ? `${pack.name}已到限购上限` : undefined}
                   className={cn(
-                    "block text-[11px] font-medium",
-                    dark ? "text-white/80" : "text-foreground",
+                    "rounded-lg border px-2 py-1.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+                    dark
+                      ? "border-white/10 bg-white/[0.02] hover:bg-white/[0.06]"
+                      : "border-border bg-card hover:bg-secondary",
                   )}
                 >
-                  {pack.name}
-                </span>
-                <span
-                  className={cn(
-                    "mt-0.5 block text-[10px] tabular-nums",
-                    dark ? "text-white/45" : "text-muted-foreground",
-                  )}
-                >
-                  {formatCredits(pack.priceCredits)} cr
-                  <span className="ml-1 text-success">{PACK_RATIO_LABEL[pack.key]}</span>
-                </span>
-                <span
-                  className={cn(
-                    "mt-0.5 block text-[10px] tabular-nums",
-                    dark ? "text-cyan-300/80" : "text-primary",
-                  )}
-                >
-                  得 {formatCredits(pack.priceCredits * pack.ratio)} cr
-                </span>
-              </button>
-            ))}
+                  <span
+                    className={cn(
+                      "block text-[11px] font-medium",
+                      dark ? "text-white/80" : "text-foreground",
+                    )}
+                  >
+                    {pack.name}
+                  </span>
+                  <span
+                    className={cn(
+                      "mt-0.5 block text-[10px] tabular-nums",
+                      dark ? "text-white/45" : "text-muted-foreground",
+                    )}
+                  >
+                    {formatCredits(pack.priceCredits)} cr
+                    <span className="ml-1 text-success">{PACK_RATIO_LABEL[pack.key]}</span>
+                  </span>
+                  <span
+                    className={cn(
+                      "mt-0.5 block text-[10px] tabular-nums",
+                      dark ? "text-cyan-300/80" : "text-primary",
+                    )}
+                  >
+                    得 {formatCredits(pack.priceCredits * pack.ratio)} cr
+                  </span>
+                  <span
+                    className={cn(
+                      "mt-0.5 block text-[9px] tabular-nums",
+                      soldOut
+                        ? dark
+                          ? "text-rose-300/80"
+                          : "text-destructive"
+                        : dark
+                          ? "text-white/30"
+                          : "text-muted-foreground/80",
+                    )}
+                  >
+                    {soldOut ? `${limitText} · 已满` : limitText}
+                  </span>
+                </button>
+              );
+            })}
           </div>
           <p className={cn("text-[11px]", dark ? "text-white/35" : "text-muted-foreground")}>
-            券按 1:1 抵玩法费用，当期结束后作废；扣款先临时余额、再永久余额。
+            1 张 = {formatCredits(unitCredits)} cr；券面按 cr 1:1 抵玩法费用，当期结束后作废；
+            扣款先临时余额（tcr）、再永久余额（cr）。
           </p>
         </>
       ) : (

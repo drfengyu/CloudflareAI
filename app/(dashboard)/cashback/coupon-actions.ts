@@ -9,6 +9,7 @@ import {
   type ActivityKind,
 } from "@/lib/activity/coupons";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { formatAmount } from "@/lib/billing/units";
 
 export type CouponActionResult = { success: true; message: string } | { success: false; message: string };
 
@@ -25,7 +26,7 @@ function revalidateCouponPaths() {
   revalidatePath("/raiden");
 }
 
-/** 用余额（先临时、再永久）1:1 兑换当期活动券。 */
+/** 按活动配置的券面单价（1 张 = X cr）兑换当期活动券，先临时余额再永久余额。 */
 export async function exchangeCouponAction(input: {
   kind: string;
   amount: string;
@@ -39,7 +40,10 @@ export async function exchangeCouponAction(input: {
     const amount = Number(input.amount);
     const result = await exchangeCoupon(userId, kind, amount);
     revalidateCouponPaths();
-    return { success: true, message: `已兑换 ${result.couponName} ${result.credits} cr` };
+    return {
+      success: true,
+      message: `已兑换 ${result.couponName} ${result.tickets} 张（${formatAmount(result.credits)} cr 券面）`,
+    };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "兑换失败" };
   }

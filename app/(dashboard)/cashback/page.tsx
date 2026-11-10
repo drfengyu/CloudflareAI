@@ -95,7 +95,7 @@ export default async function CashbackPage() {
                     <p className="text-[11px] text-muted-foreground">{item.couponName}余额</p>
                     <p className="text-xl font-semibold tabular-nums">
                       {formatCredits(item.credits)}
-                      <span className="ml-1 text-xs font-normal text-muted-foreground">cr</span>
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">cr 券面</span>
                     </p>
                   </div>
                   <span className="flex items-center gap-1 text-xs text-[color:var(--primary)]">
@@ -104,7 +104,11 @@ export default async function CashbackPage() {
                   </span>
                 </div>
                 <p className="mt-3 text-[11px] text-muted-foreground">
-                  当期活动结束后作废 · 珍宝礼包 200% / 500% / 1000%
+                  约 {formatCredits(item.credits / item.unitCredits)} 张 · 1 张 ={" "}
+                  {formatCredits(item.unitCredits)} cr · 当期结束后作废
+                </p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  珍宝礼包 200% / 500% / 1000%
                 </p>
               </Link>
             ))}
@@ -239,17 +243,18 @@ export default async function CashbackPage() {
               </li>
               <li>
                 充值按活动期内<b className="text-foreground">已完成的在线充值累计实付</b>统计：达到的每个档位都能各发一次，
-                不是只取最高一档；LinuxDO 积分与人民币同口径累计。奖励到账为临时余额，有效期{" "}
+                不是只取最高一档；LinuxDO 积分与人民币同口径累计。奖励到账为临时余额（tcr），有效期{" "}
                 <strong className="text-foreground">{recharge.validDays}</strong> 天。
               </li>
               <li>
-                消费按活动期内<b className="text-foreground">累计消耗的 credits</b> 统计，逐档发放：
-                每档发放时随机一种奖励——临时货币、永久货币、当期活动券或 1–3 张抽奖券，档位越高区间越高。
+                消费按活动期内<b className="text-foreground">累计消耗的 cr</b> 统计，逐档发放：
+                每档发放时随机一种奖励——临时货币（tcr）、永久货币（cr）、当期活动券或 1–3 张抽奖券，档位越高区间越高。
                 到账为临时余额时有效期 {cashback.validDays} 天。
               </li>
               <li>
-                活动券 1:1 用余额兑换，<b className="text-foreground">先花临时余额再花永久余额</b>；
-                当期活动结束后券自动作废，下一轮活动会换成另一种券名。珍宝礼包按 200% / 500% / 1000% 三档出售。
+                活动券按各玩法设置的单价（1 张 = X cr，可在玩法页查看）整张兑换，
+                <b className="text-foreground">先花临时余额（tcr）再花永久余额（cr）</b>；
+                券面按 cr 1:1 抵扣玩法费用。当期活动结束后券自动作废，下一轮活动会换成另一种券名。珍宝礼包按 200% / 500% / 1000% 三档出售。
               </li>
               <li>用量按上游真实 token 计，失败调用不计消费也不参与返利；排行榜脱敏展示，只读排名不发奖励。</li>
             </ul>

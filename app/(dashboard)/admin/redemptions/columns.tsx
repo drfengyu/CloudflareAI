@@ -39,7 +39,7 @@ export function createRedemptionColumns(): ColumnDef<RedemptionRow>[] {
         const credits = row.original.creditsAmount;
         return (
           <div>
-            <p className="font-medium">{credits.toLocaleString()} cr</p>
+            <p className="font-medium">{credits.toLocaleString()} tcr</p>
           </div>
         );
       },

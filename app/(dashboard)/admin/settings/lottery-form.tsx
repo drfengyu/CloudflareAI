@@ -46,6 +46,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
   const [startAt, setStartAt] = useState(toField(initialConfig.startAt));
   const [endAt, setEndAt] = useState(toField(initialConfig.endAt));
   const [ticketPrice, setTicketPrice] = useState(String(initialConfig.ticketPriceCredits));
+  const [couponUnit, setCouponUnit] = useState(String(initialConfig.couponUnitCredits));
   const [outerChance, setOuterChance] = useState(String(initialConfig.outerChancePercent));
   const [multiplierBase, setMultiplierBase] = useState<"ticket" | "batch">(
     initialConfig.multiplierBase,
@@ -80,6 +81,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
         startAt: toStored(startAt),
         endAt: toStored(endAt),
         ticketPriceCredits: Number(ticketPrice),
+        couponUnitCredits: Number(couponUnit),
         outerChancePercent: Number(outerChance),
         multiplierBase,
         prizeValidDays: Number(prizeValidDays),
@@ -101,6 +103,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
       startAt,
       endAt,
       ticketPrice,
+      couponUnit,
       outerChance,
       multiplierBase,
       prizeValidDays,
@@ -127,6 +130,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
         startAt: toStored(startAt),
         endAt: toStored(endAt),
         ticketPriceCredits: Number(ticketPrice),
+        couponUnitCredits: Number(couponUnit),
         outerChancePercent: Number(outerChance),
         multiplierBase,
         prizeValidDays: Number(prizeValidDays),
@@ -207,6 +211,18 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
             onChange={(e) => setTicketPrice(e.target.value)}
             className={FIELD_CLASS}
           />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">1 张活动券 = cr</label>
+          <input
+            type="number"
+            min={1}
+            step="1"
+            value={couponUnit}
+            onChange={(e) => setCouponUnit(e.target.value)}
+            className={FIELD_CLASS}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">兑换活动券的单价，券面按 cr 1:1 抵扣玩法费用</p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">外圈概率（%）</label>

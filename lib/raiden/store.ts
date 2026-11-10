@@ -4,7 +4,6 @@ import { raidenClears, raidenRuns, temporaryBalances, topups } from "@/lib/db/sc
 import { payWithCoupon, refundCouponPayment } from "@/lib/activity/coupons";
 import { cnStartOfToday } from "@/lib/date";
 import {
-  describeLoadout,
   loadoutCost,
   RAIDEN_STAGES,
   raidenActivityKey,
@@ -66,9 +65,9 @@ export interface StartedRun {
 }
 
 /**
- * 出击：校验活动与每日次数 → 扣装备钱 → 把之前没结束的对局标记放弃 → 建 run。
+ * 出击：校验活动与每日次数 → 扣装备券面 → 把之前没结束的对局标记放弃 → 建 run。
  *
- * 扣款失败一笔不写；建 run 或记流水失败则退回扣款，不留下「花了钱没开局」的状态。
+ * 券不足一笔不写；建 run 失败则退回券，不留下「花了券没开局」的状态。
  */
 export async function startRun(
   userId: string,
@@ -85,7 +84,7 @@ export async function startRun(
 
   const paid = await payWithCoupon(userId, "raiden", activityKey, cost);
   if (!paid.ok) {
-    throw new RaidenError(`余额不足：本次装备需要 ${cost} cr`);
+    throw new RaidenError(paid.reason);
   }
   const payment = paid.payment;
 
@@ -108,28 +107,16 @@ export async function startRun(
       bombs: starting.bombs,
       lives: starting.lives,
       revives: 0,
-      creditsSpent: payment.creditPart,
+      // 记录本局消耗的券面；货币在兑换券时已经扣过，不在玩法里重复记账。
+      creditsSpent: cost,
       stage: 0,
       score: 0,
       startedAt: now,
       lastSettleAt: now,
     });
-    if (payment.creditPart > 0) {
-      await db.insert(topups).values({
-        id: crypto.randomUUID(),
-        userId,
-        amount: -payment.creditPart,
-        type: TOPUP_TYPE_RAIDEN,
-        description:
-          payment.couponPart > 0
-            ? `雷电行动出击 · ${describeLoadout(config, loadout)}（${cost} cr，活动券抵 ${payment.couponPart} cr）`
-            : `雷电行动出击 · ${describeLoadout(config, loadout)}（${cost} cr）`,
-        createdAt: now,
-      });
-    }
   } catch (error) {
     await db.delete(raidenRuns).where(eq(raidenRuns.id, runId)).catch(() => undefined);
-    await refundCouponPayment(userId, payment, `雷电行动出击失败退回（${payment.creditPart} cr）`);
+    await refundCouponPayment(payment);
     throw error;
   }
 
@@ -433,39 +420,14 @@ export async function reviveRun(
       "UPDATE raiden_run SET revives = revives - 1 WHERE id = ?",
       [runId],
     ).catch(() => undefined);
-    throw new RaidenError(`余额不足：复活需要 ${price} cr`);
+    throw new RaidenError(paid.reason);
   }
-  const payment = paid.payment;
 
-  // 券抵的部分在买券时已扣过余额，这里只把真实现金累加进本局投入。
+  // 复活同样只扣券面；本局消耗记录券面口径，货币在兑换券时已记账。
   await d1Run(
     "UPDATE raiden_run SET creditsSpent = creditsSpent + ? WHERE id = ?",
-    [payment.creditPart, runId],
+    [price, runId],
   ).catch(() => undefined);
-
-  const topupId = crypto.randomUUID();
-  try {
-    if (payment.creditPart > 0) {
-      await db.insert(topups).values({
-        id: topupId,
-        userId,
-        amount: -payment.creditPart,
-        type: TOPUP_TYPE_RAIDEN,
-        description:
-          payment.couponPart > 0
-            ? `雷电行动 · 阵亡复活（${price} cr，活动券抵 ${payment.couponPart} cr）`
-            : `雷电行动 · 阵亡复活（${price} cr）`,
-        createdAt: new Date(),
-      });
-    }
-  } catch (error) {
-    await refundCouponPayment(userId, payment, `雷电行动复活失败退回（${payment.creditPart} cr）`);
-    await d1Run(
-      "UPDATE raiden_run SET revives = revives - 1, creditsSpent = creditsSpent - ? WHERE id = ?",
-      [payment.creditPart, runId],
-    ).catch(() => undefined);
-    throw error;
-  }
 
   return { price, revives: run.revives + 1, maxRevives: config.maxRevives };
 }

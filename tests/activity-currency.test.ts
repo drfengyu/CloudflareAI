@@ -8,6 +8,12 @@ import {
 } from "../lib/cashback/config";
 import { ACTIVITY_KINDS, COUPON_PACKS, couponNameFor } from "../lib/activity/coupons";
 import {
+  DEFAULT_LOTTERY_CONFIG,
+  sanitizeLotteryConfig,
+} from "../lib/lottery/prize-math";
+import { DEFAULT_FLIP_CONFIG, sanitizeFlipConfig } from "../lib/flip/config";
+import { DEFAULT_RAIDEN_CONFIG, sanitizeRaidenConfig } from "../lib/raiden/config";
+import {
   DAILY_MILESTONES,
   DAILY_TASKS,
   WEEKLY_MILESTONES,
@@ -114,6 +120,17 @@ test("珍宝礼包：三档比例固定为 200% / 500% / 1000%", () => {
       ["large", 100, 10],
     ],
   );
+});
+
+test("活动券单价：三种活动默认 1 cr / 张，脏值回落、超限封顶", () => {
+  assert.equal(DEFAULT_LOTTERY_CONFIG.couponUnitCredits, 1);
+  assert.equal(DEFAULT_FLIP_CONFIG.couponUnitCredits, 1);
+  assert.equal(DEFAULT_RAIDEN_CONFIG.couponUnitCredits, 1);
+
+  assert.equal(sanitizeLotteryConfig({ couponUnitCredits: 25.5 }).couponUnitCredits, 25.5);
+  assert.equal(sanitizeFlipConfig({ couponUnitCredits: "abc" }).couponUnitCredits, 1);
+  assert.equal(sanitizeFlipConfig({ couponUnitCredits: -5 }).couponUnitCredits, 1);
+  assert.equal(sanitizeRaidenConfig({ couponUnitCredits: 9e9 }).couponUnitCredits, 1_000_000);
 });
 
 test("任务：每日 100 活跃度、每周 300 活跃度，里程碑末尾对齐上限", () => {

@@ -1,4 +1,4 @@
-import { getUserTotalBalance, requireUser } from "@/lib/usage/meter";
+import { requireUser } from "@/lib/usage/meter";
 import { getRaidenConfig } from "@/lib/raiden/settings";
 import { raidenActivityKey, raidenActivityWindow } from "@/lib/raiden/config";
 import {
@@ -13,9 +13,8 @@ export const dynamic = "force-dynamic";
 
 export default async function RaidenPage() {
   const userId = await requireUser();
-  const [config, balance, coupon] = await Promise.all([
+  const [config, coupon] = await Promise.all([
     getRaidenConfig(),
-    getUserTotalBalance(userId),
     getActivityCouponView(userId, "raiden"),
   ]);
   const windowInfo = raidenActivityWindow(config);
@@ -33,7 +32,7 @@ export default async function RaidenPage() {
     <RaidenGame
       config={config}
       status={windowInfo.status}
-      balance={balance.total}
+      couponCredits={coupon.credits}
       runsLeft={runsLeft}
       summary={summary}
       leaderboard={leaderboard}

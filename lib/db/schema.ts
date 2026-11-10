@@ -500,6 +500,32 @@ export const activityCoupons = sqliteTable(
 );
 
 /**
+ * 珍宝礼包购买记录：一行 = 买过一份礼包。
+ * 限购按「用户 + 礼包」统计累计份数与北京自然日份数，读侧一次 GROUP BY 取回。
+ */
+export const couponPackPurchases = sqliteTable(
+  "coupon_pack_purchase",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** small / medium / large。 */
+    packKey: text("packKey").notNull(),
+    activityKind: text("activityKind").$type<ActivityKind>().notNull(),
+    activityKey: text("activityKey").notNull(),
+    /** 实付 cr。 */
+    priceCredits: real("priceCredits").notNull(),
+    /** 到账券面 cr。 */
+    couponCredits: real("couponCredits").notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [
+    index("idx_coupon_pack_purchase_user").on(table.userId, table.packKey, table.createdAt),
+  ],
+);
+
+/**
  * 每日/每周任务领取记录：一行 = 某周期内领过某个任务。
  * 活跃度不单独存，直接按这张表的 points 求和；周期换 key 后自然从 0 开始。
  */

@@ -234,10 +234,10 @@ export default async function DashboardPage({
       icon: <Wallet className="h-4 w-4" />,
       tone: "info",
       label: "当前余额",
-      value: `${formatCredits(balance)} cr`,
+      value: `${formatCredits(balance)} cr 等值`,
       sub:
         balanceInfo.temporary > 0 || balanceInfo.permanent < 0
-          ? `永久 ${formatCredits(displayBalance.displayPermanent)} + 临时 ${formatCredits(displayBalance.displayTemporary)}`
+          ? `永久 ${formatCredits(displayBalance.displayPermanent)} cr + 临时 ${formatCredits(displayBalance.displayTemporary)} tcr`
           : undefined,
       href: "/wallet",
       actionLabel: "充值",

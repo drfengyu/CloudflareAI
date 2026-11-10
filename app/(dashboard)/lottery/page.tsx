@@ -1,10 +1,11 @@
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getUserTotalBalance, requireUser } from "@/lib/usage/meter";
+import { requireUser } from "@/lib/usage/meter";
 import { getLotteryConfig } from "@/lib/lottery/config";
 import {
   activityWindow,
   currentActivityKey,
+  formatPermanentPrizeLabel,
   formatPrizeLabel,
   formatTicketLabel,
   innerSectorLayout,
@@ -87,11 +88,11 @@ function buildWheelViews(config: LotteryConfig): {
     }
     const single = outerPrizeCredits(config, p.multiplier, 1);
     const batch = outerPrizeCredits(config, p.multiplier, 10);
-    // 永久余额档用绿色调，label 加「永久」标记，与临时余额奖品区分。
+    // 永久余额档用绿色调，label 带「永久」标记，与 tcr 临时余额奖品区分。
     const isPermanent = p.kind === "permanentCredits";
     return {
-      label: isPermanent ? `${formatPrizeLabel(single)} 永久` : formatPrizeLabel(single),
-      ...(batch !== single ? { batchLabel: isPermanent ? `${formatPrizeLabel(batch)} 永久` : formatPrizeLabel(batch) } : {}),
+      label: isPermanent ? formatPermanentPrizeLabel(single) : formatPrizeLabel(single),
+      ...(batch !== single ? { batchLabel: isPermanent ? formatPermanentPrizeLabel(batch) : formatPrizeLabel(batch) } : {}),
       tone: (isPermanent ? "permanent" : toneOf(p.multiplier)) as WheelOuter["tone"],
       weight: round2(share),
       chance: chanceOfSector,
@@ -127,14 +128,13 @@ export default async function LotteryPage() {
   // countConsecutiveMisses 按当前活动轮次过滤，新活动保底重置。
   // currentStats = 当前活动战绩（新活动重计），myStats = 全部活动累计（转盘「累计抽奖」）。
   // 首屏只出第一页，后续翻页走卡片内的局部刷新（listMyActivityRecords）。
-  const [tickets, myStats, currentStats, myTickets, records, balance, freeDrawUsed, consecutiveMisses, bigWins, coupon] =
+  const [tickets, myStats, currentStats, myTickets, records, freeDrawUsed, consecutiveMisses, bigWins, coupon] =
     await Promise.all([
       countUnusedTickets(userId),
       lotteryBalance({ userId }),
       activityKey ? lotteryBalance({ userId, activityKey }) : Promise.resolve(null),
       lotteryTicketTotals(undefined, userId),
       listDrawRecords({ userId, limit: DRAW_RECORD_PAGE_SIZE, activityKey }),
-      getUserTotalBalance(userId),
       hasUsedFreeDrawToday(userId),
       countConsecutiveMisses(userId, 30, activityKey),
       listRecentBigWins({ thresholdCredits: 500, thresholdTickets: 3, hours: 24, limit: 20 }),
@@ -209,7 +209,8 @@ export default async function LotteryPage() {
           milestones={config.milestones}
           tickets={tickets}
           totalDraws={myStats.draws}
-          totalCredits={balance.total}
+          couponCredits={coupon.credits}
+          couponUnitCredits={coupon.unitCredits}
           status={windowInfo.status}
           startAtMs={windowInfo.startMs}
           endAtMs={windowInfo.endMs}
@@ -217,7 +218,6 @@ export default async function LotteryPage() {
           consecutiveMisses={consecutiveMisses}
           luckyThreshold={LUCKY_MISS_THRESHOLD}
           bigWins={bigWins}
-          balanceCredits={balance.total}
         />
         {couponCard}
         {recordsCard}

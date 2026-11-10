@@ -145,7 +145,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
 
       <div>
         <label className="block text-sm font-medium mb-1">
-          美元汇率（1 USD = ? credits）
+          美元汇率（1 USD = ? cr）
         </label>
         <input
           type="number"
@@ -157,7 +157,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
           placeholder="1"
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          界面与账本统一以 credits 计价；此处仅在从渠道导入美元定价时用于换算
+          界面与账本统一以 cr 计价；此处仅在从渠道导入美元定价时用于换算
           <span className="ml-1 opacity-70">（不影响实际扣费金额）</span>
         </p>
       </div>
@@ -404,7 +404,7 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">
-            最小奖励额度（credits）
+            最小奖励额度（tcr）
           </label>
           <input
             type="number"
@@ -417,13 +417,13 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
             placeholder="0.01"
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            用户每次签到最少获得的 credits
+            用户每次签到最少获得的 tcr
           </p>
         </div>
 
         <div>
           <label className="block text-sm font-medium mb-1">
-            最大奖励额度（credits）
+            最大奖励额度（tcr）
           </label>
           <input
             type="number"
@@ -436,7 +436,7 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
             placeholder="0.1"
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            用户每次签到最多获得的 credits
+            用户每次签到最多获得的 tcr
           </p>
         </div>
       </div>
@@ -491,7 +491,7 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
 
           <div>
             <label className="block text-sm font-medium mb-1">
-              额外奖励（credits）
+              额外奖励（tcr）
             </label>
             <input
               type="number"
@@ -578,7 +578,7 @@ export function InviteSettingsForm({ initialSettings }: InviteSettingsFormProps)
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-medium mb-1">
-            邀请人奖励（credits）
+            邀请人奖励（cr）
           </label>
           <input
             type="number"
@@ -597,7 +597,7 @@ export function InviteSettingsForm({ initialSettings }: InviteSettingsFormProps)
 
         <div>
           <label className="block text-sm font-medium mb-1">
-            被邀请人奖励（credits）
+            被邀请人奖励（cr）
           </label>
           <input
             type="number"

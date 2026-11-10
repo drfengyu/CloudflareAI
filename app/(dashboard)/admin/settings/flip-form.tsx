@@ -27,6 +27,7 @@ export function FlipForm({ initialConfig }: { initialConfig: FlipConfig }) {
   const [startAt, setStartAt] = useState(toField(initialConfig.startAt));
   const [endAt, setEndAt] = useState(toField(initialConfig.endAt));
   const [price, setPrice] = useState(String(initialConfig.roundPriceCredits));
+  const [couponUnit, setCouponUnit] = useState(String(initialConfig.couponUnitCredits));
   const [validDays, setValidDays] = useState(String(initialConfig.rewardValidDays));
   const [dailyRounds, setDailyRounds] = useState(String(initialConfig.dailyRounds));
   const [cards, setCards] = useState<string[]>(() =>
@@ -45,11 +46,12 @@ export function FlipForm({ initialConfig }: { initialConfig: FlipConfig }) {
         startAt: toStored(startAt),
         endAt: toStored(endAt),
         roundPriceCredits: Number(price),
+        couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
         dailyRounds: Number(dailyRounds),
         cardRewards: cards,
       }),
-    [enabled, startAt, endAt, price, validDays, dailyRounds, cards],
+    [enabled, startAt, endAt, price, couponUnit, validDays, dailyRounds, cards],
   );
   const expectation = flipExpectation(preview);
 
@@ -62,6 +64,7 @@ export function FlipForm({ initialConfig }: { initialConfig: FlipConfig }) {
         startAt: toStored(startAt),
         endAt: toStored(endAt),
         roundPriceCredits: Number(price),
+        couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
         dailyRounds: Number(dailyRounds),
         cardRewards: cards.map((value) => Number(value)),
@@ -114,7 +117,7 @@ export function FlipForm({ initialConfig }: { initialConfig: FlipConfig }) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <label className="mb-1 block text-sm font-medium">每局票价（cr）</label>
           <input
@@ -125,6 +128,18 @@ export function FlipForm({ initialConfig }: { initialConfig: FlipConfig }) {
             className={FIELD_CLASS}
           />
           <p className="mt-1 text-xs text-muted-foreground">翻开一张牌要付的 cr</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">1 张活动券 = cr</label>
+          <input
+            type="number"
+            min={1}
+            step="1"
+            value={couponUnit}
+            onChange={(e) => setCouponUnit(e.target.value)}
+            className={FIELD_CLASS}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">兑换活动券的单价，券面按 cr 1:1 抵扣玩法费用</p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">奖励有效期（天）</label>

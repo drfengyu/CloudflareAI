@@ -55,10 +55,11 @@ export function createColumns(onManage: (user: UserRow) => void): ColumnDef<User
 
         return (
           <div className="text-right">
-            <p className="font-medium">{total.toLocaleString()} cr</p>
+            <p className="font-medium">{total.toLocaleString()} cr 等值</p>
             {(temporary > 0 || permanent < 0) && (
               <p className="text-xs text-muted-foreground">
-                (永久 {display.displayPermanent.toLocaleString()} + 临时 {display.displayTemporary.toLocaleString()})
+                (永久 {display.displayPermanent.toLocaleString()} cr + 临时{" "}
+                {display.displayTemporary.toLocaleString()} tcr)
               </p>
             )}
           </div>

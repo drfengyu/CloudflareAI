@@ -78,7 +78,7 @@ export default async function ConversationsPage({
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge tone="muted">{conv.creditsUsed} credits</Badge>
+                      <Badge tone="muted">{conv.creditsUsed} cr</Badge>
                       <button
                         className="text-muted-foreground hover:text-destructive"
                         title="删除"

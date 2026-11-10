@@ -350,16 +350,16 @@ export function CheckinCalendarCard() {
 
             <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
               <ul className="list-disc space-y-1 pl-5">
-                <li>每日签到获得随机额度奖励（{data.minQuota}-{data.maxQuota} cr）</li>
+                <li>每日签到获得随机额度奖励（{data.minQuota}-{data.maxQuota} tcr）</li>
                 {data.streakEnabled && (
                   <li>
                     连续签到每满 {data.streakDays} 天，额外奖励{" "}
-                    {formatCredits(data.streakReward)} cr
+                    {formatCredits(data.streakReward)} tcr
                     {data.stats.streak > 0 &&
                       `（再签 ${data.streakDays - (data.stats.streak % data.streakDays)} 天可达下一档）`}
                   </li>
                 )}
-                <li>奖励将直接充值到账户余额</li>
+                <li>奖励将直接进入临时余额（tcr）</li>
               </ul>
             </div>
           </CardContent>

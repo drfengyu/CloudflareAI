@@ -36,7 +36,7 @@ function attachmentLabel(attachment: Attachment, claimed: boolean): string {
     case "credits":
       return `${formatCredits(attachment.credits)} cr`;
     case "temp_credits":
-      return `${formatCredits(attachment.credits)} cr（临时余额，${attachment.validDays} 天）`;
+      return `${formatCredits(attachment.credits)} tcr（临时余额，${attachment.validDays} 天）`;
     case "tickets":
       return `${attachment.count} 张抽奖券`;
     case "redemption":

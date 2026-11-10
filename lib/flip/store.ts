@@ -78,11 +78,11 @@ export async function findOpenRound(userId: string): Promise<PendingRound | null
 export type OpenedRound = PendingRound;
 
 /**
- * 开一局：扣票价、洗牌桌、落库。
+ * 开一局：扣券面、洗牌桌、落库。
  *
  * 已经有没翻完的局时直接复用那一局、不再扣第二次钱——所以并发连点最坏结果是
  * 「两个请求都拿到同一局」或「多扣一次但多一局可玩」，不存在付一次钱翻两次牌。
- * 建局或记流水失败就退回扣款，不留下「花了钱没牌桌」的状态。
+ * 建局失败就退回扣掉的券，不留下「花了券没牌桌」的状态。
  */
 export async function openRound(
   userId: string,
@@ -102,7 +102,7 @@ export async function openRound(
   const price = round2(config.roundPriceCredits);
   const paid = await payWithCoupon(userId, "flip", activityKey, price);
   if (!paid.ok) {
-    throw new FlipError(`余额不足：开一局需要 ${price} cr`);
+    throw new FlipError(paid.reason);
   }
   const payment = paid.payment;
 
@@ -120,23 +120,9 @@ export async function openRound(
       createdAt: now,
       settledAt: null,
     });
-    // 券是买券时已付过的 cr，流水只记本次真实现金支出，账本合计才和余额减少对得上。
-    if (payment.creditPart > 0) {
-      await db.insert(topups).values({
-        id: crypto.randomUUID(),
-        userId,
-        amount: -payment.creditPart,
-        type: TOPUP_TYPE_FLIP,
-        description:
-          payment.couponPart > 0
-            ? `翻牌夺宝开局（${price} cr，活动券抵 ${payment.couponPart} cr）`
-            : `翻牌夺宝开局（${price} cr）`,
-        createdAt: now,
-      });
-    }
   } catch (error) {
     await db.delete(flipRounds).where(eq(flipRounds.id, roundId)).catch(() => undefined);
-    await refundCouponPayment(userId, payment, `翻牌夺宝开局失败退回（${payment.creditPart} cr）`);
+    await refundCouponPayment(payment);
     throw error;
   }
 

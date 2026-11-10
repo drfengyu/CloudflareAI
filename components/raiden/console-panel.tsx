@@ -82,7 +82,6 @@ const RUN_TABS: { key: TabKey; label: string; icon: React.ComponentType<{ classN
 export function ConsolePanel({
   config,
   status,
-  balance,
   coupon,
   runsLeft,
   summary,
@@ -99,7 +98,6 @@ export function ConsolePanel({
 }: {
   config: RaidenConfig;
   status: RaidenActivityStatus;
-  balance: number;
   coupon: ActivityCouponView;
   runsLeft: number;
   summary: MyRaidenSummary;
@@ -139,11 +137,11 @@ export function ConsolePanel({
         </div>
 
         <div className="mt-2.5 grid grid-cols-3 divide-x divide-white/10 rounded-lg border border-white/10 bg-black/20">
-          <ConsoleStat label="可用余额" value={`${formatCredits(balance)} cr`} />
+          <ConsoleStat label="可用券面" value={`${formatCredits(coupon.credits)} cr`} />
           <ConsoleStat label="今日剩余" value={`${runsLeft} / ${config.dailyRuns} 次`} />
           <ConsoleStat
             label={inRun ? "本局奖励" : "装备费用"}
-            value={inRun ? `+${formatCredits(rewardTotal)} cr` : `${formatCredits(loadoutCost(config, loadout))} cr`}
+            value={inRun ? `+${formatCredits(rewardTotal)} tcr` : `${formatCredits(loadoutCost(config, loadout))} cr 券面`}
             tone={inRun ? "text-amber-200" : undefined}
           />
         </div>
@@ -339,7 +337,7 @@ function LivePanel({
         ))}
         <Chip
           icon={Coins}
-          text={`战利品 ${formatCredits(hud.loot)} cr`}
+          text={`战利品 ${formatCredits(hud.loot)} tcr`}
           muted={hud.loot === 0}
         />
         <Chip
@@ -355,16 +353,16 @@ function LivePanel({
       <WeaponRack hud={hud} />
 
       <div className="grid grid-cols-2 gap-1.5">
-        <LiveStat label="本局已获奖励" value={`+${formatCredits(rewardTotal)} cr`} tone="text-amber-200" />
-        <LiveStat label="装备花费" value={`${formatCredits(runCost)} cr`} />
+        <LiveStat label="本局已获奖励" value={`+${formatCredits(rewardTotal)} tcr`} tone="text-amber-200" />
+        <LiveStat label="装备花费" value={`${formatCredits(runCost)} cr 券面`} />
         <LiveStat
           label="复活花费"
-          value={revivesUsed > 0 ? `${formatCredits(revivesUsed * revivePrice)} cr` : "0 cr"}
+          value={revivesUsed > 0 ? `${formatCredits(revivesUsed * revivePrice)} cr 券面` : "0 cr"}
         />
-        <LiveStat label="本局净收支" value={`${net >= 0 ? "+" : ""}${formatCredits(net)} cr`} tone={net >= 0 ? "text-emerald-300" : "text-rose-300"} />
+        <LiveStat label="本局净收支（cr 等值）" value={`${net >= 0 ? "+" : ""}${formatCredits(net)}`} tone={net >= 0 ? "text-emerald-300" : "text-rose-300"} />
       </div>
       <p className="text-[9px] leading-relaxed text-white/30">
-        奖励发放至临时余额，有效期 {rewardValidDays} 天 · 今日还可出击 {runsLeft} 次
+        奖励以 tcr 发放至临时余额，有效期 {rewardValidDays} 天 · 今日还可出击 {runsLeft} 次
       </p>
 
       <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] leading-relaxed text-white/45">
@@ -382,7 +380,7 @@ function LivePanel({
         </p>
         <p className="mt-0.5">
           <span className="text-white/70">掉落</span> {BULLET_TYPES.map((t) => `${t} ${WEAPONS[t].name}`).join(" · ")}{" "}
-          · B 炸弹 · 金色 cr 战利品
+          · B 炸弹 · 金色战利品（tcr）
         </p>
         <p className="mt-0.5">
           每种字母各自记等级，互不影响：没学过的字母直接解锁（有空槽就自动装上），已学会的字母只升级自己；
@@ -517,7 +515,7 @@ function RecordsPanel({ summary }: { summary: MyRaidenSummary }) {
       <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fit,minmax(140px,1fr))]">
         <Stat label="单局最高分" value={summary.bestScore.toLocaleString("en-US")} />
         <Stat label="累计首通" value={`${summary.firstClears} / ${RAIDEN_STAGES.length} 关`} />
-        <Stat label="累计通关奖励" value={`${formatCredits(summary.totalReward)} cr`} />
+        <Stat label="累计通关奖励" value={`${formatCredits(summary.totalReward)} tcr`} />
         <Stat label="累计出击" value={`${summary.totalRuns} 次`} />
       </div>
 
@@ -672,7 +670,7 @@ function RankPanel({
                   <span className="text-white/35"> 首通 STAGE {row.stageNo}</span>
                 </span>
                 <span className="shrink-0 font-mono text-amber-400/90">
-                  +{formatCredits(row.reward)} cr
+                  +{formatCredits(row.reward)} tcr
                 </span>
               </div>
             ))}
@@ -720,13 +718,16 @@ function RulesPanel({ config }: { config: RaidenConfig }) {
       </div>
 
       <ul className="space-y-1 text-[10px] leading-relaxed text-white/50">
-        <li>· 每天最多出击 {config.dailyRuns} 次，装备费在出击时从余额扣除。</li>
         <li>
-          · 首通奖励仅发放一次；重复通关奖励每日封顶 {formatCredits(config.repeatDailyCap)} cr。
+          · 每天最多出击 {config.dailyRuns} 次，装备费在出击时从当期活动券扣（cr 券面）。
+          活动券按本玩法单价兑换（1 张 = {formatCredits(config.couponUnitCredits)} cr），不足需先兑换。
         </li>
-        <li>· 奖励以临时余额发放，有效期 {config.rewardValidDays} 天，可正常抵扣消费。</li>
         <li>
-          · 阵亡后可花 {formatCredits(config.revivePriceCredits)} cr 原地复活，单局最多{" "}
+          · 首通奖励仅发放一次；重复通关奖励每日封顶 {formatCredits(config.repeatDailyCap)} tcr。
+        </li>
+        <li>· 奖励以 tcr 发放到临时余额，有效期 {config.rewardValidDays} 天，可正常抵扣消费。</li>
+        <li>
+          · 阵亡后可花 {formatCredits(config.revivePriceCredits)} cr 券面原地复活，单局最多{" "}
           {config.maxRevives} 次。
         </li>
         <li>
@@ -737,7 +738,7 @@ function RulesPanel({ config }: { config: RaidenConfig }) {
         <li>· 每种子弹的等级各记各的：吃到已持有的字母只给它自己升级（最高 Lv{MAX_WEAPON_LEVEL}），不会动到别的类型；满级再吃折算成 {MAX_LEVEL_SCORE} 分。</li>
         <li>· 出击商店的「火力强化」只提升开局机炮 W 的等级，副槽与其余弹种都得靠关卡内拾取。</li>
         <li>· 开火打掉漂浮的补给箱会让它重新随机字母，可以先洗掉不想要的类型（金色战利品箱不受影响）。</li>
-        <li>· B 补充炸弹，金色 cr 是战利品；精英敌机与 Boss 的战利品在通关时并入本关奖励（有单关上限）。</li>
+        <li>· B 补充炸弹，金色战利品是 tcr；精英敌机与 Boss 的战利品在通关时并入本关奖励（有单关上限）。</li>
         <li>· 机体基础 100 HP：敌弹 -10，撞机/障碍 -34~50，HP 归零才损失一条命。</li>
         <li>· 每击破 25 架敌机 HP 回满；进入新关卡与复活同样回满。</li>
         <li>· 关卡顺序与用时由服务端校验；切到后台会自动暂停。</li>

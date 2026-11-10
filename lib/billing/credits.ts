@@ -11,6 +11,7 @@
 import { db } from "@/lib/db/d1-http";
 import { options } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { formatAmount } from "./units";
 
 /** 兼容旧代码：固定为 1。新代码应使用 `getCreditsPerUsd()`。 */
 export const CREDITS_PER_USD = 1;
@@ -77,11 +78,5 @@ export function usdToCredits(
  * @example formatCredits(0.0001) → "0.0001"
  */
 export function formatCredits(credits: number): string {
-  if (credits === 0) return "0";
-  // 小于 0.01 显示更多小数位
-  if (Math.abs(credits) < 0.01) return credits.toFixed(6);
-  // 小于 1 显示 4 位小数
-  if (Math.abs(credits) < 1) return credits.toFixed(4);
-  // 大于等于 1 显示 2 位小数
-  return credits.toFixed(2);
+  return formatAmount(credits);
 }

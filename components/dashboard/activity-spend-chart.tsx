@@ -117,7 +117,7 @@ export function ActivitySpendChart({ points }: { points: ActivitySpendPoint[] })
           净收入 {totalNet > 0 ? "+" : ""}
           {formatCredits(totalNet)} cr
         </span>
-        （口径为账本流水：买券 / 装备复活 / 票价为消耗，中奖与通关奖励为收入，赠券不动 cr）
+        （口径为账本流水：兑换活动券 / 礼包为消耗，中奖与通关奖励为收入，券内抵扣不动 cr）
       </p>
     </div>
   );

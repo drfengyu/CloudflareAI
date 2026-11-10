@@ -212,7 +212,7 @@ export async function updateCheckinSettings(formData: {
     throw new Error("连签天数需为 2 ~ 365 的整数");
   }
   if (!Number.isFinite(streakReward) || streakReward < 0 || streakReward > 1_000_000) {
-    throw new Error("连签奖励需在 0 ~ 1000000 credits 之间");
+    throw new Error("连签奖励需在 0 ~ 1000000 tcr 之间");
   }
 
   // 更新设置
@@ -251,10 +251,10 @@ export async function updateInviteSettings(formData: {
   const inviteeReward = parseFloat(formData.inviteeReward);
 
   if (!Number.isFinite(inviterReward) || inviterReward < 0 || inviterReward > 1_000_000) {
-    throw new Error("邀请人奖励需在 0 ~ 1000000 credits 之间");
+    throw new Error("邀请人奖励需在 0 ~ 1000000 cr 之间");
   }
   if (!Number.isFinite(inviteeReward) || inviteeReward < 0 || inviteeReward > 1_000_000) {
-    throw new Error("被邀请人奖励需在 0 ~ 1000000 credits 之间");
+    throw new Error("被邀请人奖励需在 0 ~ 1000000 cr 之间");
   }
 
   await upsertOption("invite_enabled", formData.enabled ? "true" : "false");
@@ -687,6 +687,8 @@ export async function updateLotterySettings(formData: {
   startAt: string;
   endAt: string;
   ticketPriceCredits: number;
+  /** 1 张活动券兑换所需的 cr。 */
+  couponUnitCredits: number;
   outerChancePercent: number;
   multiplierBase: string;
   prizeValidDays: number;
@@ -784,6 +786,7 @@ export async function updateLotterySettings(formData: {
     startAt,
     endAt,
     ticketPriceCredits: requireNumber(formData.ticketPriceCredits, "单券价", 1, 1_000_000),
+    couponUnitCredits: requireNumber(formData.couponUnitCredits, "活动券单价", 1, 1_000_000),
     outerChancePercent: requireNumber(formData.outerChancePercent, "外圈概率", 0, 100),
     multiplierBase,
     prizeValidDays: Math.trunc(requireNumber(formData.prizeValidDays, "奖品有效期", 1, 3650)),
@@ -819,6 +822,8 @@ export async function updateRaidenSettings(formData: {
   rewardValidDays: number;
   repeatDailyCap: number;
   revivePriceCredits: number;
+  /** 1 张活动券兑换所需的 cr。 */
+  couponUnitCredits: number;
   maxRevives: number;
   minStageSeconds: number;
   maxStageSeconds: number;
@@ -887,6 +892,7 @@ export async function updateRaidenSettings(formData: {
     rewardValidDays: Math.trunc(requireNumber(formData.rewardValidDays, "奖励有效期", 1, 3650)),
     repeatDailyCap: requireNumber(formData.repeatDailyCap, "重复奖励每日封顶", 0, 1_000_000),
     revivePriceCredits: requireNumber(formData.revivePriceCredits, "复活价格", 1, 1_000_000),
+    couponUnitCredits: requireNumber(formData.couponUnitCredits, "活动券单价", 1, 1_000_000),
     maxRevives: Math.trunc(requireNumber(formData.maxRevives, "单局复活次数", 0, 10)),
     minStageSeconds,
     maxStageSeconds,
@@ -909,6 +915,8 @@ export async function updateFlipSettings(formData: {
   startAt: string;
   endAt: string;
   roundPriceCredits: number;
+  /** 1 张活动券兑换所需的 cr。 */
+  couponUnitCredits: number;
   rewardValidDays: number;
   dailyRounds: number;
   /** 12 张牌各自的 cr；0 = 空牌。 */
@@ -953,6 +961,7 @@ export async function updateFlipSettings(formData: {
     startAt,
     endAt,
     roundPriceCredits: requireNumber(formData.roundPriceCredits, "每局票价", 1, 1_000_000),
+    couponUnitCredits: requireNumber(formData.couponUnitCredits, "活动券单价", 1, 1_000_000),
     rewardValidDays: Math.trunc(requireNumber(formData.rewardValidDays, "奖励有效期", 1, 3650)),
     dailyRounds: Math.trunc(requireNumber(formData.dailyRounds, "每日开局上限", 1, 1000)),
     cardRewards: rewards,

@@ -49,7 +49,7 @@ export async function generateRedemptionCodes(formData: {
     throw new Error("额度必须大于 0");
   }
   if (formData.quota > MAX_REDEMPTION_QUOTA) {
-    throw new Error(`单码额度不能超过 ${MAX_REDEMPTION_QUOTA} cr（当前 ${formData.quota} cr）`);
+    throw new Error(`单码额度不能超过 ${MAX_REDEMPTION_QUOTA} tcr（当前 ${formData.quota} tcr）`);
   }
 
   if (!Number.isFinite(formData.maxUses) || formData.maxUses < 1) {

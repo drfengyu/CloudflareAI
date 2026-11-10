@@ -45,10 +45,10 @@ export function TempBalancesCard({ balances }: { balances: SerializedTempBalance
             >
               <div className="flex-1">
                 <p className="text-sm font-medium">
-                  {formatCredits(tb.displayAmount)} credits
+                  {formatCredits(tb.displayAmount)} tcr
                   {tb.usedForCompensation > 0 && (
                     <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
-                      （{formatCredits(tb.usedForCompensation)} 已抵扣永久余额的欠费）
+                      （{formatCredits(tb.usedForCompensation)} tcr 已抵扣永久余额的欠费）
                     </span>
                   )}
                 </p>

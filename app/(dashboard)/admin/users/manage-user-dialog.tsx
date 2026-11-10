@@ -239,10 +239,10 @@ export function ManageUserDialog({ user, currentUserId, onClose }: ManageUserDia
             <div className="min-h-0 overflow-y-auto overscroll-contain pr-1">
               <TabsContent value="account" className="mt-0 space-y-4">
                 <div className="rounded-lg border border-border bg-secondary/30 p-3 text-xs">
-                  <p className="font-medium">当前余额：{user.totalBalance.toLocaleString()} cr</p>
+                  <p className="font-medium">当前余额：{user.totalBalance.toLocaleString()} cr 等值</p>
                   {user.temporaryBalance > 0 || user.permanentBalance < 0 ? (
                     <p className="mt-1 text-muted-foreground">
-                      永久：{display.displayPermanent.toLocaleString()} cr · 临时：{display.displayTemporary.toLocaleString()} cr
+                      永久：{display.displayPermanent.toLocaleString()} cr · 临时：{display.displayTemporary.toLocaleString()} tcr
                       {user.permanentBalance < 0 ? (
                         <span className="ml-1 text-amber-600 dark:text-amber-400">（已用临时余额补正）</span>
                       ) : null}

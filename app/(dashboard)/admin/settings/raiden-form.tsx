@@ -36,6 +36,7 @@ interface NumberFields {
   rewardValidDays: string;
   repeatDailyCap: string;
   revivePriceCredits: string;
+  couponUnitCredits: string;
   maxRevives: string;
   minStageSeconds: string;
   maxStageSeconds: string;
@@ -71,6 +72,13 @@ const NUMBER_FIELDS: NumberFieldRow[] = [
     max: 1_000_000,
   },
   {
+    key: "couponUnitCredits",
+    label: "1 张活动券 = cr",
+    hint: "兑换活动券的单价，券面按 cr 1:1 抵扣玩法费用",
+    min: 1,
+    max: 1_000_000,
+  },
+  {
     key: "maxRevives",
     label: "单局最多复活次数",
     hint: "0 = 本局不支持复活",
@@ -102,6 +110,7 @@ export function RaidenForm({ initialConfig }: { initialConfig: RaidenConfig }) {
     rewardValidDays: String(initialConfig.rewardValidDays),
     repeatDailyCap: String(initialConfig.repeatDailyCap),
     revivePriceCredits: String(initialConfig.revivePriceCredits),
+    couponUnitCredits: String(initialConfig.couponUnitCredits),
     maxRevives: String(initialConfig.maxRevives),
     minStageSeconds: String(initialConfig.minStageSeconds),
     maxStageSeconds: String(initialConfig.maxStageSeconds),
@@ -156,6 +165,7 @@ export function RaidenForm({ initialConfig }: { initialConfig: RaidenConfig }) {
         rewardValidDays: Number(numbers.rewardValidDays),
         repeatDailyCap: Number(numbers.repeatDailyCap),
         revivePriceCredits: Number(numbers.revivePriceCredits),
+        couponUnitCredits: Number(numbers.couponUnitCredits),
         maxRevives: Number(numbers.maxRevives),
         minStageSeconds: Number(numbers.minStageSeconds),
         maxStageSeconds: Number(numbers.maxStageSeconds),
@@ -195,6 +205,7 @@ export function RaidenForm({ initialConfig }: { initialConfig: RaidenConfig }) {
         rewardValidDays: Number(numbers.rewardValidDays),
         repeatDailyCap: Number(numbers.repeatDailyCap),
         revivePriceCredits: Number(numbers.revivePriceCredits),
+        couponUnitCredits: Number(numbers.couponUnitCredits),
         maxRevives: Number(numbers.maxRevives),
         minStageSeconds: Number(numbers.minStageSeconds),
         maxStageSeconds: Number(numbers.maxStageSeconds),

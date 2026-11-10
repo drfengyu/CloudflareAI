@@ -79,9 +79,9 @@ function CouponChip({ coupon }: { coupon: ActivityCouponView }) {
   return (
     <Link
       href={coupon.href}
-      title={`${coupon.couponName}（${coupon.label}）余额 ${exact(coupon.credits)} cr${
-        active ? "，点击兑换或查看礼包" : "，活动未开启"
-      }`}
+      title={`${coupon.couponName}（${coupon.label}）余额 ${exact(coupon.credits)} cr 券面，1 张 = ${exact(
+        coupon.unitCredits,
+      )} cr${active ? "，点击兑换或查看礼包" : "，活动未开启"}`}
       className={`flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-medium tabular-nums transition-colors hover:bg-secondary ${
         active ? "text-foreground" : "text-muted-foreground/60"
       }`}
@@ -109,7 +109,7 @@ export function CurrencyBar({ snapshot }: { snapshot: CurrencySnapshot }) {
         <PlusBadge />
       </Link>
       <div
-        title={`临时余额 ${exact(display.temporary)} cr，签到、赠送与返利获得，到期作废`}
+        title={`临时余额 ${exact(display.temporary)} tcr，签到、赠送与返利获得，到期作废`}
         className="flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground"
       >
         <Hourglass className="h-3.5 w-3.5 shrink-0 text-teal-500" />
@@ -147,7 +147,7 @@ export function CurrencyBar({ snapshot }: { snapshot: CurrencySnapshot }) {
                     </span>
                   </span>
                   <span className="shrink-0 text-sm tabular-nums">
-                    {exact(coupon.credits)}
+                    {exact(coupon.credits)} cr
                   </span>
                 </Link>
               </DropdownMenuItem>

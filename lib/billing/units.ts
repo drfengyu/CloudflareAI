@@ -1,0 +1,33 @@
+/**
+ * 货币单位：
+ * - cr  = 永久货币，充值、永久奖励与返利到账，不过期；
+ * - tcr = 临时货币，签到、活动奖励等赠送额度，带有效期，到期作废。
+ *
+ * 两者 1:1 可花，消费时先扣 tcr、再扣 cr。活动券是预付的 cr 券面，
+ * 兑换与礼包按 cr 计价，玩法内部再用券面抵扣。
+ */
+
+export const PERMANENT_UNIT = "cr";
+export const TEMPORARY_UNIT = "tcr";
+
+/** 与旧版 `formatCredits` 相同的小数规则；独立放这里避免把 DB 依赖带进客户端。 */
+export function formatAmount(value: number): string {
+  if (value === 0) return "0";
+  if (Math.abs(value) < 0.01) return value.toFixed(6);
+  if (Math.abs(value) < 1) return value.toFixed(4);
+  return value.toFixed(2);
+}
+
+export function formatPermanent(value: number): string {
+  return `${formatAmount(value)} ${PERMANENT_UNIT}`;
+}
+
+export function formatTemporary(value: number): string {
+  return `${formatAmount(value)} ${TEMPORARY_UNIT}`;
+}
+
+/** 两本账并列展示：临时为 0 时只留 cr，避免“X cr + 0 tcr”这种噪声。 */
+export function formatCombined(permanent: number, temporary: number): string {
+  if (temporary <= 0) return formatPermanent(permanent);
+  return `${formatPermanent(permanent)} + ${formatTemporary(temporary)}`;
+}

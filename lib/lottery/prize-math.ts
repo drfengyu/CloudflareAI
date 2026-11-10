@@ -72,6 +72,8 @@ export interface LotteryConfig {
   endAt: string;
   /** 单张券价格（cr）。 */
   ticketPriceCredits: number;
+  /** 1 张活动券兑换所需的 cr（券面单价）；兑换与展示都按它折算张数。 */
+  couponUnitCredits: number;
   /** 进入外圈的概率百分比，0~100。 */
   outerChancePercent: number;
   /**
@@ -102,6 +104,7 @@ export const DEFAULT_LOTTERY_CONFIG: LotteryConfig = {
   startAt: "",
   endAt: "",
   ticketPriceCredits: 100,
+  couponUnitCredits: 1,
   outerChancePercent: 12.5,
   multiplierBase: "ticket",
   prizeValidDays: 7,
@@ -233,6 +236,10 @@ export function sanitizeLotteryConfig(raw: unknown): LotteryConfig {
     startAt: typeof it.startAt === "string" ? it.startAt.trim() : "",
     endAt: typeof it.endAt === "string" ? it.endAt.trim() : "",
     ticketPriceCredits: price,
+    couponUnitCredits: Math.min(
+      1_000_000,
+      round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
+    ),
     outerChancePercent: Number.isFinite(chance)
       ? Math.min(100, Math.max(0, chance))
       : d.outerChancePercent,
@@ -343,9 +350,17 @@ function weightedIndex(weights: number[], roll: number): number {
   return weights.length - 1;
 }
 
+/** 临时余额档的文案：正数进 tcr（带过期），负数从 cr 永久余额倒扣。 */
 export function formatPrizeLabel(value: number): string {
   const n = round2(value);
-  return n === 0 ? "谢谢参与" : n > 0 ? `+${n} cr` : `${n} cr`;
+  if (n === 0) return "谢谢参与";
+  return n > 0 ? `+${n} tcr` : `${n} cr`;
+}
+
+/** 永久余额档：不进临时余额，文案固定 cr 并带「永久」标记。 */
+export function formatPermanentPrizeLabel(value: number): string {
+  const n = round2(value);
+  return n >= 0 ? `+${n} cr 永久` : `${n} cr`;
 }
 
 /** 赠券档的文案：不给 cr，只给次数，所以不套 cr 的格式。 */
@@ -433,7 +448,7 @@ export function rollPrize(
     // permanentCredits 正数发永久余额（不过期）；credits 正数发临时余额；倒扣走永久余额。
     balanceType: credits > 0 ? (isPermanent ? "permanent" : "temporary") : null,
     // label 带「永久」标记存库，记录页据此区分临时余额与永久余额；倒扣不标。
-    label: isPermanent ? `${formatPrizeLabel(credits)} 永久` : formatPrizeLabel(credits),
+    label: isPermanent ? formatPermanentPrizeLabel(credits) : formatPrizeLabel(credits),
   };
 }
 

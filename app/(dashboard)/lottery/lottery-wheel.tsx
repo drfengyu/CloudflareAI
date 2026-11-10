@@ -79,7 +79,10 @@ export interface LotteryWheelProps {
   milestones: { draws: number; tickets: number }[];
   tickets: number;
   totalDraws: number;
-  totalCredits: number;
+  /** 当期活动券余额（cr 券面），买抽奖券只扣券。 */
+  couponCredits: number;
+  /** 1 张活动券 = 多少 cr（活动设置里的兑换单价）。 */
+  couponUnitCredits: number;
   status: ActivityStatus;
   startAtMs: number | null;
   endAtMs: number | null;
@@ -91,8 +94,6 @@ export interface LotteryWheelProps {
   luckyThreshold: number;
   /** 最近 24 小时大奖记录，用于中奖墙展示。 */
   bigWins: BigWinRecord[];
-  /** 用户当前可用总余额（永久+未过期临时），用于买券按钮余额不足时禁用。 */
-  balanceCredits: number;
 }
 
 /** 霓虹配色：每个音调给深浅两档交替，相邻扇区才分得开。赠券档用金色与 cr 档区分。 */
@@ -504,11 +505,13 @@ export function LotteryWheel(props: LotteryWheelProps) {
       return;
     }
     setTickets(response.data.ticketsLeft);
-    toast.success(`已购买 ${response.data.tickets} 张抽奖券，扣 ${response.data.costCredits} cr`);
+    toast.success(`已购买 ${response.data.tickets} 张抽奖券，消耗 ${response.data.costCredits} cr 券面`);
     router.refresh();
   }
 
   const netCredits = results ? results.reduce((sum, r) => sum + r.credits, 0) : 0;
+  const tempGain = results ? results.reduce((sum, r) => sum + Math.max(0, r.credits), 0) : 0;
+  const permanentLoss = results ? results.reduce((sum, r) => sum + Math.min(0, r.credits), 0) : 0;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
@@ -744,7 +747,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
           </div>
 
           <p className="mt-1.5 text-center text-[11px] leading-relaxed text-white/40">
-            格子太窄时文案会先缩成 <span className="text-white/75">★</span>（cr 档）或{" "}
+            格子太窄时文案会先缩成 <span className="text-white/75">★</span>（cr / tcr 金额档）或{" "}
             <span className="text-white/75">券</span>（赠券档），窄到连记号都放不下的只留一个亮点——
             那正是概率最低的几档。鼠标悬停在格子上可看完整奖品与概率，全部档位也在下方「奖池与规则」公示。
           </p>
@@ -823,9 +826,9 @@ export function LotteryWheel(props: LotteryWheelProps) {
           <div className="mt-2 flex items-end gap-2 rounded-lg border border-white/10 bg-white/5 p-3">
             <div className="flex-1">
               <label className="text-[11px] text-white/50" htmlFor="lottery-buy-count">
-                购买抽奖券（{props.ticketPriceCredits} cr / 张）
+                购买抽奖券（{props.ticketPriceCredits} cr 券面 / 张）
                 <span className="ml-2 text-white/40">
-                  需 {(buyCount * props.ticketPriceCredits).toFixed(2)} cr / 余额 {props.balanceCredits.toFixed(2)} cr
+                  需 {(buyCount * props.ticketPriceCredits).toFixed(2)} cr 券面 / 可用 {props.couponCredits.toFixed(2)} cr
                 </span>
               </label>
               <input
@@ -840,7 +843,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
             </div>
             <button
               onClick={handleBuy}
-              disabled={!active || buying || props.balanceCredits < buyCount * props.ticketPriceCredits}
+              disabled={!active || buying || props.couponCredits < buyCount * props.ticketPriceCredits}
               className="h-8 shrink-0 rounded bg-white/10 px-3 text-xs font-medium text-white transition hover:bg-white/20 disabled:opacity-40"
             >
               {buying ? "…" : `买 ${buyCount} 张`}
@@ -881,8 +884,8 @@ export function LotteryWheel(props: LotteryWheelProps) {
               <p className="mt-0.5 text-[11px] text-muted-foreground">可用券</p>
             </div>
             <div className="rounded-lg border border-border bg-muted/40 py-2">
-              <p className="text-xl font-bold">{formatCredits(props.totalCredits)}</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">总余额 cr</p>
+              <p className="text-xl font-bold">{formatCredits(props.couponCredits)}</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">活动券 cr</p>
             </div>
           </CardContent>
         </Card>
@@ -909,8 +912,10 @@ export function LotteryWheel(props: LotteryWheelProps) {
                     {spokes.length < results.length ? "（开奖中…）" : ""}
                   </span>
                   <span className="text-lg font-semibold">
-                    {netCredits >= 0 ? "+" : ""}
-                    {formatCredits(netCredits)} cr
+                    {tempGain > 0 ? `+${formatCredits(tempGain)} tcr` : null}
+                    {tempGain > 0 && permanentLoss < 0 ? " · " : null}
+                    {permanentLoss < 0 ? `${formatCredits(permanentLoss)} cr` : null}
+                    {tempGain === 0 && permanentLoss === 0 ? "0" : null}
                   </span>
                 </div>
                 <ul className="grid gap-1.5 sm:grid-cols-2">
@@ -975,7 +980,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
                           </span>
                         </div>
                         <p className="mt-0.5 text-sm font-semibold">
-                          {win.credits > 0 && `+${formatCredits(win.credits)} cr`}
+                          {win.credits !== 0 && win.label}
                           {win.grantTickets > 0 && `+${win.grantTickets} 张券`}
                         </p>
                       </div>
@@ -1041,9 +1046,12 @@ export function LotteryWheel(props: LotteryWheelProps) {
             <ul className="list-disc space-y-1 pl-4">
               <li>内圈指针停在「外圈入口」时指针变长顶到环带内侧，随后一根贯穿盘面的外圈读数针从落点扫到转停后的那一格奖励上，并停在那一格。</li>
               <li>10 连抽一次转停后依次落 10 根指针；外圈只摇一次，读数针按开奖顺序逐发滑到各自的中奖格。</li>
-              <li>中奖 cr 作为临时余额发放，有效期 {props.prizeValidDays} 天，过期未用自动消失。</li>
-              <li>转到倒扣时先扣未过期的临时余额（越早到期越先扣），不够再扣永久余额，本金可能因此扣成负数。</li>
-              <li>活动结束后未使用的券作废，不折算回 cr。</li>
+              <li>中奖金额以 tcr（临时余额）发放，有效期 {props.prizeValidDays} 天，过期未用自动消失；标「永久」的档位以 cr 发放，不过期。</li>
+              <li>转到倒扣时按 cr 从永久余额扣除，本金可能因此扣成负数。</li>
+              <li>
+                抽奖券需先用 cr / tcr 按活动单价（1 张 = {formatCredits(props.couponUnitCredits)} cr）
+                兑换活动券，玩法只扣券；活动结束后未使用的券作废，不折算回货币。
+              </li>
             </ul>
           </CardContent>
         </Card>

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FlipBoard } from "@/components/flip/board";
 import { FlipRoundList } from "@/components/flip/round-list";
 import { formatCredits } from "@/lib/billing/credits";
-import { getUserTotalBalance, requireUser } from "@/lib/usage/meter";
+import { requireUser } from "@/lib/usage/meter";
 import { FLIP_CARD_COUNT, flipActivityKey, flipActivityWindow, flipExpectation } from "@/lib/flip/config";
 import { getFlipConfig } from "@/lib/flip/settings";
 import { countRoundsToday, findOpenRound, type PendingRound } from "@/lib/flip/store";
@@ -57,9 +57,8 @@ function Stat({
 
 export default async function FlipPage() {
   const userId = await requireUser();
-  const [config, balance, coupon] = await Promise.all([
+  const [config, coupon] = await Promise.all([
     getFlipConfig(),
-    getUserTotalBalance(userId),
     getActivityCouponView(userId, "flip"),
   ]);
   const windowInfo = flipActivityWindow(config);
@@ -127,11 +126,12 @@ export default async function FlipPage() {
           <li>
             每局只能翻一张，翻开即结算。因为每局都是独立的一副新牌，
             期望返还就是 {expectation.boardTotal} ÷ {FLIP_CARD_COUNT} ={" "}
-            {formatCredits(expectation.expectedPerRound)} cr，<b>不靠「抽多了才准」</b>。
+            {formatCredits(expectation.expectedPerRound)} tcr，<b>不靠「抽多了才准」</b>。
           </li>
           <li>
-            中奖 cr 进<b>临时余额</b>，有效期 {config.rewardValidDays} 天，到期未用自动作废；票价按「先花快过期的赠送额度、
-            再花本金」的顺序扣。
+            中奖金额进<b>临时余额（tcr）</b>，有效期 {config.rewardValidDays} 天，到期未用自动作废；
+            开局票价从当期活动券扣（cr 券面），活动券按本玩法单价兑换（1 张 ={" "}
+            {formatCredits(config.couponUnitCredits)} cr），券不足需先兑换。
           </li>
           <li>中途关掉页面不算丢：没翻完的那局会留在牌桌上，回来接着翻，不会再扣一次票价。</li>
           <li>每日最多 {config.dailyRounds} 局（按北京时间自然日）。</li>
@@ -175,18 +175,18 @@ export default async function FlipPage() {
             icon={Coins}
             label="累计投入"
             value={`${formatCredits(summary.spent)} cr`}
-            hint={`票价 ${formatCredits(config.roundPriceCredits)} cr / 局`}
+            hint={`票价 ${formatCredits(config.roundPriceCredits)} cr 券面 / 局`}
           />
           <Stat
             icon={Gem}
             label="累计到手"
-            value={`${formatCredits(summary.won)} cr`}
+            value={`${formatCredits(summary.won)} tcr`}
             hint={`其中 ${summary.blanks} 局翻到空牌`}
           />
           <Stat
             icon={Trophy}
             label="最好一张"
-            value={`${formatCredits(summary.best)} cr`}
+            value={`${formatCredits(summary.best)} tcr`}
             hint={`${globalStats.players} 人参与 · 全站 ${globalStats.totalRounds} 局`}
           />
         </div>
@@ -207,7 +207,7 @@ export default async function FlipPage() {
               rewardValidDays={config.rewardValidDays}
               dailyRounds={config.dailyRounds}
               roundsLeft={Math.max(0, config.dailyRounds - roundsToday)}
-              balanceCredits={balance.total}
+              couponCredits={coupon.credits}
               boardTotal={expectation.boardTotal}
               expectedPerRound={expectation.expectedPerRound}
               hitChancePercent={expectation.hitChancePercent}

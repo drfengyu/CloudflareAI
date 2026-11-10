@@ -84,7 +84,7 @@ function windowError(config: LotteryConfig): string | null {
 }
 
 /**
- * 购买抽奖券：单券价 × 张数，先扣临时余额再扣永久余额，总额不足则整笔失败。
+ * 购买抽奖券：单券价 × 张数，只扣当期活动券；券不足整笔失败，需先兑换。
  */
 export async function buyTickets(
   count: number,
@@ -108,12 +108,12 @@ export async function buyTickets(
 
     const paid = await payWithCoupon(userId, "lottery", activityKey, cost);
     if (!paid.ok) {
-      return { success: false, error: `${paid.reason}：购买 ${count} 张券需要 ${cost} cr` };
+      return { success: false, error: paid.reason };
     }
     const payment = paid.payment;
 
-    // D1 没有事务，钱已经扣走了；发券或记流水再失败就必须把券收回、把钱退回，
-    // 否则用户付了 cr 却拿不到券（退回走永久余额，比原路退回只多不少）。
+    // D1 没有事务，券已经扣走了；发券或记流水再失败就必须把券退回，
+    // 否则用户花了券面却拿不到券。
     const ticketDelta = ticketStatsDelta({
       source: "buy",
       count,
@@ -127,29 +127,13 @@ export async function buyTickets(
         priceCredits: config.ticketPriceCredits,
         activityKey,
       });
-      // 券抵的部分在买券时已扣过余额，流水只记真实现金支出。
-      if (payment.creditPart > 0) {
-        await insertTopupRows([
-          {
-            id: crypto.randomUUID(),
-            userId,
-            amount: -payment.creditPart,
-            type: TOPUP_TYPE_LOTTERY,
-            description:
-              payment.couponPart > 0
-                ? `购买抽奖券 ${count} 张（${cost} cr，活动券抵 ${payment.couponPart} cr）`
-                : `购买抽奖券 ${count} 张（${cost} cr）`,
-            createdAt: new Date(),
-          },
-        ]);
-      }
       await applyTicketStats(userId, ticketDelta);
       statsApplied = true;
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
-      console.error("[buyTickets] 发券失败，退回扣款", detail, error);
+      console.error("[buyTickets] 发券失败，退回扣券", detail, error);
       await compensatePurchase(userId, issued, payment, statsApplied ? ticketDelta : null);
-      return { success: false, error: `发券失败：${detail}，扣款已退回` };
+      return { success: false, error: `发券失败：${detail}，已退回活动券` };
     }
 
     revalidatePath("/lottery");
@@ -165,8 +149,8 @@ export async function buyTickets(
 }
 
 /**
- * 买券失败的资金回滚：收回已发出的券，把扣掉的 cr 退回永久余额并补一条流水。
- * 本身再失败就只记日志——钱在用户余额里，不会凭空消失，人工按流水核对即可。
+ * 买券失败的回滚：收回已发出的券，把扣掉的券面退回原券行。
+ * 本身再失败就只记日志——券在用户券包里，不会凭空消失，人工核对即可。
  *
  * `appliedStats` 非空表示累计统计行已经加过，要按同一份增量反向扣回。
  */
@@ -178,24 +162,10 @@ async function compensatePurchase(
 ): Promise<void> {
   try {
     await deleteTickets(issued);
-    if (payment.creditPart > 0) {
-      await adjustPermanentBalance(userId, payment.creditPart);
-      await insertTopupRows([
-        {
-          id: crypto.randomUUID(),
-          userId,
-          amount: payment.creditPart,
-          // 退回的是永久余额，不能记成 type=6：钱包会把正向的 6 类流水当带过期的奖励，到期即隐藏。
-          type: 2,
-          description: `购买抽奖券失败退回（${payment.creditPart} cr）`,
-          createdAt: new Date(),
-        },
-      ]);
-    }
     if (appliedStats) await applyTicketStats(userId, negateStatsDelta(appliedStats));
-    await refundCouponPayment(userId, payment, "购买抽奖券失败退回活动券");
+    await refundCouponPayment(payment);
   } catch (rollbackError) {
-    console.error("[buyTickets] 退回扣款失败，需人工核对", rollbackError);
+    console.error("[buyTickets] 退回扣券失败，需人工核对", rollbackError);
   }
 }
 

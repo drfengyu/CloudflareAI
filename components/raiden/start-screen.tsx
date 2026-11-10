@@ -1,6 +1,6 @@
 "use client";
 
-import { Bomb, Coins, Gamepad2, Gem, Heart, Trophy, Volume2, VolumeX, Zap } from "lucide-react";
+import { Bomb, Coins, Gamepad2, Heart, Trophy, Volume2, VolumeX, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatCredits } from "@/lib/billing/credits";
@@ -26,7 +26,6 @@ const STATUS_LABEL: Record<RaidenActivityStatus, string> = {
 export function StartScreen({
   config,
   status,
-  balance,
   couponCredits,
   runsLeft,
   loadout,
@@ -37,7 +36,7 @@ export function StartScreen({
 }: {
   config: RaidenConfig;
   status: RaidenActivityStatus;
-  balance: number;
+  /** 当期活动券余额（cr 券面）。 */
   couponCredits: number;
   runsLeft: number;
   loadout: RaidenLoadout;
@@ -48,7 +47,7 @@ export function StartScreen({
 }) {
   const cost = loadoutCost(config, loadout);
   const initial = startingStats(loadout);
-  const insufficient = cost > balance + couponCredits;
+  const insufficient = cost > couponCredits;
   const closed = status !== "active";
   const noRuns = runsLeft <= 0;
   const disabled = starting || closed || noRuns || insufficient;
@@ -61,7 +60,7 @@ export function StartScreen({
     : noRuns
       ? "今日出击次数已用完"
       : insufficient
-        ? `余额不足，还差 ${formatCredits(cost - balance - couponCredits)} cr`
+        ? `活动券不足，还差 ${formatCredits(cost - couponCredits)} cr 券面，请先兑换`
         : null;
 
   return (
@@ -84,18 +83,12 @@ export function StartScreen({
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-white/55">
           <span className="flex items-center gap-1">
             <Coins className="h-3 w-3 text-amber-300/80" />
-            余额 <span className="font-mono font-semibold text-white/90">{formatCredits(balance)}</span> cr
+            券面 <span className="font-mono font-semibold text-white/90">{formatCredits(couponCredits)}</span> cr
           </span>
           <span>
             今日 <span className="font-mono text-white/90">{runsLeft}</span>/{config.dailyRuns} 次
           </span>
-          {couponCredits > 0 ? (
-            <span className="flex items-center gap-1 text-cyan-200/70">
-              <Gem className="h-3 w-3" />
-              券 <span className="font-mono text-white/90">{formatCredits(couponCredits)}</span> cr
-            </span>
-          ) : null}
-          <span className="text-cyan-200/50">首通奖励进入临时余额</span>
+          <span className="text-cyan-200/50">首通奖励进入临时余额（tcr）</span>
         </div>
       </div>
 
@@ -106,7 +99,7 @@ export function StartScreen({
           <div className="flex items-center justify-between gap-2">
             <p className="text-[10px] font-medium text-cyan-100/80">当前装备</p>
             <p className="shrink-0 font-mono text-xs text-amber-200">
-              {cost > 0 ? `${formatCredits(cost)} cr` : "标准配备"}
+              {cost > 0 ? `${formatCredits(cost)} cr 券面` : "标准配备"}
             </p>
           </div>
           <p className="mt-1 truncate text-[11px] text-white/75">{describeLoadout(config, loadout)}</p>
@@ -149,7 +142,7 @@ export function StartScreen({
             <p className="truncate">
               装备合计{" "}
               <span className="font-mono text-sm font-semibold text-white">{formatCredits(cost)}</span>{" "}
-              cr
+              cr 券面
             </p>
             <p className={hint ? "mt-0.5 truncate text-amber-300/80" : "mt-0.5 truncate text-white/35"}>
               {hint ?? "准备就绪，出击后自动射击"}
@@ -210,7 +203,7 @@ function MissionBrief({ config }: { config: RaidenConfig }) {
               <span className="shrink-0 text-white/80">{stage.name}</span>
               <span className="min-w-0 flex-1 truncate text-white/35">{stage.brief}</span>
               <span className="shrink-0 font-mono text-amber-300/70">
-                首通 {formatCredits(reward.firstClear)} cr
+                首通 {formatCredits(reward.firstClear)} tcr
               </span>
             </div>
           );

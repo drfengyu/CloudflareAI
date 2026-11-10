@@ -11,6 +11,7 @@ import { RechargeOrdersCard } from "./recharge-orders-card";
 import { TempBalancesCard, type SerializedTempBalance } from "./temp-balances-card";
 import { RecentLedgerCard } from "./recent-ledger-card";
 import { formatCredits } from "@/lib/billing/credits";
+import { formatCombined } from "@/lib/billing/units";
 import { calculateDisplayBalance } from "@/lib/billing/display-balance";
 import {
   ledgerNet,
@@ -154,7 +155,7 @@ export default async function WalletPage({
                   <div className="min-w-0">
                     <p className="text-sm text-muted-foreground">总余额</p>
                     <p className="text-2xl font-semibold tabular-nums">
-                      {formatCredits(totalBalance)} credits
+                      {formatCombined(displayBalance.displayPermanent, displayBalance.displayTemporary)}
                     </p>
                   </div>
                 </div>
@@ -193,7 +194,7 @@ export default async function WalletPage({
                     cr
                   </span>
                   <span>
-                    当前余额 {formatCredits(settlement.balance)} cr
+                    当前余额 {formatCredits(settlement.balance)} cr 等值
                     {settlement.reconciled
                       ? ""
                       : `（相差 ${settlement.gap > 0 ? "+" : "−"}${formatCredits(Math.abs(settlement.gap))}）`}
@@ -220,7 +221,7 @@ export default async function WalletPage({
                   <p className="flex flex-wrap items-center gap-x-2">
                     <span className="flex items-center gap-1 font-medium text-foreground tabular-nums">
                       <Clock className="h-3 w-3" />
-                      临时 {formatCredits(displayBalance.displayTemporary)} cr
+                      临时 {formatCredits(displayBalance.displayTemporary)} tcr
                     </span>
                     <span>
                       {earliestExpiry
@@ -232,7 +233,7 @@ export default async function WalletPage({
                 {compensated > 0 && (
                   <p className="text-amber-600 dark:text-amber-400">
                     永久余额实为 −{formatCredits(Math.abs(permanentBalance))} cr，已用{" "}
-                    {formatCredits(compensated)} cr 临时余额抵扣；上方两项是抵扣后的可用额度
+                    {formatCredits(compensated)} tcr 临时余额抵扣；上方两项是抵扣后的可用额度
                   </p>
                 )}
                 <p>消费先扣临时，再扣永久。</p>

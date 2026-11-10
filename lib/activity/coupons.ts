@@ -1,13 +1,16 @@
 import { and, eq, gt, sql } from "drizzle-orm";
-import { d1Run, db } from "@/lib/db/d1-http";
+import { d1All, d1Run, db } from "@/lib/db/d1-http";
 import {
   activityCoupons,
+  couponPackPurchases,
   temporaryBalances,
   topups,
   users,
   type ActivityKind,
 } from "@/lib/db/schema";
 import { spendCredits, refundPermanentCredits } from "@/lib/billing/spend";
+import { formatAmount } from "@/lib/billing/units";
+import { cnStartOfToday } from "@/lib/date";
 import { activityWindow, currentActivityKey } from "@/lib/lottery/prize-math";
 import { getLotteryConfig } from "@/lib/lottery/config";
 import { flipActivityKey, flipActivityWindow } from "@/lib/flip/config";
@@ -18,8 +21,8 @@ import { getRaidenConfig } from "@/lib/raiden/settings";
 /**
  * 活动券：一种玩法一种券，按活动轮次隔离。
  *
- * 券是「已预付的 credits」：兑换或买礼包时从余额扣 cr（流水 type=15），
- * 之后在对应玩法的付费点先抵扣券、再扣临时/永久余额；券内抵扣不再写 cr 流水，
+ * 限时活动只能凭券参加：按每个活动配置的券面单价（1 张 = X cr）用余额兑换，
+ * 流入流水 type=15；玩法付费点只扣券、不再直接扣货币；券内抵扣不写 cr 流水，
  * 所以账本的支出总额仍然等于余额的真实减少。
  */
 
@@ -71,14 +74,55 @@ export interface CouponPack {
   priceCredits: number;
   /** 券面 / 实付，200% = 2 倍。 */
   ratio: number;
+  /** 每北京自然日限购份数；null = 不限。 */
+  dailyLimit: number | null;
+  /** 累计限购份数；null = 不限。 */
+  totalLimit: number | null;
 }
 
-/** 三档珍宝礼包；比例按需求固定为 200% / 500% / 1000%。 */
+/** 三档珍宝礼包；比例按需求固定为 200% / 500% / 1000%，倍率越高限购越紧。 */
 export const COUPON_PACKS: CouponPack[] = [
-  { key: "small", name: "小份珍宝", priceCredits: 10, ratio: 2 },
-  { key: "medium", name: "中份珍宝", priceCredits: 50, ratio: 5 },
-  { key: "large", name: "大份珍宝", priceCredits: 100, ratio: 10 },
+  { key: "small", name: "小份珍宝", priceCredits: 10, ratio: 2, dailyLimit: null, totalLimit: null },
+  { key: "medium", name: "中份珍宝", priceCredits: 50, ratio: 5, dailyLimit: 2, totalLimit: 20 },
+  { key: "large", name: "大份珍宝", priceCredits: 100, ratio: 10, dailyLimit: 1, totalLimit: 10 },
 ];
+
+export interface CouponPackView extends CouponPack {
+  boughtToday: number;
+  boughtTotal: number;
+}
+
+interface PackUsage {
+  today: number;
+  total: number;
+}
+
+/** 限购按「用户 + 礼包」统计，不区分玩法：三个活动共用同一份额度。 */
+async function readPackUsage(userId: string): Promise<Map<string, PackUsage>> {
+  const rows = await d1All<{ packKey: string; total: number; today: number }>(
+    `SELECT packKey,
+            COUNT(*) AS total,
+            SUM(CASE WHEN createdAt >= ? THEN 1 ELSE 0 END) AS today
+       FROM coupon_pack_purchase
+      WHERE userId = ?
+      GROUP BY packKey`,
+    [cnStartOfToday().getTime(), userId],
+  ).catch(() => []);
+  return new Map(
+    rows.map((row) => [
+      row.packKey,
+      { today: Number(row.today ?? 0), total: Number(row.total ?? 0) },
+    ]),
+  );
+}
+
+function packViews(usage: Map<string, PackUsage>): CouponPackView[] {
+  return COUPON_PACKS.map((pack) => ({
+    ...pack,
+    boughtToday: usage.get(pack.key)?.today ?? 0,
+    boughtTotal: usage.get(pack.key)?.total ?? 0,
+  }));
+}
 
 interface ResolvedActivity {
   kind: ActivityKind;
@@ -87,30 +131,37 @@ interface ResolvedActivity {
   status: ActivityStatus;
   activityKey: string | null;
   couponName: string;
+  /** 1 张活动券 = 多少 cr；兑换与张数展示都按它折算。 */
+  unitCredits: number;
 }
 
 async function resolveActivity(kind: ActivityKind): Promise<ResolvedActivity> {
   const meta = ACTIVITY_META[kind];
   let status: ActivityStatus;
   let activityKey: string | null;
+  let unitCredits = 1;
   if (kind === "lottery") {
     const config = await getLotteryConfig();
     status = activityWindow(config).status;
     activityKey = currentActivityKey(config);
+    unitCredits = config.couponUnitCredits;
   } else if (kind === "flip") {
     const config = await getFlipConfig();
     status = flipActivityWindow(config).status;
     activityKey = flipActivityKey(config);
+    unitCredits = config.couponUnitCredits;
   } else {
     const config = await getRaidenConfig();
     status = raidenActivityWindow(config).status;
     activityKey = raidenActivityKey(config);
+    unitCredits = config.couponUnitCredits;
   }
   return {
     ...meta,
     status,
     activityKey,
     couponName: couponNameFor(kind, activityKey),
+    unitCredits,
   };
 }
 
@@ -120,7 +171,7 @@ export async function resolveActivities(): Promise<ResolvedActivity[]> {
 
 export interface ActivityCouponView extends ResolvedActivity {
   credits: number;
-  packs: CouponPack[];
+  packs: CouponPackView[];
 }
 
 export interface CurrencySnapshot {
@@ -164,14 +215,17 @@ async function readCouponRows(
  */
 export async function listActivityCoupons(userId: string): Promise<ActivityCouponView[]> {
   const activities = await resolveActivities();
-  const balances = await readCouponRows(
-    userId,
-    activities.map((item) => ({ kind: item.kind, activityKey: item.activityKey })),
-  );
+  const [balances, usage] = await Promise.all([
+    readCouponRows(
+      userId,
+      activities.map((item) => ({ kind: item.kind, activityKey: item.activityKey })),
+    ),
+    readPackUsage(userId),
+  ]);
   return activities.map((item) => ({
     ...item,
     credits: item.activityKey ? round2(balances.get(`${item.kind}|${item.activityKey}`) ?? 0) : 0,
-    packs: COUPON_PACKS,
+    packs: packViews(usage),
   }));
 }
 
@@ -204,15 +258,18 @@ export async function getActivityCouponView(
   kind: ActivityKind,
 ): Promise<ActivityCouponView> {
   const activity = await resolveActivity(kind);
-  const balances = activity.activityKey
-    ? await readCouponRows(userId, [{ kind, activityKey: activity.activityKey }])
-    : new Map<string, number>();
+  const [balances, usage] = await Promise.all([
+    activity.activityKey
+      ? readCouponRows(userId, [{ kind, activityKey: activity.activityKey }])
+      : Promise.resolve(new Map<string, number>()),
+    readPackUsage(userId),
+  ]);
   return {
     ...activity,
     credits: activity.activityKey
       ? round2(balances.get(`${kind}|${activity.activityKey}`) ?? 0)
       : 0,
-    packs: COUPON_PACKS,
+    packs: packViews(usage),
   };
 }
 
@@ -244,21 +301,27 @@ async function addCouponCredits(
   );
 }
 
-/** 兑换活动券：先花临时余额再花永久余额，1:1 换券面。 */
+/**
+ * 兑换活动券：按「1 张 = 该活动配置的券面单价」整张兑换，
+ * 付款先花临时余额再花永久余额；券面按 cr 1:1 抵扣玩法费用。
+ */
 export async function exchangeCoupon(
   userId: string,
   kind: ActivityKind,
-  rawAmount: number,
-): Promise<{ credits: number; couponName: string }> {
-  const amount = round2(Number(rawAmount));
-  if (!Number.isFinite(amount) || amount < 1 || amount > 100_000) {
-    throw new Error("兑换数量需在 1 ~ 100000 之间");
+  rawTickets: number,
+): Promise<{ credits: number; tickets: number; couponName: string }> {
+  const tickets = Number(rawTickets);
+  if (!Number.isInteger(tickets) || tickets < 1 || tickets > 100_000) {
+    throw new Error("兑换张数需为 1 ~ 100000 的整数");
   }
   const activity = await resolveActivity(kind);
   const activityKey = assertActive(activity);
+  const amount = round2(tickets * activity.unitCredits);
 
   const spend = await spendCredits(userId, amount);
-  if (!spend.ok) throw new Error(`${spend.reason}：兑换需要 ${amount} cr`);
+  if (!spend.ok) {
+    throw new Error(`${spend.reason}：兑换 ${tickets} 张需要 ${formatAmount(amount)} cr`);
+  }
 
   try {
     await addCouponCredits(userId, kind, activityKey, activity.couponName, amount);
@@ -267,20 +330,22 @@ export async function exchangeCoupon(
       userId,
       amount: -amount,
       type: COUPON_TOPUP_TYPE,
-      description: `兑换${activity.couponName} ${amount} cr（${activity.label}）`,
+      description: `兑换${activity.couponName} ${tickets} 张（${formatAmount(amount)} cr，${activity.label}）`,
       createdAt: new Date(),
     });
   } catch (err) {
-    await refundPermanentCredits(userId, amount, `兑换${activity.couponName}失败退回（${amount} cr）`).catch(
-      () => undefined,
-    );
+    await refundPermanentCredits(
+      userId,
+      amount,
+      `兑换${activity.couponName}失败退回（${formatAmount(amount)} cr）`,
+    ).catch(() => undefined);
     throw err;
   }
 
-  return { credits: amount, couponName: activity.couponName };
+  return { credits: amount, tickets, couponName: activity.couponName };
 }
 
-/** 珍宝礼包：花 cr 买券面，200% / 500% / 1000% 三档。 */
+/** 珍宝礼包：花 cr 买券面，200% / 500% / 1000% 三档；倍率越高限购越紧。 */
 export async function buyCouponPack(
   userId: string,
   kind: ActivityKind,
@@ -291,11 +356,52 @@ export async function buyCouponPack(
   const activity = await resolveActivity(kind);
   const activityKey = assertActive(activity);
 
+  const usage = await readPackUsage(userId);
+  const used = usage.get(pack.key) ?? { today: 0, total: 0 };
+  if (pack.dailyLimit !== null && used.today >= pack.dailyLimit) {
+    throw new Error(`${pack.name}今日限购 ${pack.dailyLimit} 份，今天已买满，明天再来`);
+  }
+  if (pack.totalLimit !== null && used.total >= pack.totalLimit) {
+    throw new Error(`${pack.name}累计限购 ${pack.totalLimit} 份，已达上限`);
+  }
+
   const spend = await spendCredits(userId, pack.priceCredits);
   if (!spend.ok) throw new Error(`${spend.reason}：礼包需要 ${pack.priceCredits} cr`);
 
   const credits = round2(pack.priceCredits * pack.ratio);
+  const purchaseId = crypto.randomUUID();
+  const now = new Date();
+  let recorded = false;
   try {
+    // 单条语句里复查两份计数再插入：并发下第二单会在这里被挡下，不会突破限购。
+    const { changes } = await d1Run(
+      `INSERT INTO coupon_pack_purchase
+         (id, userId, packKey, activityKind, activityKey, priceCredits, couponCredits, createdAt)
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?
+       WHERE (SELECT COUNT(*) FROM coupon_pack_purchase WHERE userId = ? AND packKey = ?) < ?
+         AND (SELECT COUNT(*) FROM coupon_pack_purchase
+               WHERE userId = ? AND packKey = ? AND createdAt >= ?) < ?`,
+      [
+        purchaseId,
+        userId,
+        pack.key,
+        kind,
+        activityKey,
+        pack.priceCredits,
+        credits,
+        now.getTime(),
+        userId,
+        pack.key,
+        pack.totalLimit ?? 1_000_000_000,
+        userId,
+        pack.key,
+        cnStartOfToday().getTime(),
+        pack.dailyLimit ?? 1_000_000_000,
+      ],
+    );
+    if (changes !== 1) throw new Error(`${pack.name}已到限购上限`);
+    recorded = true;
+
     await addCouponCredits(userId, kind, activityKey, activity.couponName, credits);
     await db.insert(topups).values({
       id: crypto.randomUUID(),
@@ -303,9 +409,15 @@ export async function buyCouponPack(
       amount: -pack.priceCredits,
       type: COUPON_TOPUP_TYPE,
       description: `购买${pack.name}（${activity.couponName} ${credits} cr，${activity.label}）`,
-      createdAt: new Date(),
+      createdAt: now,
     });
   } catch (err) {
+    if (recorded) {
+      await db
+        .delete(couponPackPurchases)
+        .where(eq(couponPackPurchases.id, purchaseId))
+        .catch(() => undefined);
+    }
     await refundPermanentCredits(
       userId,
       pack.priceCredits,
@@ -320,12 +432,11 @@ export async function buyCouponPack(
 export interface CouponPayment {
   couponId: string | null;
   couponPart: number;
-  creditPart: number;
 }
 
 /**
- * 玩法付费点的统一扣款：先抵扣当期活动券，再扣临时/永久余额。
- * 券的扣减用条件 UPDATE 占位，余额扣失败会把券原样加回去。
+ * 玩法付费点的统一扣款：只扣当期活动券，不再接受货币直付。
+ * 券的扣减用条件 UPDATE 原子占位；券不足直接失败，由调用方提示先兑换。
  */
 export async function payWithCoupon(
   userId: string,
@@ -335,7 +446,7 @@ export async function payWithCoupon(
 ): Promise<{ ok: true; payment: CouponPayment } | { ok: false; reason: string }> {
   const amount = round2(Number(rawAmount));
   if (!Number.isFinite(amount) || amount <= 0) {
-    return { ok: true, payment: { couponId: null, couponPart: 0, creditPart: 0 } };
+    return { ok: true, payment: { couponId: null, couponPart: 0 } };
   }
 
   const rows = await db
@@ -350,54 +461,35 @@ export async function payWithCoupon(
     )
     .limit(1);
 
-  let couponId: string | null = null;
-  let couponPart = 0;
-  if (rows[0]) {
-    const available = round2(Number(rows[0].credits));
-    const take = Math.min(available, amount);
-    if (take > 0) {
-      const { changes } = await d1Run(
-        "UPDATE activity_coupon SET credits = credits - ?, updatedAt = ? WHERE id = ? AND credits >= ?",
-        [take, Date.now(), rows[0].id, take],
-      );
-      if (changes === 1) {
-        couponId = rows[0].id;
-        couponPart = take;
-      }
-    }
+  const available = rows[0] ? round2(Number(rows[0].credits)) : 0;
+  if (!rows[0] || available < amount) {
+    return {
+      ok: false,
+      reason: `活动券不足：本次需要 ${formatAmount(amount)} cr 券面，当前可用 ${formatAmount(available)} cr，请先兑换`,
+    };
   }
 
-  const creditPart = round2(amount - couponPart);
-  if (creditPart > 0) {
-    const spend = await spendCredits(userId, creditPart);
-    if (!spend.ok) {
-      if (couponId) {
-        await d1Run(
-          "UPDATE activity_coupon SET credits = credits + ?, updatedAt = ? WHERE id = ?",
-          [couponPart, Date.now(), couponId],
-        ).catch(() => undefined);
-      }
-      return { ok: false, reason: spend.reason };
-    }
+  const { changes } = await d1Run(
+    "UPDATE activity_coupon SET credits = credits - ?, updatedAt = ? WHERE id = ? AND credits >= ?",
+    [amount, Date.now(), rows[0].id, amount],
+  );
+  if (changes !== 1) {
+    return {
+      ok: false,
+      reason: `活动券不足：本次需要 ${formatAmount(amount)} cr 券面，请先兑换`,
+    };
   }
 
-  return { ok: true, payment: { couponId, couponPart, creditPart } };
+  return { ok: true, payment: { couponId: rows[0].id, couponPart: amount } };
 }
 
-/** 建局/开局失败时把券和现金各退回原处；券退回失败只记日志，钱不会凭空消失。 */
-export async function refundCouponPayment(
-  userId: string,
-  payment: CouponPayment,
-  description: string,
-): Promise<void> {
+/** 建局/开局失败时把券退回原处；退回失败只记日志，券不会凭空消失。 */
+export async function refundCouponPayment(payment: CouponPayment): Promise<void> {
   if (payment.couponId && payment.couponPart > 0) {
     await d1Run(
       "UPDATE activity_coupon SET credits = credits + ?, updatedAt = ? WHERE id = ?",
       [payment.couponPart, Date.now(), payment.couponId],
     ).catch((err) => console.error("[refundCouponPayment] 券退回失败:", err));
-  }
-  if (payment.creditPart > 0) {
-    await refundPermanentCredits(userId, payment.creditPart, description).catch(() => undefined);
   }
 }
 
