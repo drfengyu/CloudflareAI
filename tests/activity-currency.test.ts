@@ -65,7 +65,7 @@ test("消费返利：推荐默认五档按门槛递增且最高档封顶 1200", 
   assert.equal(DEFAULT_CASHBACK_TIERS.at(-1)?.maxReward, 1200);
 });
 
-test("消费返利：随机形态按阈值落到货币 / 券 / 抽奖券", () => {
+test("消费返利：随机形态按阈值落到货币 / 券 / 活动券", () => {
   const tier = { minCredits: 500, minReward: 10, maxReward: 100 };
   const couponTarget = {
     kind: "lottery" as const,

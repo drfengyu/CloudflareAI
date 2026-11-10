@@ -642,3 +642,52 @@ export async function grantCouponToRound(
   if (!activityKey.trim() || !couponName.trim()) throw new Error("活动券轮次或券名缺失");
   await addCouponCredits(userId, kind, activityKey, couponName, amount);
 }
+
+/**
+ * 开奖/累抽失败时撤回刚发的活动券：条件扣减挡一次负余额（券可能已被同时花掉），
+ * 没扣净只记日志，不让补偿流程二次抛错盖住原始异常。
+ */
+export async function revokeCouponCredits(
+  userId: string,
+  kind: ActivityKind,
+  activityKey: string,
+  rawAmount: number,
+): Promise<void> {
+  const amount = round2(Number(rawAmount));
+  if (!Number.isFinite(amount) || amount <= 0) return;
+  const { changes } = await d1Run(
+    `UPDATE activity_coupon SET credits = credits - ?, updatedAt = ?
+      WHERE userId = ? AND activityKind = ? AND activityKey = ? AND credits >= ?`,
+    [amount, Date.now(), userId, kind, activityKey, amount],
+  ).catch(() => ({ changes: 0 }));
+  if (changes !== 1) {
+    console.error("[revokeCouponCredits] 撤回活动券时券面未能全额扣回:", {
+      userId,
+      kind,
+      activityKey,
+      amount,
+    });
+  }
+}
+
+/** 某轮次当前可用整张活动券；轮次为空或没有券行时按 0。开奖前读一次做展示基线。 */
+export async function couponTicketBalance(
+  userId: string,
+  kind: ActivityKind,
+  activityKey: string | null,
+  unitCredits: number,
+): Promise<number> {
+  if (!activityKey) return 0;
+  const rows = await db
+    .select({ credits: activityCoupons.credits })
+    .from(activityCoupons)
+    .where(
+      and(
+        eq(activityCoupons.userId, userId),
+        eq(activityCoupons.activityKind, kind),
+        eq(activityCoupons.activityKey, activityKey),
+      ),
+    )
+    .limit(1);
+  return couponTickets(Number(rows[0]?.credits ?? 0), unitCredits);
+}

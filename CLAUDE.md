@@ -534,9 +534,17 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.38.0（2026-11-10，活动券整数张 + 礼包「张数 + 倍率」）
-**下一版本**：v0.39.0（尚未选型）
+**当前版本**：v0.39.0（2026-11-11，转盘抽奖券移除、统一活动券 + 10 连抽修复）
+**下一版本**：v0.40.0（尚未选型）
 
+- v0.39.0 转盘彻底移除抽奖券：`lib/lottery/store.ts` 删除 `lockTickets` / `grantTickets` /
+  `expireTicketsForActivity` 等一整套抽奖券原语，付费一律 `payWithCoupon` 整张扣当期活动券。
+  修复活动券全额支付时 `lockTickets([], drawIds)` 生成空 `CASE` + `id IN ()` 导致 10 连抽报错。
+  外圈活动券档与累抽档位改发当期活动券：配置 `tickets` 保留「抽奖等价」语义，实发按
+  `couponTicketsForReward` / `couponCreditsForReward` 折算；新增 `lottery_milestone_grant`
+  领取记录表与 `lottery_draw.ticketCredits` 列（迁移 026）。后台活动记录用「礼包让利」替换
+  「售券收入」：`coupon_pack_purchase` 的 `SUM(到账券面 − 实付)` 同时记为站点亏损与用户获利。
+  消费返利、站内信、任务文案里的「抽奖券」全部改为「转盘活动券」。
 - v0.38.0 活动券全面整数张：新增 `lib/activity/ticket-math.ts`（`couponTickets` 向下取整 /
   `ticketsForCost` 向上取整至少 1 张 / `creditsForTickets` / `snapCostToUnit`），
   三个玩法的价格在 `sanitize*Config` 里吸到券价整数倍，`payWithCoupon` 改为按整张扣
@@ -544,7 +552,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   `packGrant` 返回 `ratioTickets / bonusTickets / totalTickets / totalCredits`，
   实付 = `ratioTickets × 券单价 × 100 ÷ 倍率`；旧配置只有 `priceCredits` 时按实付价折整张读取。
   转盘页删除 `buyTickets` / `MAX_TICKETS_PER_PURCHASE` 与购买面板，抽 1 次 / 10 次按
-  「免费抽 → 抽奖券 → 活动券」抵扣并直接显示券图标 × 张数；付费抽无 `ticketId`
+  「免费抽 / 按整张扣当期活动券」结算并直接显示券图标 × 张数；付费抽无 `ticketId`
   （`freeDrawDate` 也为 null），券面按单抽价计入统计。消费返利与站内信券奖励按整张发放；
   全站券数量统一走 `components/activity/coupon-badge.tsx` 的 `CouponIcon` / `CouponCount`，
   不再显示 cr 券面。修复站内信 `coupon` 附件在收件箱缺少渲染分支。
@@ -592,7 +600,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 - v0.32.0 顶栏新增货币条（铃铛左侧永久 / 临时余额与三种活动券，永久「+」跳转充值弹窗）；
   活动券按「活动 + 轮次」计价，余额 1:1 兑换、珍宝礼包 200%/500%/1000%，三个玩法支付时先扣券再扣余额；
-  消费返利改与充值活动共用时间段、按累计消费 500/2000/5000/10000/20000 逐档随机发货币 / 券 / 抽奖券；
+  消费返利改与充值活动共用时间段、按累计消费 500/2000/5000/10000/20000 逐档随机发货币 / 券 / 转盘活动券；
   任务成就改为每日 6 项 100 活跃度、每周 6 项 300，手动领取任务后每 25 / 50 活跃度自动发站内信随机货币。
   新表 `activity_coupon` / `activity_task_claim`（迁移 023，另给 `reward_claim` 补 `rewardKind` / `rewardLabel`）；
   钱包最近收支改近 5 天不限条数，并按账本同一细分口径展开。

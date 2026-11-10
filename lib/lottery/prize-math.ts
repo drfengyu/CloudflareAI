@@ -1,4 +1,4 @@
-import { snapCostToUnit } from "@/lib/activity/ticket-math";
+import { snapCostToUnit, ticketsForCost } from "@/lib/activity/ticket-math";
 import { parseCnWallClock } from "@/lib/date";
 
 /**
@@ -47,20 +47,20 @@ export interface InnerPrize {
   weight: number;
 }
 
-/** 外圈奖品分三类：按倍数结算临时余额 cr，直接发永久余额 cr，或赠送抽奖券。 */
+/** 外圈奖品分三类：按倍数结算临时余额 cr，直接发永久余额 cr，或赠送活动券。 */
 export type OuterPrizeKind = "credits" | "permanentCredits" | "tickets";
 
 export interface OuterPrize {
-  /** credits=倍数×基数 → 临时余额（带过期）；permanentCredits=倍数×基数 → 永久余额（不过期）；tickets=直接发券。 */
+  /** credits=倍数×基数 → 临时余额（带过期）；permanentCredits=倍数×基数 → 永久余额（不过期）；tickets=直接发活动券。 */
   kind: OuterPrizeKind;
   /** kind=credits/permanentCredits 时生效，可为负（倒扣）。 */
   multiplier: number;
-  /** kind=tickets 时生效，赠送张数。 */
+  /** kind=tickets 时生效，赠送的活动券张数（按抽奖等价折算：1=一次抽奖价值）。 */
   tickets: number;
   weight: number;
 }
 
-/** 累抽档位：累计抽满 `draws` 次送 `tickets` 张券，每人每档位只发一次。 */
+/** 累抽档位：累计抽满 `draws` 次送 `tickets` 张活动券（抽奖等价），每人每档位只发一次。 */
 export interface LotteryMilestone {
   draws: number;
   tickets: number;
@@ -85,8 +85,6 @@ export interface LotteryConfig {
   multiplierBase: "ticket" | "batch";
   /** 中奖 cr 作为临时余额的有效天数。 */
   prizeValidDays: number;
-  /** 活动结束时未使用的券是否过期作废：true=活动结束自动作废，false=券继续有效（跨活动）。 */
-  ticketsExpireOnActivityEnd: boolean;
   innerPrizes: InnerPrize[];
   outerPrizes: OuterPrize[];
   milestones: LotteryMilestone[];
@@ -109,7 +107,6 @@ export const DEFAULT_LOTTERY_CONFIG: LotteryConfig = {
   outerChancePercent: 12.5,
   multiplierBase: "ticket",
   prizeValidDays: 7,
-  ticketsExpireOnActivityEnd: false,
   innerPrizes: [
     { credits: 200, weight: 12 },
     { credits: 150, weight: 14 },
@@ -231,7 +228,7 @@ export function sanitizeLotteryConfig(raw: unknown): LotteryConfig {
     1_000_000,
     round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
   );
-  // 单张抽奖券的价格必须是活动券单价的整数倍，扣券才不会出现半张。
+  // 单张抽奖等价券价必须是活动券单价的整数倍，扣券才不会出现半张。
   const price = snapCostToUnit(
     round2(positiveNumber(it.ticketPriceCredits, d.ticketPriceCredits)),
     unit,
@@ -251,7 +248,6 @@ export function sanitizeLotteryConfig(raw: unknown): LotteryConfig {
       : d.outerChancePercent,
     multiplierBase: it.multiplierBase === "batch" ? "batch" : "ticket",
     prizeValidDays: Math.trunc(positiveNumber(it.prizeValidDays, d.prizeValidDays)),
-    ticketsExpireOnActivityEnd: it.ticketsExpireOnActivityEnd === true,
     // 奖池被清空会让转盘无法开奖，退回默认池子而不是留空数组。
     innerPrizes: inner.length > 0 ? inner : d.innerPrizes,
     outerPrizes: outer.length > 0 ? outer : d.outerPrizes,
@@ -334,7 +330,7 @@ export interface DrawResult {
   multiplier: number | null;
   /** 倍数基数；内圈为 0。 */
   baseCredits: number;
-  /** 本次抽中的抽奖券张数（外圈赠券档）；0 = 不发券。 */
+  /** 本次抽中的赠券档抽奖等价张数（外圈赠券档）；0 = 不发券。展示/发放时按券价折算成活动券张数。 */
   grantTickets: number;
   /** 正数 cr 发去哪类余额：temporary=带过期的临时余额，permanent=永久余额，null=无 cr 变动或倒扣。 */
   balanceType: "temporary" | "permanent" | null;
@@ -369,9 +365,26 @@ export function formatPermanentPrizeLabel(value: number): string {
   return n >= 0 ? `+${n} cr 永久` : `${n} cr`;
 }
 
-/** 赠券档的文案：不给 cr，只给次数，所以不套 cr 的格式。 */
+/** 赠券档的文案：不给 cr，只给活动券张数，所以不套 cr 的格式。 */
 export function formatTicketLabel(tickets: number): string {
-  return `+${Math.trunc(tickets)} 张券`;
+  return `+${Math.trunc(tickets)} 张活动券`;
+}
+
+/**
+ * 赠券/累抽档的抽奖等价张数 → 实发活动券张数。
+ *
+ * 配置里的 `tickets` 是「抽奖等价」：1 = 一次抽奖的价值 = ticketPriceCredits cr。
+ * 活动券按 couponUnitCredits 折算，一次抽奖价值 = ticketsForCost(price, unit) 张活动券，
+ * 所以 N 个抽奖等价发 N × ticketCost 张活动券。券价被 sanitize 成单价整数倍，ticketCost 精确无漂移。
+ */
+export function couponTicketsForReward(config: LotteryConfig, tickets: number): number {
+  const ticketCost = ticketsForCost(config.ticketPriceCredits, config.couponUnitCredits);
+  return Math.trunc(tickets) * ticketCost;
+}
+
+/** 赠券/累抽档发的活动券总面值（cr）= 抽奖等价张数 × 单券价。 */
+export function couponCreditsForReward(config: LotteryConfig, tickets: number): number {
+  return round2(Math.trunc(tickets) * config.ticketPriceCredits);
 }
 
 /**
@@ -425,7 +438,7 @@ export function rollPrize(
   const outerIndex = weightedIndex(config.outerPrizes.map((p) => p.weight), random());
   const prize = config.outerPrizes[outerIndex];
 
-  // 赠券档：不动 cr 账，只往券包里加张数，所以没有倍数也没有基数。
+  // 赠券档：不动 cr 账，只往券包里加活动券，所以没有倍数也没有基数。
   if (prize.kind === "tickets") {
     return {
       ring: "outer",
@@ -436,7 +449,7 @@ export function rollPrize(
       baseCredits: 0,
       grantTickets: prize.tickets,
       balanceType: null,
-      label: formatTicketLabel(prize.tickets),
+      label: formatTicketLabel(couponTicketsForReward(config, prize.tickets)),
     };
   }
 

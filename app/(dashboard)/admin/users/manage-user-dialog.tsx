@@ -28,7 +28,7 @@ type AttachmentType = "none" | "credits" | "tickets" | "redemption" | "item";
 const ATTACHMENT_OPTIONS: { value: AttachmentType; label: string }[] = [
   { value: "none", label: "不带附件" },
   { value: "credits", label: "cr 余额" },
-  { value: "tickets", label: "抽奖券（转盘）" },
+  { value: "tickets", label: "活动券（转盘）" },
   { value: "redemption", label: "兑换码" },
   { value: "item", label: "自定义物品 / 凭证" },
 ];
@@ -377,7 +377,7 @@ export function ManageUserDialog({ user, currentUserId, onClose }: ManageUserDia
                         onChange={(e) => setAttachmentValue(e.target.value)}
                         className={`${inputClass} min-w-0`}
                         placeholder={
-                          attachmentType === "credits" ? "赠送 cr 数" : attachmentType === "tickets" ? "抽奖券张数" : attachmentType === "redemption" ? "兑换码明文" : "物品名 / 凭证文字"
+                          attachmentType === "credits" ? "赠送 cr 数" : attachmentType === "tickets" ? "活动券张数" : attachmentType === "redemption" ? "兑换码明文" : "物品名 / 凭证文字"
                         }
                       />
                     ) : null}

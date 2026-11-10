@@ -5,6 +5,27 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.39.0] - 2026-11-11
+
+### 修复
+
+- 修复幸运转盘 10 连抽报错：活动券全额支付时 `lockTickets([], drawIds)` 生成空的 `CASE … END` 与 `id IN ()`，SQLite 直接报语法错误；抽奖券移除后该锁券流程整体下线，付费批直接走 `payWithCoupon` 条件扣券。
+
+### 变更
+
+- 转盘移除抽奖券：`lib/lottery/store.ts` 删除 `countUnusedTickets` / `pickUnusedTickets` / `lockTickets` / `unlockTickets` / `grantTickets` / `deleteTickets` / `expireTicketsForActivity` 等一整套原语，`lottery_ticket` 表保留只读供历史开奖行回退关联；抽奖只按整张扣当期活动券。
+- 外圈活动券档与累抽档位改发**活动券**：配置里的 `tickets` 一律是「抽奖等价」（1 = 一次抽奖价值），展示与入账经 `couponTicketsForReward` / `couponCreditsForReward` 按单券价折算成活动券张数 / 券面；`DrawResult.grantTickets` 与开奖行的 `grantTickets` 仍存抽奖等价，模拟器与保底判据不变。
+- 累抽档位改由新表 `lottery_milestone_grant` 去重（`INSERT … ON CONFLICT(userId, activityKey, draws) DO NOTHING`），整批回滚时删除本批 claim；`lottery_draw` 新增 `ticketCredits` 记录每注消耗的活动券面值（免费抽为 0），窗口对账直接读它。迁移 026。
+- 后台活动记录用「礼包让利」替换「售券收入」：`lotteryPackDiscount` 汇总窗口内 `coupon_pack_purchase` 的 `SUM(到账券面 − 实付)`，即购券优惠掉的金额——记为站点亏损，同时是用户获利；它发生在购券时、不动 cr 余额，单独展示、不进净收益。
+- 后台限时活动设置移除「券过期策略」；累抽档位与外圈活动券档的提示改为「张数为抽奖等价、实发按单券价折算成活动券张数」。
+- 转盘页面：中央轴与「我的战绩」只显示活动券余量，抽奖按钮直接显示所需张数，中奖墙与规则同步改文案；记录页列名改为「活动券」并展示每注券面。
+- 消费返利、站内信、用户管理与系统设置的「抽奖券」文案统一改为「转盘活动券」；站内信 `tickets` 附件领取时按当前转盘轮次折算入账，活动未开启则提示稍后再领。
+
+### 验证
+
+- `npm run typecheck`、`npm run build` 通过；84 项单测全部通过（含 `lottery-simulation`、`lottery-stats`、`activity-currency`）。
+- 触及文件 eslint 干净；迁移 026 已在线上 D1（cf-ai-console）执行并核验：`lottery_draw.ticketCredits` 列、`lottery_milestone_grant` 表与唯一索引均存在。
+
 ## [0.38.0] - 2026-11-10
 
 ### 变更

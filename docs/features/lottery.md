@@ -5,17 +5,22 @@
 
 ## 玩法
 
-1. 用户用 credits 购买**抽奖券**（默认 100 cr / 张，后台可调）。
-2. 点「抽 1 次」或「抽 10 次」，每次消耗一张券，转盘开奖。
+1. 抽奖按**当期活动券**整张扣费（默认单抽 100 cr = 100 张活动券，后台可调；1 张 = `couponUnitCredits` cr）。
+   券从活动中心珍宝礼包、消费返利、任务与站内信获得，转盘页不卖券。每天首次单抽免费。
+2. 点「抽 1 次」或「抽 10 次」，转盘开奖。
 3. 转盘是**两段式指针**（暗色霓虹风）：
    - **内圈**：奖品格（固定加 / 减 cr）+ **唯一一个「外圈入口」格**，入口占满 `outerChancePercent`（默认 12.5%）。扇区角度由 `innerSectorLayout` 与抽奖同源，格子大小就是真实概率。
    - 内圈指针停在入口上 → 该指针**变长伸进外圈环带**，外圈再独立转一次，把对应奖品转到这根指针下决定最终结果。
-   - **外圈**：两种奖型（`kind`）——**cr 档**按倍数结算正负 cr，基数是单张券价或本次总花费（后台二选一）；
-     **赠券档**直接发 N 张抽奖券，不动 cr。默认外圈 16 档里配了 4 档赠券（+1 / +2 / +3 / +5 张）。
+   - **外圈**：两类奖型（`kind`）——**cr 档**按倍数结算正负 cr，基数是单张券价或本次总花费（后台二选一）；
+     **活动券档**直接发活动券，不动 cr。默认外圈 16 档里配了 4 档活动券（+1 / +2 / +3 / +5 个抽奖等价）。
 4. **抽 10 次**：转盘一次转停，然后按结果角度**依次弹出 10 根指针**（每根间隔 130ms）；命中入口的指针画成伸入环带的长线。多次进入时外圈只对位**最后一次**的落点，其余画虚线示意、结果看右侧明细。
-5. **累抽送券**：累计抽奖次数达到配置档位时赠送抽奖券（如满 10 次送 1 张），每人每档位只发一次。
+5. **累抽送活动券**：累计抽奖次数达到配置档位时赠送活动券（如满 10 次送 1 个抽奖等价），每人每档位只发一次，
+   领取记录落在 `lottery_milestone_grant`，唯一索引 `(userId, activityKey, draws)` 接住并发。
 
-券的来源共三种：`buy`（花钱买）/ `gift`（累抽档位送）/ `prize`（外圈抽中）。后两种不花 credits 就能开奖。
+奖池配置里的 `tickets`（外圈活动券档与累抽档位）是**抽奖等价**：1 = 一次抽奖的价值 = `ticketPriceCredits` cr，
+不是活动券张数。实发张数 = 抽奖等价 × `ticketsForCost(单券价, 券单价)`，面值 = 抽奖等价 × 单券价；
+展示、入账与 toast 都按折算后的活动券张数写（`formatTicketLabel` / `couponTicketsForReward`）。
+因为单券价被 `snapCostToUnit` 吸到券单价整数倍，折算永远无小数漂移。
 
 顶部导航入口在「活动中心 → 幸运转盘」（v0.24.1 起页面与导航都叫「幸运转盘」，「限时活动」不再作为这个玩法的名字，
 只留作后台设置卡片的分类前缀）。
@@ -50,7 +55,8 @@ npx tsx --test tests/lottery-simulation.test.ts
 
 参数：
 - `--draws 1,10,30,100`：每会话购买多少券，**不是一批抽多少次**。
-- `--batch 1|10`：默认逐次单抽；10 表示有至少 10 券时十连，否则单抽。中奖券和档位券在批后加入券包。
+- `--batch 1|10`：默认逐次单抽；10 表示有至少 10 券时十连，否则单抽。模拟器以「抽奖等价」为单位：
+  开奖返还的活动券与累抽档位的活动券都在批后加入券包继续抽。
 - `--sessions N`：每种规模的独立会话数，默认 8000；`--seed N`：32 位无符号整数种子，默认 20261010。
 - `--target R`：只缩放正档，尝试拟合名义 R%；`--soften F`：负档乘 0~1，再调正档保持目标名义。
   `--soften` 默认保留不高于券价的正档，`--no-keep-be` 才允许缩放这些档位。
@@ -59,17 +65,17 @@ npx tsx --test tests/lottery-simulation.test.ts
   导出值是模拟输入/候选，不是数据库原始备份；不要整行覆盖线上配置。
 
 模拟约束：
-- 每个会话从本轮零累计、零保底开始，买入券价固定，赠券全部续抽直至券包为空。
+- 每个会话从本轮零累计、零保底开始，买入券价固定，返还的活动券全部续抽直至券包为空。
 - 保底与线上一致：每批取一次概率快照，只看最近 30 条未中大奖记录；十连中途中奖不改变本批概率。
 - 每会话超过 100000 抽仍有券时直接报错，不再把剩余券当成零成本后输出虚假的利润。
 - 使用 Mulberry32 可复现伪随机序列，仅用于模拟；各规模与 what-if 各自重置种子，不依赖输出顺序。
 
 口径：
-- **名义返还率**：后台 `lotteryExpectation()` 的加权值，赠券按面值、档位按最高门槛均摊。
-- **有效返还率**：所有开奖净 cr（发奖减倒扣，含赠券续抽）÷ 买入总价。赠券不再额外按面值计入收益。
-  有效值可以高于或低于名义值，不能给模拟结果再补加一次赠券成本。
+- **名义返还率**：后台 `lotteryExpectation()` 的加权值，活动券按面值、档位按最高门槛均摊。
+- **有效返还率**：所有开奖净 cr（发奖减倒扣，含活动券续抽）÷ 买入总价。活动券不再额外按面值计入收益。
+  有效值可以高于或低于名义值，不能给模拟结果再补加一次活动券成本。
 - **站点/券**：买入金额减净返还，再除以买入券数；是 cr 账本差额，不是现金净利润。
-- **倒扣率**：仅统计开奖结果 cr<0；**单注≥券价**：该注 cr 加赠券面值至少等于券价，不代表整会话不亏。
+- **倒扣率**：仅统计开奖结果 cr<0；**单注≥券价**：该注 cr 加活动券面值至少等于券价，不代表整会话不亏。
 - **±95%抽样(pp)**：按独立会话算标准误的 1.96 倍，是模拟均值的近似抽样误差；单会话显示 N/A。
   这不是线上历史返还的预测区间，也不能用来认定历史亏损“只是运气”。
 - 未模拟每日免费抽、跨会话保底/累计、历史调价/调池、券过期、余额过期及实际消费成本。
@@ -91,13 +97,13 @@ npx tsx --test tests/lottery-simulation.test.ts
 `multiplierBase = "ticket"` 时两档金额相同，第二行显示「10连 同上」。
 换算入口是 `outerPrizeCredits(config, multiplier, drawCount)`（`lib/lottery/prize-math.ts`）。
 
-赠券档不折算成 cr，扇区与规则表直接写「+N 张券」（`formatTicketLabel`），色调也单独用金色，
-免得被当成一个小额 cr 档。
+活动券档不折算成 cr，扇区与规则表直接写「+N 张活动券」（`formatTicketLabel`，N 已按抽奖等价折算），
+色调也单独用金色，免得被当成一个小额 cr 档。
 
 ### 扇区标签：标签 → 记号 → 亮点，三级退化
 
 标签是切向排的，能占到的宽度就是落点半径处的弧长。`labelSize()` 按「弧长 ÷ 标签宽度」收缩字号，
-缩到 7.5 以下就不写整段文字，改画记号：**★ = cr 档，券 = 赠券档**；窄到连记号都放不下（弧长 < 7px，
+缩到 7.5 以下就不写整段文字，改画记号：**★ = cr 档，券 = 活动券档**；窄到连记号都放不下（弧长 < 7px，
 16 档外圈里的 ×20 头奖就是这一类）再由 `Glyph()` 退化成环带中线上一个发光的亮点。
 **不允许出现空白格**：极窄扇区恰恰装着头奖，留白会被读成「这一格里没有奖品」，
 「0.05% 那档真的能抽到吗」这个疑问就来自这里。
@@ -167,10 +173,12 @@ npx tsx --test tests/lottery-simulation.test.ts
 
 | 事件 | 处理 |
 |------|------|
-| 付费抽 | 支付顺序：免费抽 → 抽奖券 → 活动券。剩余注数按单抽价折成**整数张**扣当期活动券（`payWithCoupon`，不足 1 张按 1 张）；券余额向下取整比对，不足直接失败并提示先兑换。v0.38.0 起转盘页不再卖券，券只从礼包 / 返利 / 任务 / 站内信获得 |
+| 付费抽 | 只扣当期活动券：整批按单抽价折成**整数张**（`payWithCoupon`，`round2(注数 × 单券价)`）；券余额向下取整比对，不足直接失败并提示先兑换。免费抽不扣券。v0.38.0 起转盘页不卖券，券只从礼包 / 返利 / 任务 / 站内信获得 |
 | 中奖（正数） | 发进**临时余额**，`prizeValidDays` 天后过期 |
 | 倒扣（负数） | **先扣未过期的临时余额（最早到期的先扣），不够再扣永久余额**；落到本金的部分允许扣成负数 |
-| 抽中赠券 | 直接发 N 张 `source='prize'` 的券，**不动 cr、不写流水** |
+| 抽中活动券档 | 按抽奖等价折算成活动券面值入账（`couponCreditsForReward`），**不动 cr、不写流水** |
+| 累抽档位 | 同上，另写一行 `lottery_milestone_grant` 保证每档只发一次 |
+| 珍宝礼包让利 | 购买时 `coupon_pack_purchase` 记实付与到账券面；差额 `couponCredits − priceCredits` 记为**站点亏损**（同时是用户获利），发生在购券时、不动 cr 余额 |
 | 全部资金变动 | 写 `topup` 流水，`type = 6`，描述含奖品文案 |
 
 > 活动券内部仍按 cr 券面记账（`activity_coupon.credits`，1 张 = 该活动 `couponUnitCredits`），
@@ -196,18 +204,18 @@ npx tsx --test tests/lottery-simulation.test.ts
 写成 `topup type=2`（描述「负本金补正：本金归零」），未过期的临时余额一分未动。现在库里负本金账号为 0 个，
 但这不代表以后不会有——口径本身（允许扣成负数）没变。
 
-抽奖不写 `usage_log`，所以不进看板的调用统计与模型消耗。活动结束后未使用的券作废，不折算回 cr。
+抽奖不写 `usage_log`，所以不进看板的调用统计与模型消耗。活动券按活动轮次（`activityKey` = 配置 `startAt`）
+记账，仅限本轮使用：管理员换一轮后旧券不再可花，也不折算回 cr；本轮延长结束时间后仍可继续使用。
 
 ## 数据模型
 
 ```
 option.lottery_config        活动配置（JSON，见下）
-lottery_ticket               一行一券；usedDrawId 非空即已消耗
-  source                     gift=累抽档位送 / prize=外圈抽中 / buy=旧版买券（v0.38.0 前，仅存历史行）
-  milestoneSeq               档位内第几张（0 起）；非档位赠券恒为 0
-  unique(userId, milestoneDraws, milestoneSeq, activityKey)   档位赠券只发一次的幂等键（NULL 不参与唯一性）
+activity_coupon              活动券券包；券面按 cr 记账，按 kind=gift 与 activityKey 分轮次，1 张 = couponUnitCredits cr
 lottery_draw                 逐次开奖记录；unique(batchId, seq)
-  grantTickets               本注抽中的赠券张数（0 = cr 档）
+  grantTickets               本注抽中的**抽奖等价**张数（0 = cr 档）；展示与入账时 ×ticketCost 折成活动券张数
+  ticketCredits              这一注消耗的活动券面值（免费抽为 0），窗口对账直接读它
+  ticketId                   历史抽奖券外键；v0.39.0 起恒为 NULL，旧行仍可按券表回退关联
   freeDrawDate               只有「今日免费抽」那行写北京日期（如 2026-10-17），付费抽为 NULL
   unique(userId, freeDrawDate) 免费抽的库层幂等键：一天只能领一次，并发/连点由它兜底
   migration: migrations/007_lottery.sql
@@ -215,18 +223,25 @@ lottery_draw                 逐次开奖记录；unique(batchId, seq)
   migration: migrations/009_lottery_milestone_seq.sql（加 milestoneSeq 列并重建唯一索引）
   migration: migrations/011_lottery_milestone_unique_activity.sql（赠券唯一键加上 activityKey）
   migration: migrations/012_lottery_free_draw_idempotency_and_rate_limit.sql（加 freeDrawDate + 唯一索引，建 rate_limit_bucket 表）
+  migration: migrations/026_lottery_coupon_only.sql（加 ticketCredits 列）
+lottery_milestone_grant      累抽档位领取记录（v0.39.0）
+  unique(userId, activityKey, draws)   每轮每档只发一次；并发重复领取由这个唯一索引接住
+  migration: migrations/026_lottery_coupon_only.sql
+lottery_ticket               历史抽奖券表：v0.39.0 起不再写入，保留只读，供旧开奖行回退关联
+  source                     gift=累抽档位送 / prize=外圈抽中 / buy=旧版买券（v0.38.0 前，仅存历史行）
 lottery_user_stats           按 (userId, scope) 累计的统计行；scope='all' 为全量口径，其余为活动轮次 startAt
   draws / outerHits / paidOut / clawedBack / ticketFace / lastDrawAt   开奖侧累计（开奖批次结算时增量 upsert）
-  boughtTickets / boughtCredits / unusedTickets / unusedCredits / giftTickets / prizeTickets  券包侧累计（只维护 all 口径）
+  boughtTickets / boughtCredits / unusedTickets / unusedCredits / giftTickets / prizeTickets
+                             券包侧历史列，v0.39.0 起不再维护（新数据看 coupon_pack_purchase 与开奖明细）
   migration: migrations/014_lottery_user_stats.sql（建表 + 历史回填 + lottery_draw(userId, createdAt) 索引）
 rate_limit_bucket            跨实例限流计数，一行一个固定窗口桶（见 lib/rate-limit.ts）
 ```
 
 **为什么要有 `lottery_user_stats`**：`/lottery`、看板、管理端「全部」都要读「不限时间」的
 总次数/总收益/券面值。这类聚合没有可用的索引，每次加载都得把该用户（或全站）的历史行读完；
-D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见底。现在开奖/发券时用一条 UPSERT
-把增量写进行（`lib/lottery/stats.ts` 定义口径，`applyDrawStats` / `revertDrawStats` /
-`applyTicketStats` 落库），读侧只取一行；回滚整批开奖时按同一份增量反向扣回并重算 `lastDrawAt`。
+D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见底。现在开奖时用一条 UPSERT
+把增量写进行（`lib/lottery/stats.ts` 定义口径，`applyDrawStats` / `revertDrawStats` 落库），读侧只取一行；
+回滚整批开奖时按同一份增量反向扣回并重算 `lastDrawAt`。
 **管理端的时间窗口径（今日/近 7 日/近 30 日）仍然回到明细表聚合**，累计行不存时间维度。
 数据可由明细全量重算：先 `DELETE FROM lottery_user_stats` 再重跑 `migrations/014_lottery_user_stats.sql`。
 
@@ -240,19 +255,20 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
 ```jsonc
 {
   "enabled": true,
-  "startAt": "2026-09-25 00:00",   // 北京时间墙钟串，同公告时间约定
+  "startAt": "2026-09-25 00:00",   // 北京时间墙钟串，同公告时间约定；改它即开启新一轮（activityKey）
   "endAt": "2026-10-08 23:59",
-  "ticketPriceCredits": 100,
+  "ticketPriceCredits": 100,        // 单抽消耗的 cr，扣券时折成整数张
+  "couponUnitCredits": 1,           // 1 张活动券 = 多少 cr；单抽价会被吸到它的整数倍
   "outerChancePercent": 12.5,
   "multiplierBase": "ticket",       // ticket=单张券价 / batch=本次总花费
   "prizeValidDays": 7,
   "innerPrizes": [{ "credits": 250, "weight": 12 }, ...],   // 绝对 cr，可为负
   "outerPrizes": [
     { "kind": "credits", "multiplier": 1.5, "weight": 14 },   // kind 缺省即 credits
-    { "kind": "tickets", "tickets": 2, "weight": 7 },
+    { "kind": "tickets", "tickets": 2, "weight": 7 },         // 2 个抽奖等价 → 按券价折成活动券
     ...
   ],
-  "milestones": [{ "draws": 10, "tickets": 1 }, ...]
+  "milestones": [{ "draws": 10, "tickets": 1 }, ...]          // tickets 同样是抽奖等价
 }
 ```
 
@@ -263,12 +279,12 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
 
 ## 活动记录与站点收益
 
-钱本来就逐笔记在 `lottery_ticket` 与 `lottery_draw` 上，两表始终是唯一真源；
-`lib/lottery/records.ts` 只负责读。2026-10-29 起，「不限时间」的汇总改读累计行
-`lottery_user_stats`（开奖/发券时增量维护），管理端的时间窗仍回到明细聚合。
+钱本来就逐笔记在 `activity_coupon` 与 `lottery_draw` 上，两处始终是唯一真源；
+`lib/lottery/records.ts` 只负责读。2026-10-29 起，「不限时间」的开奖汇总改读累计行
+`lottery_user_stats`（开奖时增量维护），管理端的时间窗仍回到明细聚合。
 
 **用户侧**：`/lottery` 页面下方「我的活动记录」卡片——逐次时间、落在哪一圈、结果文案、cr 变动、
-用掉的券（赠送 / 抽中 / 免费 + 面值），外加一排汇总（次数、外圈命中、中奖发放、倒扣回收、已开奖消耗、本期净收益）。
+这一注的活动券来源与面值（活动券 / 免费），外加一排汇总（次数、外圈命中、中奖发放、倒扣回收、已开奖消耗、本期净收益）。
 **只显示当前活动轮次**：明细取当期记录（`listDrawRecords` 按 `activityKey` 过滤），每页 10 条，翻页在卡片内局部刷新
 （服务端动作 `listMyActivityRecords`，不改 URL、不整页刷新），
 总数直接用当期累计行 `draws`（不额外 COUNT）；汇总按当期全量算；
@@ -280,19 +296,18 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
 
 | 区块 | 内容 |
 |------|------|
-| 收益概览 | 站点净收益、售券收入、中奖发放、倒扣回收、参与人数、实际返还率（对照配置口径） |
-| 按用户 | 每人的抽奖次数、外圈命中、已开奖券面值、发放、回收、站点净收益、最近参与时间 |
-| 逐次明细 | 每页 10 条、卡片内局部翻页（`listAdminDrawRecords`，服务端二次校验管理员）：时间、用户、圈层、结果（外圈带倍数与基数）、用户 cr 变动、券来源与面值、该注站点净收益；总数取窗口内累计行 `draws` |
+| 收益概览 | 站点净收益、**礼包让利**、中奖发放、倒扣回收、参与人数、实际返还率（对照配置口径）。礼包让利 = 窗口内 `coupon_pack_purchase` 的 `SUM(到账券面 − 实付)`，即购券优惠掉的金额：记为站点亏损，同时是用户获利；它发生在购券时、不动 cr 余额，所以单独列出、不进净收益 |
+| 按用户 | 每人的抽奖次数、外圈命中、已开奖活动券面值、发放、回收、站点净收益、最近参与时间 |
+| 逐次明细 | 每页 10 条、卡片内局部翻页（`listAdminDrawRecords`，服务端二次校验管理员）：时间、用户、圈层、结果（外圈带倍数与基数）、用户 cr 变动、活动券来源与面值、该注站点净收益；总数取窗口内累计行 `draws` |
 
-**净收益口径**：`券面收入 + 倒扣回收 − 中奖发放`，且**只算已开奖的券**。因此：
+**净收益口径**：`活动券面值收入 + 倒扣回收 − 中奖发放`，且**只算已开奖的注**。因此：
 
-- 未开奖的券虽然在窗口内收了钱，不计入净收益，页面单列「还有 N 张未开奖（面值 X cr）已收讫未兑现」。
 - 「倒扣回收」是把用户已有余额划回站点账上，不是新增现金流入。
 - 「中奖发放」走带过期的临时余额，过期未用的部分并不会真的付出成本，所以净收益是**偏保守（偏亏）**的估计。
-- 实际返还率 = `（发放 − 回收）/ 已开奖券面值`。`multiplierBase = "batch"` 时 10 连抽的单注金额是单抽的约 10 倍，
+- 实际返还率 = `（发放 − 回收）/ 已开奖活动券面值`。`multiplierBase = "batch"` 时 10 连抽的单注金额是单抽的约 10 倍，
   这个比值会远高于配置值，所以卡片把配置那一行标成「配置单抽口径」。
-- **赠券档不进 cr 口径**：抽中赠券的那一注 cr 变动为 0，明细里标「不发 cr」，赠出的券按 `source='prize'`
-  单独计数。它的成本要等这张券被抽掉才兑现，所以当期净收益会**偏好**，页面按「兑付延后」提示。
+- **活动券档不进 cr 口径**：抽中活动券的那一注 cr 变动为 0，明细里标「不发 cr」，赠出的活动券按抽奖等价
+  折算入账。它的成本要等这些券被抽掉才兑现，所以当期净收益会**偏好**，页面按「兑付延后」提示。
 
 ## 关键文件
 
@@ -300,8 +315,8 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
 |------|------|
 | `lib/lottery/prize-math.ts` | 纯计算：类型、配置清洗、活动窗口、按权重开奖、期望返还与返还率。**不 import 任何读库代码**，后台表单据此在浏览器里实时算返还率 |
 | `lib/lottery/config.ts` | `getLotteryConfig()`：读 `option.lottery_config` |
-| `lib/lottery/store.ts` | 账本原语：发券 / 收券 / 锁券 / 扣 cr / 发临时余额 / 档位赠券 |
-| `lib/lottery/records.ts` | 只读聚合：逐次明细、按用户收益、券侧收入。用户页与管理页共用 |
+| `lib/lottery/store.ts` | 账本原语：扣 cr / 发临时余额 / 倒扣回收 / 开奖统计增量 / 累抽领取记录 |
+| `lib/lottery/records.ts` | 只读聚合：逐次明细、按用户收益、礼包让利。用户页与管理页共用 |
 | `app/(dashboard)/lottery/actions.ts` | `drawLottery` 等抽奖服务端动作 |
 | `app/(dashboard)/lottery/lottery-wheel.tsx` | 双圈 SVG 转盘与结果面板（客户端） |
 | `app/(dashboard)/lottery/lottery-records.tsx` | 「我的活动记录」卡片（服务端渲染） |
@@ -313,21 +328,16 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
 
 - **没有事务**：D1 走 REST，`db` 拿不到受影响行数，所以条件更新统一走 `d1Run()`（读 `meta.changes`）。
   付费抽 = `UPDATE activity_coupon SET credits = credits - ? WHERE id = ? AND credits >= ?`
-  （`payWithCoupon`，金额 = 整数张 × 券价）；
-  锁券 = 一条 `CASE` 语句把整批券各自锁给对应的开奖行，末尾再挂
-  `(SELECT COUNT(*) ... WHERE usedDrawId IS NULL) = 张数` 的条件。
-  并发双花靠这两条条件更新挡住，而不是靠先读后写。
+  （`payWithCoupon`，金额 = 整数张 × 券价）。并发双花靠这条条件更新挡住，而不是靠先读后写；
+  不再有「锁券 → 开奖 → 扣券」两步，也不存在锁券语句（旧实现的空 `id IN ()` 正是 10 连抽报错的根因）。
 - **整批撤销**：一次开奖先在内存里把整批结果算完（`planDrawBatch`），再一波并发写库。
-  任一写入失败就整批退回——删开奖行、删流水、删临时余额行、反向补回净额、收回发出的券、解锁券，
-  不存在「10 注里留下 3 注」的半截状态。锁券那条语句同理是整批语义：有一张被占用就一张都不锁。
-  **不能**改成「先锁、比较命中数不够再回滚」：回滚是第二条语句，中间那一瞬并发请求能把刚锁上的券再偷走，
-  用户白掉券。
-- **档位赠券的幂等键带序号**：`unique(userId, milestoneDraws, milestoneSeq)`。少了 `milestoneSeq`，
-  「送 2 张及以上」的档位会在第二行撞索引，而发券那边把异常整个吞掉——线上表现为
-  除了第 10 档（送 1 张）以外所有档位静默不发，日志里什么都没有。重复领取依旧由唯一索引挡住，
-  现在按报错文本认出 `UNIQUE constraint failed` 当作「这一档早领过」跳过，**其它异常照旧抛出并拖垮整批**
-  （静默吞异常正是当初的病灶）。**跨档判定只看当前这一批的次数区间**，
-  修复前错过的档位不会自动补发，要回填得单独跑脚本。
+  任一写入失败就整批退回——删开奖行、删流水、删临时余额行、反向补回净额、收回发出的活动券、
+  删掉本批占下的累抽档位、退还付费券，不存在「10 注里留下 3 注」的半截状态。
+- **累抽档位由领取记录表去重（v0.39.0）**：跨档时先
+  `INSERT INTO lottery_milestone_grant … ON CONFLICT(userId, activityKey, draws) DO NOTHING`，
+  `changes === 1` 才算本批占下该档；发券失败时删掉本批 claim，这些档位下次还能再发。
+  旧的 `lottery_ticket.milestoneSeq` 序号方案随抽奖券一起下线。
+  **跨档判定只看当前这一批的次数区间**，修复前错过的档位不会自动补发，要回填得单独跑脚本。
 - **`multiplierBase = "batch"` 的经济性**：10 连抽会按批次总花费（1000 cr）结算每一次的倍数，
   每券期望是单抽的约 10 倍——想让单抽与连抽等价就用 `ticket`。后台表单会按这个区别显示提示。
 - 默认奖池按**单券价 100 cr** 配平到返还率 ≈ 91.1%。内圈是绝对 cr，所以券价一改这个数就会动
@@ -342,20 +352,17 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
   `batchRows(rows, 每行列数)` 分片；`inArray()` 同理（每个 id 一个参数），记录页与 `/admin/orders` 的邮箱映射都分段查。
 - **10 连抽的服务端耗时**：一次 10 连抽原先要打约 40 次**串行** D1 HTTP 往返（每注各一次开奖行、
   一次流水、一次余额变动，外加逐张锁券），实测 7~10 秒。现在整批结果先在内存算完，写入按表合并
-  （一条 CASE 锁券、每张表一条多行 INSERT、倒扣合并成一次净额 UPDATE），互不相关的语句并发发出，
+  （每张表一条多行 INSERT、倒扣合并成一次净额 UPDATE、付费合并成一条条件扣券），互不相关的语句并发发出，
   实测降到约 2.4 秒（往返数 40+ → 9，关键路径 4 波）。剩下的时间里 D1 单程就占 0.4~0.9 秒，
   再要快只能换掉「Vercel 走 REST 打 D1」这层传输，而不是继续省语句。
   代价是回滚粒度从「单次开奖」变成「整批」——见上面「整批撤销」。
-- **赠券档不写 0 cr 流水**：`planDrawBatch` 命中 `kind='tickets'` 时只往券包里加张数并回填开奖行的
-  `grantTickets`，余额、`topup` 一行都不动；整批撤销时按发券返回的 id 收回。期望返还里赠券按券价折算，
-  所以后台那行「返还率」把送出去的券也算成成本。
+- **活动券档不写 0 cr 流水**：`planDrawBatch` 命中 `kind='tickets'` 时只回填开奖行的
+  `grantTickets`（抽奖等价），cr 余额与 `topup` 一行都不动；批后按券价折算成活动券统一入账，
+  整批撤销时按已发面值扣回。期望返还里活动券按券价折算，所以后台那行「返还率」把送出去的券也算成成本。
 - **改奖池要先部署再改配置**：`kind='tickets'` 在旧代码里会被读成 `multiplier` 缺失 → 0 cr 奖品，
   真实用户会抽到一堆空档。顺序固定为「代码上线 → 写 `option.lottery_config`」。
-- **切轮次序：要作废旧轮券，就得在改窗口之前先跑作废**。`ticketsExpireOnActivityEnd` 的触发点在
-  抽奖页 `status === "ended"` 那一支，用的 key 是**配置里当前的 `startAt`**；而
-  `countUnusedTickets` / `pickUnusedTicketIds` 都不按 `activityKey` 过滤。所以直接把 `startAt` 换成新值，
-  旧轮未使用的券不会被标 `expired`，而是继续留在券包里可用（记录页只显示当期轮次，旧券仍可抽）。
-  想让"活动结束券作废"真的兑现，顺序是：旧窗口结束、配置未改时让用户访问一次页面，或直接按旧 key
-  跑一次 `expireTicketsForActivity(userId, 旧key)`，然后再写新窗口。
+- **活动券只在本轮可用**：券按 `kind=gift` + `activityKey`（= 配置 `startAt`）记账，抽奖只读当前轮的券。
+  管理员改 `startAt` 即换轮，旧轮券留在库里但不再可花；想清掉旧轮券面值需单独跑脚本，不影响开奖。
+  延长本轮 `endAt` 不换 key，券继续可用。
 - **`scripts/run-migration.js`**：按行剥掉 `--` 注释后再切句（早先按整块 filter，首行是注释的迁移文件会被判成
   0 条语句却打印成功）；0 条语句直接退出，D1 以 HTTP 200 + `success:false` 返回的报错也会抛出。

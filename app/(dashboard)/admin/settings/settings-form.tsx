@@ -745,7 +745,7 @@ export function CashbackSettingsForm({ initialSettings }: CashbackSettingsFormPr
         </div>
         {tiers.length === 0 ? (
           <p className="mt-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-            还没有档位。开启返利需要至少一档：活动期内累计消费满 X，随机发 Y–Z cr（货币或活动券）或 1–3 张抽奖券。
+            还没有档位。开启返利需要至少一档：活动期内累计消费满 X，随机发 Y–Z cr（货币或活动券）或 1–3 张转盘活动券。
           </p>
         ) : (
           <div className="mt-2 space-y-2">
@@ -795,7 +795,7 @@ export function CashbackSettingsForm({ initialSettings }: CashbackSettingsFormPr
           </div>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
-          与充值阶梯赠送共用同一个活动时间段；按活动期内<b>累计消费</b>判定，达到多档时每档都可领取一次。每档随机发放临时货币 / 永久货币 / 当期活动券 / 1–3 张抽奖券，奖励区间随档位递增。顺序不用管，保存时按门槛从小到大重排。
+          与充值阶梯赠送共用同一个活动时间段；按活动期内<b>累计消费</b>判定，达到多档时每档都可领取一次。每档随机发放临时货币 / 永久货币 / 当期活动券 / 1–3 张转盘活动券，奖励区间随档位递增。顺序不用管，保存时按门槛从小到大重排。
         </p>
       </div>
 

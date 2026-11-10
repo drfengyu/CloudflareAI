@@ -1,7 +1,7 @@
 import { and, desc, eq, gt, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import { batchRows, db } from "@/lib/db/d1-http";
-import { lotteryDraws, lotteryTickets, lotteryUserStats, users } from "@/lib/db/schema";
+import { couponPackPurchases, lotteryDraws, lotteryTickets, lotteryUserStats, users } from "@/lib/db/schema";
 import { cnLastNDaysStart, cnStartOfToday, cnStartOfTomorrow } from "@/lib/date";
 import { maskUserLabel } from "@/lib/mask";
 import { round2 } from "./prize-math";
@@ -24,10 +24,13 @@ export interface LotteryWindow {
   end: Date;
 }
 
-/** `unknown` = 券行已被清理（用户注销级联删除），此时面值按 0 计；`free` = 每日免费抽（ticketId 为 null）。 */
-export type TicketSourceLabel = "buy" | "gift" | "prize" | "free" | "unknown";
+/**
+ * `unknown` = 历史券行已被清理（用户注销级联删除），面值按 0 计；`free` = 每日免费抽；
+ * `coupon` = 活动券直付（迁移 026 起付费抽不再关联抽奖券，ticketId 为 null 且非免费抽）。
+ */
+export type TicketSourceLabel = "buy" | "gift" | "prize" | "free" | "coupon" | "unknown";
 
-/** 一注开奖的完整记录：抽奖结果 + 消耗掉的那张券的来源与面值。 */
+/** 一注开奖的完整记录：抽奖结果 + 消耗掉的券面值与来源。 */
 export interface DrawRecord {
   id: string;
   userId: string;
@@ -38,7 +41,7 @@ export interface DrawRecord {
   multiplier: number | null;
   deltaCredits: number;
   baseCredits: number;
-  /** 这一注抽中的抽奖券张数（外圈赠券档）；不进 cr 账本。 */
+  /** 这一注抽中的赠券档抽奖等价张数（外圈赠券档）；不进 cr 账本，展示时按券价折算成活动券。 */
   grantTickets: number;
   createdAt: Date | null;
   ticketSource: TicketSourceLabel;
@@ -47,8 +50,11 @@ export interface DrawRecord {
   activityKey: string | null;
 }
 
-/** 券面值：赠券记 0，所以赠送的抽奖对站点收入没有贡献，只算发奖成本。 */
-const drawnTicketCredits = sql`COALESCE((SELECT ${lotteryTickets.priceCredits} FROM ${lotteryTickets} WHERE ${lotteryTickets.id} = ${lotteryDraws.ticketId}), 0)`;
+/**
+ * 券面值：优先取开奖行自带的 ticketCredits（活动券直付记单券价、免费抽记 0）；
+ * 历史行该列为 null，退回关联的 lottery_ticket.priceCredits；再没有就按 0。
+ */
+const drawnTicketCredits = sql`COALESCE(${lotteryDraws.ticketCredits}, (SELECT ${lotteryTickets.priceCredits} FROM ${lotteryTickets} WHERE ${lotteryTickets.id} = ${lotteryDraws.ticketId}), 0)`;
 
 const paidOutExpr = sql`COALESCE(SUM(CASE WHEN ${lotteryDraws.deltaCredits} > 0 THEN ${lotteryDraws.deltaCredits} ELSE 0 END), 0)`;
 const clawedBackExpr = sql`COALESCE(SUM(CASE WHEN ${lotteryDraws.deltaCredits} < 0 THEN -${lotteryDraws.deltaCredits} ELSE 0 END), 0)`;
@@ -244,108 +250,27 @@ export async function lotteryUserRecords(win?: LotteryWindow): Promise<LotteryUs
   }));
 }
 
-export interface LotteryTicketTotals {
-  /** 窗口内买入的张数与收入（cr）。 */
-  boughtTickets: number;
-  boughtCredits: number;
-  /** 窗口内买入、但还没开奖的张数与面值。 */
-  unusedTickets: number;
-  unusedCredits: number;
-  /** 窗口内累抽档位赠送的张数。 */
-  giftTickets: number;
-  /** 窗口内从奖池抽中的赠券张数（未开奖时它是站点对用户的欠账）。 */
-  prizeTickets: number;
-}
-
 /**
- * 券的购入侧统计。
+ * 转盘活动券礼包的让利总额（cr）= Σ(到账券面 − 实付)。
  *
- * 净收益只按**已开奖**的券算，未开奖的券不在里面，所以这里单独给出余券面值，
- * 免得把「卖了券」和「开奖兑现了」混成一个数。
+ * 礼包按倍率把券面打折卖给用户：让掉的这部分既是**站点亏损**也是**用户获利**，
+ * 与开奖净收益（lotteryBalance.net）分开列，不混进余额账。按活动种类 'lottery' 过滤，
+ * 带时间窗时只统计窗口内成交的礼包；不限时间则全量。
  */
-export async function lotteryTicketTotals(
-  win?: LotteryWindow,
-  userId?: string,
-): Promise<LotteryTicketTotals> {
-  // 不限时间：读累计行（单用户一行 / 全站按用户数求和），不再扫券表。
-  if (!win) return ticketTotalsFromStats(userId);
-
-  const where = and(
-    gte(lotteryTickets.createdAt, win.start),
-    lt(lotteryTickets.createdAt, win.end),
-    userId ? eq(lotteryTickets.userId, userId) : undefined,
-  );
-
+export async function lotteryPackDiscount(win?: LotteryWindow): Promise<number> {
   const rows = await db
     .select({
-      boughtTickets: sql<number>`COALESCE(SUM(CASE WHEN ${lotteryTickets.source} = 'buy' THEN 1 ELSE 0 END), 0)`,
-      boughtCredits: sql<number>`COALESCE(SUM(CASE WHEN ${lotteryTickets.source} = 'buy' THEN ${lotteryTickets.priceCredits} ELSE 0 END), 0)`,
-      unusedTickets: sql<number>`COALESCE(SUM(CASE WHEN ${lotteryTickets.source} = 'buy' AND ${lotteryTickets.usedDrawId} IS NULL THEN 1 ELSE 0 END), 0)`,
-      unusedCredits: sql<number>`COALESCE(SUM(CASE WHEN ${lotteryTickets.source} = 'buy' AND ${lotteryTickets.usedDrawId} IS NULL THEN ${lotteryTickets.priceCredits} ELSE 0 END), 0)`,
-      giftTickets: sql<number>`COALESCE(SUM(CASE WHEN ${lotteryTickets.source} = 'gift' THEN 1 ELSE 0 END), 0)`,
-      prizeTickets: sql<number>`COALESCE(SUM(CASE WHEN ${lotteryTickets.source} = 'prize' THEN 1 ELSE 0 END), 0)`,
+      discount: sql<number>`COALESCE(SUM(${couponPackPurchases.couponCredits} - ${couponPackPurchases.priceCredits}), 0)`,
     })
-    .from(lotteryTickets)
-    .where(where);
-
-  return toTicketTotals(rows[0]);
-}
-
-/** 累计行版本：券侧计数只维护全量口径（scope='all'）。 */
-async function ticketTotalsFromStats(userId?: string): Promise<LotteryTicketTotals> {
-  if (userId) {
-    const rows = await db
-      .select({
-        boughtTickets: lotteryUserStats.boughtTickets,
-        boughtCredits: lotteryUserStats.boughtCredits,
-        unusedTickets: lotteryUserStats.unusedTickets,
-        unusedCredits: lotteryUserStats.unusedCredits,
-        giftTickets: lotteryUserStats.giftTickets,
-        prizeTickets: lotteryUserStats.prizeTickets,
-      })
-      .from(lotteryUserStats)
-      .where(
-        and(
-          eq(lotteryUserStats.userId, userId),
-          eq(lotteryUserStats.scope, LOTTERY_STATS_ALL_SCOPE),
-        ),
-      )
-      .limit(1);
-    return toTicketTotals(rows[0]);
-  }
-
-  const rows = await db
-    .select({
-      boughtTickets: sql<number>`COALESCE(SUM(${lotteryUserStats.boughtTickets}), 0)`,
-      boughtCredits: sql<number>`COALESCE(SUM(${lotteryUserStats.boughtCredits}), 0)`,
-      unusedTickets: sql<number>`COALESCE(SUM(${lotteryUserStats.unusedTickets}), 0)`,
-      unusedCredits: sql<number>`COALESCE(SUM(${lotteryUserStats.unusedCredits}), 0)`,
-      giftTickets: sql<number>`COALESCE(SUM(${lotteryUserStats.giftTickets}), 0)`,
-      prizeTickets: sql<number>`COALESCE(SUM(${lotteryUserStats.prizeTickets}), 0)`,
-    })
-    .from(lotteryUserStats)
-    .where(eq(lotteryUserStats.scope, LOTTERY_STATS_ALL_SCOPE));
-  return toTicketTotals(rows[0]);
-}
-
-type TicketTotalsRow = {
-  boughtTickets?: unknown;
-  boughtCredits?: unknown;
-  unusedTickets?: unknown;
-  unusedCredits?: unknown;
-  giftTickets?: unknown;
-  prizeTickets?: unknown;
-};
-
-function toTicketTotals(row: TicketTotalsRow | undefined): LotteryTicketTotals {
-  return {
-    boughtTickets: Number(row?.boughtTickets ?? 0),
-    boughtCredits: round2(Number(row?.boughtCredits ?? 0)),
-    unusedTickets: Number(row?.unusedTickets ?? 0),
-    unusedCredits: round2(Number(row?.unusedCredits ?? 0)),
-    giftTickets: Number(row?.giftTickets ?? 0),
-    prizeTickets: Number(row?.prizeTickets ?? 0),
-  };
+    .from(couponPackPurchases)
+    .where(
+      and(
+        eq(couponPackPurchases.activityKind, "lottery"),
+        win ? gte(couponPackPurchases.createdAt, win.start) : undefined,
+        win ? lt(couponPackPurchases.createdAt, win.end) : undefined,
+      ),
+    );
+  return round2(Number(rows[0]?.discount ?? 0));
 }
 
 /** 活动记录每页条数：首屏与卡片内局部翻页共用，超过一页才在卡片底部翻页。 */
@@ -395,6 +320,8 @@ export async function listDrawRecords(opts: {
       grantTickets: lotteryDraws.grantTickets,
       createdAt: lotteryDraws.createdAt,
       ticketId: lotteryDraws.ticketId,
+      ticketCredits: lotteryDraws.ticketCredits,
+      freeDrawDate: lotteryDraws.freeDrawDate,
       activityKey: lotteryDraws.activityKey,
     })
     .from(lotteryDraws)
@@ -424,8 +351,15 @@ export async function listDrawRecords(opts: {
 
   return rows.map((row) => {
     const ticket = row.ticketId ? ticketMap.get(row.ticketId) : undefined;
-    // ticketId 为 null 是每日免费抽；有 id 但查不到券行是用户注销级联删除。
-    const source: TicketSourceLabel = !row.ticketId ? "free" : ticket?.source ?? "unknown";
+    // 免费抽看 freeDrawDate；有 ticketId 是历史抽奖券（查不到券行=注销级联删除→unknown）；
+    // 都没有时按券面区分：活动券直付记单券价(>0)→coupon，历史免费抽券面为 0/null→free。
+    const source: TicketSourceLabel = row.freeDrawDate
+      ? "free"
+      : row.ticketId
+        ? (ticket?.source ?? "unknown")
+        : Number(row.ticketCredits ?? 0) > 0
+          ? "coupon"
+          : "free";
     return {
       id: row.id,
       userId: row.userId,
@@ -439,7 +373,7 @@ export async function listDrawRecords(opts: {
       grantTickets: Number(row.grantTickets ?? 0),
       createdAt: row.createdAt,
       ticketSource: source,
-      ticketCredits: Number(ticket?.priceCredits ?? 0),
+      ticketCredits: Number(row.ticketCredits ?? ticket?.priceCredits ?? 0),
       activityKey: row.activityKey,
     };
   });
@@ -450,11 +384,11 @@ export interface BigWinRecord {
   id: string;
   /** 脱敏后的用户标识（邮箱前缀首字符 + *** + 域名，或用户 ID 前 8 位）。 */
   userLabel: string;
-  /** 奖品文案，如 `+1200 cr` 或 `+3 张券`。 */
+  /** 奖品文案，如 `+1200 cr` 或 `+3 张活动券`。 */
   label: string;
   /** 中奖 cr 金额（赠券档为 0）。 */
   credits: number;
-  /** 抽中的赠券张数。 */
+  /** 抽中的赠券档抽奖等价张数（展示时按券价折算成活动券）。 */
   grantTickets: number;
   createdAt: Date | null;
 }

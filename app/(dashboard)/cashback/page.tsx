@@ -253,7 +253,7 @@ export default async function CashbackPage() {
               </li>
               <li>
                 消费按活动期内<b className="text-foreground">累计消耗的 cr</b> 统计，逐档发放：
-                每档发放时随机一种奖励——临时货币（tcr）、永久货币（cr）、当期活动券或 1–3 张抽奖券，档位越高区间越高。
+                每档发放时随机一种奖励——临时货币（tcr）、永久货币（cr）、当期活动券或 1–3 张转盘活动券，档位越高区间越高。
                 到账为临时余额时有效期 {cashback.validDays} 天。
               </li>
               <li>

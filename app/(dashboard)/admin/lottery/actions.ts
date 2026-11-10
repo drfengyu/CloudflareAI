@@ -8,12 +8,11 @@ import {
   DRAW_RECORD_PAGE_SIZE,
   listDrawRecords,
   lotteryBalance,
-  lotteryTicketTotals,
+  lotteryPackDiscount,
   lotteryUserRecords,
   rangeWindow,
   type DrawRecord,
   type LotteryBalance,
-  type LotteryTicketTotals,
   type LotteryUserRecord,
 } from "@/lib/lottery/records";
 
@@ -21,7 +20,8 @@ export type AdminDrawRow = DrawRecord & { email: string | null };
 
 export interface AdminActivityReport {
   balance: LotteryBalance;
-  ticketTotals: LotteryTicketTotals;
+  /** 转盘活动券礼包让利总额（cr）：站点亏损 / 用户获利。 */
+  packDiscount: number;
   perUser: LotteryUserRecord[];
   detail: { rows: AdminDrawRow[]; totalRecords: number; totalPages: number };
 }
@@ -46,10 +46,10 @@ export async function loadActivityReport(range: string): Promise<AdminActivityRe
   await assertAdmin();
   const win = rangeWindow(range);
 
-  const [balance, perUser, ticketTotals, records] = await Promise.all([
+  const [balance, perUser, packDiscount, records] = await Promise.all([
     lotteryBalance({ win }),
     lotteryUserRecords(win),
-    lotteryTicketTotals(win),
+    lotteryPackDiscount(win),
     listDrawRecords({ win, limit: DRAW_RECORD_PAGE_SIZE }),
   ]);
 
@@ -57,7 +57,7 @@ export async function loadActivityReport(range: string): Promise<AdminActivityRe
   const emailById = new Map(perUser.map((u) => [u.userId, u.email]));
   return {
     balance,
-    ticketTotals,
+    packDiscount,
     perUser,
     detail: {
       rows: records.map((record) => ({

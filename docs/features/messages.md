@@ -3,7 +3,7 @@
 ## 用途
 
 - 系统 / 管理员给单个用户发通知（维护公告、补偿说明等）。
-- 带附件的奖励信：cr 余额、临时余额（限时返利 / 充值奖励）、抽奖券、兑换码、自定义物品 / 凭证。
+- 带附件的奖励信：cr 余额、临时余额（限时返利 / 充值奖励）、转盘活动券、兑换码、自定义物品 / 凭证。
   附件不会在发信时入账，用户点「领取」才真正发放。
 - 安全提示：管理员重置密码、用户自助改密、首次设置密码时自动发一封 `security` 信留痕。
 
@@ -42,8 +42,9 @@ WHERE id = ? AND userId = ? AND claimedAt IS NULL AND attachmentKind IS NOT NULL
 - **临时余额**（`temp_credits`）：写 `temporary_balance` 与 `topup`（`type` 由附件指定：8 消费返利 / 10 充值赠送），
   有效期取附件 `validDays`；若带 `cashbackDate` 同时补写 `cashback_claim` 历史行。
   领取成功后回写 `reward_claim.claimedAt`；回写失败不影响已到账的钱，活动页用站内信 `claimedAt` 兜底。
-- **抽奖券**（`tickets`）：`grantTickets(userId, count, { source: "gift", priceCredits: 0 })`，
-  只用于幸运转盘的抽奖券。
+- **转盘活动券**（`tickets`，旧枚举值保留）：`count` 是活动券张数；领取时取当前转盘轮次
+  （`currentActivityKey`），按 `count × couponUnitCredits` 折成券面用 `grantCouponToRound` 入账，
+  页面文案为「活动券 × N 张」。活动未开启或无轮次时拒绝领取并提示稍后再试。
 - **活动券**（`coupon`）：按发放时锁定的 `kind` / `activityKey` / `couponName` 入账，
   `tickets` 必须是**正整数**（旧附件没有该字段时按 0 处理并回退到 cr 文案），
   `grantCouponToRound` 按 `tickets × unitCredits` 记券面；领取提示只显示「券名 × N 张」。

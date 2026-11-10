@@ -28,6 +28,7 @@ const TICKET_LABEL: Record<DrawRecord["ticketSource"], string> = {
   gift: "赠送",
   prize: "抽中",
   free: "免费",
+  coupon: "活动券",
   unknown: "已失效",
 };
 
@@ -101,7 +102,7 @@ export function LotteryReport({
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  const { balance, ticketTotals, perUser, detail } = report;
+  const { balance, packDiscount, perUser, detail } = report;
   const actualRate =
     balance.ticketFace > 0
       ? round2(((balance.paidOut - balance.clawedBack) / balance.ticketFace) * 100)
@@ -171,9 +172,10 @@ export function LotteryReport({
               hint="消耗 + 回收 − 发放"
             />
             <Metric
-              label="售券收入"
-              value={`${formatCredits(ticketTotals.boughtCredits)} cr`}
-              hint={`${ticketTotals.boughtTickets} 张 · 赠券 档位 ${ticketTotals.giftTickets} / 奖池 ${ticketTotals.prizeTickets} 张`}
+              label="礼包让利"
+              value={`${formatCredits(packDiscount)} cr`}
+              tone="negative"
+              hint="站点亏损 / 用户获利"
             />
             <Metric
               label="中奖发放"
@@ -190,10 +192,11 @@ export function LotteryReport({
             />
           </div>
           <p className="text-[11px] text-muted-foreground">
-            净收益只统计已开奖的券；窗口内还有 {ticketTotals.unusedTickets} 张未开奖（消耗{" "}
-            {formatCredits(ticketTotals.unusedCredits)} cr）已收讫未兑现。倒扣回收是把用户已有余额划回，
-            不是新增现金流入；中奖发放走带过期的临时余额，过期未用不会真的付出。
-            赠券档不动 cr，它按「这一注的消耗已收、兑付延后」落在净收益里，发出去的券要等它被抽掉才转成成本。
+            净收益只统计已开奖的注，消耗按抽奖时实际抵扣的活动券面值计。礼包让利发生在购买礼包时，
+            不动 cr 余额，因此不进上面的净收益，单独列出：优惠掉的金额记为站点亏损，同时也是用户获利。
+            倒扣回收是把用户已有余额划回，不是新增现金流入；中奖发放走带过期的临时余额，过期未用不会真的付出。
+            赠活动券档不动 cr，它按「这一注的消耗已收、活动券兑付延后」落在净收益里，
+            发出去的活动券要等它被抽掉才转成成本。
           </p>
         </CardContent>
       </Card>
@@ -304,7 +307,9 @@ export function LotteryReport({
                         </td>
                         <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
                           {TICKET_LABEL[r.ticketSource]}
-                          {r.ticketSource === "buy" ? ` ${formatCredits(r.ticketCredits)} cr` : ""}
+                          {r.ticketSource === "buy" || r.ticketSource === "coupon"
+                            ? ` ${formatCredits(r.ticketCredits)} cr`
+                            : ""}
                         </td>
                         <td className="px-3 py-2">
                           <Signed value={drawNetCredits(r)} />

@@ -9,9 +9,9 @@ import {
   users,
   type ActivityKind,
 } from "@/lib/db/schema";
-import { grantTickets } from "@/lib/lottery/store";
 import { getLotteryConfig } from "@/lib/lottery/config";
-import { grantCouponToRound } from "@/lib/activity/coupons";
+import { currentActivityKey } from "@/lib/lottery/prize-math";
+import { couponNameFor, grantCouponToRound } from "@/lib/activity/coupons";
 
 export type MessageKind = "notice" | "reward" | "security";
 export type AttachmentKind =
@@ -251,9 +251,9 @@ export function validateAttachment(attachment: Attachment): string | null {
       return null;
     case "tickets":
       if (!Number.isInteger(attachment.count) || attachment.count <= 0) {
-        return "抽奖券数量必须是正整数";
+        return "活动券数量必须是正整数";
       }
-      if (attachment.count > 100) return "单封信赠券上限 100 张";
+      if (attachment.count > 100) return "单封信赠送活动券上限 100 张";
       return null;
     case "coupon":
       if (!Number.isInteger(attachment.tickets) || attachment.tickets <= 0) {
@@ -578,15 +578,23 @@ export async function claimMessage(
         };
       }
       case "tickets": {
-        // 券只有转盘这一种：翻牌夺宝是按 cr 计价的局，没有券可发。
+        // 抽奖券系统已并入活动券：站内信「tickets」附件按张数发当期转盘活动券（1 张 = 券面单价 cr）。
         const config = await getLotteryConfig();
-        await grantTickets(userId, attachment.count, {
-          source: "gift",
-          priceCredits: 0,
-          activityKey: config.startAt || null,
-        });
+        const activityKey = currentActivityKey(config);
+        if (!activityKey) {
+          throw new Error("转盘活动尚未开启，暂时无法领取活动券，请在活动开启后再试");
+        }
+        const unit = config.couponUnitCredits > 0 ? config.couponUnitCredits : 1;
+        const amount = round2(attachment.count * unit);
+        await grantCouponToRound(
+          userId,
+          "lottery",
+          activityKey,
+          couponNameFor("lottery", activityKey),
+          amount,
+        );
         await markRewardClaimed(attachment.rewardClaimId, userId, new Date(nowMs));
-        return { attachment, note: `${attachment.count} 张抽奖券已入账` };
+        return { attachment, note: `${attachment.count} 张活动券已入账` };
       }
       case "coupon": {
         const amount = round2(attachment.credits);

@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/usage/meter";
 import { getLotteryConfig } from "@/lib/lottery/config";
 import {
   activityWindow,
+  couponTicketsForReward,
   currentActivityKey,
   formatPermanentPrizeLabel,
   formatPrizeLabel,
@@ -14,12 +15,7 @@ import {
   round2,
   type LotteryConfig,
 } from "@/lib/lottery/prize-math";
-import {
-  countUnusedTickets,
-  countConsecutiveMisses,
-  expireTicketsForActivity,
-  hasUsedFreeDrawToday,
-} from "@/lib/lottery/store";
+import { countConsecutiveMisses, hasUsedFreeDrawToday } from "@/lib/lottery/store";
 import {
   DRAW_RECORD_PAGE_SIZE,
   listDrawRecords,
@@ -79,7 +75,7 @@ function buildWheelViews(config: LotteryConfig): {
     // 赠券档没有 cr，也不随抽数变化，和倍数档分两种文案与色调。
     if (p.kind === "tickets") {
       return {
-        label: formatTicketLabel(p.tickets),
+        label: formatTicketLabel(couponTicketsForReward(config, p.tickets)),
         tone: "ticket" as const,
         weight: round2(share),
         chance: chanceOfSector,
@@ -118,18 +114,12 @@ export default async function LotteryPage() {
   const windowInfo = activityWindow(config);
   const activityKey = currentActivityKey(config);
 
-  // 活动结束且配置允许券过期时，用户访问页面即自动作废该轮未使用的券。
-  if (windowInfo.status === "ended" && config.ticketsExpireOnActivityEnd && activityKey) {
-    await expireTicketsForActivity(userId, activityKey);
-  }
-
   // 记录按当前活动轮次过滤，页面只展示当期数据。
   // countConsecutiveMisses 按当前活动轮次过滤，新活动保底重置。
   // currentStats = 当前活动战绩（新活动重计），myStats = 全部活动累计（转盘「累计抽奖」）。
   // 首屏只出第一页，后续翻页走卡片内的局部刷新（listMyActivityRecords）。
-  const [tickets, myStats, currentStats, records, freeDrawUsed, consecutiveMisses, bigWins, coupon] =
+  const [myStats, currentStats, records, freeDrawUsed, consecutiveMisses, bigWins, coupon] =
     await Promise.all([
-      countUnusedTickets(userId),
       lotteryBalance({ userId }),
       activityKey ? lotteryBalance({ userId, activityKey }) : Promise.resolve(null),
       listDrawRecords({ userId, limit: DRAW_RECORD_PAGE_SIZE, activityKey }),
@@ -148,7 +138,6 @@ export default async function LotteryPage() {
       key={records[0]?.id ?? "empty"}
       balance={currentStats}
       records={records}
-      ticketsLeft={tickets}
       totalPages={recordTotalPages}
       totalRecords={recordTotal}
       pageSize={DRAW_RECORD_PAGE_SIZE}
@@ -175,13 +164,11 @@ export default async function LotteryPage() {
           ? { title: "活动尚未开始", hint: `开始时间（北京时间）：${config.startAt || "未设置"}。` }
           : {
               title: "活动已结束",
-              hint: config.ticketsExpireOnActivityEnd
-                ? `结束时间（北京时间）：${config.endAt || "未设置"}。未使用的抽奖券已随活动作废。`
-                : `结束时间（北京时间）：${config.endAt || "未设置"}。未使用的抽奖券继续有效，可用于下一轮活动。`,
+              hint: `结束时间（北京时间）：${config.endAt || "未设置"}。本期未用完的活动券保留在券包里，本轮活动重新开启后仍可使用。`,
             };
     return (
       <>
-        <PageHeader title="幸运转盘" description="抽奖券与累抽奖励" />
+        <PageHeader title="幸运转盘" description="活动券与累抽奖励" />
         <PageBody className="space-y-6">
           <Notice title={notice.title} hint={notice.hint} />
           {couponCard}
@@ -195,7 +182,7 @@ export default async function LotteryPage() {
 
   return (
     <>
-      <PageHeader title="幸运转盘" description="抽奖券与累抽奖励" />
+      <PageHeader title="幸运转盘" description="活动券与累抽奖励" />
       <PageBody className="space-y-6">
         <LotteryWheel
           innerSectors={innerSectors}
@@ -204,7 +191,6 @@ export default async function LotteryPage() {
           outerChancePercent={config.outerChancePercent}
           prizeValidDays={config.prizeValidDays}
           milestones={config.milestones}
-          tickets={tickets}
           totalDraws={myStats.draws}
           couponTickets={coupon.tickets}
           couponUnitCredits={coupon.unitCredits}

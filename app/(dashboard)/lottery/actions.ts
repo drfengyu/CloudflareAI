@@ -3,11 +3,21 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/usage/meter";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { payWithCoupon, refundCouponPayment, type CouponPayment } from "@/lib/activity/coupons";
+import {
+  couponNameFor,
+  couponTicketBalance,
+  grantCouponToRound,
+  payWithCoupon,
+  refundCouponPayment,
+  revokeCouponCredits,
+  type CouponPayment,
+} from "@/lib/activity/coupons";
 import { getLotteryConfig } from "@/lib/lottery/config";
 import {
   activityWindow,
   calculateLuckyChance,
+  couponCreditsForReward,
+  couponTicketsForReward,
   currentActivityKey,
   formatPrizeLabel,
   rollPrize,
@@ -18,38 +28,25 @@ import {
 import {
   adjustPermanentBalance,
   applyDrawStats,
-  applyTicketStats,
   beijingDayKey,
   buildTemporaryPrizeRow,
+  claimMilestoneGrant,
   clawbackCredits,
   countConsecutiveMisses,
   countDraws,
-  countUnusedTickets,
   deleteDrawsByIds,
+  deleteMilestoneGrants,
   deleteTemporaryBalancesByIds,
-  deleteTickets,
   deleteTopupsByIds,
-  expireTicketsForActivity,
-  grantTickets,
   hasUsedFreeDrawToday,
   insertDrawRows,
   insertTemporaryBalanceRows,
   insertTopupRows,
-  lockTickets,
-  pickUnusedTickets,
   refundClawback,
   revertDrawStats,
-  unlockTickets,
   type ClawbackReceipt,
-  type UnusedTicketPick,
 } from "@/lib/lottery/store";
-import {
-  consumedTicketsDelta,
-  drawStatsDelta,
-  mergeStatsDeltas,
-  negateStatsDelta,
-  type LotteryStatsDelta,
-} from "@/lib/lottery/stats";
+import { drawStatsDelta, type LotteryStatsDelta } from "@/lib/lottery/stats";
 import { lotteryDraws, temporaryBalances, topups } from "@/lib/db/schema";
 import {
   DRAW_RECORD_PAGE_SIZE,
@@ -100,15 +97,15 @@ interface DrawBatchPlan {
  * 逐注开奖只算随机数与账目，不碰数据库：一次 10 连抽的写入因此能压成「每表一条语句」，
  * 而不是每注各打两三次 D1 HTTP 往返（那是原先 7~10 秒的来源）。
  *
- * `ticketCredits` 是逐注消耗的券面值（免费抽那一注传 0），只用于累计统计行。
+ * `ticketFaces` 是逐注消耗的券面值（免费抽那一注传 0），写进 lottery_draw.ticketCredits
+ * 供按窗口对账，同时计入累计统计行。付费一律活动券直付，不再关联抽奖券，ticketId 恒为 null。
  */
 function planDrawBatch(
   userId: string,
   config: LotteryConfig,
   count: number,
   batchId: string,
-  ticketIds: (string | null)[],
-  ticketCredits: number[],
+  ticketFaces: number[],
   activityKey: string | null,
   /** 免费抽那一批写当天的北京日期（唯一索引挡重复领）；花钱抽传 null。 */
   freeDrawDate: string | null,
@@ -139,7 +136,8 @@ function planDrawBatch(
       deltaCredits: amount,
       baseCredits: outcome.ring === "outer" ? outcome.baseCredits : 0,
       grantTickets: outcome.grantTickets,
-      ticketId: ticketIds[i],
+      ticketId: null,
+      ticketCredits: ticketFaces[i] ?? 0,
       activityKey,
       freeDrawDate,
       createdAt,
@@ -194,7 +192,7 @@ function planDrawBatch(
       drawRows.map((row, index) => ({
         ring: row.ring,
         deltaCredits: Number(row.deltaCredits),
-        ticketCredits: ticketCredits[index] ?? 0,
+        ticketCredits: ticketFaces[index] ?? 0,
         createdAt: row.createdAt ?? new Date(),
       })),
     ),
@@ -202,37 +200,42 @@ function planDrawBatch(
 }
 
 /**
- * 整批撤销：这一批的行、发出去的券、净额扣款全部退回，券原样回券包。
+ * 整批撤销：这一批的行、发出去的活动券、净额扣款全部退回，付费券原样回券包。
  * 没有事务可依赖，所以逐表按 id 删；本身再失败只记日志，人工按 batchId 与流水核对。
  *
  * `appliedStats` 记录累计统计行有没有加过：加过就按同一份增量反向扣回（开奖时间重算）。
+ * `milestoneClaimIds` 是本批刚占下的累抽档位，删掉后这些档位下次还能再发；
+ * `couponGrantsToRevoke` 是已成功发出的活动券面值（cr），按轮次条件扣回。
  */
 async function compensateDrawBatch(
   userId: string,
   activityKey: string | null,
   plan: DrawBatchPlan,
-  issuedTicketIds: string[],
-  lockedTicketIds: string[],
+  milestoneClaimIds: string[],
+  couponGrantsToRevoke: number[],
   /** 本批用活动券直付的部分；没有就是 null。 */
   couponPayment: CouponPayment | null,
   /** 已经发生的倒扣回收；没执行到就传 null。 */
   clawback: ClawbackReceipt | null,
-  appliedStats: { draw: boolean; ticket: LotteryStatsDelta | null },
+  appliedStats: { draw: boolean },
 ): Promise<void> {
   try {
     await Promise.all([
       deleteDrawsByIds(rowIds(plan.drawRows)),
       deleteTopupsByIds(rowIds(plan.topupRows)),
       deleteTemporaryBalancesByIds(rowIds(plan.tempRows)),
-      deleteTickets(issuedTicketIds),
-      unlockTickets(lockedTicketIds),
+      deleteMilestoneGrants(milestoneClaimIds),
       couponPayment ? refundCouponPayment(couponPayment) : Promise.resolve(),
       plan.permanentDelta !== 0
         ? adjustPermanentBalance(userId, -plan.permanentDelta)
         : Promise.resolve(),
+      ...(activityKey
+        ? couponGrantsToRevoke.map((amount) =>
+            revokeCouponCredits(userId, "lottery", activityKey, amount),
+          )
+        : []),
     ]);
     if (appliedStats.draw) await revertDrawStats(userId, activityKey, plan.stats);
-    if (appliedStats.ticket) await applyTicketStats(userId, negateStatsDelta(appliedStats.ticket));
     // 退回倒扣要排在删临时余额之后：那批中奖行会被删掉，先加回再删就白加一场。
     if (clawback) await refundClawback(userId, clawback);
   } catch (rollbackError) {
@@ -243,10 +246,12 @@ async function compensateDrawBatch(
 /**
  * 转盘开奖：先在内存里把整批结果算完，再一波并发写库。
  *
- * 券整批锁定挡住并发双花；写库失败就整批撤销、券原样退回，所以这一批要么全落账
- * 要么全不落（回滚粒度是整批，不是逐注——逐注保留需要每注一次往返，正是慢的根源）。
+ * 付费只扣当期活动券（`payWithCoupon` 一条条件 UPDATE 挡住并发双花），不再有锁券步骤；
+ * 写库失败就整批撤销、付费券原样退回，所以这一批要么全落账要么全不落
+ * （回滚粒度是整批，不是逐注——逐注保留需要每注一次往返，正是慢的根源）。
  *
- * `useFreeDraw=true` 且 count=1 且今日未用过免费抽时，本次不消耗券（行上 ticketId 留 null）。
+ * 赠券档与累抽档位都发**活动券**：配置里的张数是「抽奖等价」（1 = 一次抽奖价值 = 单券价 cr），
+ * 实发按券价折算成活动券面值入账。`useFreeDraw=true` 且 count=1 且今日未用过免费抽时不消耗券。
  * 服务端自己查 `hasUsedFreeDrawToday` 验证，前端无法通过重复传参作弊。
  */
 export async function drawLottery(
@@ -256,9 +261,12 @@ export async function drawLottery(
   ActionResult<{
     results: DrawOutcome[];
     totalCredits: number;
+    /** 本批抽中赠券档折算后的活动券张数。 */
     prizeTickets: number;
-    ticketsLeft: number;
+    /** 开奖后当期活动券可用整张数（按本批收支推算，省一次往返）。 */
+    couponTicketsLeft: number;
     totalDraws: number;
+    /** 累抽档位赠送的活动券张数。 */
     giftedTickets: number;
     freeDrawUsed: boolean;
     /** 本次是否触发了保底（外圈概率临时提升）。 */
@@ -281,33 +289,23 @@ export async function drawLottery(
     const freeDrawEligible =
       useFreeDraw && count === 1 && !(await hasUsedFreeDrawToday(userId, freeDrawDay));
 
-    // 一波并发读：活动窗口、可用券、券包余量、本批之前的累计次数、连续未中大奖次数（保底用）。
-    // 免费抽不需要取券 id，但 ticketsBefore / drawsBefore 仍然要算（返回值与档位判定用）。
+    // 一波并发读：当期活动券余量、本批之前的累计次数、连续未中大奖次数（保底用）。
     // countDraws / countConsecutiveMisses 按当前活动轮次过滤，新活动战绩重计、保底重置。
     const config = await getLotteryConfig();
     const activityKey = currentActivityKey(config);
-    const [pickedTickets, ticketsBefore, drawsBefore, consecutiveMisses] = await Promise.all([
-      freeDrawEligible ? Promise.resolve<UnusedTicketPick[]>([]) : pickUnusedTickets(userId, count),
-      countUnusedTickets(userId),
+    const [couponBefore, drawsBefore, consecutiveMisses] = await Promise.all([
+      couponTicketBalance(userId, "lottery", activityKey, config.couponUnitCredits),
       countDraws(userId, activityKey),
       countConsecutiveMisses(userId, 30, activityKey),
     ]);
-    const pickedIds = pickedTickets.map((ticket) => ticket.id);
-
-    // 活动结束且配置允许券过期时，自动作废该用户本轮未使用的券。
-    // 用户在活动结束后首次尝试抽奖时触发，标记 expired=1 后不再计入可用券。
-    const { status: activityStatus } = activityWindow(config);
-    if (activityStatus === "ended" && config.ticketsExpireOnActivityEnd && activityKey) {
-      await expireTicketsForActivity(userId, activityKey);
-    }
 
     const closed = windowError(config);
     if (closed) return { success: false, error: closed };
     if (!activityKey) return { success: false, error: "活动轮次无效" };
+    const couponName = couponNameFor("lottery", activityKey);
 
-    // 支付顺序：免费抽 → 抽奖券 → 不足的份数按单抽价用当期活动券直付。
-    // 抽奖券与活动券都是整张口径，不会出现半张。
-    const paidCount = freeDrawEligible ? 0 : count - pickedTickets.length;
+    // 付费：免费抽不扣券；否则整批按单券价用当期活动券直付（整张口径，不会出现半张）。
+    const paidCount = freeDrawEligible ? 0 : count;
     let couponPayment: CouponPayment | null = null;
     if (paidCount > 0) {
       const paid = await payWithCoupon(
@@ -321,7 +319,7 @@ export async function drawLottery(
       couponPayment = paid.payment;
     }
 
-    // 保底：连续未中大奖达阈值后，外圈概率线性提升（每多 1 次未中 +0.1%，上限 20%）。
+    // 保底：连续未中大奖达阈值后，外圈概率线性提升（每多 1 次未中 +0.5%，上限 35%）。
     // 只覆盖 outerChancePercent，奖品金额与券价不动；中一次外圈正档后计数自然清零。
     const luckyChancePercent = calculateLuckyChance(consecutiveMisses, config.outerChancePercent);
     const luckyBoosted = luckyChancePercent > config.outerChancePercent;
@@ -329,17 +327,10 @@ export async function drawLottery(
       ? { ...config, outerChancePercent: luckyChancePercent }
       : config;
 
-    // 免费抽时 ticketIds 是 [null]，开奖行的 ticketId 留空，标记这是一次免费抽；
-    // 活动券直付的注同样留空 ticketId（freeDrawDate 为 null 以示区别），券面按单抽价计入统计。
-    const ticketIds: (string | null)[] = freeDrawEligible
-      ? [null]
-      : [...pickedIds, ...Array.from({ length: paidCount }, () => null)];
+    // 免费抽那一注券面记 0；活动券直付的每注按单券价记券面，写进 ticketCredits 供对账。
     const ticketFaces = freeDrawEligible
       ? [0]
-      : [
-          ...pickedTickets.map((ticket) => ticket.priceCredits),
-          ...Array.from({ length: paidCount }, () => config.ticketPriceCredits),
-        ];
+      : Array.from({ length: count }, () => config.ticketPriceCredits);
 
     const batchId = crypto.randomUUID();
     const plan = planDrawBatch(
@@ -347,61 +338,42 @@ export async function drawLottery(
       effectiveConfig,
       count,
       batchId,
-      ticketIds,
       ticketFaces,
       activityKey,
       freeDrawEligible ? freeDrawDay : null,
     );
 
-    if (!freeDrawEligible) {
-      if (!(await lockTickets(pickedIds, rowIds(plan.drawRows)))) {
-        await unlockTickets(pickedIds);
-        if (couponPayment) await refundCouponPayment(couponPayment);
-        return { success: false, error: "抽奖券正在被使用，请稍后重试" };
-      }
-    }
-
-    // 本批发出去的券（抽中的赠券档 + 档位赠送），撤销时按 id 收回。
-    const issuedTicketIds: string[] = [];
-
     const totalDraws = drawsBefore + count;
+    // 本批刚占下的累抽档位与已成功发出的活动券面值，撤销时按它们收回。
+    const milestoneClaimIds: string[] = [];
+    const couponGrantsToRevoke: number[] = [];
     let giftedTickets = 0;
-    // 只看这一批跨过的档位；更早的档位撞唯一索引，视作已领过，不牵连整批。
+    // 只看这一批跨过的档位；更早的档位撞唯一索引（claim 返回 null），视作已领过，不牵连整批。
     const milestoneGrants = config.milestones
       .filter((milestone) => milestone.draws > totalDraws - count && milestone.draws <= totalDraws)
       .map(async (milestone) => {
-        try {
-          const ids = await grantTickets(userId, milestone.tickets, {
-            source: "gift",
-            milestoneDraws: milestone.draws,
-            activityKey,
-          });
-          giftedTickets += ids.length;
-          issuedTicketIds.push(...ids);
-        } catch (error) {
-          if (!isUniqueConflict(error)) throw error;
-        }
+        const claimId = await claimMilestoneGrant(userId, activityKey, milestone.draws, milestone.tickets);
+        if (!claimId) return;
+        milestoneClaimIds.push(claimId);
+        const amount = couponCreditsForReward(config, milestone.tickets);
+        await grantCouponToRound(userId, "lottery", activityKey, couponName, amount);
+        couponGrantsToRevoke.push(amount);
+        giftedTickets += couponTicketsForReward(config, milestone.tickets);
       });
 
+    // 抽中赠券档：把本批合计的抽奖等价张数一次性折算成活动券面值入账。
     const prizeGrant =
       plan.prizeTickets > 0
-        ? grantTickets(userId, plan.prizeTickets, { source: "prize", activityKey }).then((ids) => {
-            issuedTicketIds.push(...ids);
-            return ids;
-          })
+        ? (async () => {
+            const amount = couponCreditsForReward(config, plan.prizeTickets);
+            await grantCouponToRound(userId, "lottery", activityKey, couponName, amount);
+            couponGrantsToRevoke.push(amount);
+          })()
         : Promise.resolve();
 
     // 本批倒扣实际扣了哪里，回滚时按它退回。
     let clawbackReceipt: ClawbackReceipt | null = null;
-
-    // 券包侧累计：消耗掉的购买券（赠券/抽中券不进「未开奖」口径）、档位赠送、抽中赠券。
-    const boughtConsumed = pickedTickets.filter((ticket) => ticket.source === "buy");
-    const consumedDelta = consumedTicketsDelta(
-      boughtConsumed.length,
-      boughtConsumed.reduce((sum, ticket) => sum + ticket.priceCredits, 0),
-    );
     let drawStatsApplied = false;
-    let appliedTicketDelta: LotteryStatsDelta | null = null;
 
     // 每个写入操作打标签，失败时能精准定位是哪一步炸了
     const writeTasks: Array<{ label: string; promise: Promise<unknown> }> = [
@@ -431,18 +403,6 @@ export async function drawLottery(
           drawStatsApplied = true;
         }),
       },
-      {
-        // 券包侧统计要等赠券都发完才知道张数，排在赠券任务之后。
-        label: "ticketStats",
-        promise: Promise.all([prizeGrant, ...milestoneGrants]).then(async () => {
-          const delta = mergeStatsDeltas(consumedDelta, {
-            giftTickets: giftedTickets,
-            prizeTickets: plan.prizeTickets,
-          });
-          await applyTicketStats(userId, delta);
-          appliedTicketDelta = delta;
-        }),
-      },
     ];
 
     const settled = await Promise.allSettled(writeTasks.map((t) => t.promise));
@@ -455,16 +415,15 @@ export async function drawLottery(
         `[drawLottery] 写入失败 step=${failedTask.label}`,
         reason instanceof Error ? { message: reason.message, stack: reason.stack } : reason,
       );
-      // 免费抽没有锁定任何券，locked 传空数组即可。
       await compensateDrawBatch(
         userId,
         activityKey,
         plan,
-        issuedTicketIds,
-        freeDrawEligible ? [] : pickedIds,
+        milestoneClaimIds,
+        couponGrantsToRevoke,
         couponPayment,
         clawbackReceipt,
-        { draw: drawStatsApplied, ticket: appliedTicketDelta },
+        { draw: drawStatsApplied },
       );
       // 免费抽撞唯一索引 = 今天这一发已经领过了（并发或连点），不是故障，说人话回去。
       if (freeDrawEligible && failedTask.label === "insertDrawRows" && isUniqueConflict(reason)) {
@@ -474,6 +433,7 @@ export async function drawLottery(
       return { success: false, error: `开奖失败（${failedTask.label}）：${detail}` };
     }
 
+    const prizeCouponTickets = couponTicketsForReward(config, plan.prizeTickets);
     revalidatePath("/lottery");
     revalidatePath("/wallet");
     return {
@@ -481,11 +441,12 @@ export async function drawLottery(
       data: {
         results: plan.results,
         totalCredits: round2(plan.results.reduce((sum, r) => sum + r.credits, 0)),
-        // 这一批抽中的赠券（奖池档），与累抽档位送的券分开报，前端两句话分开提示。
-        prizeTickets: plan.prizeTickets,
-        // 券包余量按本批收支算出来，省掉写入后的一次往返。
-        // 免费抽与活动券直付都不消耗抽奖券，所以只减实际用掉的抽奖券。
-        ticketsLeft: ticketsBefore - pickedIds.length + plan.prizeTickets + giftedTickets,
+        // 这一批抽中的赠券（奖池档）折算成活动券张数，与累抽档位送的券分开报。
+        prizeTickets: prizeCouponTickets,
+        // 券包余量按本批收支算出来，省掉写入后的一次往返：
+        // 基线 − 付费扣掉的整张 + 抽中赠券 + 累抽赠送。
+        couponTicketsLeft:
+          couponBefore - (couponPayment?.tickets ?? 0) + prizeCouponTickets + giftedTickets,
         totalDraws,
         giftedTickets,
         freeDrawUsed: freeDrawEligible,

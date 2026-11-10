@@ -5,6 +5,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
+  couponTicketsForReward,
   formatPrizeLabel,
   lotteryExpectation,
   outerPrizeCredits,
@@ -22,7 +23,7 @@ interface InnerRow {
   weight: string;
 }
 interface OuterRow {
-  /** credits=倍数→临时余额（带过期）；permanentCredits=倍数→永久余额（不过期）；tickets=直接赠券。 */
+  /** credits=倍数→临时余额（带过期）；permanentCredits=倍数→永久余额（不过期）；tickets=直接赠活动券。 */
   kind: "credits" | "permanentCredits" | "tickets";
   multiplier: string;
   tickets: string;
@@ -52,7 +53,6 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
     initialConfig.multiplierBase,
   );
   const [prizeValidDays, setPrizeValidDays] = useState(String(initialConfig.prizeValidDays));
-  const [ticketsExpire, setTicketsExpire] = useState(initialConfig.ticketsExpireOnActivityEnd);
   const [innerRows, setInnerRows] = useState<InnerRow[]>(() =>
     initialConfig.innerPrizes.map((p) => ({ credits: String(p.credits), weight: String(p.weight) })),
   );
@@ -85,7 +85,6 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
         outerChancePercent: Number(outerChance),
         multiplierBase,
         prizeValidDays: Number(prizeValidDays),
-        ticketsExpireOnActivityEnd: ticketsExpire,
         innerPrizes: innerRows.map((r) => ({
           credits: Number(r.credits),
           weight: Number(r.weight),
@@ -107,7 +106,6 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
       outerChance,
       multiplierBase,
       prizeValidDays,
-      ticketsExpire,
       innerRows,
       outerRows,
       milestoneRows,
@@ -134,7 +132,6 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
         outerChancePercent: Number(outerChance),
         multiplierBase,
         prizeValidDays: Number(prizeValidDays),
-        ticketsExpireOnActivityEnd: ticketsExpire,
         innerPrizes: innerRows
           .filter((r) => r.credits.trim() !== "" || r.weight.trim() !== "")
           .map((r) => ({ credits: Number(r.credits), weight: Number(r.weight) })),
@@ -176,7 +173,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
         </label>
       </div>
       <p className="text-xs text-muted-foreground">
-        关闭后活动页只显示「活动未开启」，已发行的抽奖券保留到下次开启。
+        关闭后活动页只显示「活动未开启」，当期活动券与开奖记录保留在对应轮次。
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -246,21 +243,6 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
             onChange={(e) => setPrizeValidDays(e.target.value)}
             className={FIELD_CLASS}
           />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium">券过期策略</label>
-          <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm">
-            <input
-              type="checkbox"
-              checked={ticketsExpire}
-              onChange={(e) => setTicketsExpire(e.target.checked)}
-              className="h-4 w-4"
-            />
-            <span>活动结束时未使用的券自动作废</span>
-          </label>
-          <p className="mt-1 text-xs text-muted-foreground">
-            开启后，每轮活动结束时该轮未用完的券标记过期，不可用于下一轮；关闭则券跨活动持续有效。
-          </p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">倍数基数</label>
@@ -336,7 +318,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
 
       <PrizeSection
         title="累抽送券档位"
-        hint="累计抽奖次数达到该值时赠送抽奖券，每人每档位只发一次。"
+        hint="累计抽奖次数达到该值时赠送活动券，每人每档位只发一次。张数为抽奖等价（1 = 一次抽奖价值），实发按单券价折算成活动券张数。"
         columns={[
           { key: "draws", label: "累计次数" },
           { key: "tickets", label: "赠送张数" },
@@ -446,11 +428,11 @@ function OuterPrizeSection({
   const patch = (i: number, next: Partial<OuterRow>) =>
     setRows((prev) => prev.map((r, idx) => (idx === i ? { ...r, ...next } : r)));
 
-  /** 这一档实际值多少：赠券档给张数，cr 档按当前基数与抽数折算（batch 下 10 连是另一个数）。 */
+  /** 这一档实际值多少：赠券档按券价折算成活动券张数，cr 档按当前基数与抽数折算（batch 下 10 连是另一个数）。 */
   function note(row: OuterRow) {
     if (row.kind === "tickets") {
       const n = Math.trunc(Number(row.tickets));
-      return n > 0 ? `+${n} 张券` : "—";
+      return n > 0 ? `+${couponTicketsForReward(config, n)} 张活动券` : "—";
     }
     const m = Number(row.multiplier);
     if (!Number.isFinite(m) || row.multiplier.trim() === "") return "—";
@@ -463,7 +445,7 @@ function OuterPrizeSection({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">外圈奖品（倍数·临时余额 / 倍数·永久余额 / 赠送抽奖券）</p>
+        <p className="text-sm font-medium">外圈奖品（倍数·临时余额 / 倍数·永久余额 / 赠送活动券）</p>
         <Button
           type="button"
           variant="outline"
@@ -481,7 +463,7 @@ function OuterPrizeSection({
       </div>
       <p className="text-xs text-muted-foreground">
         只有内圈指针停在「外圈入口」上才会抽这一圈。倍数档按上面的基数结算 cr（可为负）；
-        赠券档只往券包里加张数、不动 cr，返还率里按券价 {config.ticketPriceCredits} cr 折算。权重同时决定扇区大小与中奖概率。
+        赠券档只往券包里加活动券、不动 cr，返还率里按券价 {config.ticketPriceCredits} cr 折算。权重同时决定扇区大小与中奖概率。
       </p>
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <span className="w-20 shrink-0">奖品类型</span>
@@ -507,7 +489,7 @@ function OuterPrizeSection({
               >
                 <option value="credits">倍数·临时</option>
                 <option value="permanentCredits">倍数·永久</option>
-                <option value="tickets">赠券</option>
+                <option value="tickets">赠活动券</option>
               </select>
               <input
                 type="number"

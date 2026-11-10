@@ -450,12 +450,12 @@ export const rewardClaims = sqliteTable(
     validDays: integer("validDays").notNull().default(0),
     /** 领取时写入 topup 的流水类型（8=消费返利 / 9=任务成就 / 10=充值赠送）。 */
     topupType: integer("topupType").notNull().default(0),
-    /** 奖励形态：临时货币 / 永久货币 / 抽奖券 / 活动券。 */
+    /** 奖励形态：临时货币 / 永久货币 / 活动券张数（旧枚举值 tickets）/ 活动券面值（coupon）。 */
     rewardKind: text("rewardKind")
       .$type<"temp_credits" | "permanent_credits" | "tickets" | "coupon">()
       .notNull()
       .default("temp_credits"),
-    /** 发放时的展示名（如「抽奖券 ×2」「星轨券 88 cr」），改配置不影响已发记录。 */
+    /** 发放时的展示名（如「活动券 ×2」「星轨券 88 cr」），改配置不影响已发记录。 */
     rewardLabel: text("rewardLabel"),
     /** 站内信 id；站内信被清理后仍保留发放记录。 */
     messageId: text("messageId"),
@@ -683,9 +683,15 @@ export const lotteryDraws = sqliteTable(
     deltaCredits: real("deltaCredits").notNull(),
     /** 本次倍数结算用的基数（cr）：单券价或批次总花费，见配置 multiplierBase。 */
     baseCredits: real("baseCredits").notNull().default(0),
-    /** 本次抽中的抽奖券张数（外圈赠券档）；0 = 不发券。券不进 cr 账本，所以不写流水。 */
+    /** 本次抽中的活动券张数（外圈赠券档）；0 = 不发券。券不进 cr 账本，所以不写流水。 */
     grantTickets: integer("grantTickets").notNull().default(0),
-    /** 消耗掉的券。 */
+    /**
+     * 这一注消耗的活动券面值（cr）：付费抽记单券价，免费抽记 0。
+     * 抽奖券移除后不再回填 ticketId，窗口口径的站点收入直接读这一列；
+     * 历史开奖行为 null，读侧退回 lottery_ticket 关联取值。
+     */
+    ticketCredits: real("ticketCredits"),
+    /** 消耗掉的券（历史抽奖券记录）；活动券直付与免费抽都为 null。 */
     ticketId: text("ticketId").references(() => lotteryTickets.id, {
       onDelete: "set null",
     }),
@@ -740,6 +746,32 @@ export const lotteryUserStats = sqliteTable(
     updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).$defaultFn(now),
   },
   (table) => [primaryKey({ columns: [table.userId, table.scope] })],
+);
+
+/**
+ * 累抽档位领取记录：一行 = 某用户在某活动轮次领过某个累抽档位的活动券。
+ *
+ * 抽奖券移除后，档位赠券改发当期活动券；原先靠 lottery_ticket 唯一索引挡重复领取，
+ * 现在由这张表的唯一索引接住——并发跨过同一档位的两批开奖，只有一批能插入成功。
+ */
+export const lotteryMilestoneGrants = sqliteTable(
+  "lottery_milestone_grant",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 活动轮次标识（活动 startAt 字符串）。 */
+    activityKey: text("activityKey").notNull(),
+    /** 命中的累抽档位（累计抽奖次数阈值）。 */
+    draws: integer("draws").notNull(),
+    /** 实发活动券张数。 */
+    tickets: integer("tickets").notNull(),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [
+    unique("uq_lottery_milestone_grant").on(table.userId, table.activityKey, table.draws),
+  ],
 );
 
 /**

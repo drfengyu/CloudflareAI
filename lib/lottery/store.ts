@@ -1,8 +1,8 @@
 import { and, asc, eq, gt, gte, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
-import { batchRows, d1Run, db, D1_MAX_BINDINGS } from "@/lib/db/d1-http";
+import { batchRows, d1Run, db } from "@/lib/db/d1-http";
 import {
   lotteryDraws,
-  lotteryTickets,
+  lotteryMilestoneGrants,
   lotteryUserStats,
   temporaryBalances,
   topups,
@@ -22,8 +22,8 @@ import {
  * `changes` 判断有没有真的命中。
  *
  * 这里的写入一律**按整批设计**：一次 10 连抽原先要打约 40 次串行 HTTP 往返（单程
- * 实测 0.4~0.9 秒），所以锁券合成一条 CASE 更新、每一张表的行合成一条多行 INSERT、
- * 倒扣合成一次净额 UPDATE，剩下几个互不相关的语句并发发出。
+ * 实测 0.4~0.9 秒），所以每一张表的行合成一条多行 INSERT、倒扣合成一次净额 UPDATE，
+ * 剩下几个互不相关的语句并发发出。付费只扣当期活动券（`payWithCoupon`），不再有锁券步骤。
  */
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -35,17 +35,6 @@ export interface DrawRow {
   multiplier: number | null;
   deltaCredits: number;
   createdAt: Date | null;
-}
-
-/** 可用券数量（未消耗且未过期）。 */
-export async function countUnusedTickets(userId: string): Promise<number> {
-  const rows = await db
-    .select({ c: sql<number>`COUNT(*)` })
-    .from(lotteryTickets)
-    .where(
-      and(eq(lotteryTickets.userId, userId), isNull(lotteryTickets.usedDrawId), eq(lotteryTickets.expired, 0)),
-    );
-  return Number(rows[0]?.c ?? 0);
 }
 
 /**
@@ -167,118 +156,9 @@ export async function globalLotteryStats(): Promise<{ totalDraws: number; player
   };
 }
 
-/** 取 n 张未消耗的券（最早发放的优先），带上面值与来源给统计口径用。 */
-export interface UnusedTicketPick {
-  id: string;
-  source: "buy" | "gift" | "prize";
-  priceCredits: number;
-}
-
-export async function pickUnusedTickets(userId: string, n: number): Promise<UnusedTicketPick[]> {
-  const rows = await db
-    .select({
-      id: lotteryTickets.id,
-      source: lotteryTickets.source,
-      priceCredits: lotteryTickets.priceCredits,
-    })
-    .from(lotteryTickets)
-    .where(
-      and(
-        eq(lotteryTickets.userId, userId),
-        isNull(lotteryTickets.usedDrawId),
-        eq(lotteryTickets.expired, 0),
-      ),
-    )
-    .orderBy(asc(lotteryTickets.createdAt))
-    .limit(n);
-  return rows.map((r) => ({
-    id: r.id,
-    source: r.source,
-    priceCredits: Number(r.priceCredits ?? 0),
-  }));
-}
-
-/**
- * 把整批券一次锁给对应的开奖 id；false 表示其中至少一张已被并发请求用掉。
- *
- * 「有券被占用就一张都不锁」必须写进这条语句本身（末尾那个 COUNT 条件），不能靠调用方
- * 比较命中数再回滚：回滚是第二条语句，中间那一瞬并发请求能把刚锁上的券再偷走，
- * 用户白掉券。逐张锁还会多打 10 次 HTTP 往返。
- */
-export async function lockTickets(ticketIds: string[], drawIds: string[]): Promise<boolean> {
-  // 每张券绑 4 个参数（CASE 的 id 与目标 drawId、两处 IN 列表各一次），别超 D1 的参数墙。
-  if (ticketIds.length * 4 + 1 > D1_MAX_BINDINGS) throw new Error("一次锁定的券过多");
-  const cases = ticketIds.map(() => "WHEN ? THEN ?").join(" ");
-  const placeholders = ticketIds.map(() => "?").join(", ");
-  const idList = ticketIds.map(() => "?").join(", ");
-  const params: unknown[] = [];
-  ticketIds.forEach((ticketId, index) => params.push(ticketId, drawIds[index]));
-  params.push(...ticketIds);
-  params.push(...ticketIds);
-  const { changes } = await d1Run(
-    `UPDATE lottery_ticket SET usedDrawId = CASE id ${cases} END ` +
-      `WHERE usedDrawId IS NULL AND id IN (${placeholders}) ` +
-      `AND (SELECT COUNT(*) FROM lottery_ticket WHERE id IN (${idList}) AND usedDrawId IS NULL) = ?`,
-    [...params, ticketIds.length],
-  );
-  return changes === ticketIds.length;
-}
-
-/** 整批退回券包（开奖失败或提前退出时把锁定释放掉）。 */
-export async function unlockTickets(ticketIds: string[]): Promise<void> {
-  for (const batch of batchRows(ticketIds, 1)) {
-    await d1Run(
-      `UPDATE lottery_ticket SET usedDrawId = NULL WHERE id IN (${batch.map(() => "?").join(",")})`,
-      batch,
-    );
-  }
-}
-
-/** 发券；档位赠券带 `milestoneDraws` + 档位内序号，靠唯一索引保证同档位只发一次。 */
-export async function grantTickets(
-  userId: string,
-  count: number,
-  grant: {
-    source: "buy" | "gift" | "prize";
-    priceCredits?: number;
-    milestoneDraws?: number;
-    /** 活动轮次标识；null 表示历史数据或活动未启用。 */
-    activityKey?: string | null;
-  },
-): Promise<string[]> {
-  const ids: string[] = [];
-  const values = Array.from({ length: count }, (_unused, index) => {
-    const id = crypto.randomUUID();
-    ids.push(id);
-    return {
-      id,
-      userId,
-      source: grant.source,
-      priceCredits: grant.priceCredits ?? 0,
-      milestoneDraws: grant.milestoneDraws ?? null,
-      activityKey: grant.activityKey ?? null,
-      // 一个档位送多张时，各行靠序号区分，否则第二行会撞 (userId, milestoneDraws) 唯一索引。
-      milestoneSeq: grant.milestoneDraws === undefined ? 0 : index,
-      createdAt: new Date(),
-    };
-  });
-  // 每行绑 10 个参数（含 Drizzle 自动补的 usedDrawId、expired 默认值），一次买 50 张就是 500 个，会直接撞 D1 的参数墙，必须分片。
-  // 多批并行插入，D1 HTTP API 无状态可并发，100 张券从串行 ~5 秒降到 ~1.5 秒。
-  const batches = batchRows(values, 10);
-  await Promise.all(batches.map((batch) => db.insert(lotteryTickets).values(batch)));
-  return ids;
-}
-
 /** 金额按 1e-6 对齐，避免多次加减后留下浮点尾巴（0.1+0.2 那类）。 */
 function round6(value: number): number {
   return Math.round(value * 1e6) / 1e6;
-}
-
-/** 收回刚发出的券；发券之后还有步骤失败时用它把券清干净。 */
-export async function deleteTickets(ids: string[]): Promise<void> {
-  for (const batch of batchRows(ids, 1)) {
-    await db.delete(lotteryTickets).where(inArray(lotteryTickets.id, batch));
-  }
 }
 
 
@@ -463,16 +343,31 @@ export async function deleteTemporaryBalancesByIds(ids: string[]): Promise<void>
 }
 
 /**
- * 活动结束时作废该轮未使用的券（ticketsExpireOnActivityEnd 开启时调用）。
- * 只标记 expired=1，不物理删除，便于管理端对账和用户查看历史。
- * 返回作废的券数量。
+ * 累抽档位发放占位：唯一索引 (userId, activityKey, draws) 挡住并发/重复领取。
+ * `INSERT ... ON CONFLICT DO NOTHING` 命中返回新 id，已发过返回 null（changes=0）。
+ * 发券失败时调用方按 id 删除占位，让这一档可以重试。
  */
-export async function expireTicketsForActivity(userId: string, activityKey: string): Promise<number> {
+export async function claimMilestoneGrant(
+  userId: string,
+  activityKey: string,
+  draws: number,
+  tickets: number,
+): Promise<string | null> {
+  const id = crypto.randomUUID();
   const { changes } = await d1Run(
-    "UPDATE lottery_ticket SET expired = 1 WHERE userId = ? AND activityKey = ? AND usedDrawId IS NULL AND expired = 0",
-    [userId, activityKey],
+    `INSERT INTO lottery_milestone_grant (id, userId, activityKey, draws, tickets, createdAt)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT(userId, activityKey, draws) DO NOTHING`,
+    [id, userId, activityKey, draws, tickets, Date.now()],
   );
-  return changes;
+  return changes === 1 ? id : null;
+}
+
+/** 开奖整批回滚时删掉本批刚占下的累抽档位，让这些档位下次还能再发。 */
+export async function deleteMilestoneGrants(ids: string[]): Promise<void> {
+  for (const batch of batchRows(ids, 1)) {
+    await db.delete(lotteryMilestoneGrants).where(inArray(lotteryMilestoneGrants.id, batch));
+  }
 }
 
 /**
@@ -551,9 +446,4 @@ export async function revertDrawStats(
       ),
     ),
   );
-}
-
-/** 券包侧计数只维护全量口径（活动轮次口径的券统计走明细查询）。 */
-export async function applyTicketStats(userId: string, delta: LotteryStatsDelta): Promise<void> {
-  await upsertStatsRow(userId, LOTTERY_STATS_ALL_SCOPE, delta);
 }

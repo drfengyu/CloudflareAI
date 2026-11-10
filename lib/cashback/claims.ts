@@ -72,7 +72,7 @@ const fmt = (v: number) => String(round2(v));
 
 /** 后台配置的一档奖励区间，展示成一句人话。 */
 export function rewardRangeLabel(tier: CashbackTier): string {
-  return `随机 ${fmt(tier.minReward)}–${fmt(tier.maxReward)} cr 货币或活动券，或 1–3 张抽奖券`;
+  return `随机 ${fmt(tier.minReward)}–${fmt(tier.maxReward)} cr 货币或活动券，或 1–3 张转盘活动券`;
 }
 
 /** 发放时随机挑一个「当前开着」的活动作为券落点；没有活动时券奖励降级成临时货币。 */
@@ -111,7 +111,7 @@ export interface CashbackTierView {
   claimState: RewardClaimState;
   /** 已发放时锁定的奖励形态；未发放为 null。 */
   rewardKind: RewardKind | null;
-  /** 已发放时锁定的奖励名（如「抽奖券 ×2」「星轨券 88 cr」）。 */
+  /** 已发放时锁定的奖励名（如「活动券 ×2」「星轨券 88 cr」）。 */
   rewardLabel: string | null;
 }
 
@@ -201,7 +201,7 @@ function arrivalText(reward: CashbackReward, validDays: number): string {
     case "permanent_credits":
       return "领取后直接进入永久余额。";
     case "tickets":
-      return "领取后抽奖券直接入账，可去幸运转盘使用。";
+      return "领取后活动券直接入账，可去幸运转盘使用。";
     case "coupon":
       return "领取后进入当期活动券；当期活动结束后作废。";
     default:

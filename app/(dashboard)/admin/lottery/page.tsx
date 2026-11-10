@@ -12,7 +12,7 @@ import {
   DRAW_RECORD_PAGE_SIZE,
   listDrawRecords,
   lotteryBalance,
-  lotteryTicketTotals,
+  lotteryPackDiscount,
   lotteryUserRecords,
   rangeWindow,
 } from "@/lib/lottery/records";
@@ -46,12 +46,12 @@ export default async function AdminLotteryPage({
   const range = RANGE_VALUES.includes(rawRange) ? rawRange : "all";
   const win = rangeWindow(range);
 
-  const [config, balance, perUser, records, ticketTotals] = await Promise.all([
+  const [config, balance, perUser, records, packDiscount] = await Promise.all([
     getLotteryConfig(),
     lotteryBalance({ win }),
     lotteryUserRecords(win),
     listDrawRecords({ win, limit: DRAW_RECORD_PAGE_SIZE }),
-    lotteryTicketTotals(win),
+    lotteryPackDiscount(win),
   ]);
 
   const activity = activityWindow(config);
@@ -75,7 +75,7 @@ export default async function AdminLotteryPage({
           rateHint={`${config.multiplierBase === "batch" ? "配置单抽口径" : "配置口径"} ${returnRatePercent(config)}%`}
           report={{
             balance,
-            ticketTotals,
+            packDiscount,
             perUser,
             detail: {
               rows: records.map((record) => ({

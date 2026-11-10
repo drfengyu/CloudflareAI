@@ -3,7 +3,7 @@ import type { ActivityKind } from "@/lib/db/schema";
 /**
  * 限时消费返利：与充值活动同一时间段，按活动期内累计消费发阶梯奖励。
  *
- * 每档在发放时随机一种奖励：临时货币 / 永久货币 / 活动券 / 抽奖券；
+ * 每档在发放时随机一种奖励：临时货币 / 永久货币 / 活动券（面值）/ 活动券（张数）；
  * 奖励数值在后台配置的区间内随机，档位越高区间越高。配置与发放逻辑分离，
  * 抽奖函数是纯函数，回归测试可注入随机数。
  */
@@ -73,9 +73,9 @@ export interface CashbackCouponReward {
 
 export interface CashbackReward {
   kind: CashbackRewardKind;
-  /** 货币/活动券的 credits；抽奖券为 0。 */
+  /** 货币/活动券的 credits；活动券张数形态为 0。 */
   credits: number;
-  /** 抽奖券张数；其他形态为 0。 */
+  /** 活动券张数；其他形态为 0。 */
   tickets: number;
   /** 展示名，发放时锁定进 reward_claim。 */
   label: string;
@@ -90,7 +90,7 @@ const KIND_CUTOFFS: { kind: CashbackRewardKind; max: number }[] = [
 ];
 
 /**
- * 随机奖励。`random` 返回 [0,1)，按序取三次：形态、金额、抽奖券张数。
+ * 随机奖励。`random` 返回 [0,1)，按序取三次：形态、金额、活动券张数。
  *
  * `couponTarget` 由调用方从「当前开着的活动」里随机选一个传入；没有可发券的活动时，
  * 活动券会降级成临时货币，避免发出一张领不到当期券的空头奖励。
@@ -125,7 +125,7 @@ export function rollCashbackReward(
   }
   if (picked.kind === "tickets") {
     const count = 1 + Math.min(2, Math.floor(random() * 3));
-    return { kind: "tickets", credits: 0, tickets: count, label: `抽奖券 ×${count}` };
+    return { kind: "tickets", credits: 0, tickets: count, label: `活动券 ×${count}` };
   }
   if (picked.kind === "permanent_credits") {
     return { kind: "permanent_credits", credits: amount, tickets: 0, label: `${amount} cr 永久货币` };
