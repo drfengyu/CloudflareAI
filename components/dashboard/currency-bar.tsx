@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { ActivityCouponView, CurrencySnapshot } from "@/lib/activity/coupons";
+import { formatCredits } from "@/lib/billing/credits";
 
 /**
  * 顶栏货币条：永久余额、临时余额与三种活动券。
@@ -38,20 +39,6 @@ const KIND_COLOR = {
   flip: "text-amber-500",
   raiden: "text-sky-500",
 } as const;
-
-/** 顶栏只求一眼看懂：万位以上压成 k/m，完整数值放在 title 里。 */
-function compact(value: number): string {
-  const abs = Math.abs(value);
-  if (abs >= 1_000_000) {
-    return `${(value / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}m`;
-  }
-  if (abs >= 10_000) {
-    return `${(value / 1_000).toFixed(abs >= 100_000 ? 0 : 1).replace(/\.0$/, "")}k`;
-  }
-  if (abs >= 1) return value.toFixed(abs >= 100 ? 0 : 2).replace(/\.?0+$/, "");
-  if (abs === 0) return "0";
-  return value.toFixed(2);
-}
 
 function exact(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
@@ -87,7 +74,9 @@ function CouponChip({ coupon }: { coupon: ActivityCouponView }) {
       }`}
     >
       <Icon className={`h-3.5 w-3.5 shrink-0 ${KIND_COLOR[coupon.kind]}`} />
-      <span>{compact(coupon.credits)}</span>
+      <span>
+        {formatCredits(coupon.credits)} cr
+      </span>
       {active ? <PlusBadge /> : null}
     </Link>
   );
@@ -102,18 +91,18 @@ export function CurrencyBar({ snapshot }: { snapshot: CurrencySnapshot }) {
       <Link
         href="/wallet?recharge=1"
         title={`永久余额 ${exact(display.permanent)} cr，点击充值`}
-        className="flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-medium tabular-nums text-foreground transition-colors hover:bg-secondary"
+        className="flex items-center gap-0.5 whitespace-nowrap rounded-md px-0.5 py-0.5 text-[10px] font-medium tabular-nums text-foreground transition-colors hover:bg-secondary md:gap-1 md:px-1 md:text-[11px]"
       >
-        <Coins className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
-        <span>{compact(display.permanent)}</span>
+        <Coins className="h-3 w-3 shrink-0 text-emerald-500 md:h-3.5 md:w-3.5" />
+        <span>{formatCredits(display.permanent)} cr</span>
         <PlusBadge />
       </Link>
       <div
         title={`临时余额 ${exact(display.temporary)} tcr，签到、赠送与返利获得，到期作废`}
-        className="flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-medium tabular-nums text-muted-foreground"
+        className="flex items-center gap-0.5 whitespace-nowrap rounded-md px-0.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground md:gap-1 md:px-1 md:text-[11px]"
       >
-        <Hourglass className="h-3.5 w-3.5 shrink-0 text-teal-500" />
-        <span>{compact(display.temporary)}</span>
+        <Hourglass className="h-3 w-3 shrink-0 text-teal-500 md:h-3.5 md:w-3.5" />
+        <span>{formatCredits(display.temporary)} tcr</span>
       </div>
 
       <div className="hidden items-center gap-0.5 md:flex">
@@ -126,10 +115,10 @@ export function CurrencyBar({ snapshot }: { snapshot: CurrencySnapshot }) {
       <DropdownMenu>
         <DropdownMenuTrigger
           aria-label="活动券余额"
-          className="flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-medium tabular-nums text-foreground transition-colors hover:bg-secondary md:hidden"
+          className="flex items-center gap-0.5 whitespace-nowrap rounded-md px-0.5 py-0.5 text-[10px] font-medium tabular-nums text-foreground transition-colors hover:bg-secondary md:hidden md:gap-1 md:px-1 md:text-[11px]"
         >
-          <Ticket className="h-3.5 w-3.5 shrink-0 text-primary" />
-          <span>{compact(couponTotal)}</span>
+          <Ticket className="h-3 w-3 shrink-0 text-primary md:h-3.5 md:w-3.5" />
+          <span>{formatCredits(couponTotal)} cr</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel className="normal-case">活动券</DropdownMenuLabel>

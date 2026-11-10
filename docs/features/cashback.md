@@ -38,13 +38,16 @@
 - 当期活动结束即作废，下一轮 `activityKey` 变化后自然换名；旧券行保留但不再参与支付。
 - 获取方式：按活动单价整张兑换（1 张 = `couponUnitCredits` cr，默认 1，先临时余额、再永久余额）、
   珍宝礼包、消费返利 / 活跃度奖励。
-- 珍宝礼包三档（小份实付 10 cr / 中份 50 cr / 大份 100 cr），倍率与限购在后台
-  「珍宝礼包（活动券通用）」卡片配置，存 `option.coupon_pack_config`：`ratioPercent`（%，默认
-  200 / 500 / 1000）、`dailyLimit`、`totalLimit`（份，0 = 不限）。限购按「用户 + 礼包」跨活动统计、
-  北京自然日切日（`coupon_pack_purchase`，迁移 025）；写入用单条 `INSERT ... SELECT ... WHERE`
-  复查计数，并发不超卖。到账券面 = 实付 × 倍率，随配置实时变化。
-- 每购买 1 份礼包额外赠送 1 张当期活动券，按购买时该活动的 `couponUnitCredits` 折成券面，
-  与倍率券面合并入账（`packGrant`）；礼包卡片显示「得 X cr +1 张券」，流水文案标注含赠张数。
+- 珍宝礼包档位在后台「珍宝礼包（活动券通用）」卡片增删配置（1–6 档），存
+  `option.coupon_pack_config` 的 `{ packs: [...] }`：每档 `name`、`priceCredits`（实付 cr）、
+  `ratioPercent`（%）、`dailyLimit` / `totalLimit`（份，0 = 不限）、`bonusTickets`（赠券张数）、
+  `tempCredits` + `tempValidDays`（额外赠送的临时余额与其有效期）。旧的三档对象读取时按默认补齐。
+  限购按「用户 + 礼包键」跨活动统计、北京自然日切日（`coupon_pack_purchase`，迁移 025）；
+  写入用单条 `INSERT ... SELECT ... WHERE` 复查计数，并发不超卖。到账券面 = 实付 × 倍率。
+- 每档赠送内容独立：`bonusTickets` 张当期活动券按购买时该活动的 `couponUnitCredits` 折成券面，
+  与倍率券面合并入账（`packGrant`）；`tempCredits > 0` 时另写一笔带 `expiresAt` 的
+  `temporary_balance` 与 `topup type=16`（礼包赠送，账本归「赠送与返利」），到期由清理任务作废。
+  任一步失败会回滚 tcr、券面、购买记录与扣款。
 - 玩法付费只扣活动券：券面不足直接失败并提示先兑换，不再接受余额直付。券在兑换 / 买礼包时已经作为
   `topup type=15` 记过支出，所以账本合计与余额下降保持一致。
 
@@ -86,7 +89,7 @@ SQL 只做 `GROUP BY`——D1 上 `ORDER BY` 聚合表达式或 SELECT 别名会
 | 页面 | `app/(dashboard)/cashback/{page,actions,coupon-actions}.tsx`、`components/cashback/{cashback-tier-panel,recharge-panel}.tsx`、`components/activity/coupon-shop.tsx` |
 | 顶栏 | `components/dashboard/currency-bar.tsx`（铃铛左侧货币条） |
 | 后台 | `app/(dashboard)/admin/settings/settings-form.tsx` → `CashbackSettingsForm`（逐行数字档位，无 JSON） |
-| 账本 | `lib/billing/ledger.ts`（type=8 返利、type=15 活动券兑换归「赠送与返利」） |
+| 账本 | `lib/billing/ledger.ts`（type=8 返利 / type=16 礼包赠送归「赠送与返利」，type=15 活动券兑换归「活动」） |
 
 ## 已知边界
 

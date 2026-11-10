@@ -103,7 +103,7 @@ test("金额为 0 的发放/调整在 SQL 里就挡掉，不占笔数也不占�
   assert.match(sql, /FROM usage_log WHERE userId = \? AND creditsUsed > 0/);
 });
 
-test("15 个流水类型各归一类，漏登记会被问出来", () => {
+test("16 个流水类型各归一类，漏登记会被问出来", () => {
   const { ledger } = harness();
   const buckets = Object.values(ledger.LEDGER_CATEGORY_TYPES).flat();
   const labelled = Object.keys(ledger.TOPUP_TYPE_LABEL).map(Number);
@@ -111,11 +111,13 @@ test("15 个流水类型各归一类，漏登记会被问出来", () => {
   assert.deepEqual([...buckets].sort((a, b) => a - b), [...labelled].sort((a, b) => a - b));
   assert.equal(new Set(buckets).size, buckets.length, "同一个 type 不能落进两个类别");
   assert.deepEqual(labelled.sort((a, b) => a - b), [
-    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
   ]);
   assert.deepEqual(local(ledger.LEDGER_CATEGORY_TYPES.expire), [ledger.TOPUP_TYPE_EXPIRE]);
   // 活动券兑换是付出 cr 买券，属于活动类目的资金流出。
   assert.ok(ledger.LEDGER_CATEGORY_TYPES.activity.includes(15));
+  // 礼包附赠的临时余额是白送的钱，进赠送类目。
+  assert.ok(ledger.LEDGER_CATEGORY_TYPES.reward.includes(16));
 });
 
 test("注册奖励是赠送，不进充值类目", () => {

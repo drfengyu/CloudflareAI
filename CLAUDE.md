@@ -534,8 +534,16 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.35.0（2026-11-10，礼包每份赠 1 张活动券 + 设置保存修复）
-**下一版本**：v0.36.0（尚未选型）
+**当前版本**：v0.36.0（2026-11-10，礼包自定义档位 + 每档赠券 / 赠 tcr）
+**下一版本**：v0.37.0（尚未选型）
+
+- v0.36.0 珍宝礼包自定义档位：`lib/activity/pack-config.ts` 的配置结构升级为 `{ packs: [...] }`
+  （1–6 档，每档 `key / name / priceCredits / ratioPercent / dailyLimit / totalLimit / bonusTickets /
+  tempCredits / tempValidDays`），旧的 `{small,medium,large}` 读取时按默认补齐。`buyCouponPack`
+  按档赠 `bonusTickets` 张券（× 活动单价折券面）与 `tempCredits` tcr（写带 `expiresAt` 的
+  `temporary_balance` + `topup type=16 礼包赠送`，账本归「赠送与返利」），任一步失败整体回滚。
+  后台表单可增删档位并实时预览；用户侧卡片突出实付金额 + 活动券图标 ×N 角标，档位名只留 tooltip；
+  顶栏货币条改完整金额 + 单位（去掉 k/m 缩写），窄屏压字号保持单行。
 
 - v0.35.0 珍宝礼包赠券：`packGrant` 把「倍率券面 + 1 张当期活动券 × 该活动单价」合并成到账合计，
   `buyCouponPack` 按合计入账并把总额写进 `coupon_pack_purchase.couponCredits`；礼包视图新增

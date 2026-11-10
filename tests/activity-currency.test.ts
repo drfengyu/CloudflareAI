@@ -120,42 +120,87 @@ test("活动券：同一轮次名字稳定，三种活动各自有券", () => {
   );
 });
 
-test("珍宝礼包：默认 200% / 500% / 1000%，倍率与限购可配置、0 = 不限", () => {
+test("珍宝礼包：默认三档 200% / 500% / 1000%，档位、倍率、限购与赠品均可配置", () => {
   assert.deepEqual(
     buildCouponPacks(DEFAULT_COUPON_PACK_CONFIG).map((pack) => [
       pack.key,
+      pack.name,
       pack.priceCredits,
       pack.ratioPercent,
       pack.dailyLimit,
       pack.totalLimit,
+      pack.bonusTickets,
+      pack.tempCredits,
     ]),
     [
-      ["small", 10, 200, null, null],
-      ["medium", 50, 500, 2, 20],
-      ["large", 100, 1000, 1, 10],
+      ["small", "小份珍宝", 10, 200, null, null, 1, 0],
+      ["medium", "中份珍宝", 50, 500, 2, 20, 1, 0],
+      ["large", "大份珍宝", 100, 1000, 1, 10, 1, 0],
     ],
   );
 
-  const custom = sanitizeCouponPackConfig({
+  // 旧版对象配置自动升级成数组，缺的字段回默认。
+  const legacy = sanitizeCouponPackConfig({
     medium: { ratioPercent: 650.5, dailyLimit: 3, totalLimit: 0 },
   });
-  assert.deepEqual(custom.medium, { ratioPercent: 650.5, dailyLimit: 3, totalLimit: 0 });
-  assert.deepEqual(custom.small, DEFAULT_COUPON_PACK_CONFIG.small);
+  assert.equal(legacy.packs.length, 3);
+  assert.equal(legacy.packs[1].key, "medium");
+  assert.equal(legacy.packs[1].ratioPercent, 650.5);
+  assert.equal(legacy.packs[1].dailyLimit, 3);
+  assert.equal(legacy.packs[1].totalLimit, 0);
+  assert.deepEqual(legacy.packs[0], DEFAULT_COUPON_PACK_CONFIG.packs[0]);
+
+  // 自定义档位：名称、实付、赠券与 tcr 都按配置落地。
+  const custom = sanitizeCouponPackConfig({
+    packs: [
+      {
+        key: "trial",
+        name: "体验包",
+        priceCredits: 5,
+        ratioPercent: 150,
+        dailyLimit: 0,
+        totalLimit: 0,
+        bonusTickets: 0,
+        tempCredits: 2.5,
+        tempValidDays: 7,
+      },
+      {
+        key: "pro",
+        name: "进阶包",
+        priceCredits: 30,
+        ratioPercent: 650.5,
+        dailyLimit: 3,
+        totalLimit: 0,
+        bonusTickets: 2,
+        tempCredits: 0,
+        tempValidDays: 30,
+      },
+    ],
+  });
+  assert.deepEqual(custom.packs.map((pack) => pack.key), ["trial", "pro"]);
+  assert.equal(custom.packs[0].tempCredits, 2.5);
+  assert.equal(custom.packs[0].tempValidDays, 7);
+  assert.equal(custom.packs[1].bonusTickets, 2);
+
+  const packs = buildCouponPacks(custom);
+  assert.equal(packs[0].dailyLimit, null);
+  assert.equal(packs[1].totalLimit, null);
+
   assert.equal(
-    sanitizeCouponPackConfig({ large: { ratioPercent: 9e9 } }).large.ratioPercent,
+    sanitizeCouponPackConfig({ packs: [{ ratioPercent: 9e9 }] }).packs[0].ratioPercent,
     100_000,
   );
   assert.equal(
-    sanitizeCouponPackConfig({ large: { ratioPercent: -5 } }).large.ratioPercent,
-    1000,
+    sanitizeCouponPackConfig({ packs: [{ ratioPercent: -5 }] }).packs[0].ratioPercent,
+    200,
   );
-
-  const packs = buildCouponPacks(custom);
-  assert.equal(packs[1].dailyLimit, 3);
-  assert.equal(packs[1].totalLimit, null);
+  assert.deepEqual(
+    sanitizeCouponPackConfig({ packs: [] }).packs.map((pack) => pack.key),
+    ["small", "medium", "large"],
+  );
 });
 
-test("珍宝礼包：每份另赠 1 张券，按活动单价折算后与倍率券面一起到账", () => {
+test("珍宝礼包：赠券按各档张数折算，0 张不送券", () => {
   const [small, medium, large] = buildCouponPacks(DEFAULT_COUPON_PACK_CONFIG);
   assert.deepEqual(packGrant(small, 1), {
     baseCredits: 20,
@@ -170,6 +215,17 @@ test("珍宝礼包：每份另赠 1 张券，按活动单价折算后与倍率�
     totalCredits: 275.5,
   });
   assert.equal(packGrant(large, 3).totalCredits, 1003);
+
+  const zeroBonus = { ...small, bonusTickets: 0, tempCredits: 10 };
+  assert.deepEqual(packGrant(zeroBonus, 2), {
+    baseCredits: 20,
+    bonusTickets: 0,
+    bonusCredits: 0,
+    totalCredits: 20,
+  });
+
+  const multi = { ...small, bonusTickets: 3 };
+  assert.equal(packGrant(multi, 2).totalCredits, 26);
 });
 
 test("活动券单价：三种活动默认 1 cr / 张，脏值回落、超限封顶", () => {

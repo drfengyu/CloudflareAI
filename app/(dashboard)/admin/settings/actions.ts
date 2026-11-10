@@ -28,9 +28,9 @@ import {
 } from "@/lib/flip/config";
 import {
   COUPON_PACK_CONFIG_KEY,
-  COUPON_PACK_META,
-  type CouponPackConfig,
-  type CouponPackKey,
+  MAX_COUPON_PACKS,
+  MAX_PACK_NAME,
+  type CouponPackSetting,
 } from "@/lib/activity/pack-config";
 import { setSetting } from "@/lib/settings";
 import { saveSmtpSettings, type SmtpSettings } from "@/lib/email";
@@ -981,13 +981,18 @@ export async function updateFlipSettings(formData: {
   return { success: true };
 }
 
-/** 珍宝礼包配置的保存入口：三个活动共用一份，0 表示不限购。 */
+/** 珍宝礼包配置的保存入口：三个活动共用一份，档位可增删，0 表示不限购 / 不送。 */
 export async function updateCouponPackSettings(formData: {
   packs: {
-    key: string;
+    key?: string;
+    name: string;
+    priceCredits: number;
     ratioPercent: number;
     dailyLimit: number;
     totalLimit: number;
+    bonusTickets: number;
+    tempCredits: number;
+    tempValidDays: number;
   }[];
 }) {
   const currentUserId = await requireUser();
@@ -1001,29 +1006,64 @@ export async function updateCouponPackSettings(formData: {
     throw new Error("权限不足");
   }
 
-  const byKey = new Map((formData.packs ?? []).map((pack) => [pack?.key, pack]));
-  const config = {} as CouponPackConfig;
-  for (const key of Object.keys(COUPON_PACK_META) as CouponPackKey[]) {
-    const name = COUPON_PACK_META[key].name;
-    const pack = byKey.get(key);
-    if (!pack) throw new Error(`缺少${name}的配置`);
+  const rows = formData.packs ?? [];
+  if (rows.length < 1) throw new Error("至少保留一个礼包档位");
+  if (rows.length > MAX_COUPON_PACKS) {
+    throw new Error(`礼包档位最多 ${MAX_COUPON_PACKS} 个`);
+  }
 
+  const packs: CouponPackSetting[] = [];
+  const seenKeys = new Set<string>();
+  rows.forEach((pack, index) => {
+    const name = typeof pack.name === "string" ? pack.name.trim() : "";
+    if (!name) throw new Error(`第 ${index + 1} 个礼包的名称不能为空`);
+    if (name.length > MAX_PACK_NAME) {
+      throw new Error(`第 ${index + 1} 个礼包的名称不能超过 ${MAX_PACK_NAME} 字`);
+    }
+
+    const priceCredits = Math.round(
+      requireNumber(pack.priceCredits, `${name}实付价`, 0.01, 1_000_000) * 100,
+    ) / 100;
     const ratioPercent = Math.round(
       requireNumber(pack.ratioPercent, `${name}倍率（%）`, 0.01, 100_000) * 100,
     ) / 100;
-    const dailyLimit = Math.trunc(
-      requireNumber(pack.dailyLimit, `${name}每日限购`, 0, 1_000_000),
-    );
-    const totalLimit = Math.trunc(
-      requireNumber(pack.totalLimit, `${name}累计限购`, 0, 1_000_000),
-    );
+    const dailyLimit = Math.trunc(requireNumber(pack.dailyLimit, `${name}每日限购`, 0, 1_000_000));
+    const totalLimit = Math.trunc(requireNumber(pack.totalLimit, `${name}累计限购`, 0, 1_000_000));
     if (dailyLimit > 0 && totalLimit > 0 && dailyLimit > totalLimit) {
       throw new Error(`${name}每日限购不能大于累计限购`);
     }
-    config[key] = { ratioPercent, dailyLimit, totalLimit };
-  }
+    const bonusTickets = Math.trunc(
+      requireNumber(pack.bonusTickets, `${name}赠券张数`, 0, 1_000),
+    );
+    const tempCredits = Math.round(
+      requireNumber(pack.tempCredits, `${name}赠送 tcr`, 0, 1_000_000) * 100,
+    ) / 100;
+    const tempValidDays = Math.trunc(
+      requireNumber(pack.tempValidDays, `${name}赠送 tcr 有效期`, 1, 3650),
+    );
 
-  await upsertOption(COUPON_PACK_CONFIG_KEY, JSON.stringify(config));
+    // 已有档位沿用原 key（限购统计挂在它上面）；新档位由服务端生成稳定 key。
+    const rawKey = typeof pack.key === "string" ? pack.key.trim() : "";
+    let key = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/.test(rawKey) && !seenKeys.has(rawKey)
+      ? rawKey
+      : `pack-${crypto.randomUUID().slice(0, 8)}`;
+    while (seenKeys.has(key)) key = `pack-${crypto.randomUUID().slice(0, 8)}`;
+    seenKeys.add(key);
+
+    packs.push({
+      key,
+      name,
+      priceCredits,
+      ratioPercent,
+      dailyLimit,
+      totalLimit,
+      bonusTickets,
+      tempCredits,
+      tempValidDays,
+    });
+  });
+
+  await upsertOption(COUPON_PACK_CONFIG_KEY, JSON.stringify({ packs }));
 
   revalidatePath("/admin/settings");
   revalidatePath("/cashback");

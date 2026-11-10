@@ -2,13 +2,19 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Gem, Loader2 } from "lucide-react";
+import { Crosshair, Gem, Layers, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { formatCredits } from "@/lib/billing/credits";
 import type { ActivityCouponView } from "@/lib/activity/coupons";
 import { buyCouponPackAction, exchangeCouponAction } from "@/app/(dashboard)/cashback/coupon-actions";
 import { cn } from "@/lib/utils";
+
+const KIND_ICON = {
+  lottery: Sparkles,
+  flip: Layers,
+  raiden: Crosshair,
+} as const;
 
 const STATUS_TEXT: Record<ActivityCouponView["status"], string> = {
   active: "进行中",
@@ -50,6 +56,7 @@ function CouponShopItem({
   const [busy, setBusy] = useState<string | null>(null);
   const active = activity.status === "active";
   const dark = tone === "dark";
+  const Icon = KIND_ICON[activity.kind];
   const unitCredits = activity.unitCredits > 0 ? activity.unitCredits : 1;
   const couponTickets = Math.round((activity.credits / unitCredits) * 100) / 100;
   const amountNumber = Number(amount);
@@ -170,43 +177,75 @@ function CouponShopItem({
                   type="button"
                   onClick={() => void handlePack(pack.key)}
                   disabled={busy !== null || soldOut}
-                  title={soldOut ? `${pack.name}已到限购上限` : undefined}
+                  aria-label={`${pack.name} · ${formatCredits(pack.priceCredits)} cr`}
+                  title={
+                    soldOut
+                      ? `${pack.name}已到限购上限`
+                      : `${pack.name} · 实付 ${formatCredits(pack.priceCredits)} cr`
+                  }
                   className={cn(
-                    "rounded-lg border px-2 py-1.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+                    "group flex flex-col items-center gap-1 rounded-xl border px-1.5 py-2.5 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-45",
                     dark
-                      ? "border-white/10 bg-white/[0.02] hover:bg-white/[0.06]"
-                      : "border-border bg-card hover:bg-secondary",
+                      ? "border-white/10 bg-white/[0.02] hover:border-cyan-300/30 hover:bg-white/[0.06]"
+                      : "border-border bg-card hover:border-primary/40 hover:bg-secondary",
                   )}
                 >
                   <span
                     className={cn(
-                      "block text-[11px] font-medium",
-                      dark ? "text-white/80" : "text-foreground",
-                    )}
-                  >
-                    {pack.name}
-                  </span>
-                  <span
-                    className={cn(
-                      "mt-0.5 block text-[10px] tabular-nums",
-                      dark ? "text-white/45" : "text-muted-foreground",
+                      "whitespace-nowrap text-[15px] font-semibold leading-none tabular-nums",
+                      dark ? "text-amber-200" : "text-foreground",
                     )}
                   >
                     {formatCredits(pack.priceCredits)} cr
-                    <span className="ml-1 text-success">{pack.ratioPercent}%</span>
+                  </span>
+                  <span className="relative mt-1 inline-flex h-6 w-6 items-center justify-center">
+                    <Icon
+                      className={cn(
+                        "h-5 w-5",
+                        dark ? "text-cyan-300" : "text-primary",
+                      )}
+                    />
+                    {pack.bonusTickets > 0 ? (
+                      <span
+                        className={cn(
+                          "absolute -bottom-1 -right-1.5 rounded px-0.5 text-[9px] font-semibold leading-[1.4] tabular-nums",
+                          dark
+                            ? "bg-cyan-300/20 text-cyan-200"
+                            : "bg-primary/15 text-primary",
+                        )}
+                      >
+                        ×{pack.bonusTickets}
+                      </span>
+                    ) : null}
                   </span>
                   <span
                     className={cn(
-                      "mt-0.5 block text-[10px] tabular-nums",
-                      dark ? "text-cyan-300/80" : "text-primary",
+                      "text-[10px] tabular-nums",
+                      dark ? "text-white/45" : "text-muted-foreground",
                     )}
                   >
-                    得 {formatCredits(pack.baseCredits)} cr
-                    <span className="text-success"> +{pack.bonusTickets} 张券</span>
+                    {pack.ratioPercent}% → 得{" "}
+                    <span className="whitespace-nowrap">
+                      {formatCredits(pack.baseCredits)} cr
+                    </span>
                   </span>
+                  {pack.tempCredits > 0 ? (
+                    <span
+                      className={cn(
+                        "text-[9px] leading-tight tabular-nums",
+                        dark ? "text-emerald-300/80" : "text-success",
+                      )}
+                    >
+                      <span className="whitespace-nowrap">
+                        +{formatCredits(pack.tempCredits)} tcr
+                      </span>{" "}
+                      · {pack.tempValidDays} 天
+                    </span>
+                  ) : null}
                   <span
                     className={cn(
-                      "mt-0.5 block text-[9px] tabular-nums",
+                      "text-[9px] tabular-nums",
+                      !soldOut && "whitespace-nowrap",
                       soldOut
                         ? dark
                           ? "text-rose-300/80"
@@ -223,8 +262,9 @@ function CouponShopItem({
             })}
           </div>
           <p className={cn("text-[11px]", dark ? "text-white/35" : "text-muted-foreground")}>
-            1 张 = {formatCredits(unitCredits)} cr；礼包每份另赠 1 张当期活动券，按该单价折成券面一起入账；
-            券面按 cr 1:1 抵玩法费用，当期结束后作废；扣款先临时余额（tcr）、再永久余额（cr）。
+            1 张 = {formatCredits(unitCredits)} cr；礼包按档位赠送当期活动券，按该单价折成券面一起入账，
+            另赠的 tcr 进入临时余额、到期作废；券面按 cr 1:1 抵玩法费用，当期结束后作废；
+            扣款先临时余额（tcr）、再永久余额（cr）。
           </p>
         </>
       ) : (

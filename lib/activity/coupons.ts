@@ -17,12 +17,7 @@ import { flipActivityKey, flipActivityWindow } from "@/lib/flip/config";
 import { getFlipConfig } from "@/lib/flip/settings";
 import { raidenActivityKey, raidenActivityWindow } from "@/lib/raiden/config";
 import { getRaidenConfig } from "@/lib/raiden/settings";
-import {
-  COUPON_PACK_META,
-  getCouponPackConfig,
-  type CouponPackConfig,
-  type CouponPackKey,
-} from "./pack-config";
+import { getCouponPackConfig, type CouponPackConfig } from "./pack-config";
 
 /**
  * 活动券：一种玩法一种券，按活动轮次隔离。
@@ -36,6 +31,9 @@ export type { ActivityKind };
 
 /** 钱包流水 type=15：付出 cr 换活动券。 */
 export const COUPON_TOPUP_TYPE = 15;
+
+/** 钱包流水 type=16：礼包附赠的临时余额，与活动券兑换区分开。 */
+export const PACK_BONUS_TOPUP_TYPE = 16;
 
 export interface ActivityMeta {
   kind: ActivityKind;
@@ -75,7 +73,7 @@ export function couponNameFor(kind: ActivityKind, activityKey: string | null): s
 }
 
 export interface CouponPack {
-  key: CouponPackKey;
+  key: string;
   name: string;
   priceCredits: number;
   /** 倍率百分比：200 = 200%。 */
@@ -84,36 +82,34 @@ export interface CouponPack {
   dailyLimit: number | null;
   /** 累计限购份数；null = 不限。 */
   totalLimit: number | null;
+  /** 每份附赠的活动券张数。 */
+  bonusTickets: number;
+  /** 每份附赠的临时余额 tcr；0 = 不送。 */
+  tempCredits: number;
+  /** 赠送临时余额的有效天数。 */
+  tempValidDays: number;
 }
 
-const PACK_KEYS: CouponPackKey[] = ["small", "medium", "large"];
-
-/** 礼包身份（名称 / 实付价）固定，倍率与限购读管理端配置。 */
+/** 管理端配置直接决定礼包身份与内容，档位数量不固定。 */
 export function buildCouponPacks(config: CouponPackConfig): CouponPack[] {
-  return PACK_KEYS.map((key) => {
-    const meta = COUPON_PACK_META[key];
-    const setting = config[key];
-    return {
-      key,
-      name: meta.name,
-      priceCredits: meta.priceCredits,
-      ratioPercent: setting.ratioPercent,
-      dailyLimit: setting.dailyLimit > 0 ? setting.dailyLimit : null,
-      totalLimit: setting.totalLimit > 0 ? setting.totalLimit : null,
-    };
-  });
+  return config.packs.map((setting) => ({
+    key: setting.key,
+    name: setting.name,
+    priceCredits: setting.priceCredits,
+    ratioPercent: setting.ratioPercent,
+    dailyLimit: setting.dailyLimit > 0 ? setting.dailyLimit : null,
+    totalLimit: setting.totalLimit > 0 ? setting.totalLimit : null,
+    bonusTickets: setting.bonusTickets,
+    tempCredits: setting.tempCredits,
+    tempValidDays: setting.tempValidDays,
+  }));
 }
-
-/** 每购买 1 份礼包固定附赠 1 张当期活动券。 */
-export const PACK_BONUS_TICKETS = 1;
 
 export interface CouponPackView extends CouponPack {
   boughtToday: number;
   boughtTotal: number;
   /** 倍率部分到账的券面 cr（不含赠券）。 */
   baseCredits: number;
-  /** 每次购买附赠的活动券张数。 */
-  bonusTickets: number;
   /** 到账合计：倍率券面 + 赠券按当期单价折算的券面。 */
   couponCredits: number;
 }
@@ -121,10 +117,10 @@ export interface CouponPackView extends CouponPack {
 /** 礼包到账口径：赠券按购买时该活动的券面单价折成 cr，与倍率券面一起入账。 */
 export function packGrant(pack: CouponPack, unitCredits: number) {
   const baseCredits = round2((pack.priceCredits * pack.ratioPercent) / 100);
-  const bonusCredits = round2(unitCredits * PACK_BONUS_TICKETS);
+  const bonusCredits = round2(unitCredits * pack.bonusTickets);
   return {
     baseCredits,
-    bonusTickets: PACK_BONUS_TICKETS,
+    bonusTickets: pack.bonusTickets,
     bonusCredits,
     totalCredits: round2(baseCredits + bonusCredits),
   };
@@ -166,7 +162,6 @@ function packViews(
       boughtToday: usage.get(pack.key)?.today ?? 0,
       boughtTotal: usage.get(pack.key)?.total ?? 0,
       baseCredits: grant.baseCredits,
-      bonusTickets: grant.bonusTickets,
       couponCredits: grant.totalCredits,
     };
   });
@@ -229,6 +224,7 @@ export interface CurrencySnapshot {
 }
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
+const DAY_MS = 86_400_000;
 
 async function readCouponRows(
   userId: string,
@@ -395,7 +391,7 @@ export async function exchangeCoupon(
   return { credits: amount, tickets, couponName: activity.couponName };
 }
 
-/** 珍宝礼包：花 cr 买券面，倍率与限购读后台配置（0 = 不限）。 */
+/** 珍宝礼包：花 cr 买券面，倍率、限购与附赠内容读后台配置（0 = 不限 / 不送）。 */
 export async function buyCouponPack(
   userId: string,
   kind: ActivityKind,
@@ -404,6 +400,8 @@ export async function buyCouponPack(
   credits: number;
   baseCredits: number;
   bonusTickets: number;
+  tempCredits: number;
+  tempValidDays: number;
   price: number;
   couponName: string;
 }> {
@@ -430,6 +428,9 @@ export async function buyCouponPack(
   const purchaseId = crypto.randomUUID();
   const now = new Date();
   let recorded = false;
+  let couponGranted = false;
+  let tempBalanceId: string | null = null;
+  let tempTopupId: string | null = null;
   try {
     // 单条语句里复查两份计数再插入：并发下第二单会在这里被挡下，不会突破限购。
     const { changes } = await d1Run(
@@ -461,15 +462,67 @@ export async function buyCouponPack(
     recorded = true;
 
     await addCouponCredits(userId, kind, activityKey, activity.couponName, credits);
+    couponGranted = true;
+
+    const bonusParts: string[] = [];
+    if (grant.bonusTickets > 0) bonusParts.push(`含赠 ${grant.bonusTickets} 张券`);
+    if (pack.tempCredits > 0) bonusParts.push(`赠 ${formatAmount(pack.tempCredits)} tcr`);
+    const bonusText = bonusParts.length > 0 ? `，${bonusParts.join("、")}` : "";
     await db.insert(topups).values({
       id: crypto.randomUUID(),
       userId,
       amount: -pack.priceCredits,
       type: COUPON_TOPUP_TYPE,
-      description: `购买${pack.name}（${activity.couponName} ${formatAmount(credits)} cr，含赠 ${grant.bonusTickets} 张，${activity.label}）`,
+      description: `购买${pack.name}（${activity.couponName} ${formatAmount(credits)} cr${bonusText}，${activity.label}）`,
       createdAt: now,
     });
+
+    if (pack.tempCredits > 0) {
+      tempBalanceId = crypto.randomUUID();
+      await db.insert(temporaryBalances).values({
+        id: tempBalanceId,
+        userId,
+        amount: pack.tempCredits,
+        expiresAt: new Date(now.getTime() + pack.tempValidDays * DAY_MS),
+        description: `购买${pack.name}赠送（${pack.tempValidDays} 天内有效）`,
+        createdAt: now,
+      });
+      tempTopupId = crypto.randomUUID();
+      await db.insert(topups).values({
+        id: tempTopupId,
+        userId,
+        amount: pack.tempCredits,
+        type: PACK_BONUS_TOPUP_TYPE,
+        description: `购买${pack.name}赠送临时余额（${activity.label}）`,
+        createdAt: now,
+      });
+    }
   } catch (err) {
+    if (tempTopupId) {
+      await db.delete(topups).where(eq(topups.id, tempTopupId)).catch(() => undefined);
+    }
+    if (tempBalanceId) {
+      await db
+        .delete(temporaryBalances)
+        .where(eq(temporaryBalances.id, tempBalanceId))
+        .catch(() => undefined);
+    }
+    if (couponGranted) {
+      // 券面可能已被用户同时在别的页面花掉，条件扣减挡一次负余额；没扣净只记日志。
+      const { changes } = await d1Run(
+        `UPDATE activity_coupon SET credits = credits - ?, updatedAt = ?
+          WHERE userId = ? AND activityKind = ? AND activityKey = ? AND credits >= ?`,
+        [credits, Date.now(), userId, kind, activityKey, credits],
+      ).catch(() => ({ changes: 0 }));
+      if (changes !== 1) {
+        console.error("[buyCouponPack] 失败回滚时券面未能全额撤回:", {
+          userId,
+          kind,
+          activityKey,
+          credits,
+        });
+      }
+    }
     if (recorded) {
       await db
         .delete(couponPackPurchases)
@@ -488,6 +541,8 @@ export async function buyCouponPack(
     credits,
     baseCredits: grant.baseCredits,
     bonusTickets: grant.bonusTickets,
+    tempCredits: pack.tempCredits,
+    tempValidDays: pack.tempValidDays,
     price: pack.priceCredits,
     couponName: activity.couponName,
   };

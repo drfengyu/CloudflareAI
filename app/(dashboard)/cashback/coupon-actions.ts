@@ -62,9 +62,15 @@ export async function buyCouponPackAction(input: {
     }
     const result = await buyCouponPack(userId, kind, input.pack);
     revalidateCouponPaths();
+    const bonusParts: string[] = [];
+    if (result.bonusTickets > 0) bonusParts.push(`赠 ${result.bonusTickets} 张券`);
+    if (result.tempCredits > 0) {
+      bonusParts.push(`赠 ${formatAmount(result.tempCredits)} tcr（${result.tempValidDays} 天）`);
+    }
+    const bonusText = bonusParts.length > 0 ? `，${bonusParts.join("、")}` : "";
     return {
       success: true,
-      message: `已购买礼包：${result.couponName} +${formatAmount(result.credits)} cr（含赠 ${result.bonusTickets} 张，实付 ${formatAmount(result.price)} cr）`,
+      message: `已购买礼包：${result.couponName} +${formatAmount(result.credits)} cr${bonusText}，实付 ${formatAmount(result.price)} cr`,
     };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "购买失败" };
