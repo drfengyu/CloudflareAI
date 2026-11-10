@@ -200,32 +200,46 @@ test("珍宝礼包：默认三档 200% / 500% / 1000%，档位、倍率、限购
   );
 });
 
-test("珍宝礼包：赠券按各档张数折算，0 张不送券", () => {
+test("珍宝礼包：倍率按实付折成该券单价张数，赠券张数叠加，0 张不送", () => {
   const [small, medium, large] = buildCouponPacks(DEFAULT_COUPON_PACK_CONFIG);
   assert.deepEqual(packGrant(small, 1), {
-    baseCredits: 20,
+    ratioTickets: 20,
     bonusTickets: 1,
-    bonusCredits: 1,
+    totalTickets: 21,
     totalCredits: 21,
   });
   assert.deepEqual(packGrant(medium, 25.5), {
-    baseCredits: 250,
+    ratioTickets: 9.8,
     bonusTickets: 1,
-    bonusCredits: 25.5,
+    totalTickets: 10.8,
     totalCredits: 275.5,
   });
-  assert.equal(packGrant(large, 3).totalCredits, 1003);
+  assert.deepEqual(packGrant(large, 3), {
+    ratioTickets: 333.33,
+    bonusTickets: 1,
+    totalTickets: 334.33,
+    totalCredits: 1003,
+  });
 
   const zeroBonus = { ...small, bonusTickets: 0, tempCredits: 10 };
   assert.deepEqual(packGrant(zeroBonus, 2), {
-    baseCredits: 20,
+    ratioTickets: 10,
     bonusTickets: 0,
-    bonusCredits: 0,
+    totalTickets: 10,
     totalCredits: 20,
   });
 
   const multi = { ...small, bonusTickets: 3 };
-  assert.equal(packGrant(multi, 2).totalCredits, 26);
+  assert.equal(packGrant(multi, 2).totalTickets, 13);
+
+  // 线上转盘券单价 2000 cr / 张：小份 10 cr × 200% 只折 0.01 张，赠券另算。
+  assert.deepEqual(packGrant(small, 2000), {
+    ratioTickets: 0.01,
+    bonusTickets: 1,
+    totalTickets: 1.01,
+    totalCredits: 2020,
+  });
+  assert.equal(packGrant(medium, 2000).ratioTickets, 0.13);
 });
 
 test("活动券单价：三种活动默认 1 cr / 张，脏值回落、超限封顶", () => {

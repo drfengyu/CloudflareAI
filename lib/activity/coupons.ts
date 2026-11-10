@@ -9,7 +9,7 @@ import {
   type ActivityKind,
 } from "@/lib/db/schema";
 import { spendCredits, refundPermanentCredits } from "@/lib/billing/spend";
-import { formatAmount } from "@/lib/billing/units";
+import { formatAmount, formatTickets } from "@/lib/billing/units";
 import { cnStartOfToday } from "@/lib/date";
 import { activityWindow, currentActivityKey } from "@/lib/lottery/prize-math";
 import { getLotteryConfig } from "@/lib/lottery/config";
@@ -18,6 +18,9 @@ import { getFlipConfig } from "@/lib/flip/settings";
 import { raidenActivityKey, raidenActivityWindow } from "@/lib/raiden/config";
 import { getRaidenConfig } from "@/lib/raiden/settings";
 import { getCouponPackConfig, type CouponPackConfig } from "./pack-config";
+import { packGrant } from "./pack-grant";
+
+export { packGrant } from "./pack-grant";
 
 /**
  * 活动券：一种玩法一种券，按活动轮次隔离。
@@ -108,22 +111,10 @@ export function buildCouponPacks(config: CouponPackConfig): CouponPack[] {
 export interface CouponPackView extends CouponPack {
   boughtToday: number;
   boughtTotal: number;
-  /** 倍率部分到账的券面 cr（不含赠券）。 */
-  baseCredits: number;
-  /** 到账合计：倍率券面 + 赠券按当期单价折算的券面。 */
-  couponCredits: number;
-}
-
-/** 礼包到账口径：赠券按购买时该活动的券面单价折成 cr，与倍率券面一起入账。 */
-export function packGrant(pack: CouponPack, unitCredits: number) {
-  const baseCredits = round2((pack.priceCredits * pack.ratioPercent) / 100);
-  const bonusCredits = round2(unitCredits * pack.bonusTickets);
-  return {
-    baseCredits,
-    bonusTickets: pack.bonusTickets,
-    bonusCredits,
-    totalCredits: round2(baseCredits + bonusCredits),
-  };
+  /** 倍率折算的当期活动券张数（不含赠券）。 */
+  ratioTickets: number;
+  /** 到账合计张数：倍率折算 + 赠券。 */
+  totalTickets: number;
 }
 
 interface PackUsage {
@@ -161,8 +152,8 @@ function packViews(
       ...pack,
       boughtToday: usage.get(pack.key)?.today ?? 0,
       boughtTotal: usage.get(pack.key)?.total ?? 0,
-      baseCredits: grant.baseCredits,
-      couponCredits: grant.totalCredits,
+      ratioTickets: grant.ratioTickets,
+      totalTickets: grant.totalTickets,
     };
   });
 }
@@ -391,14 +382,13 @@ export async function exchangeCoupon(
   return { credits: amount, tickets, couponName: activity.couponName };
 }
 
-/** 珍宝礼包：花 cr 买券面，倍率、限购与附赠内容读后台配置（0 = 不限 / 不送）。 */
+/** 珍宝礼包：花 cr 买当期活动券，倍率、限购与附赠内容读后台配置（0 = 不限 / 不送）。 */
 export async function buyCouponPack(
   userId: string,
   kind: ActivityKind,
   packKey: string,
 ): Promise<{
-  credits: number;
-  baseCredits: number;
+  tickets: number;
   bonusTickets: number;
   tempCredits: number;
   tempValidDays: number;
@@ -465,7 +455,7 @@ export async function buyCouponPack(
     couponGranted = true;
 
     const bonusParts: string[] = [];
-    if (grant.bonusTickets > 0) bonusParts.push(`含赠 ${grant.bonusTickets} 张券`);
+    if (grant.bonusTickets > 0) bonusParts.push(`含赠 ${grant.bonusTickets} 张`);
     if (pack.tempCredits > 0) bonusParts.push(`赠 ${formatAmount(pack.tempCredits)} tcr`);
     const bonusText = bonusParts.length > 0 ? `，${bonusParts.join("、")}` : "";
     await db.insert(topups).values({
@@ -473,7 +463,7 @@ export async function buyCouponPack(
       userId,
       amount: -pack.priceCredits,
       type: COUPON_TOPUP_TYPE,
-      description: `购买${pack.name}（${activity.couponName} ${formatAmount(credits)} cr${bonusText}，${activity.label}）`,
+      description: `购买${pack.name}（${activity.couponName} +${formatTickets(grant.totalTickets)} 张${bonusText}，${activity.label}）`,
       createdAt: now,
     });
 
@@ -538,8 +528,7 @@ export async function buyCouponPack(
   }
 
   return {
-    credits,
-    baseCredits: grant.baseCredits,
+    tickets: grant.totalTickets,
     bonusTickets: grant.bonusTickets,
     tempCredits: pack.tempCredits,
     tempValidDays: pack.tempValidDays,

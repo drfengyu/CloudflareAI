@@ -9,7 +9,7 @@ import {
   type ActivityKind,
 } from "@/lib/activity/coupons";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { formatAmount } from "@/lib/billing/units";
+import { formatAmount, formatTickets } from "@/lib/billing/units";
 
 export type CouponActionResult = { success: true; message: string } | { success: false; message: string };
 
@@ -49,7 +49,7 @@ export async function exchangeCouponAction(input: {
   }
 }
 
-/** 珍宝礼包：花 cr 买指定倍率的券面，同样先临时余额再永久余额。 */
+/** 珍宝礼包：花 cr 买当期活动券，同样先临时余额再永久余额。 */
 export async function buyCouponPackAction(input: {
   kind: string;
   pack: string;
@@ -63,14 +63,14 @@ export async function buyCouponPackAction(input: {
     const result = await buyCouponPack(userId, kind, input.pack);
     revalidateCouponPaths();
     const bonusParts: string[] = [];
-    if (result.bonusTickets > 0) bonusParts.push(`赠 ${result.bonusTickets} 张券`);
+    if (result.bonusTickets > 0) bonusParts.push(`含赠 ${result.bonusTickets} 张`);
     if (result.tempCredits > 0) {
       bonusParts.push(`赠 ${formatAmount(result.tempCredits)} tcr（${result.tempValidDays} 天）`);
     }
     const bonusText = bonusParts.length > 0 ? `，${bonusParts.join("、")}` : "";
     return {
       success: true,
-      message: `已购买礼包：${result.couponName} +${formatAmount(result.credits)} cr${bonusText}，实付 ${formatAmount(result.price)} cr`,
+      message: `已购买礼包：${result.couponName} +${formatTickets(result.tickets)} 张${bonusText}，实付 ${formatAmount(result.price)} cr`,
     };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "购买失败" };

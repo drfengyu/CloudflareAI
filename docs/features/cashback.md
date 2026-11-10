@@ -43,11 +43,14 @@
   `ratioPercent`（%）、`dailyLimit` / `totalLimit`（份，0 = 不限）、`bonusTickets`（赠券张数）、
   `tempCredits` + `tempValidDays`（额外赠送的临时余额与其有效期）。旧的三档对象读取时按默认补齐。
   限购按「用户 + 礼包键」跨活动统计、北京自然日切日（`coupon_pack_purchase`，迁移 025）；
-  写入用单条 `INSERT ... SELECT ... WHERE` 复查计数，并发不超卖。到账券面 = 实付 × 倍率。
-- 每档赠送内容独立：`bonusTickets` 张当期活动券按购买时该活动的 `couponUnitCredits` 折成券面，
-  与倍率券面合并入账（`packGrant`）；`tempCredits > 0` 时另写一笔带 `expiresAt` 的
-  `temporary_balance` 与 `topup type=16`（礼包赠送，账本归「赠送与返利」），到期由清理任务作废。
-  任一步失败会回滚 tcr、券面、购买记录与扣款。
+  写入用单条 `INSERT ... SELECT ... WHERE` 复查计数，并发不超卖。
+- 到账按张数（`lib/activity/pack-grant.ts`）：倍率只作用于实付金额，按购买时该活动的
+  `couponUnitCredits` 折成张数（实付 × 倍率 ÷ 券单价，保留两位小数），再叠加 `bonusTickets`；
+  卡片、后台预览与购买提示只讲张数，实付价仍按 cr。券内部继续以 cr 券面记账
+  （合计张数 × 单价），`payWithCoupon` 的 1:1 抵扣不变。
+- `tempCredits > 0` 时另写一笔带 `expiresAt` 的 `temporary_balance` 与 `topup type=16`
+  （礼包赠送，账本归「赠送与返利」），到期由清理任务作废。任一步失败会回滚 tcr、券面、
+  购买记录与扣款。
 - 玩法付费只扣活动券：券面不足直接失败并提示先兑换，不再接受余额直付。券在兑换 / 买礼包时已经作为
   `topup type=15` 记过支出，所以账本合计与余额下降保持一致。
 

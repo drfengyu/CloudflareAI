@@ -534,8 +534,14 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.36.1（2026-11-10，顶栏活动券改按张数显示）
-**下一版本**：v0.37.0（尚未选型）
+**当前版本**：v0.37.0（2026-11-10，礼包倍率按券单价折张数）
+**下一版本**：v0.38.0（尚未选型）
+
+- v0.37.0 珍宝礼包到账改按张数：`lib/activity/pack-grant.ts` 的 `packGrant` 只把倍率作用于实付金额，
+  按该活动 `couponUnitCredits` 折成张数（保留两位小数），再叠加 `bonusTickets`；返回
+  `ratioTickets / totalTickets / totalCredits`。礼包卡片、后台预览、购买提示与 `topup type=15`
+  流水说明都不再展示到账券面 cr，实付仍按 cr。后台预览按转盘 / 翻牌 / 雷电各自的券单价分别折算。
+  券内部仍以 cr 券面记账（合计张数 × 单价），`payWithCoupon` 的 1:1 抵扣不变。
 
 - v0.36.1 顶栏货币条的活动券改显示张数（`credits / unitCredits` 折算），窄屏下拉与 tooltip 同步，
   券面 cr 不再出现在顶栏；cr / tcr 余额仍按完整金额 + 单位显示。
@@ -550,7 +556,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 - v0.35.0 珍宝礼包赠券：`packGrant` 把「倍率券面 + 1 张当期活动券 × 该活动单价」合并成到账合计，
   `buyCouponPack` 按合计入账并把总额写进 `coupon_pack_purchase.couponCredits`；礼包视图新增
-  `baseCredits` / `bonusTickets`，卡片显示「得 X cr +1 张券」。修复礼包设置无法保存：倍率输入框
+  `baseCredits` / `bonusTickets`（v0.37.0 起改为 `ratioTickets` / `totalTickets`），卡片显示「得 X cr +1 张券」。修复礼包设置无法保存：倍率输入框
   原来 `min=0.01` + `step=1`，浏览器把 200/500/1000 判为非法步进并阻止提交，改为 `step="any"`；
   基础设置两个价格倍率输入框（`min=0.01` + `step=0.1`）同病同修。
 

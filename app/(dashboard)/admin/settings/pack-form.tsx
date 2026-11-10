@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { formatAmount } from "@/lib/billing/units";
+import { formatAmount, formatTickets } from "@/lib/billing/units";
 import {
   MAX_COUPON_PACKS,
   MAX_PACK_NAME,
@@ -12,6 +12,7 @@ import {
   type CouponPackConfig,
   type CouponPackSetting,
 } from "@/lib/activity/pack-config";
+import { packGrant } from "@/lib/activity/pack-grant";
 import { cn } from "@/lib/utils";
 import { updateCouponPackSettings } from "./actions";
 
@@ -75,7 +76,13 @@ function Field({
   );
 }
 
-export function CouponPackForm({ initialConfig }: { initialConfig: CouponPackConfig }) {
+export function CouponPackForm({
+  initialConfig,
+  unitCredits,
+}: {
+  initialConfig: CouponPackConfig;
+  unitCredits: { lottery: number; flip: number; raiden: number };
+}) {
   const [rows, setRows] = useState<Row[]>(() => initialConfig.packs.map(toRow));
   const [loading, setLoading] = useState(false);
 
@@ -137,15 +144,19 @@ export function CouponPackForm({ initialConfig }: { initialConfig: CouponPackCon
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        档位由三个活动共用，可增删（最多 {MAX_COUPON_PACKS} 个）：倍率决定到账券面；
-        限购按「用户 + 档位」统计，0 = 不限，每日限购按北京时间自然日重置；
-        赠券按活动当期券面单价折算入账；赠 tcr 进入临时余额，到期作废。
+        档位由三个活动共用，可增删（最多 {MAX_COUPON_PACKS} 个）：倍率只作用于实付金额，
+        按各活动券单价折成张数；限购按「用户 + 档位」统计，0 = 不限，每日限购按北京时间自然日重置；
+        赠券张数在倍率张数上叠加；赠 tcr 进入临时余额，到期作废。
       </p>
 
       <div className="space-y-2">
         {rows.map((row, index) => {
           const setting = preview.packs[index] ?? preview.packs[0];
-          const baseCredits = (setting.priceCredits * setting.ratioPercent) / 100;
+          const perActivity = [
+            { label: "转盘", credits: unitCredits.lottery },
+            { label: "翻牌", credits: unitCredits.flip },
+            { label: "雷电", credits: unitCredits.raiden },
+          ];
           return (
             <div key={index} className="space-y-2 rounded-lg border border-border p-3">
               <div className="flex items-center justify-between gap-2">
@@ -250,14 +261,20 @@ export function CouponPackForm({ initialConfig }: { initialConfig: CouponPackCon
                 </Field>
                 <div className="col-span-2 flex items-end sm:col-span-3 lg:col-span-3">
                   <p className="w-full rounded-lg bg-secondary/40 px-2.5 py-1.5 text-xs tabular-nums">
-                    得 <span className="font-medium">{formatAmount(baseCredits)} cr</span>
-                    {setting.bonusTickets > 0 ? (
-                      <span className="text-success"> + {setting.bonusTickets} 张券</span>
-                    ) : null}
+                    到账{" "}
+                    {perActivity.map((item, unitIndex) => (
+                      <span key={item.label}>
+                        {unitIndex > 0 ? " · " : ""}
+                        {item.label}{" "}
+                        <span className="font-medium">
+                          {formatTickets(packGrant(setting, item.credits).totalTickets)} 张
+                        </span>
+                      </span>
+                    ))}
                     {setting.tempCredits > 0 ? (
                       <span className="text-primary">
                         {" "}
-                        + {formatAmount(setting.tempCredits)} tcr（{setting.tempValidDays} 天）
+                        · + {formatAmount(setting.tempCredits)} tcr（{setting.tempValidDays} 天）
                       </span>
                     ) : null}
                   </p>

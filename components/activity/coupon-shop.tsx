@@ -6,6 +6,7 @@ import { Crosshair, Gem, Layers, Loader2, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { formatCredits } from "@/lib/billing/credits";
+import { formatTickets } from "@/lib/billing/units";
 import type { ActivityCouponView } from "@/lib/activity/coupons";
 import { buyCouponPackAction, exchangeCouponAction } from "@/app/(dashboard)/cashback/coupon-actions";
 import { cn } from "@/lib/utils";
@@ -177,11 +178,15 @@ function CouponShopItem({
                   type="button"
                   onClick={() => void handlePack(pack.key)}
                   disabled={busy !== null || soldOut}
-                  aria-label={`${pack.name} · ${formatCredits(pack.priceCredits)} cr`}
+                  aria-label={`${pack.name} · 实付 ${formatCredits(pack.priceCredits)} cr · 得 ${formatTickets(pack.totalTickets)} 张`}
                   title={
                     soldOut
                       ? `${pack.name}已到限购上限`
-                      : `${pack.name} · 实付 ${formatCredits(pack.priceCredits)} cr`
+                      : `${pack.name} · 实付 ${formatCredits(pack.priceCredits)} cr，倍率 ${formatTickets(pack.ratioTickets)} 张${
+                          pack.bonusTickets > 0
+                            ? ` + 赠 ${pack.bonusTickets} 张，共 +${formatTickets(pack.totalTickets)} 张`
+                            : ""
+                        }`
                   }
                   className={cn(
                     "group flex flex-col items-center gap-1 rounded-xl border px-1.5 py-2.5 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-45",
@@ -226,7 +231,7 @@ function CouponShopItem({
                   >
                     {pack.ratioPercent}% → 得{" "}
                     <span className="whitespace-nowrap">
-                      {formatCredits(pack.baseCredits)} cr
+                      {formatTickets(pack.ratioTickets)} 张
                     </span>
                   </span>
                   {pack.tempCredits > 0 ? (
@@ -262,8 +267,8 @@ function CouponShopItem({
             })}
           </div>
           <p className={cn("text-[11px]", dark ? "text-white/35" : "text-muted-foreground")}>
-            1 张 = {formatCredits(unitCredits)} cr；礼包按档位赠送当期活动券，按该单价折成券面一起入账，
-            另赠的 tcr 进入临时余额、到期作废；券面按 cr 1:1 抵玩法费用，当期结束后作废；
+            1 张 = {formatCredits(unitCredits)} cr；礼包按「实付 × 倍率 ÷ 该券单价」折成当期活动券张数，
+            每份另赠的券一并到账，tcr 进入临时余额、到期作废；券按 cr 1:1 抵玩法费用，当期结束后作废；
             扣款先临时余额（tcr）、再永久余额（cr）。
           </p>
         </>

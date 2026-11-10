@@ -314,7 +314,14 @@ export default async function AdminSettingsPage() {
             <CardTitle className="text-base">珍宝礼包（活动券通用）</CardTitle>
           </CardHeader>
           <CardContent>
-            <CouponPackForm initialConfig={packConfig} />
+            <CouponPackForm
+              initialConfig={packConfig}
+              unitCredits={{
+                lottery: lotteryConfig.couponUnitCredits,
+                flip: flipConfig.couponUnitCredits,
+                raiden: raidenConfig.couponUnitCredits,
+              }}
+            />
           </CardContent>
         </Card>
       </PageBody>
