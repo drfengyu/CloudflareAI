@@ -167,18 +167,22 @@ npx tsx --test tests/lottery-simulation.test.ts
 
 | 事件 | 处理 |
 |------|------|
-| 买券 | 只扣当期活动券（券面按 cr 1:1 抵扣）；券不足直接失败，提示先按活动单价兑换 |
+| 付费抽 | 支付顺序：免费抽 → 抽奖券 → 活动券。剩余注数按单抽价折成**整数张**扣当期活动券（`payWithCoupon`，不足 1 张按 1 张）；券余额向下取整比对，不足直接失败并提示先兑换。v0.38.0 起转盘页不再卖券，券只从礼包 / 返利 / 任务 / 站内信获得 |
 | 中奖（正数） | 发进**临时余额**，`prizeValidDays` 天后过期 |
 | 倒扣（负数） | **先扣未过期的临时余额（最早到期的先扣），不够再扣永久余额**；落到本金的部分允许扣成负数 |
 | 抽中赠券 | 直接发 N 张 `source='prize'` 的券，**不动 cr、不写流水** |
 | 全部资金变动 | 写 `topup` 流水，`type = 6`，描述含奖品文案 |
+
+> 活动券内部仍按 cr 券面记账（`activity_coupon.credits`，1 张 = 该活动 `couponUnitCredits`），
+> 但**张数一律是整数**：发放按整张折算（向下取整），扣费按 `ticketsForCost` 折成整数张，
+> 后台单抽价与各玩法价格都被 `snapCostToUnit` 吸到券价的整数倍，界面只显示「活动券图标 × 张数」。
 
 > 活动账目（`type=6`）在个人账本 `/ledger` 里归「活动」类别，正负都按天汇总；逐次明细仍在
 > `/lottery`「我的活动记录」与 `/admin/lottery` 查看。钱包页不再列流水，只留余额、最近 8 笔收支
 > 与「临时余额明细」（中奖发放的临时余额仍带到期时间）。
 
 **倒扣的扣款顺序（2026-10-17 改）**：`clawbackCredits()`（`lib/lottery/store.ts`）把整批倒扣按
-「未过期临时余额（`expiresAt` 升序）→ 本金」的顺序回收，跟买券、模型消费走同一条优先级。
+「未过期临时余额（`expiresAt` 升序）→ 本金」的顺序回收，跟模型消费走同一条优先级。
 改之前倒扣是一步砸本金，于是出现过这种分裂：某账号本金被砸成 −1,598.80，手上却还躺着 14 笔共 2,051.39 cr
 的未过期临时余额（2026-10-21 起逐笔作废，最晚一笔 11-14）——界面按「负数补正」显示可用 +452.58，
 站点没真收回成本，用户还在这些行作废完的那天发现可用余额从正翻负。
@@ -199,7 +203,7 @@ npx tsx --test tests/lottery-simulation.test.ts
 ```
 option.lottery_config        活动配置（JSON，见下）
 lottery_ticket               一行一券；usedDrawId 非空即已消耗
-  source                     buy=花钱买 / gift=累抽档位送 / prize=外圈抽中
+  source                     gift=累抽档位送 / prize=外圈抽中 / buy=旧版买券（v0.38.0 前，仅存历史行）
   milestoneSeq               档位内第几张（0 起）；非档位赠券恒为 0
   unique(userId, milestoneDraws, milestoneSeq, activityKey)   档位赠券只发一次的幂等键（NULL 不参与唯一性）
 lottery_draw                 逐次开奖记录；unique(batchId, seq)
@@ -220,7 +224,7 @@ rate_limit_bucket            跨实例限流计数，一行一个固定窗口桶
 
 **为什么要有 `lottery_user_stats`**：`/lottery`、看板、管理端「全部」都要读「不限时间」的
 总次数/总收益/券面值。这类聚合没有可用的索引，每次加载都得把该用户（或全站）的历史行读完；
-D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见底。现在开奖/买券时用一条 UPSERT
+D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见底。现在开奖/发券时用一条 UPSERT
 把增量写进行（`lib/lottery/stats.ts` 定义口径，`applyDrawStats` / `revertDrawStats` /
 `applyTicketStats` 落库），读侧只取一行；回滚整批开奖时按同一份增量反向扣回并重算 `lastDrawAt`。
 **管理端的时间窗口径（今日/近 7 日/近 30 日）仍然回到明细表聚合**，累计行不存时间维度。
@@ -254,15 +258,17 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
 
 扇区角度按权重分配，所以「权重」同时决定中奖概率与该扇区的大小。缺字段、权重全 0、时间写错都会
 被 `sanitizeLotteryConfig` 退回默认值——配置写坏时活动照常可玩，而不是让 `/lottery` 500。
+`ticketPriceCredits` 会被当期活动券单价 `snapCostToUnit` 吸到**整数倍**（1 张起），
+所以实际扣券永远是整张；后台表单保存的也是吸附后的值。
 
 ## 活动记录与站点收益
 
 钱本来就逐笔记在 `lottery_ticket` 与 `lottery_draw` 上，两表始终是唯一真源；
 `lib/lottery/records.ts` 只负责读。2026-10-29 起，「不限时间」的汇总改读累计行
-`lottery_user_stats`（开奖/买券时增量维护），管理端的时间窗仍回到明细聚合。
+`lottery_user_stats`（开奖/发券时增量维护），管理端的时间窗仍回到明细聚合。
 
 **用户侧**：`/lottery` 页面下方「我的活动记录」卡片——逐次时间、落在哪一圈、结果文案、cr 变动、
-用掉的券（购买 / 赠送 + 面值），外加一排汇总（次数、外圈命中、中奖发放、倒扣回收、已开奖券面值、本期净收益）。
+用掉的券（赠送 / 抽中 / 免费 + 面值），外加一排汇总（次数、外圈命中、中奖发放、倒扣回收、已开奖消耗、本期净收益）。
 **只显示当前活动轮次**：明细取当期记录（`listDrawRecords` 按 `activityKey` 过滤），每页 10 条，翻页在卡片内局部刷新
 （服务端动作 `listMyActivityRecords`，不改 URL、不整页刷新），
 总数直接用当期累计行 `draws`（不额外 COUNT）；汇总按当期全量算；
@@ -296,7 +302,7 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
 | `lib/lottery/config.ts` | `getLotteryConfig()`：读 `option.lottery_config` |
 | `lib/lottery/store.ts` | 账本原语：发券 / 收券 / 锁券 / 扣 cr / 发临时余额 / 档位赠券 |
 | `lib/lottery/records.ts` | 只读聚合：逐次明细、按用户收益、券侧收入。用户页与管理页共用 |
-| `app/(dashboard)/lottery/actions.ts` | `buyTickets` / `drawLottery` 两个服务端动作 |
+| `app/(dashboard)/lottery/actions.ts` | `drawLottery` 等抽奖服务端动作 |
 | `app/(dashboard)/lottery/lottery-wheel.tsx` | 双圈 SVG 转盘与结果面板（客户端） |
 | `app/(dashboard)/lottery/lottery-records.tsx` | 「我的活动记录」卡片（服务端渲染） |
 | `app/(dashboard)/admin/lottery/page.tsx` | 后台活动记录页（角色 ≥10） |
@@ -306,7 +312,8 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
 ## 实现注意
 
 - **没有事务**：D1 走 REST，`db` 拿不到受影响行数，所以条件更新统一走 `d1Run()`（读 `meta.changes`）。
-  买券 = `UPDATE user SET balanceCredits = balanceCredits - ? WHERE id = ? AND balanceCredits >= ?`；
+  付费抽 = `UPDATE activity_coupon SET credits = credits - ? WHERE id = ? AND credits >= ?`
+  （`payWithCoupon`，金额 = 整数张 × 券价）；
   锁券 = 一条 `CASE` 语句把整批券各自锁给对应的开奖行，末尾再挂
   `(SELECT COUNT(*) ... WHERE usedDrawId IS NULL) = 张数` 的条件。
   并发双花靠这两条条件更新挡住，而不是靠先读后写。
@@ -327,10 +334,11 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
   （125 cr 券价下同一份内圈只有约 77%）；改奖池时以后台那行「内圈 / 外圈 / 单券综合期望 + 返还率」为准，
   超过 100% 即每卖一张券净亏。
 - 时间一律北京时间墙钟串（`lib/date.ts` 的 `parseCnWallClock`），避免服务器 UTC 造成活动提前/延后开关。
-- **一次买券上限 100 张**受 `MAX_TICKETS_PER_PURCHASE` 控制；发券走 `batchRows(values, 7)` 分片写入，
+- **转盘页不再卖券**（v0.38.0）：`buyTickets` / `MAX_TICKETS_PER_PURCHASE` 已删除，券统一从活动中心礼包、
+  返利、任务与站内信获得；付费抽的剩余份数按单抽价折整张扣券。发券走 `batchRows(values, 7)` 分片写入，
   单条 INSERT 绑 100 个参数是 D1 的硬上限（见下条）。
 - **D1 单语句最多绑 100 个参数**：`too many SQL variables`。批量插入（`insert().values(多行)`）每行每列都占一个参数，
-  所以「一次买 50 张券」= 300 个参数，早期版本正是因此扣了钱却发不出券。统一用 `lib/db/d1-http.ts` 的
+  所以早期的「一次买 50 张券」= 300 个参数，那时扣了钱却发不出券。统一用 `lib/db/d1-http.ts` 的
   `batchRows(rows, 每行列数)` 分片；`inArray()` 同理（每个 id 一个参数），记录页与 `/admin/orders` 的邮箱映射都分段查。
 - **10 连抽的服务端耗时**：一次 10 连抽原先要打约 40 次**串行** D1 HTTP 往返（每注各一次开奖行、
   一次流水、一次余额变动，外加逐张锁券），实测 7~10 秒。现在整批结果先在内存算完，写入按表合并

@@ -168,7 +168,7 @@ export function LotteryReport({
               label="站点净收益"
               value={`${formatCredits(balance.net)} cr`}
               tone={balance.net >= 0 ? "positive" : "negative"}
-              hint="券面 + 回收 − 发放"
+              hint="消耗 + 回收 − 发放"
             />
             <Metric
               label="售券收入"
@@ -190,10 +190,10 @@ export function LotteryReport({
             />
           </div>
           <p className="text-[11px] text-muted-foreground">
-            净收益只统计已开奖的券；窗口内还有 {ticketTotals.unusedTickets} 张未开奖（面值{" "}
+            净收益只统计已开奖的券；窗口内还有 {ticketTotals.unusedTickets} 张未开奖（消耗{" "}
             {formatCredits(ticketTotals.unusedCredits)} cr）已收讫未兑现。倒扣回收是把用户已有余额划回，
             不是新增现金流入；中奖发放走带过期的临时余额，过期未用不会真的付出。
-            赠券档不动 cr，它按「这一注的券面已收、兑付延后」落在净收益里，发出去的券要等它被抽掉才转成成本。
+            赠券档不动 cr，它按「这一注的消耗已收、兑付延后」落在净收益里，发出去的券要等它被抽掉才转成成本。
           </p>
         </CardContent>
       </Card>
@@ -213,7 +213,7 @@ export function LotteryReport({
                     <th className="px-3 py-2 font-medium">用户</th>
                     <th className="px-3 py-2 font-medium">抽奖次数</th>
                     <th className="px-3 py-2 font-medium">外圈命中</th>
-                    <th className="px-3 py-2 font-medium">已开奖券面值</th>
+                    <th className="px-3 py-2 font-medium">已开奖消耗</th>
                     <th className="px-3 py-2 font-medium">中奖发放</th>
                     <th className="px-3 py-2 font-medium">倒扣回收</th>
                     <th className="px-3 py-2 font-medium">站点净收益</th>
@@ -253,7 +253,7 @@ export function LotteryReport({
           <CardTitle className="text-base">
             逐次明细
             <span className="ml-2 text-xs font-normal text-muted-foreground">
-              共 {detail.totalRecords} 注 · 每页 {DRAW_RECORD_PAGE_SIZE} 条 · 收益按单注口径：券面 + 回收 − 发放
+              共 {detail.totalRecords} 注 · 每页 {DRAW_RECORD_PAGE_SIZE} 条 · 收益按单注口径：消耗 + 回收 − 发放
             </span>
           </CardTitle>
         </CardHeader>

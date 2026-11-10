@@ -4,8 +4,8 @@ import { getSetting } from "@/lib/settings";
  * 珍宝礼包配置（`option` 表的 `coupon_pack_config`，三个活动共用）。
  *
  * 档位可增删，每档独立设置：
- * - 名称与实付价（历史购买记录保存价格快照，改价不影响旧记录）；
- * - 倍率：券面 / 实付，按百分比存（200 = 200%）；
+ * - 名称、整数张数与倍率：实付价按「张数 × 该活动券单价 × 100 ÷ 倍率」实时折算；
+ * - 倍率：张数 × 单价 相对实付的倍数，按百分比存（200 = 200%）；
  * - 每日限购 / 累计限购：0 表示不限，按「用户 + 档位」统计（北京自然日）；
  * - 赠送内容：每份赠 N 张当期活动券 + M tcr 临时余额（有效期天数）。
  *
@@ -15,14 +15,17 @@ import { getSetting } from "@/lib/settings";
 export const COUPON_PACK_CONFIG_KEY = "coupon_pack_config";
 export const MAX_COUPON_PACKS = 6;
 export const MAX_PACK_NAME = 24;
+export const MAX_PACK_TICKETS = 1_000;
 
 export interface CouponPackSetting {
   /** 档位稳定标识，购买记录按它统计限购。 */
   key: string;
   name: string;
-  /** 实付 cr。 */
+  /** 每份含的整数活动券张数；旧配置没有该字段时为 null，读侧按旧实付价折算。 */
+  tickets: number | null;
+  /** 旧版实付 cr，仅在没有 tickets 时作为折算依据。 */
   priceCredits: number;
-  /** 倍率百分比：200 = 200%。 */
+  /** 倍率百分比：张数 × 单价 相对实付的倍数，200 = 200%。 */
   ratioPercent: number;
   /** 每北京自然日限购份数；0 = 不限。 */
   dailyLimit: number;
@@ -45,6 +48,7 @@ export const DEFAULT_COUPON_PACK_CONFIG: CouponPackConfig = {
     {
       key: "small",
       name: "小份珍宝",
+      tickets: 10,
       priceCredits: 10,
       ratioPercent: 200,
       dailyLimit: 0,
@@ -56,6 +60,7 @@ export const DEFAULT_COUPON_PACK_CONFIG: CouponPackConfig = {
     {
       key: "medium",
       name: "中份珍宝",
+      tickets: 50,
       priceCredits: 50,
       ratioPercent: 500,
       dailyLimit: 2,
@@ -67,6 +72,7 @@ export const DEFAULT_COUPON_PACK_CONFIG: CouponPackConfig = {
     {
       key: "large",
       name: "大份珍宝",
+      tickets: 100,
       priceCredits: 100,
       ratioPercent: 1000,
       dailyLimit: 1,
@@ -81,7 +87,7 @@ export const DEFAULT_COUPON_PACK_CONFIG: CouponPackConfig = {
 const MAX_RATIO_PERCENT = 100_000;
 const MAX_PRICE = 1_000_000;
 const MAX_LIMIT = 1_000_000;
-const MAX_TICKETS = 1_000;
+const MAX_BONUS_TICKETS = 1_000;
 const MAX_VALID_DAYS = 3650;
 const DEFAULT_VALID_DAYS = 30;
 const KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/;
@@ -107,10 +113,19 @@ function limit(raw: unknown, fallback: number): number {
   return Math.min(MAX_LIMIT, Math.trunc(n));
 }
 
-function tickets(raw: unknown, fallback: number): number {
+/** 礼包内包含的活动券张数：整数 1 ~ 1000；旧配置缺字段时返回 null。 */
+function packTickets(raw: unknown, fallback: number | null): number | null {
+  if (raw === undefined || raw === null || raw === "") return fallback;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(MAX_PACK_TICKETS, Math.max(1, Math.trunc(n)));
+}
+
+/** 赠送的额外张数可为 0。 */
+function bonusTickets(raw: unknown, fallback: number): number {
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0) return fallback;
-  return Math.min(MAX_TICKETS, Math.trunc(n));
+  return Math.min(MAX_BONUS_TICKETS, Math.trunc(n));
 }
 
 /** 赠送的临时余额可为 0，且支持小数 cr。 */
@@ -187,11 +202,13 @@ export function sanitizeCouponPackConfig(raw: unknown): CouponPackConfig {
     packs.push({
       key,
       name: packName(record.name, fallback.name),
+      // 没有 tickets 的旧配置保持 null，由 packGrant 按旧实付价折算成整张。
+      tickets: packTickets(record.tickets, null),
       priceCredits: money(record.priceCredits, fallback.priceCredits),
       ratioPercent: ratio(record.ratioPercent, fallback.ratioPercent),
       dailyLimit: limit(record.dailyLimit, fallback.dailyLimit),
       totalLimit: limit(record.totalLimit, fallback.totalLimit),
-      bonusTickets: tickets(record.bonusTickets, fallback.bonusTickets),
+      bonusTickets: bonusTickets(record.bonusTickets, fallback.bonusTickets),
       tempCredits: bonusCredits(record.tempCredits, fallback.tempCredits),
       tempValidDays: validDays(record.tempValidDays, fallback.tempValidDays),
     });

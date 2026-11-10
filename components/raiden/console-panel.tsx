@@ -19,6 +19,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatCredits } from "@/lib/billing/credits";
+import { ticketsForCost } from "@/lib/activity/ticket-math";
+import { CouponCount } from "@/components/activity/coupon-badge";
 import { formatCnDateTime } from "@/lib/date";
 import {
   loadoutCost,
@@ -137,11 +139,24 @@ export function ConsolePanel({
         </div>
 
         <div className="mt-2.5 grid grid-cols-3 divide-x divide-white/10 rounded-lg border border-white/10 bg-black/20">
-          <ConsoleStat label="可用券面" value={`${formatCredits(coupon.credits)} cr`} />
+          <ConsoleStat
+            label="活动券"
+            value={<CouponCount kind="raiden" count={coupon.tickets} className="justify-center" />}
+          />
           <ConsoleStat label="今日剩余" value={`${runsLeft} / ${config.dailyRuns} 次`} />
           <ConsoleStat
             label={inRun ? "本局奖励" : "装备费用"}
-            value={inRun ? `+${formatCredits(rewardTotal)} tcr` : `${formatCredits(loadoutCost(config, loadout))} cr 券面`}
+            value={
+              inRun ? (
+                `+${formatCredits(rewardTotal)} tcr`
+              ) : (
+                <CouponCount
+                  kind="raiden"
+                  count={ticketsForCost(loadoutCost(config, loadout), config.couponUnitCredits)}
+                  className="justify-center"
+                />
+              )
+            }
             tone={inRun ? "text-amber-200" : undefined}
           />
         </div>
@@ -183,6 +198,7 @@ export function ConsolePanel({
             runsLeft={runsLeft}
             rewardValidDays={config.rewardValidDays}
             revivePrice={config.revivePriceCredits}
+            unitCredits={config.couponUnitCredits}
           />
         ) : active === "loadout" ? (
           <LoadoutShop config={config} loadout={loadout} onChange={onLoadoutChange} />
@@ -206,7 +222,7 @@ function ConsoleStat({
   tone,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   tone?: string;
 }) {
   return (
@@ -230,6 +246,7 @@ function LivePanel({
   runsLeft,
   rewardValidDays,
   revivePrice,
+  unitCredits,
 }: {
   hud: HudSnapshot;
   paused: boolean;
@@ -241,6 +258,7 @@ function LivePanel({
   runsLeft: number;
   rewardValidDays: number;
   revivePrice: number;
+  unitCredits: number;
 }) {
   const meta = stageMeta(hud.stage);
   const net = Math.round((rewardTotal - runCost - revivesUsed * revivePrice) * 100) / 100;
@@ -354,10 +372,19 @@ function LivePanel({
 
       <div className="grid grid-cols-2 gap-1.5">
         <LiveStat label="本局已获奖励" value={`+${formatCredits(rewardTotal)} tcr`} tone="text-amber-200" />
-        <LiveStat label="装备花费" value={`${formatCredits(runCost)} cr 券面`} />
+        <LiveStat
+          label="装备花费"
+          value={<CouponCount kind="raiden" count={ticketsForCost(runCost, unitCredits)} />}
+        />
         <LiveStat
           label="复活花费"
-          value={revivesUsed > 0 ? `${formatCredits(revivesUsed * revivePrice)} cr 券面` : "0 cr"}
+          value={
+            revivesUsed > 0 ? (
+              <CouponCount kind="raiden" count={ticketsForCost(revivesUsed * revivePrice, unitCredits)} />
+            ) : (
+              <CouponCount kind="raiden" count={0} />
+            )
+          }
         />
         <LiveStat label="本局净收支（cr 等值）" value={`${net >= 0 ? "+" : ""}${formatCredits(net)}`} tone={net >= 0 ? "text-emerald-300" : "text-rose-300"} />
       </div>
@@ -459,7 +486,7 @@ function LiveStat({
   tone,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   icon?: React.ComponentType<{ className?: string }>;
   mono?: boolean;
   highlight?: boolean;
@@ -719,16 +746,20 @@ function RulesPanel({ config }: { config: RaidenConfig }) {
 
       <ul className="space-y-1 text-[10px] leading-relaxed text-white/50">
         <li>
-          · 每天最多出击 {config.dailyRuns} 次，装备费在出击时从当期活动券扣（cr 券面）。
-          活动券按本玩法单价兑换（1 张 = {formatCredits(config.couponUnitCredits)} cr），不足需先兑换。
+          · 每天最多出击 {config.dailyRuns} 次，装备费在出击时按整张从当期活动券扣。活动券按本玩法单价兑换（1
+          张 = {formatCredits(config.couponUnitCredits)} cr），不足需先兑换。
         </li>
         <li>
           · 首通奖励仅发放一次；重复通关奖励每日封顶 {formatCredits(config.repeatDailyCap)} tcr。
         </li>
         <li>· 奖励以 tcr 发放到临时余额，有效期 {config.rewardValidDays} 天，可正常抵扣消费。</li>
         <li>
-          · 阵亡后可花 {formatCredits(config.revivePriceCredits)} cr 券面原地复活，单局最多{" "}
-          {config.maxRevives} 次。
+          · 阵亡后可花{" "}
+          <CouponCount
+            kind="raiden"
+            count={ticketsForCost(config.revivePriceCredits, config.couponUnitCredits)}
+          />{" "}
+          原地复活，单局最多 {config.maxRevives} 次。
         </li>
         <li>
           · 七种子弹：<Badge tone="muted">W/S/M/L/P/T/R</Badge> ={" "}

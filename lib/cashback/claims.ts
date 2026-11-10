@@ -80,6 +80,7 @@ export interface CouponTarget {
   kind: ActivityKind;
   activityKey: string;
   couponName: string;
+  unitCredits: number;
 }
 
 export async function pickCouponTarget(random: () => number = Math.random): Promise<CouponTarget | null> {
@@ -93,6 +94,7 @@ export async function pickCouponTarget(random: () => number = Math.random): Prom
     kind: picked.kind,
     activityKey: picked.activityKey as string,
     couponName: picked.couponName,
+    unitCredits: picked.unitCredits,
   };
 }
 
@@ -177,6 +179,8 @@ function rewardAttachment(reward: CashbackReward, validDays: number, claimId: st
         activityKind: reward.coupon.kind,
         activityKey: reward.coupon.activityKey,
         couponName: reward.coupon.couponName,
+        unitCredits: reward.coupon.unitCredits,
+        tickets: reward.coupon.tickets,
         credits: reward.coupon.credits,
         rewardClaimId: claimId,
       };

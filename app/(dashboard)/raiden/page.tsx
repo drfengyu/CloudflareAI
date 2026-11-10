@@ -32,7 +32,7 @@ export default async function RaidenPage() {
     <RaidenGame
       config={config}
       status={windowInfo.status}
-      couponCredits={coupon.credits}
+      couponTickets={coupon.tickets}
       runsLeft={runsLeft}
       summary={summary}
       leaderboard={leaderboard}

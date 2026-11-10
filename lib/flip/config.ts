@@ -1,3 +1,4 @@
+import { snapCostToUnit } from "@/lib/activity/ticket-math";
 import { parseCnWallClock } from "@/lib/date";
 
 /**
@@ -88,16 +89,21 @@ export function sanitizeFlipConfig(raw: unknown): FlipConfig {
   const d = DEFAULT_FLIP_CONFIG;
   if (!raw || typeof raw !== "object") return d;
   const it = raw as Partial<FlipConfig>;
+  const unit = Math.min(
+    1_000_000,
+    round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
+  );
 
   return {
     enabled: it.enabled === true,
     startAt: typeof it.startAt === "string" ? it.startAt.trim() : "",
     endAt: typeof it.endAt === "string" ? it.endAt.trim() : "",
-    roundPriceCredits: round2(positiveNumber(it.roundPriceCredits, d.roundPriceCredits)),
-    couponUnitCredits: Math.min(
-      1_000_000,
-      round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
+    // 票价必须是活动券单价的整数倍，扣券才不会出现半张。
+    roundPriceCredits: snapCostToUnit(
+      round2(positiveNumber(it.roundPriceCredits, d.roundPriceCredits)),
+      unit,
     ),
+    couponUnitCredits: unit,
     cardRewards: sanitizeCardRewards(it.cardRewards),
     rewardValidDays: boundedInteger(it.rewardValidDays, d.rewardValidDays, 1, 3650),
     dailyRounds: boundedInteger(it.dailyRounds, d.dailyRounds, 1, 1000),

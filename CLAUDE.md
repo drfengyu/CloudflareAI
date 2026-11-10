@@ -534,8 +534,20 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.37.0（2026-11-10，礼包倍率按券单价折张数）
-**下一版本**：v0.38.0（尚未选型）
+**当前版本**：v0.38.0（2026-11-10，活动券整数张 + 礼包「张数 + 倍率」）
+**下一版本**：v0.39.0（尚未选型）
+
+- v0.38.0 活动券全面整数张：新增 `lib/activity/ticket-math.ts`（`couponTickets` 向下取整 /
+  `ticketsForCost` 向上取整至少 1 张 / `creditsForTickets` / `snapCostToUnit`），
+  三个玩法的价格在 `sanitize*Config` 里吸到券价整数倍，`payWithCoupon` 改为按整张扣
+  （`CouponPayment` 增加 `tickets`）。礼包模型改为「整数张数 + 倍率」：配置存 `tickets`，
+  `packGrant` 返回 `ratioTickets / bonusTickets / totalTickets / totalCredits`，
+  实付 = `ratioTickets × 券单价 × 100 ÷ 倍率`；旧配置只有 `priceCredits` 时按实付价折整张读取。
+  转盘页删除 `buyTickets` / `MAX_TICKETS_PER_PURCHASE` 与购买面板，抽 1 次 / 10 次按
+  「免费抽 → 抽奖券 → 活动券」抵扣并直接显示券图标 × 张数；付费抽无 `ticketId`
+  （`freeDrawDate` 也为 null），券面按单抽价计入统计。消费返利与站内信券奖励按整张发放；
+  全站券数量统一走 `components/activity/coupon-badge.tsx` 的 `CouponIcon` / `CouponCount`，
+  不再显示 cr 券面。修复站内信 `coupon` 附件在收件箱缺少渲染分支。
 
 - v0.37.0 珍宝礼包到账改按张数：`lib/activity/pack-grant.ts` 的 `packGrant` 只把倍率作用于实付金额，
   按该活动 `couponUnitCredits` 折成张数（保留两位小数），再叠加 `bonusTickets`；返回

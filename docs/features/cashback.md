@@ -25,6 +25,7 @@
 
 - 每档发放时随机一种形态：临时货币 40% / 永久货币 30% / 当期活动券 20% / 抽奖券 10%（1–3 张）；
   金额在档位区间内随机，档位越高区间越高。活动券落点从「当前开着的活动」里随机挑一个，
+  再按该活动券单价折成**整数张**（向下取整，至少 1 张），奖励卡与站内信只显示「活动券 × N 张」；
   没有开着的活动时自动降级为临时货币，不会发出一张领不到的空头券。
 - 「消费」取 `usage_log.creditsUsed` 汇总；失败调用记 0 cr，不需要按 `status` 过滤。
 - 奖励不直接进余额，统一走「发放到站内信 → 领取后到账」。
@@ -39,19 +40,23 @@
 - 获取方式：按活动单价整张兑换（1 张 = `couponUnitCredits` cr，默认 1，先临时余额、再永久余额）、
   珍宝礼包、消费返利 / 活跃度奖励。
 - 珍宝礼包档位在后台「珍宝礼包（活动券通用）」卡片增删配置（1–6 档），存
-  `option.coupon_pack_config` 的 `{ packs: [...] }`：每档 `name`、`priceCredits`（实付 cr）、
+  `option.coupon_pack_config` 的 `{ packs: [...] }`：每档 `name`、`tickets`（**整数张数**）、
   `ratioPercent`（%）、`dailyLimit` / `totalLimit`（份，0 = 不限）、`bonusTickets`（赠券张数）、
-  `tempCredits` + `tempValidDays`（额外赠送的临时余额与其有效期）。旧的三档对象读取时按默认补齐。
+  `tempCredits` + `tempValidDays`（额外赠送的临时余额与其有效期）。旧的三档对象读取时按默认补齐；
+  只有实付价的旧配置按「实付 × 倍率 ÷ 券单价」折算成整张（最小 1 张）展示，保存后写回 `tickets`，
+  `priceCredits` 仅作为兼容字段保留。
   限购按「用户 + 礼包键」跨活动统计、北京自然日切日（`coupon_pack_purchase`，迁移 025）；
   写入用单条 `INSERT ... SELECT ... WHERE` 复查计数，并发不超卖。
-- 到账按张数（`lib/activity/pack-grant.ts`）：倍率只作用于实付金额，按购买时该活动的
-  `couponUnitCredits` 折成张数（实付 × 倍率 ÷ 券单价，保留两位小数），再叠加 `bonusTickets`；
-  卡片、后台预览与购买提示只讲张数，实付价仍按 cr。券内部继续以 cr 券面记账
-  （合计张数 × 单价），`payWithCoupon` 的 1:1 抵扣不变。
+- 实付与到账按整张折算（`lib/activity/pack-grant.ts`，客户端预览与服务端购买共用同一口径）：
+  `totalTickets = ratioTickets + bonusTickets`（都是整数），
+  `实付 = ratioTickets × 券单价 × 100 ÷ 倍率`（cr），到账券面 = `totalTickets × 券单价`。
+  倍率高于 100% 即到账张数多于实付张数；卡片、后台预览与购买提示只讲张数，实付价仍按 cr。
+  券内部继续以 cr 券面记账，`payWithCoupon` 的整张抵扣不变。
 - `tempCredits > 0` 时另写一笔带 `expiresAt` 的 `temporary_balance` 与 `topup type=16`
   （礼包赠送，账本归「赠送与返利」），到期由清理任务作废。任一步失败会回滚 tcr、券面、
   购买记录与扣款。
-- 玩法付费只扣活动券：券面不足直接失败并提示先兑换，不再接受余额直付。券在兑换 / 买礼包时已经作为
+- 玩法付费只扣**对应活动**的券：按整张扣（不足 1 张按 1 张），券不足直接失败并提示先兑换，
+  不再接受余额直付，也不能用其他活动的券顶替。券在兑换 / 买礼包时已经作为
   `topup type=15` 记过支出，所以账本合计与余额下降保持一致。
 
 ## 发放与到账

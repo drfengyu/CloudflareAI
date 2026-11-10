@@ -30,6 +30,8 @@ import {
   COUPON_PACK_CONFIG_KEY,
   MAX_COUPON_PACKS,
   MAX_PACK_NAME,
+  MAX_PACK_TICKETS,
+  getCouponPackConfig,
   type CouponPackSetting,
 } from "@/lib/activity/pack-config";
 import { setSetting } from "@/lib/settings";
@@ -986,7 +988,7 @@ export async function updateCouponPackSettings(formData: {
   packs: {
     key?: string;
     name: string;
-    priceCredits: number;
+    tickets: number;
     ratioPercent: number;
     dailyLimit: number;
     totalLimit: number;
@@ -1014,6 +1016,9 @@ export async function updateCouponPackSettings(formData: {
 
   const packs: CouponPackSetting[] = [];
   const seenKeys = new Set<string>();
+  // 新版配置以张数为准，旧实付价只做占位保留，升级已有档位时不丢旧值。
+  const existingPacks = (await getCouponPackConfig()).packs;
+  const legacyPrices = new Map(existingPacks.map((pack) => [pack.key, pack.priceCredits]));
   rows.forEach((pack, index) => {
     const name = typeof pack.name === "string" ? pack.name.trim() : "";
     if (!name) throw new Error(`第 ${index + 1} 个礼包的名称不能为空`);
@@ -1021,9 +1026,9 @@ export async function updateCouponPackSettings(formData: {
       throw new Error(`第 ${index + 1} 个礼包的名称不能超过 ${MAX_PACK_NAME} 字`);
     }
 
-    const priceCredits = Math.round(
-      requireNumber(pack.priceCredits, `${name}实付价`, 0.01, 1_000_000) * 100,
-    ) / 100;
+    const tickets = Math.trunc(
+      requireNumber(pack.tickets, `${name}张数`, 1, MAX_PACK_TICKETS),
+    );
     const ratioPercent = Math.round(
       requireNumber(pack.ratioPercent, `${name}倍率（%）`, 0.01, 100_000) * 100,
     ) / 100;
@@ -1053,7 +1058,8 @@ export async function updateCouponPackSettings(formData: {
     packs.push({
       key,
       name,
-      priceCredits,
+      tickets,
+      priceCredits: legacyPrices.get(key) ?? 1,
       ratioPercent,
       dailyLimit,
       totalLimit,

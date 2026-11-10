@@ -12,7 +12,6 @@ import { listMyActivityRecords } from "./actions";
 import type {
   DrawRecord,
   LotteryBalance,
-  LotteryTicketTotals,
 } from "@/lib/lottery/records";
 
 const TICKET_LABEL: Record<DrawRecord["ticketSource"], string> = {
@@ -111,12 +110,11 @@ function ActivityRoundTable({ records }: { records: DrawRecord[] }) {
 /**
  * 我的活动记录：只展示当期活动的战绩与逐次开奖明细。
  *
- * 净收益按**已开奖的券**算（中奖 − 倒扣 − 券面），没开奖的券还挂在券包里，不计盈也不计亏。
+ * 净收益按**已开奖的券**算（中奖 − 倒扣 − 消耗），没开奖的券还挂在券包里，不计盈也不计亏。
  * 明细每页 10 条，翻页只换这张卡的表格（`listMyActivityRecords`），不改 URL、不整页刷新。
  */
 export function LotteryRecords({
   balance,
-  tickets,
   records: initialRecords,
   ticketsLeft,
   totalPages: initialTotalPages,
@@ -126,7 +124,6 @@ export function LotteryRecords({
 }: {
   /** 当期活动战绩；null 表示当前没有活动轮次。 */
   balance: LotteryBalance | null;
-  tickets: LotteryTicketTotals;
   records: DrawRecord[];
   ticketsLeft: number;
   totalPages: number;
@@ -191,10 +188,10 @@ export function LotteryRecords({
                       −{formatCredits(balance.clawedBack)} cr
                     </span>
                   </Stat>
-                  <Stat label="已开奖券面值">
+                  <Stat label="已开奖消耗">
                     {formatCredits(balance.ticketFace)} cr
                   </Stat>
-                  <Stat label="本期净收益" hint="中奖 − 倒扣 − 券面">
+                  <Stat label="本期净收益" hint="中奖 − 倒扣 − 消耗">
                     <Delta value={-balance.net} />
                   </Stat>
                 </div>
@@ -209,8 +206,7 @@ export function LotteryRecords({
             </div>
 
             <p className="text-[11px] text-muted-foreground">
-              券包中尚有 {ticketsLeft} 张未开奖（其中购得面值 {formatCredits(tickets.unusedCredits)}{" "}
-              cr），这部分不计入净收益；普通中奖以临时余额发放（过期未用自动作废），标注「永久」的奖品直接进永久余额、不过期。
+              抽奖券包中尚有 {ticketsLeft} 张未使用，这部分不计入净收益；普通中奖以临时余额发放（过期未用自动作废），标注「永久」的奖品直接进永久余额、不过期。
             </p>
           </>
         )}

@@ -22,7 +22,7 @@ const FIELD_CLASS =
 type Row = {
   key: string;
   name: string;
-  priceCredits: string;
+  tickets: string;
   ratioPercent: string;
   dailyLimit: string;
   totalLimit: string;
@@ -31,11 +31,16 @@ type Row = {
   tempValidDays: string;
 };
 
-function toRow(setting: CouponPackSetting): Row {
+/** 旧配置没有 tickets，按旧实付价折算成整张，让管理员看到可保存的起始值。 */
+function toRow(setting: CouponPackSetting, legacyUnit: number): Row {
+  const legacyTickets = Math.max(
+    1,
+    Math.round((setting.priceCredits * setting.ratioPercent) / 100 / Math.max(1, legacyUnit)),
+  );
   return {
     key: setting.key,
     name: setting.name,
-    priceCredits: String(setting.priceCredits),
+    tickets: String(setting.tickets ?? legacyTickets),
     ratioPercent: String(setting.ratioPercent),
     dailyLimit: String(setting.dailyLimit),
     totalLimit: String(setting.totalLimit),
@@ -49,7 +54,7 @@ function blankRow(index: number): Row {
   return {
     key: "",
     name: `档位 ${index + 1}`,
-    priceCredits: "10",
+    tickets: "10",
     ratioPercent: "200",
     dailyLimit: "0",
     totalLimit: "0",
@@ -83,7 +88,9 @@ export function CouponPackForm({
   initialConfig: CouponPackConfig;
   unitCredits: { lottery: number; flip: number; raiden: number };
 }) {
-  const [rows, setRows] = useState<Row[]>(() => initialConfig.packs.map(toRow));
+  const [rows, setRows] = useState<Row[]>(() =>
+    initialConfig.packs.map((pack) => toRow(pack, unitCredits.lottery)),
+  );
   const [loading, setLoading] = useState(false);
 
   const patchRow = (index: number, field: keyof Row, value: string) =>
@@ -104,7 +111,7 @@ export function CouponPackForm({
         packs: rows.map((row) => ({
           key: row.key || undefined,
           name: row.name,
-          priceCredits: Number(row.priceCredits),
+          tickets: Number(row.tickets),
           ratioPercent: Number(row.ratioPercent),
           dailyLimit: Number(row.dailyLimit),
           totalLimit: Number(row.totalLimit),
@@ -124,7 +131,7 @@ export function CouponPackForm({
         packs: rows.map((row) => ({
           key: row.key || undefined,
           name: row.name,
-          priceCredits: Number(row.priceCredits),
+          tickets: Number(row.tickets),
           ratioPercent: Number(row.ratioPercent),
           dailyLimit: Number(row.dailyLimit),
           totalLimit: Number(row.totalLimit),
@@ -144,8 +151,9 @@ export function CouponPackForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        档位由三个活动共用，可增删（最多 {MAX_COUPON_PACKS} 个）：倍率只作用于实付金额，
-        按各活动券单价折成张数；限购按「用户 + 档位」统计，0 = 不限，每日限购按北京时间自然日重置；
+        档位由三个活动共用，可增删（最多 {MAX_COUPON_PACKS} 个）：每档填整数张数与倍率，
+        实付价按「张数 × 该活动券单价 × 100 ÷ 倍率」实时折算，三个活动券价不同则实付不同；
+        限购按「用户 + 档位」统计，0 = 不限，每日限购按北京时间自然日重置；
         赠券张数在倍率张数上叠加；赠 tcr 进入临时余额，到期作废。
       </p>
 
@@ -189,13 +197,13 @@ export function CouponPackForm({
                     className={FIELD_CLASS}
                   />
                 </Field>
-                <Field label="实付（cr）">
+                <Field label="张数（张）">
                   <input
                     type="number"
-                    min={0.01}
-                    step="any"
-                    value={row.priceCredits}
-                    onChange={(e) => patchRow(index, "priceCredits", e.target.value)}
+                    min={1}
+                    step="1"
+                    value={row.tickets}
+                    onChange={(e) => patchRow(index, "tickets", e.target.value)}
                     className={FIELD_CLASS}
                   />
                 </Field>
@@ -261,16 +269,20 @@ export function CouponPackForm({
                 </Field>
                 <div className="col-span-2 flex items-end sm:col-span-3 lg:col-span-3">
                   <p className="w-full rounded-lg bg-secondary/40 px-2.5 py-1.5 text-xs tabular-nums">
-                    到账{" "}
-                    {perActivity.map((item, unitIndex) => (
-                      <span key={item.label}>
-                        {unitIndex > 0 ? " · " : ""}
-                        {item.label}{" "}
-                        <span className="font-medium">
-                          {formatTickets(packGrant(setting, item.credits).totalTickets)} 张
+                    {perActivity.map((item, unitIndex) => {
+                      const grant = packGrant(setting, item.credits);
+                      return (
+                        <span key={item.label}>
+                          {unitIndex > 0 ? " · " : ""}
+                          {item.label} 实付{" "}
+                          <span className="font-medium">{formatAmount(grant.priceCredits)} cr</span>
+                          得{" "}
+                          <span className="font-medium">
+                            {formatTickets(grant.totalTickets)} 张
+                          </span>
                         </span>
-                      </span>
-                    ))}
+                      );
+                    })}
                     {setting.tempCredits > 0 ? (
                       <span className="text-primary">
                         {" "}

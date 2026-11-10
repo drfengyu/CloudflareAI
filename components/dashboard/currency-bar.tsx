@@ -1,15 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import {
-  Coins,
-  Crosshair,
-  Hourglass,
-  Layers,
-  Plus,
-  Sparkles,
-  Ticket,
-} from "lucide-react";
+import { Coins, Hourglass, Plus, Ticket } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,38 +12,17 @@ import {
 } from "@/components/ui/dropdown-menu";
 import type { ActivityCouponView, CurrencySnapshot } from "@/lib/activity/coupons";
 import { formatCredits } from "@/lib/billing/credits";
+import { CouponIcon } from "@/components/activity/coupon-badge";
 
 /**
  * 顶栏货币条：永久余额、临时余额与三种活动券。
  *
  * 铃铛左边的数字由布局一次取齐；这里只做展示与跳转，不自己发请求。
- * 永久/临时仍按负数补正口径显示（与钱包、看板一致）。
+ * 永久/临时仍按负数补正口径显示（与钱包、看板一致）；活动券只报「图标 × 整张数」。
  */
-
-const KIND_ICON = {
-  lottery: Sparkles,
-  flip: Layers,
-  raiden: Crosshair,
-} as const;
-
-const KIND_COLOR = {
-  lottery: "text-violet-500",
-  flip: "text-amber-500",
-  raiden: "text-sky-500",
-} as const;
 
 function exact(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
-}
-
-/** 券抵玩法费用按 cr 1:1，顶栏只按「张」展示，不出现券面金额。 */
-function ticketCount(coupon: ActivityCouponView): number {
-  const unit = coupon.unitCredits > 0 ? coupon.unitCredits : 1;
-  return Math.round((coupon.credits / unit) * 100) / 100;
-}
-
-function ticketsText(value: number): string {
-  return `${Math.round(value * 100) / 100} 张`;
 }
 
 function compensate(permanent: number, temporary: number) {
@@ -71,20 +42,19 @@ function PlusBadge() {
 }
 
 function CouponChip({ coupon }: { coupon: ActivityCouponView }) {
-  const Icon = KIND_ICON[coupon.kind];
   const active = coupon.status === "active";
   return (
     <Link
       href={coupon.href}
-      title={`${coupon.couponName}（${coupon.label}）余额 ${ticketsText(ticketCount(coupon))}${
+      title={`${coupon.couponName}（${coupon.label}）可用 ${coupon.tickets} 张${
         active ? "，点击兑换或查看礼包" : "，活动未开启"
       }`}
       className={`flex items-center gap-1 rounded-md px-1 py-0.5 text-[11px] font-medium tabular-nums transition-colors hover:bg-secondary ${
         active ? "text-foreground" : "text-muted-foreground/60"
       }`}
     >
-      <Icon className={`h-3.5 w-3.5 shrink-0 ${KIND_COLOR[coupon.kind]}`} />
-      <span>{ticketsText(ticketCount(coupon))}</span>
+      <CouponIcon kind={coupon.kind} />
+      <span>×{coupon.tickets}</span>
       {active ? <PlusBadge /> : null}
     </Link>
   );
@@ -92,7 +62,7 @@ function CouponChip({ coupon }: { coupon: ActivityCouponView }) {
 
 export function CurrencyBar({ snapshot }: { snapshot: CurrencySnapshot }) {
   const display = compensate(snapshot.permanent, snapshot.temporary);
-  const couponTickets = snapshot.coupons.reduce((sum, coupon) => sum + ticketCount(coupon), 0);
+  const couponTickets = snapshot.coupons.reduce((sum, coupon) => sum + coupon.tickets, 0);
 
   return (
     <div className="flex items-center gap-0.5">
@@ -126,26 +96,23 @@ export function CurrencyBar({ snapshot }: { snapshot: CurrencySnapshot }) {
           className="flex items-center gap-0.5 whitespace-nowrap rounded-md px-0.5 py-0.5 text-[10px] font-medium tabular-nums text-foreground transition-colors hover:bg-secondary md:hidden md:gap-1 md:px-1 md:text-[11px]"
         >
           <Ticket className="h-3 w-3 shrink-0 text-primary md:h-3.5 md:w-3.5" />
-          <span>{ticketsText(couponTickets)}</span>
+          <span>×{couponTickets}</span>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel className="normal-case">活动券</DropdownMenuLabel>
           <DropdownMenuSeparator />
           {snapshot.coupons.map((coupon) => {
-            const Icon = KIND_ICON[coupon.kind];
             return (
               <DropdownMenuItem key={coupon.kind} asChild>
                 <Link href={coupon.href} className="flex w-full items-center gap-2">
-                  <Icon className={`h-4 w-4 shrink-0 ${KIND_COLOR[coupon.kind]}`} />
+                  <CouponIcon kind={coupon.kind} className="h-4 w-4" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm">{coupon.couponName}</span>
                     <span className="block text-[11px] text-muted-foreground">
                       {coupon.label} · {coupon.status === "active" ? "可兑换" : "未开启"}
                     </span>
                   </span>
-                  <span className="shrink-0 text-sm tabular-nums">
-                    {ticketsText(ticketCount(coupon))}
-                  </span>
+                  <span className="shrink-0 text-sm tabular-nums">×{coupon.tickets}</span>
                 </Link>
               </DropdownMenuItem>
             );

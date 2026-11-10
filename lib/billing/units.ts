@@ -3,7 +3,7 @@
  * - cr  = 永久货币，充值、永久奖励与返利到账，不过期；
  * - tcr = 临时货币，签到、活动奖励等赠送额度，带有效期，到期作废。
  *
- * 两者 1:1 可花，消费时先扣 tcr、再扣 cr。活动券按张发放与展示，
+ * 两者 1:1 可花，消费时先扣 tcr、再扣 cr。活动券按整张发放与展示，
  * 兑换与礼包实付按 cr；内部以 cr 券面（1 张 = couponUnitCredits cr）记账供玩法抵扣。
  */
 
@@ -18,9 +18,9 @@ export function formatAmount(value: number): string {
   return value.toFixed(2);
 }
 
-/** 活动券张数：最多两位小数，不带单位。 */
+/** 活动券张数：一律整数，不带单位。 */
 export function formatTickets(value: number): string {
-  return String(Math.round(value * 100) / 100);
+  return String(Math.round(value));
 }
 
 export function formatPermanent(value: number): string {

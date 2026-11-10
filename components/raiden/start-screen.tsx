@@ -1,9 +1,8 @@
 "use client";
 
-import { Bomb, Coins, Gamepad2, Heart, Trophy, Volume2, VolumeX, Zap } from "lucide-react";
+import { Bomb, Gamepad2, Heart, Trophy, Volume2, VolumeX, Zap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { formatCredits } from "@/lib/billing/credits";
 import {
   describeLoadout,
   loadoutCost,
@@ -14,6 +13,9 @@ import {
   type RaidenConfig,
   type RaidenLoadout,
 } from "@/lib/raiden/config";
+import { formatCredits } from "@/lib/billing/credits";
+import { ticketsForCost } from "@/lib/activity/ticket-math";
+import { CouponCount } from "@/components/activity/coupon-badge";
 
 const STATUS_LABEL: Record<RaidenActivityStatus, string> = {
   active: "进行中",
@@ -26,7 +28,7 @@ const STATUS_LABEL: Record<RaidenActivityStatus, string> = {
 export function StartScreen({
   config,
   status,
-  couponCredits,
+  couponTickets,
   runsLeft,
   loadout,
   starting,
@@ -36,8 +38,8 @@ export function StartScreen({
 }: {
   config: RaidenConfig;
   status: RaidenActivityStatus;
-  /** 当期活动券余额（cr 券面）。 */
-  couponCredits: number;
+  /** 当期活动券可用整张数。 */
+  couponTickets: number;
   runsLeft: number;
   loadout: RaidenLoadout;
   starting: boolean;
@@ -46,8 +48,9 @@ export function StartScreen({
   onToggleMute: () => void;
 }) {
   const cost = loadoutCost(config, loadout);
+  const costTickets = ticketsForCost(cost, config.couponUnitCredits);
   const initial = startingStats(loadout);
-  const insufficient = cost > couponCredits;
+  const insufficient = costTickets > couponTickets;
   const closed = status !== "active";
   const noRuns = runsLeft <= 0;
   const disabled = starting || closed || noRuns || insufficient;
@@ -60,7 +63,7 @@ export function StartScreen({
     : noRuns
       ? "今日出击次数已用完"
       : insufficient
-        ? `活动券不足，还差 ${formatCredits(cost - couponCredits)} cr 券面，请先兑换`
+        ? `活动券不足，还差 ${costTickets - couponTickets} 张，请先兑换`
         : null;
 
   return (
@@ -82,8 +85,8 @@ export function StartScreen({
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-white/55">
           <span className="flex items-center gap-1">
-            <Coins className="h-3 w-3 text-amber-300/80" />
-            券面 <span className="font-mono font-semibold text-white/90">{formatCredits(couponCredits)}</span> cr
+            <CouponCount kind="raiden" count={couponTickets} className="text-white/90" />
+            <span className="text-white/55">活动券</span>
           </span>
           <span>
             今日 <span className="font-mono text-white/90">{runsLeft}</span>/{config.dailyRuns} 次
@@ -99,7 +102,11 @@ export function StartScreen({
           <div className="flex items-center justify-between gap-2">
             <p className="text-[10px] font-medium text-cyan-100/80">当前装备</p>
             <p className="shrink-0 font-mono text-xs text-amber-200">
-              {cost > 0 ? `${formatCredits(cost)} cr 券面` : "标准配备"}
+              {costTickets > 0 ? (
+                <CouponCount kind="raiden" count={costTickets} iconClassName="h-3.5 w-3.5" />
+              ) : (
+                "标准配备"
+              )}
             </p>
           </div>
           <p className="mt-1 truncate text-[11px] text-white/75">{describeLoadout(config, loadout)}</p>
@@ -139,10 +146,15 @@ export function StartScreen({
       <div className="shrink-0 border-t border-white/10 bg-black/60 px-4 py-2.5 backdrop-blur">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0 text-[10px] text-white/50">
-            <p className="truncate">
-              装备合计{" "}
-              <span className="font-mono text-sm font-semibold text-white">{formatCredits(cost)}</span>{" "}
-              cr 券面
+            <p className="flex items-center gap-1 truncate">
+              {costTickets > 0 ? (
+                <>
+                  装备合计
+                  <CouponCount kind="raiden" count={costTickets} className="text-sm font-semibold text-white" iconClassName="h-4 w-4" />
+                </>
+              ) : (
+                <span>装备合计 <span className="font-mono text-sm font-semibold text-white">0</span>（标准配备）</span>
+              )}
             </p>
             <p className={hint ? "mt-0.5 truncate text-amber-300/80" : "mt-0.5 truncate text-white/35"}>
               {hint ?? "准备就绪，出击后自动射击"}

@@ -2,20 +2,14 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Crosshair, Gem, Layers, Loader2, Sparkles } from "lucide-react";
+import { Gem, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { formatCredits } from "@/lib/billing/credits";
-import { formatTickets } from "@/lib/billing/units";
 import type { ActivityCouponView } from "@/lib/activity/coupons";
 import { buyCouponPackAction, exchangeCouponAction } from "@/app/(dashboard)/cashback/coupon-actions";
 import { cn } from "@/lib/utils";
-
-const KIND_ICON = {
-  lottery: Sparkles,
-  flip: Layers,
-  raiden: Crosshair,
-} as const;
+import { CouponCount, CouponIcon } from "./coupon-badge";
 
 const STATUS_TEXT: Record<ActivityCouponView["status"], string> = {
   active: "进行中",
@@ -27,7 +21,7 @@ const STATUS_TEXT: Record<ActivityCouponView["status"], string> = {
 /**
  * 活动券的兑换与珍宝礼包：活动页与钱包充值位共用。
  * 兑换按活动配置的「1 张 = X cr」整张购买，券只在当期活动内有效；
- * 兑换与买礼包都按「先临时余额、再永久余额」扣款。
+ * 兑换与买礼包都按「先临时余额、再永久余额」扣款。余额与到账一律只报整张数。
  */
 export function CouponShop({
   activities,
@@ -57,9 +51,7 @@ function CouponShopItem({
   const [busy, setBusy] = useState<string | null>(null);
   const active = activity.status === "active";
   const dark = tone === "dark";
-  const Icon = KIND_ICON[activity.kind];
   const unitCredits = activity.unitCredits > 0 ? activity.unitCredits : 1;
-  const couponTickets = Math.round((activity.credits / unitCredits) * 100) / 100;
   const amountNumber = Number(amount);
   const exchangeCost =
     Number.isInteger(amountNumber) && amountNumber > 0
@@ -113,14 +105,14 @@ function CouponShopItem({
         <span className="shrink-0 text-right">
           <span
             className={cn(
-              "block text-sm font-semibold tabular-nums",
+              "flex items-center justify-end gap-1 text-sm font-semibold tabular-nums",
               dark ? "text-amber-200" : "text-foreground",
             )}
           >
-            {formatCredits(activity.credits)} cr
+            <CouponIcon kind={activity.kind} className="h-4 w-4" />×{activity.tickets}
           </span>
           <span className={cn("block text-[10px] tabular-nums", dark ? "text-white/40" : "text-muted-foreground")}>
-            ≈ {formatCredits(couponTickets)} 张 · 1 张 = {formatCredits(unitCredits)} cr
+            1 张 = {formatCredits(unitCredits)} cr
           </span>
         </span>
       </div>
@@ -178,13 +170,13 @@ function CouponShopItem({
                   type="button"
                   onClick={() => void handlePack(pack.key)}
                   disabled={busy !== null || soldOut}
-                  aria-label={`${pack.name} · 实付 ${formatCredits(pack.priceCredits)} cr · 得 ${formatTickets(pack.totalTickets)} 张`}
+                  aria-label={`${pack.name} · 实付 ${formatCredits(pack.price)} cr · 得 ${pack.totalTickets} 张`}
                   title={
                     soldOut
                       ? `${pack.name}已到限购上限`
-                      : `${pack.name} · 实付 ${formatCredits(pack.priceCredits)} cr，倍率 ${formatTickets(pack.ratioTickets)} 张${
+                      : `${pack.name} · 实付 ${formatCredits(pack.price)} cr，倍率 ${pack.ratioTickets} 张${
                           pack.bonusTickets > 0
-                            ? ` + 赠 ${pack.bonusTickets} 张，共 +${formatTickets(pack.totalTickets)} 张`
+                            ? ` + 赠 ${pack.bonusTickets} 张，共 +${pack.totalTickets} 张`
                             : ""
                         }`
                   }
@@ -201,15 +193,10 @@ function CouponShopItem({
                       dark ? "text-amber-200" : "text-foreground",
                     )}
                   >
-                    {formatCredits(pack.priceCredits)} cr
+                    {formatCredits(pack.price)} cr
                   </span>
                   <span className="relative mt-1 inline-flex h-6 w-6 items-center justify-center">
-                    <Icon
-                      className={cn(
-                        "h-5 w-5",
-                        dark ? "text-cyan-300" : "text-primary",
-                      )}
-                    />
+                    <CouponIcon kind={activity.kind} className="h-5 w-5" />
                     {pack.bonusTickets > 0 ? (
                       <span
                         className={cn(
@@ -231,7 +218,12 @@ function CouponShopItem({
                   >
                     {pack.ratioPercent}% → 得{" "}
                     <span className="whitespace-nowrap">
-                      {formatTickets(pack.ratioTickets)} 张
+                      <CouponCount
+                        kind={activity.kind}
+                        count={pack.ratioTickets}
+                        iconClassName="h-3 w-3"
+                      />{" "}
+                      张
                     </span>
                   </span>
                   {pack.tempCredits > 0 ? (
@@ -267,8 +259,8 @@ function CouponShopItem({
             })}
           </div>
           <p className={cn("text-[11px]", dark ? "text-white/35" : "text-muted-foreground")}>
-            1 张 = {formatCredits(unitCredits)} cr；礼包按「实付 × 倍率 ÷ 该券单价」折成当期活动券张数，
-            每份另赠的券一并到账，tcr 进入临时余额、到期作废；券按 cr 1:1 抵玩法费用，当期结束后作废；
+            1 张 = {formatCredits(unitCredits)} cr；礼包填整数张数与倍率，实付 = 张数 × 单价 × 100 ÷ 倍率，
+            赠券一并到账；tcr 进入临时余额、到期作废；玩法只扣对应活动券，当期结束后作废；
             扣款先临时余额（tcr）、再永久余额（cr）。
           </p>
         </>

@@ -6,6 +6,8 @@ import { CashbackTierPanel } from "@/components/cashback/cashback-tier-panel";
 import { RechargeTierPanel } from "@/components/cashback/recharge-panel";
 import { PageBody } from "@/components/dashboard/section";
 import { formatCredits } from "@/lib/billing/credits";
+import { couponTickets } from "@/lib/activity/ticket-math";
+import { CouponCount } from "@/components/activity/coupon-badge";
 import {
   getCashbackActivity,
   getUsageLeaderboard,
@@ -93,9 +95,13 @@ export default async function CashbackPage() {
                 <div className="mt-3 flex items-end justify-between gap-2">
                   <div>
                     <p className="text-[11px] text-muted-foreground">{item.couponName}余额</p>
-                    <p className="text-xl font-semibold tabular-nums">
-                      {formatCredits(item.credits)}
-                      <span className="ml-1 text-xs font-normal text-muted-foreground">cr 券面</span>
+                    <p className="text-xl font-semibold">
+                      <CouponCount
+                        kind={item.kind}
+                        count={couponTickets(item.credits, item.unitCredits)}
+                        iconClassName="h-5 w-5"
+                      />
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">张</span>
                     </p>
                   </div>
                   <span className="flex items-center gap-1 text-xs text-[color:var(--primary)]">
@@ -104,11 +110,10 @@ export default async function CashbackPage() {
                   </span>
                 </div>
                 <p className="mt-3 text-[11px] text-muted-foreground">
-                  约 {formatCredits(item.credits / item.unitCredits)} 张 · 1 张 ={" "}
-                  {formatCredits(item.unitCredits)} cr · 当期结束后作废
+                  1 张 = {formatCredits(item.unitCredits)} cr · 当期结束后作废
                 </p>
                 <p className="mt-1 text-[11px] text-muted-foreground">
-                  珍宝礼包 200% / 500% / 1000%
+                  珍宝礼包按玩法页档位出售
                 </p>
               </Link>
             ))}
@@ -254,7 +259,7 @@ export default async function CashbackPage() {
               <li>
                 活动券按各玩法设置的单价（1 张 = X cr，可在玩法页查看）整张兑换，
                 <b className="text-foreground">先花临时余额（tcr）再花永久余额（cr）</b>；
-                券面按 cr 1:1 抵扣玩法费用。当期活动结束后券自动作废，下一轮活动会换成另一种券名。珍宝礼包按 200% / 500% / 1000% 三档出售。
+                玩法只扣对应活动的券，不能用其他券或余额代替。当期活动结束后券自动作废，下一轮活动会换成另一种券名。
               </li>
               <li>用量按上游真实 token 计，失败调用不计消费也不参与返利；排行榜脱敏展示，只读排名不发奖励。</li>
             </ul>

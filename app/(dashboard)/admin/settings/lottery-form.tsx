@@ -222,7 +222,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
             onChange={(e) => setCouponUnit(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">兑换活动券的单价，券面按 cr 1:1 抵扣玩法费用</p>
+          <p className="mt-1 text-xs text-muted-foreground">兑换活动券的单价，玩法费用必须是它的整数倍</p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">外圈概率（%）</label>

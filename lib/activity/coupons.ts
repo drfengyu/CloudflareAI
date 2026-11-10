@@ -19,6 +19,7 @@ import { raidenActivityKey, raidenActivityWindow } from "@/lib/raiden/config";
 import { getRaidenConfig } from "@/lib/raiden/settings";
 import { getCouponPackConfig, type CouponPackConfig } from "./pack-config";
 import { packGrant } from "./pack-grant";
+import { couponTickets, creditsForTickets, ticketsForCost } from "./ticket-math";
 
 export { packGrant } from "./pack-grant";
 
@@ -78,8 +79,11 @@ export function couponNameFor(kind: ActivityKind, activityKey: string | null): s
 export interface CouponPack {
   key: string;
   name: string;
+  /** 每份含的整数活动券张数；旧配置为 null，按旧实付价折算。 */
+  tickets: number | null;
+  /** 旧版实付 cr，仅在 tickets 为 null 时参与折算。 */
   priceCredits: number;
-  /** 倍率百分比：200 = 200%。 */
+  /** 倍率百分比：张数 × 单价 相对实付的倍数，200 = 200%。 */
   ratioPercent: number;
   /** 每北京自然日限购份数；null = 不限。 */
   dailyLimit: number | null;
@@ -98,6 +102,7 @@ export function buildCouponPacks(config: CouponPackConfig): CouponPack[] {
   return config.packs.map((setting) => ({
     key: setting.key,
     name: setting.name,
+    tickets: setting.tickets,
     priceCredits: setting.priceCredits,
     ratioPercent: setting.ratioPercent,
     dailyLimit: setting.dailyLimit > 0 ? setting.dailyLimit : null,
@@ -111,9 +116,11 @@ export function buildCouponPacks(config: CouponPackConfig): CouponPack[] {
 export interface CouponPackView extends CouponPack {
   boughtToday: number;
   boughtTotal: number;
-  /** 倍率折算的当期活动券张数（不含赠券）。 */
+  /** 该活动口径下的实付 cr：张数 × 单价 × 100 ÷ 倍率。 */
+  price: number;
+  /** 倍率档的当期活动券张数（不含赠券）。 */
   ratioTickets: number;
-  /** 到账合计张数：倍率折算 + 赠券。 */
+  /** 到账合计张数：倍率档 + 赠券。 */
   totalTickets: number;
 }
 
@@ -152,6 +159,7 @@ function packViews(
       ...pack,
       boughtToday: usage.get(pack.key)?.today ?? 0,
       boughtTotal: usage.get(pack.key)?.total ?? 0,
+      price: grant.priceCredits,
       ratioTickets: grant.ratioTickets,
       totalTickets: grant.totalTickets,
     };
@@ -205,6 +213,8 @@ export async function resolveActivities(): Promise<ResolvedActivity[]> {
 
 export interface ActivityCouponView extends ResolvedActivity {
   credits: number;
+  /** 可用整张数：不足一张的零头不计。 */
+  tickets: number;
   packs: CouponPackView[];
 }
 
@@ -258,11 +268,17 @@ export async function listActivityCoupons(userId: string): Promise<ActivityCoupo
     readPackUsage(userId),
     getCouponPackConfig(),
   ]);
-  return activities.map((item) => ({
-    ...item,
-    credits: item.activityKey ? round2(balances.get(`${item.kind}|${item.activityKey}`) ?? 0) : 0,
-    packs: packViews(packConfig, usage, item.unitCredits),
-  }));
+  return activities.map((item) => {
+    const credits = item.activityKey
+      ? round2(balances.get(`${item.kind}|${item.activityKey}`) ?? 0)
+      : 0;
+    return {
+      ...item,
+      credits,
+      tickets: couponTickets(credits, item.unitCredits),
+      packs: packViews(packConfig, usage, item.unitCredits),
+    };
+  });
 }
 
 /** 顶栏货币条的数据：永久余额、未过期临时余额、三种活动券。 */
@@ -301,11 +317,13 @@ export async function getActivityCouponView(
     readPackUsage(userId),
     getCouponPackConfig(),
   ]);
+  const credits = activity.activityKey
+    ? round2(balances.get(`${kind}|${activity.activityKey}`) ?? 0)
+    : 0;
   return {
     ...activity,
-    credits: activity.activityKey
-      ? round2(balances.get(`${kind}|${activity.activityKey}`) ?? 0)
-      : 0,
+    credits,
+    tickets: couponTickets(credits, activity.unitCredits),
     packs: packViews(packConfig, usage, activity.unitCredits),
   };
 }
@@ -410,11 +428,13 @@ export async function buyCouponPack(
     throw new Error(`${pack.name}累计限购 ${pack.totalLimit} 份，已达上限`);
   }
 
-  const spend = await spendCredits(userId, pack.priceCredits);
-  if (!spend.ok) throw new Error(`${spend.reason}：礼包需要 ${pack.priceCredits} cr`);
-
   const grant = packGrant(pack, activity.unitCredits);
+  const price = grant.priceCredits;
   const credits = grant.totalCredits;
+
+  const spend = await spendCredits(userId, price);
+  if (!spend.ok) throw new Error(`${spend.reason}：礼包需要 ${formatAmount(price)} cr`);
+
   const purchaseId = crypto.randomUUID();
   const now = new Date();
   let recorded = false;
@@ -436,7 +456,7 @@ export async function buyCouponPack(
         pack.key,
         kind,
         activityKey,
-        pack.priceCredits,
+        price,
         credits,
         now.getTime(),
         userId,
@@ -461,7 +481,7 @@ export async function buyCouponPack(
     await db.insert(topups).values({
       id: crypto.randomUUID(),
       userId,
-      amount: -pack.priceCredits,
+      amount: -price,
       type: COUPON_TOPUP_TYPE,
       description: `购买${pack.name}（${activity.couponName} +${formatTickets(grant.totalTickets)} 张${bonusText}，${activity.label}）`,
       createdAt: now,
@@ -521,8 +541,8 @@ export async function buyCouponPack(
     }
     await refundPermanentCredits(
       userId,
-      pack.priceCredits,
-      `购买${pack.name}失败退回（${pack.priceCredits} cr）`,
+      price,
+      `购买${pack.name}失败退回（${formatAmount(price)} cr）`,
     ).catch(() => undefined);
     throw err;
   }
@@ -532,7 +552,7 @@ export async function buyCouponPack(
     bonusTickets: grant.bonusTickets,
     tempCredits: pack.tempCredits,
     tempValidDays: pack.tempValidDays,
-    price: pack.priceCredits,
+    price,
     couponName: activity.couponName,
   };
 }
@@ -540,22 +560,27 @@ export async function buyCouponPack(
 export interface CouponPayment {
   couponId: string | null;
   couponPart: number;
+  /** 本次扣掉的整张数。 */
+  tickets: number;
 }
 
 /**
  * 玩法付费点的统一扣款：只扣当期活动券，不再接受货币直付。
- * 券的扣减用条件 UPDATE 原子占位；券不足直接失败，由调用方提示先兑换。
+ * 费用按「整张 × 该活动券单价」结算；券不足直接失败，由调用方提示先兑换。
  */
 export async function payWithCoupon(
   userId: string,
   kind: ActivityKind,
   activityKey: string,
-  rawAmount: number,
+  rawCostCredits: number,
+  rawUnitCredits: number,
 ): Promise<{ ok: true; payment: CouponPayment } | { ok: false; reason: string }> {
-  const amount = round2(Number(rawAmount));
-  if (!Number.isFinite(amount) || amount <= 0) {
-    return { ok: true, payment: { couponId: null, couponPart: 0 } };
+  const unit = rawUnitCredits > 0 ? rawUnitCredits : 1;
+  const tickets = ticketsForCost(Number(rawCostCredits), unit);
+  if (tickets <= 0) {
+    return { ok: true, payment: { couponId: null, couponPart: 0, tickets: 0 } };
   }
+  const amount = creditsForTickets(tickets, unit);
 
   const rows = await db
     .select({ id: activityCoupons.id, credits: activityCoupons.credits })
@@ -569,11 +594,11 @@ export async function payWithCoupon(
     )
     .limit(1);
 
-  const available = rows[0] ? round2(Number(rows[0].credits)) : 0;
-  if (!rows[0] || available < amount) {
+  const available = rows[0] ? couponTickets(Number(rows[0].credits), unit) : 0;
+  if (!rows[0] || available < tickets) {
     return {
       ok: false,
-      reason: `活动券不足：本次需要 ${formatAmount(amount)} cr 券面，当前可用 ${formatAmount(available)} cr，请先兑换`,
+      reason: `活动券不足：本次需要 ${tickets} 张，当前可用 ${available} 张，请先兑换`,
     };
   }
 
@@ -584,11 +609,11 @@ export async function payWithCoupon(
   if (changes !== 1) {
     return {
       ok: false,
-      reason: `活动券不足：本次需要 ${formatAmount(amount)} cr 券面，请先兑换`,
+      reason: `活动券不足：本次需要 ${tickets} 张，请先兑换`,
     };
   }
 
-  return { ok: true, payment: { couponId: rows[0].id, couponPart: amount } };
+  return { ok: true, payment: { couponId: rows[0].id, couponPart: amount, tickets } };
 }
 
 /** 建局/开局失败时把券退回原处；退回失败只记日志，券不会凭空消失。 */
@@ -599,20 +624,6 @@ export async function refundCouponPayment(payment: CouponPayment): Promise<void>
       [payment.couponPart, Date.now(), payment.couponId],
     ).catch((err) => console.error("[refundCouponPayment] 券退回失败:", err));
   }
-}
-
-/** 奖励发放到券：按当前轮次入账，轮次无效时由调用方降级成 cr。 */
-export async function grantCoupon(
-  userId: string,
-  kind: ActivityKind,
-  rawAmount: number,
-): Promise<{ activityKey: string; couponName: string; credits: number }> {
-  const amount = round2(Number(rawAmount));
-  if (!Number.isFinite(amount) || amount <= 0) throw new Error("券面金额必须大于 0");
-  const activity = await resolveActivity(kind);
-  const activityKey = assertActive(activity);
-  await addCouponCredits(userId, kind, activityKey, activity.couponName, amount);
-  return { activityKey, couponName: activity.couponName, credits: amount };
 }
 
 /**
@@ -627,7 +638,7 @@ export async function grantCouponToRound(
   rawAmount: number,
 ): Promise<void> {
   const amount = round2(Number(rawAmount));
-  if (!Number.isFinite(amount) || amount <= 0) throw new Error("券面金额必须大于 0");
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error("活动券到账金额必须大于 0");
   if (!activityKey.trim() || !couponName.trim()) throw new Error("活动券轮次或券名缺失");
   await addCouponCredits(userId, kind, activityKey, couponName, amount);
 }

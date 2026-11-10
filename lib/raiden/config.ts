@@ -1,3 +1,4 @@
+import { snapCostToUnit } from "@/lib/activity/ticket-math";
 import { parseCnWallClock } from "@/lib/date";
 
 /**
@@ -264,10 +265,15 @@ function sanitizeItem(
   fallback: RaidenItemConfig,
   maxPrice: number,
   maxCount: number,
+  unitCredits: number,
 ): RaidenItemConfig {
   const it = (raw && typeof raw === "object" ? raw : {}) as Partial<RaidenItemConfig>;
   return {
-    price: round2(positiveNumber(it.price, fallback.price)),
+    // 道具价格必须是活动券单价的整数倍，扣券才不会出现半张。
+    price: snapCostToUnit(
+      Math.min(maxPrice, round2(positiveNumber(it.price, fallback.price))),
+      unitCredits,
+    ),
     max: boundedInteger(it.max, fallback.max, 0, maxCount),
   };
 }
@@ -305,6 +311,10 @@ export function sanitizeRaidenConfig(raw: unknown): RaidenConfig {
   if (!raw || typeof raw !== "object") return d;
   const it = raw as Partial<RaidenConfig>;
   const items = (it.items && typeof it.items === "object" ? it.items : {}) as Partial<RaidenConfig["items"]>;
+  const unit = Math.min(
+    1_000_000,
+    round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
+  );
 
   return {
     enabled: it.enabled === true,
@@ -313,19 +323,19 @@ export function sanitizeRaidenConfig(raw: unknown): RaidenConfig {
     dailyRuns: boundedInteger(it.dailyRuns, d.dailyRuns, 1, 100),
     rewardValidDays: boundedInteger(it.rewardValidDays, d.rewardValidDays, 1, 3650),
     repeatDailyCap: round2(Math.max(0, Number(it.repeatDailyCap ?? d.repeatDailyCap) || 0)),
-    revivePriceCredits: round2(positiveNumber(it.revivePriceCredits, d.revivePriceCredits)),
-    couponUnitCredits: Math.min(
-      1_000_000,
-      round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
+    revivePriceCredits: snapCostToUnit(
+      round2(positiveNumber(it.revivePriceCredits, d.revivePriceCredits)),
+      unit,
     ),
+    couponUnitCredits: unit,
     maxRevives: boundedInteger(it.maxRevives, d.maxRevives, 0, 10),
     minStageSeconds: boundedInteger(it.minStageSeconds, d.minStageSeconds, 5, 600),
     maxStageSeconds: boundedInteger(it.maxStageSeconds, d.maxStageSeconds, 120, 7200),
     items: {
-      weapon: sanitizeItem(items.weapon, d.items.weapon, 1_000_000, RAIDEN_ITEM_MAX_CAP.weapon),
-      bomb: sanitizeItem(items.bomb, d.items.bomb, 1_000_000, RAIDEN_ITEM_MAX_CAP.bomb),
-      shield: sanitizeItem(items.shield, d.items.shield, 1_000_000, RAIDEN_ITEM_MAX_CAP.shield),
-      life: sanitizeItem(items.life, d.items.life, 1_000_000, RAIDEN_ITEM_MAX_CAP.life),
+      weapon: sanitizeItem(items.weapon, d.items.weapon, 1_000_000, RAIDEN_ITEM_MAX_CAP.weapon, unit),
+      bomb: sanitizeItem(items.bomb, d.items.bomb, 1_000_000, RAIDEN_ITEM_MAX_CAP.bomb, unit),
+      shield: sanitizeItem(items.shield, d.items.shield, 1_000_000, RAIDEN_ITEM_MAX_CAP.shield, unit),
+      life: sanitizeItem(items.life, d.items.life, 1_000_000, RAIDEN_ITEM_MAX_CAP.life, unit),
     },
     stages: sanitizeStages(it.stages),
   };

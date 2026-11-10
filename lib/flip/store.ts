@@ -100,7 +100,7 @@ export async function openRound(
   }
 
   const price = round2(config.roundPriceCredits);
-  const paid = await payWithCoupon(userId, "flip", activityKey, price);
+  const paid = await payWithCoupon(userId, "flip", activityKey, price, config.couponUnitCredits);
   if (!paid.ok) {
     throw new FlipError(paid.reason);
   }

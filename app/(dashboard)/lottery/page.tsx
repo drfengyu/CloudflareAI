@@ -25,7 +25,6 @@ import {
   listDrawRecords,
   listRecentBigWins,
   lotteryBalance,
-  lotteryTicketTotals,
 } from "@/lib/lottery/records";
 import { LotteryRecords } from "./lottery-records";
 import { LotteryWheel, type WheelOuter, type WheelSector } from "./lottery-wheel";
@@ -128,12 +127,11 @@ export default async function LotteryPage() {
   // countConsecutiveMisses 按当前活动轮次过滤，新活动保底重置。
   // currentStats = 当前活动战绩（新活动重计），myStats = 全部活动累计（转盘「累计抽奖」）。
   // 首屏只出第一页，后续翻页走卡片内的局部刷新（listMyActivityRecords）。
-  const [tickets, myStats, currentStats, myTickets, records, freeDrawUsed, consecutiveMisses, bigWins, coupon] =
+  const [tickets, myStats, currentStats, records, freeDrawUsed, consecutiveMisses, bigWins, coupon] =
     await Promise.all([
       countUnusedTickets(userId),
       lotteryBalance({ userId }),
       activityKey ? lotteryBalance({ userId, activityKey }) : Promise.resolve(null),
-      lotteryTicketTotals(undefined, userId),
       listDrawRecords({ userId, limit: DRAW_RECORD_PAGE_SIZE, activityKey }),
       hasUsedFreeDrawToday(userId),
       countConsecutiveMisses(userId, 30, activityKey),
@@ -149,7 +147,6 @@ export default async function LotteryPage() {
     <LotteryRecords
       key={records[0]?.id ?? "empty"}
       balance={currentStats}
-      tickets={myTickets}
       records={records}
       ticketsLeft={tickets}
       totalPages={recordTotalPages}
@@ -209,7 +206,7 @@ export default async function LotteryPage() {
           milestones={config.milestones}
           tickets={tickets}
           totalDraws={myStats.draws}
-          couponCredits={coupon.credits}
+          couponTickets={coupon.tickets}
           couponUnitCredits={coupon.unitCredits}
           status={windowInfo.status}
           startAtMs={windowInfo.startMs}

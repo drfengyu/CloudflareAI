@@ -5,6 +5,25 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.38.0] - 2026-11-10
+
+### 变更
+
+- 活动券全面改为**整数张**：新增 `lib/activity/ticket-math.ts`（`couponTickets` 向下取整、`ticketsForCost` 向上取整且至少 1 张、`creditsForTickets`、`snapCostToUnit`）；券余额、发放、扣费与界面数量一律按整张，不再出现半张。
+- 珍宝礼包配置改为「整数张数 + 倍率」：后台每档填 `tickets` 与 `ratioPercent`，实付 = 张数 × 该活动券单价 × 100 ÷ 倍率；旧配置只有 `priceCredits` 时按实付价折整张读取，保存后写回 `tickets`。`packGrant` 返回 `ratioTickets / bonusTickets / totalTickets / totalCredits`，客户端预览与服务端购买同口径。
+- 玩法价格吸到券价整数倍：抽奖 `ticketPriceCredits`、翻牌 `roundPriceCredits`、雷电各装备价与 `revivePriceCredits` 都在 `sanitize*Config` 里 `snapCostToUnit`；`payWithCoupon` 按整张扣（`CouponPayment` 增加 `tickets`），不能再用其他活动的券或余额顶替。
+- 转盘页取消「购买抽奖券」面板与 `buyTickets` / `MAX_TICKETS_PER_PURCHASE`：抽 1 次 / 抽 10 次按「免费抽 → 抽奖券 → 活动券」抵扣，按钮直接显示活动券图标 × 张数；付费抽无 `ticketId`（`freeDrawDate` 也为 null），券面按单抽价计入统计。
+- 全站券数量统一为「活动券图标 × 整数张」：新增 `components/activity/coupon-badge.tsx`（`CouponIcon` / `CouponCount`），顶栏货币条、活动中心礼包卡、返利奖励卡、站内信、翻牌与雷电界面统一替换，页面不再出现「券面」cr 文案。
+- 消费返利与站内信发放活动券改为整张（金额 ÷ 券单价向下取整，至少 1 张），文案写作「券名 × N 张」；站内信 `coupon` 附件补充 `unitCredits` / `tickets` 快照，并修复收件箱此前缺少 `coupon` 附件渲染分支的问题。
+- 文档同步：`docs/features/{lottery,cashback,flip-cards,raiden,messages}.md`、`docs/BILLING_GUIDE.md`、README 与 CLAUDE.md。
+
+### 验证
+
+- `npm run typecheck`、`npm run build` 通过；84 项单测全部通过（`ticket-math` 与 `packGrant` 改为整张口径：20+1、9.8+1、333.33+1、0.01+1；券价 2000 时 10 张实付 10000 cr）。
+- 触及文件 eslint 干净。
+- Playwright 管理员会话 1440 / 375 只读巡检：转盘无买券面板、抽奖按钮显示活动券图标 × 张数；礼包卡与后台预览按张数展示；页面无「券面」字样、窄屏无横向溢出。未实际购买、未改线上配置。
+- 线上存量券余量归一（小数张向下取整、差额退回 tcr）与雷电炸弹价 150 的整数倍对齐均未执行，待单独批准。
+
 ## [0.37.0] - 2026-11-10
 
 ### 变更

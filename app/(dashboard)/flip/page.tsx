@@ -10,6 +10,8 @@ import { getFlipConfig } from "@/lib/flip/settings";
 import { countRoundsToday, findOpenRound, type PendingRound } from "@/lib/flip/store";
 import { flipGlobalStats, flipSummary, listMyRounds, FLIP_ROUND_PAGE_SIZE, type FlipGlobalStats, type FlipRoundView, type FlipSummary } from "@/lib/flip/records";
 import { getActivityCouponView } from "@/lib/activity/coupons";
+import { couponTickets, ticketsForCost } from "@/lib/activity/ticket-math";
+import { CouponCount } from "@/components/activity/coupon-badge";
 import { CouponShop } from "@/components/activity/coupon-shop";
 
 import { PageBody } from "@/components/dashboard/section";
@@ -38,8 +40,8 @@ function Stat({
 }: {
   icon: typeof Coins;
   label: string;
-  value: string;
-  hint: string;
+  value: React.ReactNode;
+  hint: React.ReactNode;
 }) {
   return (
     <Card className="flex flex-col">
@@ -64,6 +66,7 @@ export default async function FlipPage() {
   const windowInfo = flipActivityWindow(config);
   const activityKey = flipActivityKey(config);
   const expectation = flipExpectation(config);
+  const priceTickets = ticketsForCost(config.roundPriceCredits, config.couponUnitCredits);
 
   // 活动没开或还没开始时，一条 flip_round 查询都不发：这一轮没人能开局，读了也只有零值，
   // 白占 D1 的每日读额度。已经结束的轮次要读——用户回来对账看他赢了多少。
@@ -96,7 +99,12 @@ export default async function FlipPage() {
         <span className="text-xs text-muted-foreground">每页 {FLIP_ROUND_PAGE_SIZE} 局</span>
       </CardHeader>
       <CardContent>
-        <FlipRoundList key={rounds[0]?.id ?? "empty"} rounds={rounds} hasNext={hasMoreRounds} />
+        <FlipRoundList
+          key={rounds[0]?.id ?? "empty"}
+          rounds={rounds}
+          hasNext={hasMoreRounds}
+          unitCredits={config.couponUnitCredits}
+        />
       </CardContent>
     </Card>
   );
@@ -130,8 +138,8 @@ export default async function FlipPage() {
           </li>
           <li>
             中奖金额进<b>临时余额（tcr）</b>，有效期 {config.rewardValidDays} 天，到期未用自动作废；
-            开局票价从当期活动券扣（cr 券面），活动券按本玩法单价兑换（1 张 ={" "}
-            {formatCredits(config.couponUnitCredits)} cr），券不足需先兑换。
+            开局票价从当期活动券扣（每局 <CouponCount kind="flip" count={priceTickets} />），
+            活动券按本玩法单价兑换（1 张 = {formatCredits(config.couponUnitCredits)} cr），不足需先兑换。
           </li>
           <li>中途关掉页面不算丢：没翻完的那局会留在牌桌上，回来接着翻，不会再扣一次票价。</li>
           <li>每日最多 {config.dailyRounds} 局（按北京时间自然日）。</li>
@@ -174,8 +182,8 @@ export default async function FlipPage() {
           <Stat
             icon={Coins}
             label="累计投入"
-            value={`${formatCredits(summary.spent)} cr`}
-            hint={`票价 ${formatCredits(config.roundPriceCredits)} cr 券面 / 局`}
+            value={<CouponCount kind="flip" count={couponTickets(summary.spent, config.couponUnitCredits)} iconClassName="h-4 w-4" />}
+            hint={<span className="inline-flex items-center gap-1">票价 <CouponCount kind="flip" count={priceTickets} /> / 局</span>}
           />
           <Stat
             icon={Gem}
@@ -202,12 +210,12 @@ export default async function FlipPage() {
           </CardHeader>
           <CardContent>
             <FlipBoard
-              priceCredits={config.roundPriceCredits}
+              priceTickets={priceTickets}
               cardCount={FLIP_CARD_COUNT}
               rewardValidDays={config.rewardValidDays}
               dailyRounds={config.dailyRounds}
               roundsLeft={Math.max(0, config.dailyRounds - roundsToday)}
-              couponCredits={coupon.credits}
+              couponTickets={coupon.tickets}
               boardTotal={expectation.boardTotal}
               expectedPerRound={expectation.expectedPerRound}
               hitChancePercent={expectation.hitChancePercent}

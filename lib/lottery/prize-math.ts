@@ -1,3 +1,4 @@
+import { snapCostToUnit } from "@/lib/activity/ticket-math";
 import { parseCnWallClock } from "@/lib/date";
 
 /**
@@ -226,7 +227,15 @@ export function sanitizeLotteryConfig(raw: unknown): LotteryConfig {
   const d = DEFAULT_LOTTERY_CONFIG;
   if (!raw || typeof raw !== "object") return d;
   const it = raw as Partial<LotteryConfig>;
-  const price = round2(positiveNumber(it.ticketPriceCredits, d.ticketPriceCredits));
+  const unit = Math.min(
+    1_000_000,
+    round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
+  );
+  // 单张抽奖券的价格必须是活动券单价的整数倍，扣券才不会出现半张。
+  const price = snapCostToUnit(
+    round2(positiveNumber(it.ticketPriceCredits, d.ticketPriceCredits)),
+    unit,
+  );
   const inner = sanitizeInner(it.innerPrizes, price);
   const outer = sanitizeOuter(it.outerPrizes);
   const chance = Number(it.outerChancePercent);
@@ -236,10 +245,7 @@ export function sanitizeLotteryConfig(raw: unknown): LotteryConfig {
     startAt: typeof it.startAt === "string" ? it.startAt.trim() : "",
     endAt: typeof it.endAt === "string" ? it.endAt.trim() : "",
     ticketPriceCredits: price,
-    couponUnitCredits: Math.min(
-      1_000_000,
-      round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
-    ),
+    couponUnitCredits: unit,
     outerChancePercent: Number.isFinite(chance)
       ? Math.min(100, Math.max(0, chance))
       : d.outerChancePercent,

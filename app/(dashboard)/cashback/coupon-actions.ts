@@ -26,7 +26,7 @@ function revalidateCouponPaths() {
   revalidatePath("/raiden");
 }
 
-/** 按活动配置的券面单价（1 张 = X cr）兑换当期活动券，先临时余额再永久余额。 */
+/** 按活动配置的券单价（1 张 = X cr）整张兑换当期活动券，先临时余额再永久余额。 */
 export async function exchangeCouponAction(input: {
   kind: string;
   amount: string;
@@ -42,7 +42,7 @@ export async function exchangeCouponAction(input: {
     revalidateCouponPaths();
     return {
       success: true,
-      message: `已兑换 ${result.couponName} ${result.tickets} 张（${formatAmount(result.credits)} cr 券面）`,
+      message: `已兑换 ${result.couponName} ${result.tickets} 张`,
     };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "兑换失败" };

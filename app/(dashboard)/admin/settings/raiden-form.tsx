@@ -74,7 +74,7 @@ const NUMBER_FIELDS: NumberFieldRow[] = [
   {
     key: "couponUnitCredits",
     label: "1 张活动券 = cr",
-    hint: "兑换活动券的单价，券面按 cr 1:1 抵扣玩法费用",
+    hint: "兑换活动券的单价，玩法费用必须是它的整数倍",
     min: 1,
     max: 1_000_000,
   },

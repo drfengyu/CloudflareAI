@@ -48,7 +48,6 @@ import {
   drawStatsDelta,
   mergeStatsDeltas,
   negateStatsDelta,
-  ticketStatsDelta,
   type LotteryStatsDelta,
 } from "@/lib/lottery/stats";
 import { lotteryDraws, temporaryBalances, topups } from "@/lib/db/schema";
@@ -58,8 +57,6 @@ import {
   lotteryBalance,
   type DrawRecord,
 } from "@/lib/lottery/records";
-
-const MAX_TICKETS_PER_PURCHASE = 100;
 
 type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
 
@@ -81,92 +78,6 @@ function windowError(config: LotteryConfig): string | null {
   if (status === "disabled") return "活动未开启";
   if (status === "pending") return "活动尚未开始";
   return "活动已结束";
-}
-
-/**
- * 购买抽奖券：单券价 × 张数，只扣当期活动券；券不足整笔失败，需先兑换。
- */
-export async function buyTickets(
-  count: number,
-): Promise<ActionResult<{ tickets: number; costCredits: number; ticketsLeft: number }>> {
-  try {
-    const userId = await requireUser();
-    if (!Number.isInteger(count) || count < 1 || count > MAX_TICKETS_PER_PURCHASE) {
-      return { success: false, error: `单次最多购买 ${MAX_TICKETS_PER_PURCHASE} 张` };
-    }
-    if (!(await checkRateLimit(`lottery-buy:${userId}`, { window: 60_000, limit: 10 }))) {
-      return { success: false, error: "操作过于频繁，请 1 分钟后再试" };
-    }
-
-    const config = await getLotteryConfig();
-    const closed = windowError(config);
-    if (closed) return { success: false, error: closed };
-
-    const cost = round2(config.ticketPriceCredits * count);
-    const activityKey = currentActivityKey(config);
-    if (!activityKey) return { success: false, error: "活动轮次无效" };
-
-    const paid = await payWithCoupon(userId, "lottery", activityKey, cost);
-    if (!paid.ok) {
-      return { success: false, error: paid.reason };
-    }
-    const payment = paid.payment;
-
-    // D1 没有事务，券已经扣走了；发券或记流水再失败就必须把券退回，
-    // 否则用户花了券面却拿不到券。
-    const ticketDelta = ticketStatsDelta({
-      source: "buy",
-      count,
-      priceCredits: config.ticketPriceCredits,
-    });
-    let statsApplied = false;
-    let issued: string[] = [];
-    try {
-      issued = await grantTickets(userId, count, {
-        source: "buy",
-        priceCredits: config.ticketPriceCredits,
-        activityKey,
-      });
-      await applyTicketStats(userId, ticketDelta);
-      statsApplied = true;
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      console.error("[buyTickets] 发券失败，退回扣券", detail, error);
-      await compensatePurchase(userId, issued, payment, statsApplied ? ticketDelta : null);
-      return { success: false, error: `发券失败：${detail}，已退回活动券` };
-    }
-
-    revalidatePath("/lottery");
-    revalidatePath("/wallet");
-    return {
-      success: true,
-      data: { tickets: count, costCredits: cost, ticketsLeft: await countUnusedTickets(userId) },
-    };
-  } catch (error) {
-    console.error("[buyTickets] Error:", error);
-    return { success: false, error: error instanceof Error ? error.message : "购买失败" };
-  }
-}
-
-/**
- * 买券失败的回滚：收回已发出的券，把扣掉的券面退回原券行。
- * 本身再失败就只记日志——券在用户券包里，不会凭空消失，人工核对即可。
- *
- * `appliedStats` 非空表示累计统计行已经加过，要按同一份增量反向扣回。
- */
-async function compensatePurchase(
-  userId: string,
-  issued: string[],
-  payment: CouponPayment,
-  appliedStats: LotteryStatsDelta | null,
-): Promise<void> {
-  try {
-    await deleteTickets(issued);
-    if (appliedStats) await applyTicketStats(userId, negateStatsDelta(appliedStats));
-    await refundCouponPayment(payment);
-  } catch (rollbackError) {
-    console.error("[buyTickets] 退回扣券失败，需人工核对", rollbackError);
-  }
 }
 
 /** 一整批开奖在内存里算好的行；写库按表批量落，失败按 id 整批撤。 */
@@ -302,6 +213,8 @@ async function compensateDrawBatch(
   plan: DrawBatchPlan,
   issuedTicketIds: string[],
   lockedTicketIds: string[],
+  /** 本批用活动券直付的部分；没有就是 null。 */
+  couponPayment: CouponPayment | null,
   /** 已经发生的倒扣回收；没执行到就传 null。 */
   clawback: ClawbackReceipt | null,
   appliedStats: { draw: boolean; ticket: LotteryStatsDelta | null },
@@ -313,6 +226,7 @@ async function compensateDrawBatch(
       deleteTemporaryBalancesByIds(rowIds(plan.tempRows)),
       deleteTickets(issuedTicketIds),
       unlockTickets(lockedTicketIds),
+      couponPayment ? refundCouponPayment(couponPayment) : Promise.resolve(),
       plan.permanentDelta !== 0
         ? adjustPermanentBalance(userId, -plan.permanentDelta)
         : Promise.resolve(),
@@ -389,11 +303,22 @@ export async function drawLottery(
 
     const closed = windowError(config);
     if (closed) return { success: false, error: closed };
-    if (!freeDrawEligible && pickedIds.length < count) {
-      return {
-        success: false,
-        error: `抽奖券不足：本次需要 ${count} 张，当前可用 ${pickedIds.length} 张`,
-      };
+    if (!activityKey) return { success: false, error: "活动轮次无效" };
+
+    // 支付顺序：免费抽 → 抽奖券 → 不足的份数按单抽价用当期活动券直付。
+    // 抽奖券与活动券都是整张口径，不会出现半张。
+    const paidCount = freeDrawEligible ? 0 : count - pickedTickets.length;
+    let couponPayment: CouponPayment | null = null;
+    if (paidCount > 0) {
+      const paid = await payWithCoupon(
+        userId,
+        "lottery",
+        activityKey,
+        round2(paidCount * config.ticketPriceCredits),
+        config.couponUnitCredits,
+      );
+      if (!paid.ok) return { success: false, error: paid.reason };
+      couponPayment = paid.payment;
     }
 
     // 保底：连续未中大奖达阈值后，外圈概率线性提升（每多 1 次未中 +0.1%，上限 20%）。
@@ -405,9 +330,16 @@ export async function drawLottery(
       : config;
 
     // 免费抽时 ticketIds 是 [null]，开奖行的 ticketId 留空，标记这是一次免费抽；
-    // 免费抽不消耗券，券面值计 0。
-    const ticketIds: (string | null)[] = freeDrawEligible ? [null] : pickedIds;
-    const ticketFaces = freeDrawEligible ? [0] : pickedTickets.map((ticket) => ticket.priceCredits);
+    // 活动券直付的注同样留空 ticketId（freeDrawDate 为 null 以示区别），券面按单抽价计入统计。
+    const ticketIds: (string | null)[] = freeDrawEligible
+      ? [null]
+      : [...pickedIds, ...Array.from({ length: paidCount }, () => null)];
+    const ticketFaces = freeDrawEligible
+      ? [0]
+      : [
+          ...pickedTickets.map((ticket) => ticket.priceCredits),
+          ...Array.from({ length: paidCount }, () => config.ticketPriceCredits),
+        ];
 
     const batchId = crypto.randomUUID();
     const plan = planDrawBatch(
@@ -424,6 +356,7 @@ export async function drawLottery(
     if (!freeDrawEligible) {
       if (!(await lockTickets(pickedIds, rowIds(plan.drawRows)))) {
         await unlockTickets(pickedIds);
+        if (couponPayment) await refundCouponPayment(couponPayment);
         return { success: false, error: "抽奖券正在被使用，请稍后重试" };
       }
     }
@@ -529,6 +462,7 @@ export async function drawLottery(
         plan,
         issuedTicketIds,
         freeDrawEligible ? [] : pickedIds,
+        couponPayment,
         clawbackReceipt,
         { draw: drawStatsApplied, ticket: appliedTicketDelta },
       );
@@ -550,10 +484,8 @@ export async function drawLottery(
         // 这一批抽中的赠券（奖池档），与累抽档位送的券分开报，前端两句话分开提示。
         prizeTickets: plan.prizeTickets,
         // 券包余量按本批收支算出来，省掉写入后的一次往返。
-        // 免费抽不消耗券，所以不减 count。
-        ticketsLeft: freeDrawEligible
-          ? ticketsBefore + plan.prizeTickets + giftedTickets
-          : ticketsBefore - count + plan.prizeTickets + giftedTickets,
+        // 免费抽与活动券直付都不消耗抽奖券，所以只减实际用掉的抽奖券。
+        ticketsLeft: ticketsBefore - pickedIds.length + plan.prizeTickets + giftedTickets,
         totalDraws,
         giftedTickets,
         freeDrawUsed: freeDrawEligible,

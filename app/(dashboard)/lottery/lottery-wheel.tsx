@@ -7,10 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatCredits } from "@/lib/billing/credits";
 import { toast } from "sonner";
-import { buyTickets, drawLottery } from "./actions";
+import { drawLottery } from "./actions";
 import type { ActivityStatus, DrawOutcome } from "@/lib/lottery/prize-math";
 import { calculateLuckyChance, LUCKY_CHANCE_CAP_PERCENT, LUCKY_CHANCE_STEP_PERCENT } from "@/lib/lottery/prize-math";
 import type { BigWinRecord } from "@/lib/lottery/records";
+import { ticketsForCost } from "@/lib/activity/ticket-math";
+import { CouponCount } from "@/components/activity/coupon-badge";
 
 /** 外沿还有两道发光环，viewBox 要比最大半径留出这点余量，否则环带会被裁掉。 */
 const SIZE = 400;
@@ -79,8 +81,8 @@ export interface LotteryWheelProps {
   milestones: { draws: number; tickets: number }[];
   tickets: number;
   totalDraws: number;
-  /** 当期活动券余额（cr 券面），买抽奖券只扣券。 */
-  couponCredits: number;
+  /** 当期活动券可用整张数（抽奖券用完后的差额由它按整张支付）。 */
+  couponTickets: number;
   /** 1 张活动券 = 多少 cr（活动设置里的兑换单价）。 */
   couponUnitCredits: number;
   status: ActivityStatus;
@@ -333,8 +335,6 @@ export function LotteryWheel(props: LotteryWheelProps) {
   const [tickets, setTickets] = useState(props.tickets);
   const [spokes, setSpokes] = useState<DrawOutcome[]>([]);
   const [results, setResults] = useState<DrawOutcome[] | null>(null);
-  const [buyCount, setBuyCount] = useState(10);
-  const [buying, setBuying] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   /** 本次会话内免费抽是否已用掉；服务端 revalidate 后 props 会更新，但动画期间靠本地状态挡重复点击。 */
   const [freeDrawUsed, setFreeDrawUsed] = useState(false);
@@ -346,6 +346,12 @@ export function LotteryWheel(props: LotteryWheelProps) {
   const busy = phase === "inner" || phase === "outer";
   /** 免费抽可用：服务端说有额度 + 本次会话还没用。 */
   const canFreeDraw = props.freeDrawAvailable && !freeDrawUsed;
+  /** 单抽折几张活动券；价格已在配置侧对齐成券单价的整数倍。 */
+  const ticketCost = ticketsForCost(props.ticketPriceCredits, props.couponUnitCredits);
+  /** 先花抽奖券、不足的份数按整张扣活动券。 */
+  const couponCostFor = (count: 1 | 10) =>
+    Math.max(0, count - Math.min(tickets, count)) * ticketCost;
+  const canPay = (count: 1 | 10) => couponCostFor(count) <= props.couponTickets;
   const consecutiveMisses = props.consecutiveMisses;
   const innerSectorSpans = useMemo(
     () => spans(props.innerSectors.map((s) => s.weight)),
@@ -372,10 +378,10 @@ export function LotteryWheel(props: LotteryWheelProps) {
 
   async function handleDraw(count: 1 | 10) {
     if (busy) return;
-    // 免费抽只对单抽生效；10 连抽和免费抽之后的单抽都需要券。
+    // 免费抽只对单抽生效；其余先扣抽奖券，不足的份数用当期活动券按整张付。
     const useFree = count === 1 && canFreeDraw;
-    if (!useFree && tickets < count) {
-      toast.error(`抽奖券不足，本次需要 ${count} 张`);
+    if (!useFree && !canPay(count)) {
+      toast.error(`活动券不足：本次还差 ${couponCostFor(count) - props.couponTickets} 张`);
       return;
     }
     timers.current.forEach((id) => clearTimeout(id));
@@ -492,21 +498,6 @@ export function LotteryWheel(props: LotteryWheelProps) {
       setDrawingLuckyChance(null);
       router.refresh();
     }, spokesDone);
-  }
-
-  async function handleBuy() {
-    if (buying) return;
-    setBuying(true);
-    const response = await buyTickets(buyCount);
-    setBuying(false);
-    if (!response.success) {
-      toast.error(response.error);
-      router.refresh();
-      return;
-    }
-    setTickets(response.data.ticketsLeft);
-    toast.success(`已购买 ${response.data.tickets} 张抽奖券，消耗 ${response.data.costCredits} cr 券面`);
-    router.refresh();
   }
 
   const netCredits = results ? results.reduce((sum, r) => sum + r.credits, 0) : 0;
@@ -741,7 +732,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
                 {tickets}
               </text>
               <text x={C} y={C + 14} textAnchor="middle" fill="#94a3b8" fontSize={9}>
-                张券
+                抽奖券
               </text>
             </svg>
           </div>
@@ -752,20 +743,52 @@ export function LotteryWheel(props: LotteryWheelProps) {
             那正是概率最低的几档。鼠标悬停在格子上可看完整奖品与概率，全部档位也在下方「奖池与规则」公示。
           </p>
 
-          <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] text-white/45">
+            <span className="inline-flex items-center gap-1">
+              活动券
+              <CouponCount kind="lottery" count={props.couponTickets} className="text-white/85" />
+            </span>
+            <span>抽奖券 {tickets} 张（中奖与累抽获得，抽奖时先用）</span>
+          </div>
+
+          <div className="mt-2 grid grid-cols-2 gap-3">
             <button
               onClick={() => handleDraw(1)}
-              disabled={!active || busy || (!canFreeDraw && tickets < 1)}
+              disabled={!active || busy || (!canFreeDraw && !canPay(1))}
               className="h-11 rounded-lg bg-cyan-400 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {busy ? "开奖中…" : canFreeDraw ? "免费抽 1 次" : `抽 1 次（${tickets} 券）`}
+              {busy ? (
+                "开奖中…"
+              ) : canFreeDraw ? (
+                "免费抽 1 次"
+              ) : (
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  抽 1 次
+                  {couponCostFor(1) > 0 ? (
+                    <CouponCount kind="lottery" count={couponCostFor(1)} />
+                  ) : (
+                    <span className="text-xs font-normal opacity-75">用抽奖券</span>
+                  )}
+                </span>
+              )}
             </button>
             <button
               onClick={() => handleDraw(10)}
-              disabled={!active || busy || tickets < 10}
+              disabled={!active || busy || !canPay(10)}
               className="h-11 rounded-lg border border-fuchsia-400/70 text-sm font-semibold text-fuchsia-200 transition hover:bg-fuchsia-400/10 disabled:cursor-not-allowed disabled:opacity-40"
             >
-              {busy ? "开奖中…" : "抽 10 次"}
+              {busy ? (
+                "开奖中…"
+              ) : (
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  抽 10 次
+                  {couponCostFor(10) > 0 ? (
+                    <CouponCount kind="lottery" count={couponCostFor(10)} />
+                  ) : (
+                    <span className="text-xs font-normal opacity-75">用抽奖券</span>
+                  )}
+                </span>
+              )}
             </button>
           </div>
 
@@ -822,49 +845,6 @@ export function LotteryWheel(props: LotteryWheelProps) {
               上限 {LUCKY_CHANCE_CAP_PERCENT}%；中一次大奖后计数清零重新累积。
             </p>
           </div>
-
-          <div className="mt-2 flex items-end gap-2 rounded-lg border border-white/10 bg-white/5 p-3">
-            <div className="flex-1">
-              <label className="text-[11px] text-white/50" htmlFor="lottery-buy-count">
-                购买抽奖券（{props.ticketPriceCredits} cr 券面 / 张）
-                <span className="ml-2 text-white/40">
-                  需 {(buyCount * props.ticketPriceCredits).toFixed(2)} cr 券面 / 可用 {props.couponCredits.toFixed(2)} cr
-                </span>
-              </label>
-              <input
-                id="lottery-buy-count"
-                type="number"
-                min={1}
-                max={100}
-                value={buyCount}
-                onChange={(e) => setBuyCount(Math.max(1, Math.min(100, Number(e.target.value) || 1)))}
-                className="mt-1 h-8 w-full rounded border border-white/15 bg-slate-950/60 px-2 text-sm text-white outline-none focus:border-cyan-400"
-              />
-            </div>
-            <button
-              onClick={handleBuy}
-              disabled={!active || buying || props.couponCredits < buyCount * props.ticketPriceCredits}
-              className="h-8 shrink-0 rounded bg-white/10 px-3 text-xs font-medium text-white transition hover:bg-white/20 disabled:opacity-40"
-            >
-              {buying ? "…" : `买 ${buyCount} 张`}
-            </button>
-            <div className="flex shrink-0 gap-1.5 pb-1">
-              {[1, 10, 50].map((n) => (
-                <button
-                  key={n}
-                  onClick={() => setBuyCount(n)}
-                  className={cn(
-                    "rounded border px-2 py-0.5 text-[11px] transition",
-                    buyCount === n
-                      ? "border-cyan-400 text-cyan-300"
-                      : "border-white/15 text-white/50 hover:text-white",
-                  )}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          </div>
         </div>
       </Card>
 
@@ -881,11 +861,13 @@ export function LotteryWheel(props: LotteryWheelProps) {
             </div>
             <div className="rounded-lg border border-border bg-muted/40 py-2">
               <p className="text-xl font-bold">{tickets}</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">可用券</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">抽奖券</p>
             </div>
             <div className="rounded-lg border border-border bg-muted/40 py-2">
-              <p className="text-xl font-bold">{formatCredits(props.couponCredits)}</p>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">活动券 cr</p>
+              <p className="flex items-center justify-center text-xl font-bold">
+                <CouponCount kind="lottery" count={props.couponTickets} iconClassName="h-5 w-5" />
+              </p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">活动券</p>
             </div>
           </CardContent>
         </Card>
@@ -1049,8 +1031,9 @@ export function LotteryWheel(props: LotteryWheelProps) {
               <li>中奖金额以 tcr（临时余额）发放，有效期 {props.prizeValidDays} 天，过期未用自动消失；标「永久」的档位以 cr 发放，不过期。</li>
               <li>转到倒扣时按 cr 从永久余额扣除，本金可能因此扣成负数。</li>
               <li>
-                抽奖券需先用 cr / tcr 按活动单价（1 张 = {formatCredits(props.couponUnitCredits)} cr）
-                兑换活动券，玩法只扣券；活动结束后未使用的券作废，不折算回货币。
+                抽奖先消耗抽奖券（中奖与累抽获得）；不足的份数按整张扣当期活动券。
+                活动券在下方「活动券与珍宝礼包」按 1 张 = {formatCredits(props.couponUnitCredits)} cr 兑换，
+                当期结束后未使用的券作废，不折算回货币。
               </li>
             </ul>
           </CardContent>

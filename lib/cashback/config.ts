@@ -63,6 +63,11 @@ export interface CashbackCouponReward {
   kind: ActivityKind;
   activityKey: string;
   couponName: string;
+  /** 1 张活动券的 cr 单价。 */
+  unitCredits: number;
+  /** 整张数（不发零头）。 */
+  tickets: number;
+  /** 到账券面 = tickets × unitCredits。 */
   credits: number;
 }
 
@@ -92,7 +97,12 @@ const KIND_CUTOFFS: { kind: CashbackRewardKind; max: number }[] = [
  */
 export function rollCashbackReward(
   tier: CashbackTier,
-  couponTarget: { kind: ActivityKind; activityKey: string; couponName: string } | null,
+  couponTarget: {
+    kind: ActivityKind;
+    activityKey: string;
+    couponName: string;
+    unitCredits: number;
+  } | null,
   random: () => number = Math.random,
 ): CashbackReward {
   const kindRoll = random();
@@ -102,12 +112,15 @@ export function rollCashbackReward(
   );
 
   if (picked.kind === "coupon" && couponTarget) {
+    const unit = Math.max(1, couponTarget.unitCredits);
+    const tickets = Math.max(1, Math.floor(amount / unit));
+    const face = round2(tickets * unit);
     return {
       kind: "coupon",
-      credits: amount,
+      credits: face,
       tickets: 0,
-      label: `${couponTarget.couponName} ${amount} cr`,
-      coupon: { ...couponTarget, credits: amount },
+      label: `${couponTarget.couponName} ×${tickets}`,
+      coupon: { ...couponTarget, tickets, credits: face },
     };
   }
   if (picked.kind === "tickets") {

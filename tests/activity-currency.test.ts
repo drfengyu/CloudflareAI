@@ -71,6 +71,7 @@ test("消费返利：随机形态按阈值落到货币 / 券 / 抽奖券", () =>
     kind: "lottery" as const,
     activityKey: "2026-11-01~2026-11-30",
     couponName: "星轨券",
+    unitCredits: 50,
   };
 
   const temp = rollCashbackReward(tier, couponTarget, queued(0.1, 0.5));
@@ -85,6 +86,8 @@ test("消费返利：随机形态按阈值落到货币 / 券 / 抽奖券", () =>
   assert.equal(coupon.kind, "coupon");
   assert.equal(coupon.coupon?.activityKey, couponTarget.activityKey);
   assert.equal(coupon.credits, 100);
+  assert.equal(coupon.coupon?.tickets, 2);
+  assert.equal(coupon.coupon?.credits, 100);
 
   const tickets = rollCashbackReward(tier, couponTarget, queued(0.95, 0.5, 0.99));
   assert.equal(tickets.kind, "tickets");
@@ -120,12 +123,12 @@ test("活动券：同一轮次名字稳定，三种活动各自有券", () => {
   );
 });
 
-test("珍宝礼包：默认三档 200% / 500% / 1000%，档位、倍率、限购与赠品均可配置", () => {
+test("珍宝礼包：默认三档 10 / 50 / 100 张，倍率、限购与赠品均可配置", () => {
   assert.deepEqual(
     buildCouponPacks(DEFAULT_COUPON_PACK_CONFIG).map((pack) => [
       pack.key,
       pack.name,
-      pack.priceCredits,
+      pack.tickets,
       pack.ratioPercent,
       pack.dailyLimit,
       pack.totalLimit,
@@ -148,15 +151,18 @@ test("珍宝礼包：默认三档 200% / 500% / 1000%，档位、倍率、限购
   assert.equal(legacy.packs[1].ratioPercent, 650.5);
   assert.equal(legacy.packs[1].dailyLimit, 3);
   assert.equal(legacy.packs[1].totalLimit, 0);
-  assert.deepEqual(legacy.packs[0], DEFAULT_COUPON_PACK_CONFIG.packs[0]);
+  // 旧配置没有 tickets 字段，读侧保持 null 走旧实付价折算。
+  assert.equal(legacy.packs[0].tickets, null);
+  assert.equal(legacy.packs[0].priceCredits, 10);
+  assert.equal(legacy.packs[0].ratioPercent, 200);
 
-  // 自定义档位：名称、实付、赠券与 tcr 都按配置落地。
+  // 自定义档位：名称、张数、赠券与 tcr 都按配置落地。
   const custom = sanitizeCouponPackConfig({
     packs: [
       {
         key: "trial",
         name: "体验包",
-        priceCredits: 5,
+        tickets: 2,
         ratioPercent: 150,
         dailyLimit: 0,
         totalLimit: 0,
@@ -167,7 +173,7 @@ test("珍宝礼包：默认三档 200% / 500% / 1000%，档位、倍率、限购
       {
         key: "pro",
         name: "进阶包",
-        priceCredits: 30,
+        tickets: 4,
         ratioPercent: 650.5,
         dailyLimit: 3,
         totalLimit: 0,
@@ -178,9 +184,12 @@ test("珍宝礼包：默认三档 200% / 500% / 1000%，档位、倍率、限购
     ],
   });
   assert.deepEqual(custom.packs.map((pack) => pack.key), ["trial", "pro"]);
+  assert.equal(custom.packs[0].tickets, 2);
   assert.equal(custom.packs[0].tempCredits, 2.5);
   assert.equal(custom.packs[0].tempValidDays, 7);
+  assert.equal(custom.packs[1].tickets, 4);
   assert.equal(custom.packs[1].bonusTickets, 2);
+  assert.equal(custom.packs[0].priceCredits, 10);
 
   const packs = buildCouponPacks(custom);
   assert.equal(packs[0].dailyLimit, null);
@@ -200,25 +209,28 @@ test("珍宝礼包：默认三档 200% / 500% / 1000%，档位、倍率、限购
   );
 });
 
-test("珍宝礼包：倍率按实付折成该券单价张数，赠券张数叠加，0 张不送", () => {
+test("珍宝礼包：实付按张数 × 券单价 ÷ 倍率折算，赠券张数叠加，0 张不送", () => {
   const [small, medium, large] = buildCouponPacks(DEFAULT_COUPON_PACK_CONFIG);
   assert.deepEqual(packGrant(small, 1), {
-    ratioTickets: 20,
+    ratioTickets: 10,
     bonusTickets: 1,
-    totalTickets: 21,
-    totalCredits: 21,
+    totalTickets: 11,
+    totalCredits: 11,
+    priceCredits: 5,
   });
   assert.deepEqual(packGrant(medium, 25.5), {
-    ratioTickets: 9.8,
+    ratioTickets: 50,
     bonusTickets: 1,
-    totalTickets: 10.8,
-    totalCredits: 275.5,
+    totalTickets: 51,
+    totalCredits: 1300.5,
+    priceCredits: 255,
   });
   assert.deepEqual(packGrant(large, 3), {
-    ratioTickets: 333.33,
+    ratioTickets: 100,
     bonusTickets: 1,
-    totalTickets: 334.33,
-    totalCredits: 1003,
+    totalTickets: 101,
+    totalCredits: 303,
+    priceCredits: 30,
   });
 
   const zeroBonus = { ...small, bonusTickets: 0, tempCredits: 10 };
@@ -227,19 +239,33 @@ test("珍宝礼包：倍率按实付折成该券单价张数，赠券张数叠�
     bonusTickets: 0,
     totalTickets: 10,
     totalCredits: 20,
+    priceCredits: 10,
   });
 
   const multi = { ...small, bonusTickets: 3 };
   assert.equal(packGrant(multi, 2).totalTickets, 13);
 
-  // 线上转盘券单价 2000 cr / 张：小份 10 cr × 200% 只折 0.01 张，赠券另算。
+  // 线上转盘券单价 2000 cr / 张：10 张 = 20000 cr 券面，200% 档实付 10000 cr。
   assert.deepEqual(packGrant(small, 2000), {
-    ratioTickets: 0.01,
+    ratioTickets: 10,
     bonusTickets: 1,
-    totalTickets: 1.01,
-    totalCredits: 2020,
+    totalTickets: 11,
+    totalCredits: 22000,
+    priceCredits: 10000,
   });
-  assert.equal(packGrant(medium, 2000).ratioTickets, 0.13);
+  assert.equal(packGrant(medium, 2000).priceCredits, 20000);
+
+  // 旧配置没有张数：按旧实付价 × 倍率 ÷ 单价折算成整张，至少 1 张。
+  const legacySmall = { ...small, tickets: null };
+  assert.deepEqual(packGrant(legacySmall, 2000), {
+    ratioTickets: 1,
+    bonusTickets: 1,
+    totalTickets: 2,
+    totalCredits: 4000,
+    priceCredits: 1000,
+  });
+  const legacyMedium = { ...medium, tickets: null, priceCredits: 10 };
+  assert.equal(packGrant(legacyMedium, 25.5).ratioTickets, 2);
 });
 
 test("活动券单价：三种活动默认 1 cr / 张，脏值回落、超限封顶", () => {

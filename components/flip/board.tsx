@@ -9,18 +9,19 @@ import { openFlipRound, revealFlipCard } from "@/app/(dashboard)/flip/actions";
 import { formatCredits } from "@/lib/billing/credits";
 import { formatFlipReward } from "@/lib/flip/config";
 import type { FlipOutcome } from "@/lib/flip/store";
+import { CouponCount } from "@/components/activity/coupon-badge";
 import { FlipCard } from "./flip-card";
 
 export interface FlipBoardProps {
-  /** 开一局的价格（cr 券面），来自当前活动配置。 */
-  priceCredits: number;
+  /** 开一局扣的当期活动券张数。 */
+  priceTickets: number;
   cardCount: number;
   rewardValidDays: number;
   /** 今日还能开几局。 */
   roundsLeft: number;
   dailyRounds: number;
-  /** 当期活动券余额（cr 券面），开局只扣券。 */
-  couponCredits: number;
+  /** 当期活动券可用整张数，开局只扣对应活动券。 */
+  couponTickets: number;
   /** 12 格金额合计，用来解释「期望 = 合计 / 张数」。 */
   boardTotal: number;
   expectedPerRound: number;
@@ -76,19 +77,26 @@ export function FlipBoard(props: FlipBoardProps) {
     router.refresh();
   }
 
-  const insufficient = props.couponCredits < props.priceCredits;
+  const insufficient = props.couponTickets < props.priceTickets;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm">
           <Sparkles className="h-4 w-4 text-muted-foreground" />
-          <span>
+          <span className="inline-flex flex-wrap items-center gap-1.5">
             {revealed
               ? `本局翻开第 ${Number(outcome?.position ?? 0) + 1} 张 · ${formatFlipReward(Number(outcome?.reward ?? 0))}`
               : round
-                ? `本局已付 ${round.priceCredits} cr 券面，挑一张翻开`
-                  : `开一局 ${props.priceCredits} cr 券面`}
+                ? <>
+                    本局已付
+                    <CouponCount kind="flip" count={props.priceTickets} />
+                    ，挑一张翻开
+                  </>
+                : <>
+                    开一局
+                    <CouponCount kind="flip" count={props.priceTickets} />
+                  </>}
           </span>
           {outcome && Number(outcome.reward) > 0 ? (
             <span className="text-xs text-muted-foreground">
@@ -96,8 +104,11 @@ export function FlipBoard(props: FlipBoardProps) {
             </span>
           ) : null}
         </div>
-        <div className="text-xs text-muted-foreground tabular-nums">
-          可用券 {formatCredits(props.couponCredits)} cr · 今日剩余 {props.roundsLeft} / {props.dailyRounds} 局
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
+          <span className="inline-flex items-center gap-1">
+            活动券 <CouponCount kind="flip" count={props.couponTickets} />
+          </span>
+          <span>· 今日剩余 {props.roundsLeft} / {props.dailyRounds} 局</span>
         </div>
       </div>
 
@@ -119,14 +130,14 @@ export function FlipBoard(props: FlipBoardProps) {
         {revealed ? (
           <Button onClick={() => void onOpen()} disabled={busy !== null || props.roundsLeft <= 0 || insufficient}>
             {busy === "open" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            再来一局（{props.priceCredits} cr 券面）
+            再来一局（<CouponCount kind="flip" count={props.priceTickets} />）
           </Button>
         ) : round ? (
           <p className="text-sm text-muted-foreground">上面挑一张翻开，翻开即结算。</p>
         ) : (
           <Button onClick={() => void onOpen()} disabled={busy !== null || props.roundsLeft <= 0 || insufficient}>
             {busy === "open" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            开一局（{props.priceCredits} cr 券面）
+            开一局（<CouponCount kind="flip" count={props.priceTickets} />）
           </Button>
         )}
         {!revealed && round === null && props.roundsLeft <= 0 ? (
@@ -134,7 +145,7 @@ export function FlipBoard(props: FlipBoardProps) {
         ) : null}
         {insufficient && props.roundsLeft > 0 ? (
           <span className="text-xs text-muted-foreground">
-            活动券不足，还差 {formatCredits(props.priceCredits - props.couponCredits)} cr，请在上方先兑换。
+            活动券不足，还差 {props.priceTickets - props.couponTickets} 张，请在上方先兑换。
           </span>
         ) : null}
       </div>

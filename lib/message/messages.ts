@@ -63,6 +63,10 @@ export type Attachment =
       activityKind: ActivityKind;
       activityKey: string;
       couponName: string;
+      /** 1 张活动券的 cr 单价；老附件可能为 0。 */
+      unitCredits: number;
+      /** 整张数；老附件可能为 0，只能按 credits 展示。 */
+      tickets: number;
       credits: number;
       rewardClaimId?: string;
     };
@@ -147,6 +151,8 @@ function parseAttachment(row: {
         activityKind: kind,
         activityKey: String(data.activityKey ?? ""),
         couponName: String(data.couponName ?? ""),
+        unitCredits: Number(data.unitCredits ?? 0),
+        tickets: Number(data.tickets ?? 0),
         credits: Number(data.credits ?? 0),
         rewardClaimId: typeof data.rewardClaimId === "string" ? data.rewardClaimId : undefined,
       };
@@ -184,6 +190,8 @@ function attachmentJson(attachment: Attachment): string {
         activityKind: attachment.activityKind,
         activityKey: attachment.activityKey,
         couponName: attachment.couponName,
+        unitCredits: attachment.unitCredits,
+        tickets: attachment.tickets,
         credits: attachment.credits,
         rewardClaimId: attachment.rewardClaimId,
       });
@@ -248,8 +256,11 @@ export function validateAttachment(attachment: Attachment): string | null {
       if (attachment.count > 100) return "单封信赠券上限 100 张";
       return null;
     case "coupon":
+      if (!Number.isInteger(attachment.tickets) || attachment.tickets <= 0) {
+        return "活动券张数必须是正整数";
+      }
       if (!Number.isFinite(attachment.credits) || attachment.credits <= 0) {
-        return "活动券面额必须是大于 0 的数字";
+        return "活动券到账金额必须大于 0";
       }
       if (attachment.credits > 100_000) return "单封信活动券上限 100000";
       if (!attachment.activityKey.trim()) return "活动券缺少活动轮次";
@@ -589,7 +600,10 @@ export async function claimMessage(
         await markRewardClaimed(attachment.rewardClaimId, userId, new Date(nowMs));
         return {
           attachment: { ...attachment, credits: amount },
-          note: `${attachment.couponName} ${amount} cr 已入账（当期活动结束后作废）`,
+          note:
+            attachment.tickets > 0
+              ? `${attachment.couponName} ×${attachment.tickets} 已入账（当期活动结束后作废）`
+              : `${attachment.couponName} ${amount} cr 已入账（当期活动结束后作废）`,
         };
       }
       case "redemption":

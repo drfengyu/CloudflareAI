@@ -17,8 +17,8 @@
 | `userId` | 收件人，`ON DELETE CASCADE` |
 | `kind` | `notice` / `reward` / `security` |
 | `title` / `body` | 主题与正文（列表简述由正文压平后截 60 字生成，不单独存） |
-| `attachmentKind` | `credits` / `temp_credits` / `tickets` / `redemption` / `item`，可空 |
-| `attachment` | JSON：`{"credits":50}`、`{"credits":50,"validDays":30,"topupType":10,"rewardClaimId":"..."}`、`{"count":2}`、`{"code":"..."}`、`{"label":"..."}` |
+| `attachmentKind` | `credits` / `temp_credits` / `tickets` / `coupon` / `redemption` / `item`，可空 |
+| `attachment` | JSON：`{"credits":50}`、`{"credits":50,"validDays":30,"topupType":10,"rewardClaimId":"..."}`、`{"count":2}`、`{"kind":"lottery","activityKey":"...","couponName":"...","unitCredits":2000,"tickets":2}`、`{"code":"..."}`、`{"label":"..."}` |
 | `sentBy` | 发信管理员，系统信为 null，`ON DELETE SET NULL` |
 | `readAt` | 第一次打开的毫秒时间戳；清理的起算点 |
 | `claimedAt` | 领取时间；无附件的信恒为 null |
@@ -42,8 +42,12 @@ WHERE id = ? AND userId = ? AND claimedAt IS NULL AND attachmentKind IS NOT NULL
 - **临时余额**（`temp_credits`）：写 `temporary_balance` 与 `topup`（`type` 由附件指定：8 消费返利 / 10 充值赠送），
   有效期取附件 `validDays`；若带 `cashbackDate` 同时补写 `cashback_claim` 历史行。
   领取成功后回写 `reward_claim.claimedAt`；回写失败不影响已到账的钱，活动页用站内信 `claimedAt` 兜底。
-- **抽奖券**：`grantTickets(userId, count, { source: "gift", priceCredits: 0 })`。
-  翻牌夺宝是按 cr 计价的局，没有券，所以这里只覆盖幸运转盘。
+- **抽奖券**（`tickets`）：`grantTickets(userId, count, { source: "gift", priceCredits: 0 })`，
+  只用于幸运转盘的抽奖券。
+- **活动券**（`coupon`）：按发放时锁定的 `kind` / `activityKey` / `couponName` 入账，
+  `tickets` 必须是**正整数**（旧附件没有该字段时按 0 处理并回退到 cr 文案），
+  `grantCouponToRound` 按 `tickets × unitCredits` 记券面；领取提示只显示「券名 × N 张」。
+  收件箱对 `coupon` 附件有独立渲染分支（v0.38.0 修复此前缺分支导致只显示空白奖励行）。
 - **兑换码 / 自定义物品**：领取前 `readMessage` 返回空内容，领取后才返回明文，
   避免不点领取也能把码抄走。
 

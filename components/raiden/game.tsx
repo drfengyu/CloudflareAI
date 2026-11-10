@@ -23,6 +23,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatCredits } from "@/lib/billing/credits";
+import { ticketsForCost } from "@/lib/activity/ticket-math";
+import { CouponCount } from "@/components/activity/coupon-badge";
 import {
   EMPTY_LOADOUT,
   RAIDEN_STAGES,
@@ -85,7 +87,7 @@ const REASON_LABEL: Record<FinalState["reason"], { title: string; hint: string }
 export function RaidenGame({
   config,
   status,
-  couponCredits,
+  couponTickets,
   runsLeft,
   summary,
   leaderboard,
@@ -94,8 +96,8 @@ export function RaidenGame({
 }: {
   config: RaidenConfig;
   status: RaidenActivityStatus;
-  /** 当期活动券余额（cr 券面），装备与复活只扣券。 */
-  couponCredits: number;
+  /** 当期活动券可用整张数，装备与复活只扣券。 */
+  couponTickets: number;
   runsLeft: number;
   summary: MyRaidenSummary;
   leaderboard: LeaderboardRow[];
@@ -425,10 +427,24 @@ export function RaidenGame({
                 <p className="mt-2 text-xs text-white/60">
                   切到后台会自动暂停。暂停期间游戏时间不流逝，结算用时不受影响。
                 </p>
-                <p className="mt-2 text-[11px] text-white/40">
-                  本局装备{" "}
-                  {run.cost > 0 ? `已付 ${formatCredits(run.cost)} cr 券面` : "标准配备 · 0 cr"} · 复活{" "}
-                  {revivesUsed}/{config.maxRevives} 次
+                <p className="mt-2 flex flex-wrap items-center justify-center gap-1 text-[11px] text-white/40">
+                  <span>本局装备</span>
+                  {run.cost > 0 ? (
+                    <>
+                      <span>已付</span>
+                      <CouponCount
+                        kind="raiden"
+                        count={ticketsForCost(run.cost, config.couponUnitCredits)}
+                        className="text-white/70"
+                      />
+                    </>
+                  ) : (
+                    <span>标准配备</span>
+                  )}
+                  <span>·</span>
+                  <span>
+                    复活 {revivesUsed}/{config.maxRevives} 次
+                  </span>
                 </p>
                 <div className="mt-6 space-y-2">
                   <Button
@@ -584,8 +600,13 @@ export function RaidenGame({
                 <div className="mt-5 rounded-md border border-white/10 bg-white/5 px-3 py-3">
                   {revivesLeft > 0 ? (
                     <>
-                      <p className="text-sm font-medium text-cyan-100">
-                        原地复活 · {formatCredits(config.revivePriceCredits)} cr 券面
+                      <p className="flex items-center gap-1 text-sm font-medium text-cyan-100">
+                        原地复活 ·
+                        <CouponCount
+                          kind="raiden"
+                          count={ticketsForCost(config.revivePriceCredits, config.couponUnitCredits)}
+                          iconClassName="h-4 w-4"
+                        />
                       </p>
                       <p className="mt-1 text-[11px] leading-relaxed text-white/55">
                         复活后以 1 条命继续本关，获得 3 秒无敌并清除周围弹幕。本局还可复活{" "}
@@ -612,9 +633,19 @@ export function RaidenGame({
                     ) : (
                       <Heart className="h-4 w-4" />
                     )}
-                    {revivesLeft > 0
-                      ? `消耗 ${formatCredits(config.revivePriceCredits)} cr 券面复活`
-                      : "无法继续复活"}
+                    {revivesLeft > 0 ? (
+                      <span className="inline-flex items-center gap-1">
+                        消耗
+                        <CouponCount
+                          kind="raiden"
+                          count={ticketsForCost(config.revivePriceCredits, config.couponUnitCredits)}
+                          className="font-semibold"
+                        />
+                        复活
+                      </span>
+                    ) : (
+                      "无法继续复活"
+                    )}
                   </Button>
                   <Button
                     type="button"
@@ -643,7 +674,7 @@ export function RaidenGame({
           <StartScreen
             config={config}
             status={status}
-            couponCredits={couponCredits}
+            couponTickets={couponTickets}
             runsLeft={runsLeft}
             loadout={loadout}
             starting={starting}

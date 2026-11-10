@@ -3,7 +3,8 @@
 import { Bomb, Heart, Minus, Plus, Shield, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { formatCredits } from "@/lib/billing/credits";
+import { ticketsForCost } from "@/lib/activity/ticket-math";
+import { CouponCount } from "@/components/activity/coupon-badge";
 import {
   RAIDEN_ITEMS,
   type RaidenConfig,
@@ -68,8 +69,12 @@ export function LoadoutShop({
                   </span>
                   <div className="min-w-0">
                     <p className="truncate text-xs font-medium text-white">{item.title}</p>
-                    <p className="text-[10px] text-white/40">
-                      {formatCredits(price)} cr
+                    <p className="flex items-center gap-0.5 text-[10px] text-white/40">
+                      <CouponCount
+                        kind="raiden"
+                        count={ticketsForCost(price, config.couponUnitCredits)}
+                        iconClassName="h-3 w-3"
+                      />
                       {isToggle ? " / 出击" : " / 份"}
                       {max > 1 ? ` · 上限 ${max}` : ""}
                     </p>

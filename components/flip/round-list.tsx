@@ -8,6 +8,8 @@ import { formatCredits } from "@/lib/billing/credits";
 import { cn } from "@/lib/utils";
 import { listMyFlipRounds } from "@/app/(dashboard)/flip/actions";
 import type { FlipRoundView } from "@/lib/flip/records";
+import { couponTickets } from "@/lib/activity/ticket-math";
+import { CouponCount } from "@/components/activity/coupon-badge";
 
 function Delta({ value }: { value: number }) {
   return (
@@ -34,10 +36,13 @@ function Delta({ value }: { value: number }) {
 export function FlipRoundList({
   rounds: initialRounds,
   hasNext: initialHasNext,
+  unitCredits,
 }: {
   rounds: FlipRoundView[];
   /** 服务端多取一条探测出的「还有下一页」 */
   hasNext: boolean;
+  /** 1 张活动券 = 多少 cr，用来把历史票价换算成整张数。 */
+  unitCredits: number;
 }) {
   const [rounds, setRounds] = useState(initialRounds);
   const [page, setPage] = useState(1);
@@ -92,7 +97,10 @@ export function FlipRoundList({
                     )}
                   </td>
                   <td className="px-3 py-2 tabular-nums text-muted-foreground">
-                    −{formatCredits(round.priceCredits)} cr
+                    <CouponCount
+                      kind="flip"
+                      count={couponTickets(round.priceCredits, unitCredits)}
+                    />
                   </td>
                   <td className="px-3 py-2">
                     {reward === null ? (

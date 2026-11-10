@@ -82,7 +82,7 @@ export async function startRun(
     throw new RaidenError(`今日出击次数已用完（${config.dailyRuns} 次），明天再来`);
   }
 
-  const paid = await payWithCoupon(userId, "raiden", activityKey, cost);
+  const paid = await payWithCoupon(userId, "raiden", activityKey, cost, config.couponUnitCredits);
   if (!paid.ok) {
     throw new RaidenError(paid.reason);
   }
@@ -414,7 +414,7 @@ export async function reviveRun(
   );
   if (reserved.changes !== 1) throw new RaidenError("复活次数已用完");
 
-  const paid = await payWithCoupon(userId, "raiden", activityKey, price);
+  const paid = await payWithCoupon(userId, "raiden", activityKey, price, config.couponUnitCredits);
   if (!paid.ok) {
     await d1Run(
       "UPDATE raiden_run SET revives = revives - 1 WHERE id = ?",
