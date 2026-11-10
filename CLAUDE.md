@@ -534,8 +534,14 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.34.0（2026-11-10，珍宝礼包倍率与限购后台可设）
-**下一版本**：v0.35.0（尚未选型）
+**当前版本**：v0.35.0（2026-11-10，礼包每份赠 1 张活动券 + 设置保存修复）
+**下一版本**：v0.36.0（尚未选型）
+
+- v0.35.0 珍宝礼包赠券：`packGrant` 把「倍率券面 + 1 张当期活动券 × 该活动单价」合并成到账合计，
+  `buyCouponPack` 按合计入账并把总额写进 `coupon_pack_purchase.couponCredits`；礼包视图新增
+  `baseCredits` / `bonusTickets`，卡片显示「得 X cr +1 张券」。修复礼包设置无法保存：倍率输入框
+  原来 `min=0.01` + `step=1`，浏览器把 200/500/1000 判为非法步进并阻止提交，改为 `step="any"`；
+  基础设置两个价格倍率输入框（`min=0.01` + `step=0.1`）同病同修。
 
 - v0.34.0 珍宝礼包配置化：`lib/activity/pack-config.ts` 读写 `option.coupon_pack_config`，
   三档分别存 `ratioPercent`（%）、`dailyLimit`、`totalLimit`（0 = 不限）；`buildCouponPacks`

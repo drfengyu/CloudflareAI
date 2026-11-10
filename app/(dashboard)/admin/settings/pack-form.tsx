@@ -86,6 +86,7 @@ export function CouponPackForm({ initialConfig }: { initialConfig: CouponPackCon
       <p className="text-xs text-muted-foreground">
         三档礼包由三个活动共用：倍率决定到账券面；限购按「用户 + 礼包」统计，0 = 不限；
         每日限购按北京时间自然日重置。实付价固定为各档身份，不随配置变化。
+        每购买 1 份礼包额外赠送 1 张当期活动券，按该活动的券面单价折算入账。
       </p>
 
       <div className="overflow-x-auto">
@@ -114,7 +115,7 @@ export function CouponPackForm({ initialConfig }: { initialConfig: CouponPackCon
                 <input
                   type="number"
                   min={0.01}
-                  step="1"
+                  step="any"
                   value={rows[key].ratioPercent}
                   onChange={(e) => patchRow(key, "ratioPercent", e.target.value)}
                   className={FIELD_CLASS}
@@ -139,6 +140,7 @@ export function CouponPackForm({ initialConfig }: { initialConfig: CouponPackCon
                   <span className="text-muted-foreground">{setting.ratioPercent}%</span>
                   {" → "}
                   得 {formatAmount((meta.priceCredits * setting.ratioPercent) / 100)} cr
+                  <span className="text-success"> +1 张券</span>
                 </p>
               </div>
             );

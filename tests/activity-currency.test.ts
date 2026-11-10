@@ -6,7 +6,12 @@ import {
   rollCashbackReward,
   sanitizeCashbackTiers,
 } from "../lib/cashback/config";
-import { ACTIVITY_KINDS, buildCouponPacks, couponNameFor } from "../lib/activity/coupons";
+import {
+  ACTIVITY_KINDS,
+  buildCouponPacks,
+  couponNameFor,
+  packGrant,
+} from "../lib/activity/coupons";
 import {
   DEFAULT_COUPON_PACK_CONFIG,
   sanitizeCouponPackConfig,
@@ -148,6 +153,23 @@ test("珍宝礼包：默认 200% / 500% / 1000%，倍率与限购可配置、0 =
   const packs = buildCouponPacks(custom);
   assert.equal(packs[1].dailyLimit, 3);
   assert.equal(packs[1].totalLimit, null);
+});
+
+test("珍宝礼包：每份另赠 1 张券，按活动单价折算后与倍率券面一起到账", () => {
+  const [small, medium, large] = buildCouponPacks(DEFAULT_COUPON_PACK_CONFIG);
+  assert.deepEqual(packGrant(small, 1), {
+    baseCredits: 20,
+    bonusTickets: 1,
+    bonusCredits: 1,
+    totalCredits: 21,
+  });
+  assert.deepEqual(packGrant(medium, 25.5), {
+    baseCredits: 250,
+    bonusTickets: 1,
+    bonusCredits: 25.5,
+    totalCredits: 275.5,
+  });
+  assert.equal(packGrant(large, 3).totalCredits, 1003);
 });
 
 test("活动券单价：三种活动默认 1 cr / 张，脏值回落、超限封顶", () => {

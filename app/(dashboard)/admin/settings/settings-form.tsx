@@ -269,7 +269,7 @@ export function PricingSettingsForm({ initialSettings }: PricingSettingsFormProp
               value={adjustMultiplierLow}
               onChange={(e) => setAdjustMultiplierLow(e.target.value)}
               min={0.01}
-              step={0.1}
+              step="any"
               className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
               placeholder="5"
             />
@@ -288,7 +288,7 @@ export function PricingSettingsForm({ initialSettings }: PricingSettingsFormProp
             value={adjustMultiplierHigh}
             onChange={(e) => setAdjustMultiplierHigh(e.target.value)}
             min={0.01}
-            step={0.1}
+            step="any"
             className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm"
             placeholder="1"
           />

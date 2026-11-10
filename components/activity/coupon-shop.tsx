@@ -201,7 +201,8 @@ function CouponShopItem({
                       dark ? "text-cyan-300/80" : "text-primary",
                     )}
                   >
-                    得 {formatCredits(pack.couponCredits)} cr
+                    得 {formatCredits(pack.baseCredits)} cr
+                    <span className="text-success"> +{pack.bonusTickets} 张券</span>
                   </span>
                   <span
                     className={cn(
@@ -222,8 +223,8 @@ function CouponShopItem({
             })}
           </div>
           <p className={cn("text-[11px]", dark ? "text-white/35" : "text-muted-foreground")}>
-            1 张 = {formatCredits(unitCredits)} cr；券面按 cr 1:1 抵玩法费用，当期结束后作废；
-            扣款先临时余额（tcr）、再永久余额（cr）。
+            1 张 = {formatCredits(unitCredits)} cr；礼包每份另赠 1 张当期活动券，按该单价折成券面一起入账；
+            券面按 cr 1:1 抵玩法费用，当期结束后作废；扣款先临时余额（tcr）、再永久余额（cr）。
           </p>
         </>
       ) : (

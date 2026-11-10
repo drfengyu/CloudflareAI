@@ -64,7 +64,7 @@ export async function buyCouponPackAction(input: {
     revalidateCouponPaths();
     return {
       success: true,
-      message: `已购买礼包：${result.couponName} +${result.credits} cr（实付 ${result.price} cr）`,
+      message: `已购买礼包：${result.couponName} +${formatAmount(result.credits)} cr（含赠 ${result.bonusTickets} 张，实付 ${formatAmount(result.price)} cr）`,
     };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "购买失败" };

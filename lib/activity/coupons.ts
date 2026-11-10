@@ -104,11 +104,30 @@ export function buildCouponPacks(config: CouponPackConfig): CouponPack[] {
   });
 }
 
+/** 每购买 1 份礼包固定附赠 1 张当期活动券。 */
+export const PACK_BONUS_TICKETS = 1;
+
 export interface CouponPackView extends CouponPack {
   boughtToday: number;
   boughtTotal: number;
-  /** 本次购买到账的券面 cr。 */
+  /** 倍率部分到账的券面 cr（不含赠券）。 */
+  baseCredits: number;
+  /** 每次购买附赠的活动券张数。 */
+  bonusTickets: number;
+  /** 到账合计：倍率券面 + 赠券按当期单价折算的券面。 */
   couponCredits: number;
+}
+
+/** 礼包到账口径：赠券按购买时该活动的券面单价折成 cr，与倍率券面一起入账。 */
+export function packGrant(pack: CouponPack, unitCredits: number) {
+  const baseCredits = round2((pack.priceCredits * pack.ratioPercent) / 100);
+  const bonusCredits = round2(unitCredits * PACK_BONUS_TICKETS);
+  return {
+    baseCredits,
+    bonusTickets: PACK_BONUS_TICKETS,
+    bonusCredits,
+    totalCredits: round2(baseCredits + bonusCredits),
+  };
 }
 
 interface PackUsage {
@@ -135,13 +154,22 @@ async function readPackUsage(userId: string): Promise<Map<string, PackUsage>> {
   );
 }
 
-function packViews(config: CouponPackConfig, usage: Map<string, PackUsage>): CouponPackView[] {
-  return buildCouponPacks(config).map((pack) => ({
-    ...pack,
-    boughtToday: usage.get(pack.key)?.today ?? 0,
-    boughtTotal: usage.get(pack.key)?.total ?? 0,
-    couponCredits: round2((pack.priceCredits * pack.ratioPercent) / 100),
-  }));
+function packViews(
+  config: CouponPackConfig,
+  usage: Map<string, PackUsage>,
+  unitCredits: number,
+): CouponPackView[] {
+  return buildCouponPacks(config).map((pack) => {
+    const grant = packGrant(pack, unitCredits);
+    return {
+      ...pack,
+      boughtToday: usage.get(pack.key)?.today ?? 0,
+      boughtTotal: usage.get(pack.key)?.total ?? 0,
+      baseCredits: grant.baseCredits,
+      bonusTickets: grant.bonusTickets,
+      couponCredits: grant.totalCredits,
+    };
+  });
 }
 
 interface ResolvedActivity {
@@ -246,7 +274,7 @@ export async function listActivityCoupons(userId: string): Promise<ActivityCoupo
   return activities.map((item) => ({
     ...item,
     credits: item.activityKey ? round2(balances.get(`${item.kind}|${item.activityKey}`) ?? 0) : 0,
-    packs: packViews(packConfig, usage),
+    packs: packViews(packConfig, usage, item.unitCredits),
   }));
 }
 
@@ -291,7 +319,7 @@ export async function getActivityCouponView(
     credits: activity.activityKey
       ? round2(balances.get(`${kind}|${activity.activityKey}`) ?? 0)
       : 0,
-    packs: packViews(packConfig, usage),
+    packs: packViews(packConfig, usage, activity.unitCredits),
   };
 }
 
@@ -372,7 +400,13 @@ export async function buyCouponPack(
   userId: string,
   kind: ActivityKind,
   packKey: string,
-): Promise<{ credits: number; price: number; couponName: string }> {
+): Promise<{
+  credits: number;
+  baseCredits: number;
+  bonusTickets: number;
+  price: number;
+  couponName: string;
+}> {
   const packConfig = await getCouponPackConfig();
   const pack = buildCouponPacks(packConfig).find((item) => item.key === packKey);
   if (!pack) throw new Error("礼包不存在");
@@ -391,7 +425,8 @@ export async function buyCouponPack(
   const spend = await spendCredits(userId, pack.priceCredits);
   if (!spend.ok) throw new Error(`${spend.reason}：礼包需要 ${pack.priceCredits} cr`);
 
-  const credits = round2((pack.priceCredits * pack.ratioPercent) / 100);
+  const grant = packGrant(pack, activity.unitCredits);
+  const credits = grant.totalCredits;
   const purchaseId = crypto.randomUUID();
   const now = new Date();
   let recorded = false;
@@ -431,7 +466,7 @@ export async function buyCouponPack(
       userId,
       amount: -pack.priceCredits,
       type: COUPON_TOPUP_TYPE,
-      description: `购买${pack.name}（${activity.couponName} ${credits} cr，${activity.label}）`,
+      description: `购买${pack.name}（${activity.couponName} ${formatAmount(credits)} cr，含赠 ${grant.bonusTickets} 张，${activity.label}）`,
       createdAt: now,
     });
   } catch (err) {
@@ -449,7 +484,13 @@ export async function buyCouponPack(
     throw err;
   }
 
-  return { credits, price: pack.priceCredits, couponName: activity.couponName };
+  return {
+    credits,
+    baseCredits: grant.baseCredits,
+    bonusTickets: grant.bonusTickets,
+    price: pack.priceCredits,
+    couponName: activity.couponName,
+  };
 }
 
 export interface CouponPayment {
