@@ -6,6 +6,7 @@ import {
   dealFlipBoard,
   flipActivityWindow,
   flipExpectation,
+  flipRewardTickets,
   parseFlipBoard,
   sanitizeFlipConfig,
   type FlipConfig,
@@ -37,6 +38,15 @@ test("票价与牌桌联动的返还率", () => {
     flipExpectation(config({ cardRewards: [720, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] })).expectedPerRound,
     60,
   );
+});
+
+test("券奖判定：只有券单价的整数倍才发整张", () => {
+  assert.equal(flipRewardTickets(2000, 1000), 2);
+  assert.equal(flipRewardTickets(1000, 1000), 1);
+  assert.equal(flipRewardTickets(800, 1000), null);
+  assert.equal(flipRewardTickets(2500, 1000), null);
+  assert.equal(flipRewardTickets(0, 1000), null);
+  assert.equal(flipRewardTickets(1000, 0), null);
 });
 
 test("洗牌保集合，且首张确实会变", () => {

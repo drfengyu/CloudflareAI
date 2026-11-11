@@ -221,8 +221,8 @@ export const DAILY_TASKS: TaskDef[] = [
   },
   {
     key: "daily_spend",
-    title: "消费满 50 cr",
-    hint: "今天累计消耗 50 cr",
+    title: "消费满 50 tcr",
+    hint: "今天累计消耗 50 tcr",
     href: "/wallet",
     target: 50,
     points: 20,
@@ -329,12 +329,12 @@ export const WEEKLY_MILESTONES: MilestoneDef[] = [
 ];
 
 export interface MilestoneReward {
-  kind: "temp_credits" | "permanent_credits";
+  kind: "temp_credits";
   credits: number;
   label: string;
 }
 
-/** 里程碑奖励只发货币（临时 / 永久各 60% / 40%），金额在区间内随机。 */
+/** 里程碑奖励只发临时货币（tcr），金额在区间内随机。 */
 export function rollMilestoneReward(
   milestone: MilestoneDef,
   random: () => number = Math.random,
@@ -345,11 +345,10 @@ export function rollMilestoneReward(
       Math.max(milestone.min, milestone.min + random() * (milestone.max - milestone.min)),
     ),
   );
-  const permanent = random() < 0.4;
   return {
-    kind: permanent ? "permanent_credits" : "temp_credits",
+    kind: "temp_credits",
     credits: amount,
-    label: `${amount} cr ${permanent ? "永久" : "临时"}货币`,
+    label: `${amount} tcr`,
   };
 }
 
@@ -517,21 +516,13 @@ async function ensureMilestoneRewards(
     }
     if (!reserved.fresh) continue;
 
-    const attachment: Attachment =
-      reward.kind === "permanent_credits"
-        ? {
-            kind: "credits",
-            credits: reward.credits,
-            topupType: TASK_TOPUP_TYPE,
-            rewardClaimId: reserved.id,
-          }
-        : {
-            kind: "temp_credits",
-            credits: reward.credits,
-            validDays: settings.validDays,
-            topupType: TASK_TOPUP_TYPE,
-            rewardClaimId: reserved.id,
-          };
+    const attachment: Attachment = {
+      kind: "temp_credits",
+      credits: reward.credits,
+      validDays: settings.validDays,
+      topupType: TASK_TOPUP_TYPE,
+      rewardClaimId: reserved.id,
+    };
 
     try {
       const messageId = await sendMessage({
@@ -541,9 +532,7 @@ async function ensureMilestoneRewards(
         body: [
           `你在${period === "daily" ? "今日" : "本周"}已达到 ${milestone.points} 活跃度。`,
           `随机奖励：${reward.label}，已发放到站内信，请前往领取。`,
-          reward.kind === "temp_credits"
-            ? `领取后进入临时余额，有效期 ${settings.validDays} 天。`
-            : "领取后直接进入永久余额。",
+          `领取后进入临时余额，有效期 ${settings.validDays} 天。`,
         ].join("\n"),
         attachment,
       });

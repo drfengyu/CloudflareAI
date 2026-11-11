@@ -60,7 +60,7 @@ export function TaskBoardCard({
                 {milestone.points}
               </p>
               <p className="text-[10px] text-muted-foreground">
-                {milestone.rewardLabel ?? `${milestone.min}–${milestone.max} cr`}
+                {milestone.rewardLabel ?? `${milestone.min}–${milestone.max} tcr`}
               </p>
               <p className="text-[10px] text-muted-foreground">
                 {milestone.claimState === "claimed"

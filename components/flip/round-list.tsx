@@ -29,6 +29,25 @@ function Delta({ value }: { value: number }) {
   );
 }
 
+/** 券奖的盈亏按张数算：发出张数 − 票价张数。 */
+function TicketDelta({ value }: { value: number }) {
+  return (
+    <span
+      className={cn(
+        "font-medium tabular-nums",
+        value > 0
+          ? "text-success"
+          : value < 0
+            ? "text-[color:var(--destructive)]"
+            : "text-muted-foreground",
+      )}
+    >
+      {value > 0 ? "+" : ""}
+      {value} 张
+    </span>
+  );
+}
+
 /**
  * 我的牌局：一行一局；还没翻完的那局标「待翻开」，盈亏留空。
  * 每页 10 局，翻页只换这张表（`listMyFlipRounds`），不改 URL、不整页刷新。
@@ -105,9 +124,11 @@ export function FlipRoundList({
                   <td className="px-3 py-2">
                     {reward === null ? (
                       <span className="text-muted-foreground">—</span>
+                    ) : round.rewardTickets !== null ? (
+                      <CouponCount kind="flip" count={round.rewardTickets} />
                     ) : reward > 0 ? (
                       <span className="font-medium tabular-nums text-success">
-                        +{formatCredits(reward)} cr
+                        +{formatCredits(reward)} tcr
                       </span>
                     ) : (
                       <span className="text-xs text-muted-foreground">空牌</span>
@@ -116,6 +137,10 @@ export function FlipRoundList({
                   <td className="px-3 py-2">
                     {reward === null ? (
                       <span className="text-muted-foreground">—</span>
+                    ) : round.rewardTickets !== null ? (
+                      <TicketDelta
+                        value={round.rewardTickets - couponTickets(round.priceCredits, unitCredits)}
+                      />
                     ) : (
                       <Delta value={reward - round.priceCredits} />
                     )}

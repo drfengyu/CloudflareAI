@@ -1,12 +1,15 @@
 "use client";
 
-import { formatFlipReward } from "@/lib/flip/config";
+import { flipRewardTickets, formatFlipReward } from "@/lib/flip/config";
+import { CouponCount } from "@/components/activity/coupon-badge";
 
 export interface FlipCardProps {
   /** 牌桌上的第几张（0 起），只用于展示编号。 */
   position: number;
   /** 这张牌的中奖金额；翻开前服务端不会给，null = 还没揭晓。 */
   reward: number | null;
+  /** 1 张活动券 = 多少 cr；面值正好整张时牌面显示券图标 × 张数。 */
+  unitCredits: number;
   /** 用户翻的是不是这一张。 */
   picked: boolean;
   disabled: boolean;
@@ -19,9 +22,10 @@ export interface FlipCardProps {
  * 牌背刻意做得一模一样、不给任何「这张看起来更大」的暗示——赔率只由开局那次洗牌决定，
  * 界面不该给出误导挑选的线索。
  */
-export function FlipCard({ position, reward, picked, disabled, onPick }: FlipCardProps) {
+export function FlipCard({ position, reward, unitCredits, picked, disabled, onPick }: FlipCardProps) {
   const revealed = reward !== null;
-  const label = revealed ? formatFlipReward(reward) : "";
+  const tickets = revealed ? flipRewardTickets(reward, unitCredits) : null;
+  const label = revealed ? formatFlipReward(reward, tickets) : "";
   const winning = revealed && reward > 0;
 
   return (
@@ -55,7 +59,7 @@ export function FlipCard({ position, reward, picked, disabled, onPick }: FlipCar
               winning ? "text-success" : "text-muted-foreground",
             ].join(" ")}
           >
-            {label}
+            {tickets !== null ? <CouponCount kind="flip" count={tickets} /> : label}
           </span>
           {picked ? <span className="text-[10px] text-muted-foreground">本局所选</span> : null}
         </span>

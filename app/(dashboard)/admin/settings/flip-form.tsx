@@ -7,6 +7,7 @@ import {
   FLIP_CARD_COUNT,
   FLIP_MAX_REWARD,
   flipExpectation,
+  flipRewardTickets,
   sanitizeFlipConfig,
   type FlipConfig,
 } from "@/lib/flip/config";
@@ -54,6 +55,13 @@ export function FlipForm({ initialConfig }: { initialConfig: FlipConfig }) {
     [enabled, startAt, endAt, price, couponUnit, validDays, dailyRounds, cards],
   );
   const expectation = flipExpectation(preview);
+  const couponCards = preview.cardRewards.filter(
+    (value) => flipRewardTickets(value, preview.couponUnitCredits) !== null,
+  );
+  const couponCardTickets = couponCards.reduce(
+    (sum, value) => sum + (flipRewardTickets(value, preview.couponUnitCredits) ?? 0),
+    0,
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -150,7 +158,7 @@ export function FlipForm({ initialConfig }: { initialConfig: FlipConfig }) {
             onChange={(e) => setValidDays(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">中奖 cr 进临时余额，到期作废</p>
+          <p className="mt-1 text-xs text-muted-foreground">tcr 奖进临时余额；整张券奖直接进翻牌券</p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">每日开局上限（局）</label>
@@ -170,6 +178,7 @@ export function FlipForm({ initialConfig }: { initialConfig: FlipConfig }) {
         <p className="mt-1 text-xs text-muted-foreground">
           每格就是牌桌上第几张牌的金额，0 = 空牌。开局时服务端把这 {FLIP_CARD_COUNT}
           格洗乱后落到位置上，所以格子的先后顺序不影响赔率。上限 {FLIP_MAX_REWARD} cr。
+          面值正好是券单价整数倍的格子发整张翻牌券，有零头的仍发 tcr。
         </p>
         <div className="mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-4">
           {cards.map((value, index) => (
@@ -193,6 +202,7 @@ export function FlipForm({ initialConfig }: { initialConfig: FlipConfig }) {
         <p className="font-medium">
           奖项合计 {expectation.boardTotal} cr · 每局期望 {expectation.expectedPerRound} cr · 返还率{" "}
           {expectation.returnRatePercent}% · 站点每局净回收 {expectation.houseEdge} cr
+          {couponCards.length > 0 ? ` · 其中 ${couponCards.length} 格发券 ${couponCardTickets} 张` : ""}
         </p>
         <p className="mt-1 text-muted-foreground">
           期望 = 合计 ÷ {FLIP_CARD_COUNT}，是精确值而不是模拟值：每局都从完整的一副牌里翻一张。

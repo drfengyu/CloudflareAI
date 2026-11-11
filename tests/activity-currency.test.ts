@@ -305,7 +305,8 @@ test("任务：里程碑随机奖励在区间内且逐档递增", () => {
     for (const roll of [0, 0.5, 0.999]) {
       const reward = rollMilestoneReward(milestone, queued(roll, roll));
       assert.ok(reward.credits >= milestone.min && reward.credits <= milestone.max);
-      assert.ok(reward.kind === "temp_credits" || reward.kind === "permanent_credits");
+      assert.equal(reward.kind, "temp_credits");
+      assert.ok(reward.label.endsWith("tcr"));
     }
   }
   for (let i = 1; i < WEEKLY_MILESTONES.length; i += 1) {

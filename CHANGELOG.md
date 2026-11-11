@@ -5,6 +5,29 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.40.0] - 2026-11-11
+
+### 新增
+
+- 翻牌夺宝支持券奖：新增 `flipRewardTickets(value, unitCredits)`（`lib/flip/config.ts`），奖项面值正好是当期券单价的整数倍（N ≥ 1）时翻中发 N 张**翻牌活动券**，不进 tcr 余额、不写 `topup`；有零头的奖项仍按原口径进临时余额。`flip_round` 新增 `rewardTickets` 列记录每局实发张数（NULL = 发的是 tcr / 未翻开 / 空牌，历史行不回填），迁移 027。
+- 牌桌与记录展示券奖：牌面、开牌结果、我的牌局「中奖 / 盈亏」列、战绩「累计到手 / 最好一张」与规则文案，整数倍一律显示为活动券图标 × 张数；战绩汇总新增 `wonTickets` 单列券奖，`won` 只合计 tcr 奖；「最好一张」分别聚合 tcr 最好（`best`）与券奖最好（`bestTickets` / `bestTicketCredits`）后按实发口径比较，不用 MAX(cr) 反推张数（历史 tcr 奖可能恰好是券单价整数倍）；后台翻牌表单实时提示「其中 N 格发券 M 张」。
+
+### 变更
+
+- 任务成就每日任务「消费满 50 cr」改为「消费满 50 tcr」：口径仍是当日 `usage_log.creditsUsed` 合计，tcr 消费本就计入，只改单位与文案。
+- 里程碑随机奖励只发临时货币 tcr：`rollMilestoneReward` 固定 `kind = "temp_credits"`，删除永久货币分支及相关文案；历史站内信里的永久货币附件仍按原类型领取。
+
+### 上线
+
+- **必须先执行迁移 027 再部署**：drizzle 的 `select()` 读取全部列，活动开启时 `/flip` 与结算路径都扫 `flip_round`，缺 `rewardTickets` 列会 500。
+  `node scripts/run-migration.js migrations/027_flip_coupon_rewards.sql`（纯增量可空列，回退只能 `DROP COLUMN`）。
+
+### 验证
+
+- `npm run typecheck`、`npm run lint`、`npm run build` 通过；触及文件 eslint 干净（存量 lint 错误不在本次改动文件）。
+- `npx tsx --test tests/flip-config.test.ts tests/activity-currency.test.ts` 20 项全部通过（含券奖整数倍判定与里程碑只发 tcr）。
+- UI 验证待迁移 027 应用后进行（线上库缺列时 `/flip` 无法打开）。
+
 ## [0.39.1] - 2026-11-11
 
 ### 变更

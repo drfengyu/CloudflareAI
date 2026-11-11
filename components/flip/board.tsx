@@ -16,6 +16,10 @@ export interface FlipBoardProps {
   /** 开一局扣的当期活动券张数。 */
   priceTickets: number;
   cardCount: number;
+  /** 1 张活动券 = 多少 cr；牌面券奖按它折整张。 */
+  unitCredits: number;
+  /** 牌桌所有券奖合计张数，只用于脚注说明。 */
+  boardCouponTickets: number;
   rewardValidDays: number;
   /** 今日还能开几局。 */
   roundsLeft: number;
@@ -85,20 +89,29 @@ export function FlipBoard(props: FlipBoardProps) {
         <div className="flex items-center gap-2 text-sm">
           <Sparkles className="h-4 w-4 text-muted-foreground" />
           <span className="inline-flex flex-wrap items-center gap-1.5">
-            {revealed
-              ? `本局翻开第 ${Number(outcome?.position ?? 0) + 1} 张 · ${formatFlipReward(Number(outcome?.reward ?? 0))}`
-              : round
-                ? <>
-                    本局已付
-                    <CouponCount kind="flip" count={props.priceTickets} />
-                    ，挑一张翻开
-                  </>
-                : <>
-                    开一局
-                    <CouponCount kind="flip" count={props.priceTickets} />
-                  </>}
+            {revealed ? (
+              <>
+                本局翻开第 {Number(outcome?.position ?? 0) + 1} 张 ·{" "}
+                {outcome && outcome.rewardTickets !== null ? (
+                  <CouponCount kind="flip" count={outcome.rewardTickets} />
+                ) : (
+                  formatFlipReward(Number(outcome?.reward ?? 0))
+                )}
+              </>
+            ) : round ? (
+              <>
+                本局已付
+                <CouponCount kind="flip" count={props.priceTickets} />
+                ，挑一张翻开
+              </>
+            ) : (
+              <>
+                开一局
+                <CouponCount kind="flip" count={props.priceTickets} />
+              </>
+            )}
           </span>
-          {outcome && Number(outcome.reward) > 0 ? (
+          {outcome && Number(outcome.reward) > 0 && outcome.rewardTickets === null ? (
             <span className="text-xs text-muted-foreground">
               （tcr 临时余额，{outcome.rewardValidDays} 天内有效）
             </span>
@@ -119,6 +132,7 @@ export function FlipBoard(props: FlipBoardProps) {
             key={position}
             position={position}
             reward={revealed ? revealed[position] : null}
+            unitCredits={props.unitCredits}
             picked={revealed ? outcome?.position === position : false}
             disabled={revealed !== null || round === null || busy !== null}
             onPick={() => void onFlip(position)}
@@ -151,8 +165,11 @@ export function FlipBoard(props: FlipBoardProps) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        牌桌共 {props.cardCount} 张，奖项合计 {formatCredits(props.boardTotal)} tcr，
-        每局期望 {formatCredits(props.expectedPerRound)} tcr（= 合计 ÷ {props.cardCount}），
+        牌桌共 {props.cardCount} 张，奖项按券面合计 {formatCredits(props.boardTotal)} tcr
+        {props.boardCouponTickets > 0
+          ? `（其中 ${props.boardCouponTickets} 张以翻牌券发放）`
+          : ""}
+        ，每局期望 {formatCredits(props.expectedPerRound)} tcr（= 合计 ÷ {props.cardCount}），
         中奖概率 {props.hitChancePercent}%。位置与奖项的对应关系是开局时洗出来的，
         洗完直接落库，翻开前不告诉任何人。
       </p>

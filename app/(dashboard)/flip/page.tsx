@@ -5,7 +5,7 @@ import { FlipBoard } from "@/components/flip/board";
 import { FlipRoundList } from "@/components/flip/round-list";
 import { formatCredits } from "@/lib/billing/credits";
 import { requireUser } from "@/lib/usage/meter";
-import { FLIP_CARD_COUNT, flipActivityKey, flipActivityWindow, flipExpectation } from "@/lib/flip/config";
+import { FLIP_CARD_COUNT, flipActivityKey, flipActivityWindow, flipExpectation, flipRewardTickets } from "@/lib/flip/config";
 import { getFlipConfig } from "@/lib/flip/settings";
 import { countRoundsToday, findOpenRound, type PendingRound } from "@/lib/flip/store";
 import { flipGlobalStats, flipSummary, listMyRounds, FLIP_ROUND_PAGE_SIZE, type FlipGlobalStats, type FlipRoundView, type FlipSummary } from "@/lib/flip/records";
@@ -18,7 +18,16 @@ import { PageBody } from "@/components/dashboard/section";
 
 export const dynamic = "force-dynamic";
 
-const EMPTY_SUMMARY: FlipSummary = { rounds: 0, spent: 0, won: 0, best: 0, blanks: 0 };
+const EMPTY_SUMMARY: FlipSummary = {
+  rounds: 0,
+  spent: 0,
+  won: 0,
+  wonTickets: 0,
+  best: 0,
+  bestTickets: 0,
+  bestTicketCredits: 0,
+  blanks: 0,
+};
 const EMPTY_GLOBAL_STATS: FlipGlobalStats = { totalRounds: 0, players: 0, paidOut: 0 };
 
 function Notice({ title, hint }: { title: string; hint: string }) {
@@ -67,6 +76,10 @@ export default async function FlipPage() {
   const activityKey = flipActivityKey(config);
   const expectation = flipExpectation(config);
   const priceTickets = ticketsForCost(config.roundPriceCredits, config.couponUnitCredits);
+  const boardCouponTickets = config.cardRewards.reduce(
+    (sum, value) => sum + (flipRewardTickets(value, config.couponUnitCredits) ?? 0),
+    0,
+  );
 
   // 活动没开或还没开始时，一条 flip_round 查询都不发：这一轮没人能开局，读了也只有零值，
   // 白占 D1 的每日读额度。已经结束的轮次要读——用户回来对账看他赢了多少。
@@ -91,6 +104,10 @@ export default async function FlipPage() {
   // 多取的那一条只用来探测「还有下一页」，翻页本身走卡片内的局部刷新。
   const hasMoreRounds = fetchedRounds.length > FLIP_ROUND_PAGE_SIZE;
   const rounds = fetchedRounds.slice(0, FLIP_ROUND_PAGE_SIZE);
+  // 「最好一张」按实发口径比较：券奖看 rewardTickets / 面值，tcr 奖看 rewardCredits，
+  // 不能用 MAX(cr) 反推券张数——历史 tcr 奖可能恰好是券单价的整数倍。
+  const bestIsTickets =
+    summary.bestTickets > 0 && summary.bestTicketCredits >= summary.best;
 
   const recordsCard = (
     <Card>
@@ -137,7 +154,9 @@ export default async function FlipPage() {
             {formatCredits(expectation.expectedPerRound)} tcr，<b>不靠「抽多了才准」</b>。
           </li>
           <li>
-            中奖金额进<b>临时余额（tcr）</b>，有效期 {config.rewardValidDays} 天，到期未用自动作废；
+            面值正好是券单价整数倍的奖项发<b>整张翻牌券</b>（
+            <CouponCount kind="flip" count={1} /> = {formatCredits(config.couponUnitCredits)} cr 券面）；
+            其余奖项进<b>临时余额（tcr）</b>，有效期 {config.rewardValidDays} 天，到期未用自动作废。
             开局票价从当期活动券扣（每局 <CouponCount kind="flip" count={priceTickets} />），
             活动券按本玩法单价兑换（1 张 = {formatCredits(config.couponUnitCredits)} cr），不足需先兑换。
           </li>
@@ -188,13 +207,29 @@ export default async function FlipPage() {
           <Stat
             icon={Gem}
             label="累计到手"
-            value={`${formatCredits(summary.won)} tcr`}
+            value={
+              <span className="inline-flex flex-wrap items-center gap-1">
+                {`${formatCredits(summary.won)} tcr`}
+                {summary.wonTickets > 0 ? (
+                  <>
+                    <span className="text-muted-foreground">+</span>
+                    <CouponCount kind="flip" count={summary.wonTickets} iconClassName="h-4 w-4" />
+                  </>
+                ) : null}
+              </span>
+            }
             hint={`其中 ${summary.blanks} 局翻到空牌`}
           />
           <Stat
             icon={Trophy}
             label="最好一张"
-            value={`${formatCredits(summary.best)} tcr`}
+            value={
+              bestIsTickets ? (
+                <CouponCount kind="flip" count={summary.bestTickets} iconClassName="h-4 w-4" />
+              ) : (
+                `${formatCredits(summary.best)} tcr`
+              )
+            }
             hint={`${globalStats.players} 人参与 · 全站 ${globalStats.totalRounds} 局`}
           />
         </div>
@@ -212,6 +247,8 @@ export default async function FlipPage() {
             <FlipBoard
               priceTickets={priceTickets}
               cardCount={FLIP_CARD_COUNT}
+              unitCredits={config.couponUnitCredits}
+              boardCouponTickets={boardCouponTickets}
               rewardValidDays={config.rewardValidDays}
               dailyRounds={config.dailyRounds}
               roundsLeft={Math.max(0, config.dailyRounds - roundsToday)}

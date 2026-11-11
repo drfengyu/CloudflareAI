@@ -168,7 +168,18 @@ export function flipExpectation(config: FlipConfig): FlipExpectation {
   };
 }
 
-export function formatFlipReward(value: number): string {
+/** 奖项折成整张活动券：面值正好是券单价的 N 倍（N ≥ 1）才算券奖。 */
+export function flipRewardTickets(value: number, unitCredits: number): number | null {
+  const amount = round2(value);
+  const unit = round2(unitCredits);
+  if (!(amount > 0) || !(unit > 0)) return null;
+  const tickets = Math.round(amount / unit);
+  if (tickets < 1) return null;
+  return Math.abs(amount - round2(tickets * unit)) < 0.005 ? tickets : null;
+}
+
+export function formatFlipReward(value: number, tickets: number | null = null): string {
+  if (tickets !== null) return `${tickets} 张翻牌券`;
   const n = round2(value);
   return n > 0 ? `+${n} tcr` : "空牌";
 }

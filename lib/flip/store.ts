@@ -1,13 +1,14 @@
 import { and, asc, eq, gte, sql } from "drizzle-orm";
 import { d1Run, db } from "@/lib/db/d1-http";
 import { flipRounds, temporaryBalances, topups, type FlipRound } from "@/lib/db/schema";
-import { payWithCoupon, refundCouponPayment } from "@/lib/activity/coupons";
+import { couponNameFor, grantCouponToRound, payWithCoupon, refundCouponPayment } from "@/lib/activity/coupons";
 import { cnStartOfToday } from "@/lib/date";
 import {
   dealFlipBoard,
   FLIP_CARD_COUNT,
   flipActivityKey,
   flipActivityWindow,
+  flipRewardTickets,
   formatFlipReward,
   parseFlipBoard,
   round2,
@@ -135,6 +136,8 @@ export interface FlipOutcome {
   position: number;
   /** 本张牌的实发 cr，0 = 空牌。 */
   reward: number;
+  /** 券奖实发的整张数；null = 本张发的是 tcr（或空牌）。 */
+  rewardTickets: number | null;
   priceCredits: number;
   /** 结算后揭晓的整副牌桌；翻开之前它不会离开服务端。 */
   board: number[];
@@ -177,16 +180,28 @@ export async function flipCard(
 
   const board = parseFlipBoard(round.board);
   const reward = round2(board[position] ?? 0);
+  const rewardTickets = flipRewardTickets(reward, config.couponUnitCredits);
   const priceCredits = Number(round.priceCredits);
 
   const claimed = await d1Run(
-    "UPDATE flip_round SET status = 'settled', position = ?, rewardCredits = ?, settledAt = ? " +
+    "UPDATE flip_round SET status = 'settled', position = ?, rewardCredits = ?, rewardTickets = ?, settledAt = ? " +
       "WHERE id = ? AND userId = ? AND status = 'open'",
-    [position, reward, now.getTime(), roundId, userId],
+    [position, reward, rewardTickets, now.getTime(), roundId, userId],
   );
   if (claimed.changes !== 1) throw new FlipError("这一局已经翻过了，开新的一局吧");
 
-  if (reward > 0) {
+  if (rewardTickets !== null) {
+    // 券奖按整张进当期翻牌券，不写 tcr 余额，也不进 cr 账本。
+    try {
+      await grantCouponToRound(userId, "flip", activityKey, couponNameFor("flip", activityKey), reward);
+    } catch (error) {
+      await d1Run(
+        "UPDATE flip_round SET status = 'open', position = NULL, rewardCredits = NULL, rewardTickets = NULL, settledAt = NULL WHERE id = ?",
+        [roundId],
+      ).catch(() => undefined);
+      throw error;
+    }
+  } else if (reward > 0) {
     const expiresAt = new Date(now.getTime() + config.rewardValidDays * DAY_MS);
     const cardLabel = `第 ${position + 1} 张`;
     try {
@@ -211,12 +226,20 @@ export async function flipCard(
     } catch (error) {
       // 退回未翻状态：奖励没发出去，这局不该算完，用户重点那张牌即可。
       await d1Run(
-        "UPDATE flip_round SET status = 'open', position = NULL, rewardCredits = NULL, settledAt = NULL WHERE id = ?",
+        "UPDATE flip_round SET status = 'open', position = NULL, rewardCredits = NULL, rewardTickets = NULL, settledAt = NULL WHERE id = ?",
         [roundId],
       ).catch(() => undefined);
       throw error;
     }
   }
 
-  return { roundId, position, reward, priceCredits, board, rewardValidDays: config.rewardValidDays };
+  return {
+    roundId,
+    position,
+    reward,
+    rewardTickets,
+    priceCredits,
+    board,
+    rewardValidDays: config.rewardValidDays,
+  };
 }

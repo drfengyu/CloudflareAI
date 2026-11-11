@@ -904,6 +904,8 @@ export const flipRounds = sqliteTable(
     position: integer("position"),
     /** 该位置的实发 cr；未翻为 null。 */
     rewardCredits: real("rewardCredits"),
+    /** 券奖的实发整张数；null = 发的是 tcr（或还没翻/空牌）。 */
+    rewardTickets: integer("rewardTickets"),
     createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
     settledAt: integer("settledAt", { mode: "timestamp_ms" }),
   },
