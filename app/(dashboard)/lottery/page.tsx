@@ -18,6 +18,7 @@ import {
 import { countConsecutiveMisses, hasUsedFreeDrawToday } from "@/lib/lottery/store";
 import {
   DRAW_RECORD_PAGE_SIZE,
+  MY_RECORDS_LIMIT,
   listDrawRecords,
   listRecentBigWins,
   lotteryBalance,
@@ -129,8 +130,8 @@ export default async function LotteryPage() {
       getActivityCouponView(userId, "lottery"),
     ]);
 
-  // 当期口径的开奖总数即累计统计行的 draws，可直接当分页总数，不必再 COUNT 明细。
-  const recordTotal = (activityKey ? currentStats?.draws : myStats.draws) ?? 0;
+  // 当期口径的开奖总数即累计统计行的 draws；用户侧只展示最新 MY_RECORDS_LIMIT 条，更早的不再翻页。
+  const recordTotal = Math.min((activityKey ? currentStats?.draws : myStats.draws) ?? 0, MY_RECORDS_LIMIT);
   const recordTotalPages = Math.max(1, Math.ceil(recordTotal / DRAW_RECORD_PAGE_SIZE));
 
   const recordsCard = (

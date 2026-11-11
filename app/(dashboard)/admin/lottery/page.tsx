@@ -60,7 +60,7 @@ export default async function AdminLotteryPage({
   return (
     <>
       <PageHeader
-        title="活动记录"
+        title="转盘记录"
         description="幸运转盘 · 用户参与明细与站点收益"
       />
 

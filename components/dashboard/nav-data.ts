@@ -91,7 +91,7 @@ export const NAV: NavGroup[] = [
       { href: "/admin/users", label: "用户管理", icon: Users },
       { href: "/admin/redemptions", label: "兑换码", icon: Ticket },
       { href: "/admin/orders", label: "订单管理", icon: Receipt },
-      { href: "/admin/lottery", label: "活动记录", icon: Sparkles },
+      { href: "/admin/lottery", label: "转盘记录", icon: Sparkles },
       { href: "/admin/raiden", label: "雷电记录", icon: Crosshair },
       { href: "/admin/pricing", label: "定价管理", icon: Settings },
       { href: "/admin/settings", label: "系统设置", icon: Settings },

@@ -111,10 +111,11 @@ function ActivityRoundTable({ records }: { records: DrawRecord[] }) {
 }
 
 /**
- * 我的活动记录：只展示当期活动的战绩与逐次开奖明细。
+ * 我的转盘记录：只展示当期活动的战绩与逐次开奖明细。
  *
  * 净收益按**已开奖的注**算（中奖 − 倒扣 − 消耗），消耗按开奖时实际抵扣的活动券面值计。
- * 明细每页 10 条，翻页只换这张卡的表格（`listMyActivityRecords`），不改 URL、不整页刷新。
+ * 明细只取当期最新 30 条（MY_RECORDS_LIMIT），每页 10 条、最多 3 页，翻页只换这张卡的表格
+ * （`listMyActivityRecords`），不改 URL、不整页刷新；战绩汇总仍按当期全量。
  */
 export function LotteryRecords({
   balance,
@@ -149,7 +150,7 @@ export function LotteryRecords({
       setTotalPages(result.totalPages);
       setPage(target);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "加载活动记录失败");
+      toast.error(error instanceof Error ? error.message : "加载转盘记录失败");
     } finally {
       setPaging(false);
     }
@@ -159,9 +160,9 @@ export function LotteryRecords({
     <Card>
       <CardHeader className="pb-3">
         <CardTitle className="flex items-baseline justify-between gap-3 text-base">
-          <span>我的活动记录</span>
+          <span>我的转盘记录</span>
           <span className="text-xs font-normal text-muted-foreground">
-            仅显示当期活动 · 每页 {pageSize} 条
+            仅显示当期最新 30 条 · 每页 {pageSize} 条
           </span>
         </CardTitle>
       </CardHeader>

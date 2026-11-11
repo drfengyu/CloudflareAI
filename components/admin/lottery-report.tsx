@@ -80,7 +80,7 @@ function Signed({ value, suffix = " cr" }: { value: number; suffix?: string }) {
 }
 
 /**
- * 活动记录报告：时间窗标签、概览数字、按用户汇总、逐次明细共用一份状态。
+ * 转盘记录报告：时间窗标签、概览数字、按用户汇总、逐次明细共用一份状态。
  *
  * 切窗口一次换全套（`loadActivityReport`），只翻页时只换明细（`listAdminDrawRecords`）——
  * 概览若跟着单页明细走会自相矛盾，所以窗口与页码分开取。两条路径都不改 URL、不整页刷新。
@@ -116,7 +116,7 @@ export function LotteryReport({
       setRange(target);
       setPage(1);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "加载活动记录失败");
+      toast.error(error instanceof Error ? error.message : "加载转盘记录失败");
     } finally {
       setLoading(false);
     }
@@ -164,12 +164,17 @@ export function LotteryReport({
           </div>
         </CardHeader>
         <CardContent className={cn("space-y-3", loading && "opacity-60")}>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
             <Metric
               label="站点净收益"
               value={`${formatCredits(balance.net)} cr`}
               tone={balance.net >= 0 ? "positive" : "negative"}
               hint="消耗 + 回收 − 发放"
+            />
+            <Metric
+              label="已开奖消耗"
+              value={`${formatCredits(balance.ticketFace)} cr`}
+              hint="开奖抵扣券面 · 计入净收益"
             />
             <Metric
               label="礼包让利"

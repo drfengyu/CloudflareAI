@@ -8,7 +8,7 @@ import { round2 } from "./prize-math";
 import { LOTTERY_STATS_ALL_SCOPE } from "./stats";
 
 /**
- * 活动记录读取层：用户侧逐次明细 + 管理侧收益聚合。
+ * 转盘记录读取层：用户侧逐次明细 + 管理侧收益聚合。
  *
  * 不新增账本表——买券的钱在 `lottery_ticket.priceCredits`、开奖的账在
  * `lottery_draw.deltaCredits`，两边已经逐笔记全了，这里只做读取。
@@ -273,8 +273,11 @@ export async function lotteryPackDiscount(win?: LotteryWindow): Promise<number> 
   return round2(Number(rows[0]?.discount ?? 0));
 }
 
-/** 活动记录每页条数：首屏与卡片内局部翻页共用，超过一页才在卡片底部翻页。 */
+/** 转盘记录每页条数：首屏与卡片内局部翻页共用，超过一页才在卡片底部翻页。 */
 export const DRAW_RECORD_PAGE_SIZE = 10;
+
+/** 用户侧「我的转盘记录」只保留当期最新 30 条：用户主要看最近单抽 / 10 连的结果，更早的明细不再翻页展示（管理端不受此限）。 */
+export const MY_RECORDS_LIMIT = 30;
 
 /** 后台时间窗按北京时间算，与用量看板一致；「全部」即不加过滤。 */
 export function rangeWindow(range: string): LotteryWindow | undefined {
@@ -285,7 +288,7 @@ export function rangeWindow(range: string): LotteryWindow | undefined {
   return undefined;
 }
 
-/** 逐次明细：用户侧「我的活动记录」与管理侧「最近开奖」共用。 */
+/** 逐次明细：用户侧「我的转盘记录」与管理侧「最近开奖」共用。 */
 export async function listDrawRecords(opts: {
   win?: LotteryWindow;
   userId?: string;

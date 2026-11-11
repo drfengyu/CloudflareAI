@@ -344,7 +344,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   - 资金：买券「临时余额→永久余额」且不透支；中奖进带过期的临时余额；倒扣直接扣永久余额、允许负数；统一 `topup` type 6，不写 `usage_log`
   - 展示：扇区/规则/结果/流水一律实际 cr。**内圈存绝对 cr、外圈存倍数 × 基数（`ticket`/`batch`）**，所以券价是独立的利润率杠杆：奖池不动、调高券价，返还率就下降。想让奖池跟着券价走，用后台的「按 ×N 重算内圈」按钮（显式动作，不做默认耦合）
   - 后台：`/admin/settings` 新卡片配奖池与累抽档位，顶部实时显示内圈期望 / 外圈期望 / 单券综合 / 返还率 / 站点每券净得（默认池按券价 100 配平到约 91.1%），外圈每行现算该档实际 cr
-  - 记录：`lib/lottery/records.ts` 只读聚合（不新增表）——用户侧「我的活动记录」逐次明细 + 汇总，管理侧 `/admin/lottery` 按今日/近 7 日/近 30 日窗口出站点净收益、按用户聚合与最近 200 注明细；净收益 = 券面 + 回收 − 发放，只算已开奖的券
+  - 记录：`lib/lottery/records.ts` 只读聚合（不新增表）——用户侧「我的转盘记录」逐次明细 + 汇总，管理侧 `/admin/lottery` 按今日/近 7 日/近 30 日窗口出站点净收益、按用户聚合与最近 200 注明细；净收益 = 券面 + 回收 − 发放，只算已开奖的券
   - 奖型：外圈 `kind = "credits" | "tickets"`，赠券档直接发 `source='prize'` 的券、不动 cr 也不写流水，张数记在 `lottery_draw.grantTickets`（`migrations/008_lottery_prize_tickets.sql`）；期望返还把赠券按券价折算计入成本。**改奖池的顺序固定为「代码先上线，再写 `option.lottery_config`」**，旧代码会把 `kind:'tickets'` 读成 0 cr 奖品
 - ✅ **新用户注册奖励**（2026-06-16）：
   - 新用户注册时自动获得 2000 credits
@@ -534,15 +534,19 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.39.0（2026-11-11，转盘抽奖券移除、统一活动券 + 10 连抽修复）
+**当前版本**：v0.39.1（2026-11-11，活动记录改名转盘记录 + 概览补回已开奖消耗 + 用户侧记录限最新 30 条）
 **下一版本**：v0.40.0（尚未选型）
 
+- v0.39.1 后台「活动记录」改名「转盘记录」（导航 / `/admin/lottery` 标题 / 用户侧「我的转盘记录」卡片）；
+  收益概览在「站点净收益」后补回「已开奖消耗」指标（`balance.ticketFace`，grid 改 7 列），与「礼包让利」
+  并列区分：消耗是开奖抵扣的活动券面值、计入净收益，礼包让利是购券优惠、不进净收益。用户侧记录只显示最新
+  30 条（`MY_RECORDS_LIMIT`，10/页 ≤3 页，首屏与 `listMyActivityRecords` 都封顶并夹取页码），战绩汇总与管理端不受限。
 - v0.39.0 转盘彻底移除抽奖券：`lib/lottery/store.ts` 删除 `lockTickets` / `grantTickets` /
   `expireTicketsForActivity` 等一整套抽奖券原语，付费一律 `payWithCoupon` 整张扣当期活动券。
   修复活动券全额支付时 `lockTickets([], drawIds)` 生成空 `CASE` + `id IN ()` 导致 10 连抽报错。
   外圈活动券档与累抽档位改发当期活动券：配置 `tickets` 保留「抽奖等价」语义，实发按
   `couponTicketsForReward` / `couponCreditsForReward` 折算；新增 `lottery_milestone_grant`
-  领取记录表与 `lottery_draw.ticketCredits` 列（迁移 026）。后台活动记录用「礼包让利」替换
+  领取记录表与 `lottery_draw.ticketCredits` 列（迁移 026）。后台转盘记录用「礼包让利」替换
   「售券收入」：`coupon_pack_purchase` 的 `SUM(到账券面 − 实付)` 同时记为站点亏损与用户获利。
   消费返利、站内信、任务文案里的「抽奖券」全部改为「转盘活动券」。
 - v0.38.0 活动券全面整数张：新增 `lib/activity/ticket-math.ts`（`couponTickets` 向下取整 /
