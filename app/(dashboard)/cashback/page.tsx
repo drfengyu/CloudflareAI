@@ -16,7 +16,11 @@ import {
 } from "@/lib/cashback/claims";
 import { getRechargeActivity, type RechargeActivityStatus } from "@/lib/rewards/claims";
 import { getCashbackSettings } from "@/lib/settings";
-import { listActivityCoupons, type ActivityStatus } from "@/lib/activity/coupons";
+import {
+  listActivityCoupons,
+  listLegacyActivityCoupons,
+  type ActivityStatus,
+} from "@/lib/activity/coupons";
 import { requireUser } from "@/lib/usage/meter";
 
 export const dynamic = "force-dynamic";
@@ -43,10 +47,11 @@ export default async function CashbackPage() {
   const userId = await requireUser();
   const settings = await getCashbackSettings();
 
-  const [recharge, cashback, coupons, leaderboard, windowCredits] = await Promise.all([
+  const [recharge, cashback, coupons, legacyCoupons, leaderboard, windowCredits] = await Promise.all([
     getRechargeActivity(userId),
     getCashbackActivity(userId),
     listActivityCoupons(userId),
+    listLegacyActivityCoupons(userId),
     getUsageLeaderboard(settings, userId),
     sumCreditsSince(userId, leaderboardStartMs(settings)),
   ]);
@@ -63,7 +68,7 @@ export default async function CashbackPage() {
     <>
       <PageHeader
         title="活动中心"
-        description={`限时充值、消费返利与三种玩法券 · 奖励统一发到站内信领取 · 消费榜近 ${settings.leaderboardDays} 天`}
+        description={`限时充值、消费返利与三种新玩法券 · 经典玩法保留入口 · 奖励统一发到站内信领取 · 消费榜近 ${settings.leaderboardDays} 天`}
       />
       <PageBody className="space-y-4">
         <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
@@ -118,6 +123,36 @@ export default async function CashbackPage() {
               </Link>
             ))}
           </div>
+        </section>
+
+        <section className="space-y-2">
+          <h2 className="text-sm font-medium text-muted-foreground">经典玩法</h2>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {legacyCoupons.map((item) => (
+              <Link
+                key={item.kind}
+                href={item.href}
+                className="group flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-primary/5"
+              >
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium">{item.label}</span>
+                  <span className="block text-[11px] text-muted-foreground">
+                    {item.couponName} · {couponStatusLabel(item.status)}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-2 text-sm tabular-nums">
+                  <CouponCount
+                    kind={item.kind}
+                    count={couponTickets(item.credits, item.unitCredits)}
+                  />
+                  <span className="text-xs text-[color:var(--primary)]">进入</span>
+                </span>
+              </Link>
+            ))}
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            转盘、翻牌与雷电行动继续按原规则开放；活动券各自独立，当期结束后作废。
+          </p>
         </section>
 
         <div className="grid gap-4 lg:grid-cols-2">

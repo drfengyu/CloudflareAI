@@ -10,6 +10,7 @@ import {
   messages,
   raidenRuns,
   topups,
+  trialRuns,
   usageLogs,
 } from "@/lib/db/schema";
 import { cnDateString, cnStartOfToday, parseCnWallClock, shiftDateString } from "@/lib/date";
@@ -130,7 +131,7 @@ const apiSpend = async (userId: string, w: PeriodWindow) =>
   );
 
 const activityRuns = async (userId: string, w: PeriodWindow) => {
-  const [draws, flips, runs] = await Promise.all([
+  const [draws, flips, runs, trials] = await Promise.all([
     db
       .select({ n: sql<number>`count(*)` })
       .from(lotteryDraws)
@@ -143,8 +144,12 @@ const activityRuns = async (userId: string, w: PeriodWindow) => {
       .select({ n: sql<number>`count(*)` })
       .from(raidenRuns)
       .where(and(eq(raidenRuns.userId, userId), ...inWindow(raidenRuns.startedAt, w))),
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(trialRuns)
+      .where(and(eq(trialRuns.userId, userId), ...inWindow(trialRuns.startedAt, w))),
   ]);
-  return countFrom(draws) + countFrom(flips) + countFrom(runs);
+  return countFrom(draws) + countFrom(flips) + countFrom(runs) + countFrom(trials);
 };
 
 const claimedRewardCount = async (userId: string, w: PeriodWindow) =>

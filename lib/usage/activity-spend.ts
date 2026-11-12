@@ -5,15 +5,21 @@ import { COUPON_TOPUP_TYPE } from "@/lib/activity/coupons";
 import { TOPUP_TYPE_LOTTERY } from "@/lib/lottery/prize-math";
 import { TOPUP_TYPE_RAIDEN } from "@/lib/raiden/config";
 import { TOPUP_TYPE_FLIP } from "@/lib/flip/config";
+import { TOPUP_TYPE_TRIAL } from "@/lib/trial/config";
+import { TOPUP_TYPE_WORKSHOP } from "@/lib/workshop/config";
+import { TOPUP_TYPE_COLLECTION } from "@/lib/collection/config";
 
 /**
- * 限时活动的账本类型：6/11/12 是历史玩法流水（v0.33.0 之前的直付），
+ * 限时活动的账本类型：6/11/12/17/18/19 是各玩法的奖励或历史直付流水，
  * v0.33.0 起玩法只扣活动券，货币支出统一记在 type=15 的兑换/礼包流水上。
  */
 const ACTIVITIES = [
   { type: TOPUP_TYPE_LOTTERY, name: "幸运转盘" },
   { type: TOPUP_TYPE_RAIDEN, name: "雷电行动" },
   { type: TOPUP_TYPE_FLIP, name: "翻牌夺宝" },
+  { type: TOPUP_TYPE_TRIAL, name: "每日试炼" },
+  { type: TOPUP_TYPE_WORKSHOP, name: "灵宠工坊" },
+  { type: TOPUP_TYPE_COLLECTION, name: "星匣图鉴" },
   { type: COUPON_TOPUP_TYPE, name: "活动券兑换" },
 ] as const;
 

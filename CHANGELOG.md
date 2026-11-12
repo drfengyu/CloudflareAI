@@ -5,6 +5,32 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.42.0] - 2026-11-12
+
+### 新增
+
+- 限时活动改版，新增三个默认上线的新玩法；幸运转盘 / 翻牌夺宝 / 雷电行动的页面、数据与配置全部保留为「经典玩法」：
+  - **每日试炼**（`/trial`）：服务端生成整数四则 / 两步混合题并把答案与题目一起落库，浏览器只拿题干，交卷由服务端严格判分；每日局数上限、超时按 0 分、瞬交清零，答对题数命中最高档发 tcr。表 `trial_run`，配置 `option.trial_config`。
+  - **灵宠工坊**（`/workshop`）：三条养成线 × 9 阶，花当期工坊券采集 1~3 阶，两只同阶合成一只高一阶（确定性、不花券），任意一条线首次达到 3/5/7/9 阶发 tcr。状态存 `workshop_state`，写入用 `version` 乐观锁，撞每日上限或连续 CAS 失败退回券。配置 `option.workshop_config`。
+  - **星匣图鉴**（`/collection`）：三个星匣各 6 件，开匣先等概率选匣再按权重抽件；重复藏品折算星尘，星尘可定向兑换任意未收集藏品，集齐整匣发 tcr。状态存 `collection_state`（乐观锁），配置 `option.collection_config`。
+- `ActivityKind` 扩为 6 个，新增 `LIVE_ACTIVITY_KINDS`（试炼 / 工坊 / 图鉴）与 `LEGACY_ACTIVITY_KINDS`（转盘 / 翻牌 / 雷电）：顶栏、钱包与活动中心默认只展示新玩法三种券，经典玩法在活动中心「经典玩法」区块保留入口，券各自独立、按轮次作废。
+- 奖励只发 tcr：`topup.type` 17=每日试炼 / 18=灵宠工坊 / 19=星匣图鉴，全部归账本「活动」类目；里程碑与集齐奖励先占用 `activity_milestone` 唯一键 `(userId, activityKind, activityKey, tierKey)` 再发奖，重试不重复发放。
+- 后台系统设置新增三张数字表单卡片（每日试炼 / 灵宠工坊 / 星匣图鉴，按字段拆输入框，不写 JSON）；珍宝礼包预览改为按六个活动各自的券单价折算张数。任务成就的「活动次数」统计加入试炼局数。
+- 迁移 `028_new_activity_games.sql`：新增 `trial_run`、`workshop_state`、`collection_state` 与 `activity_milestone`（含用户索引与唯一索引）。
+
+### 上线
+
+- **开启新玩法前必须先执行迁移 028**：三个新页面在活动开启后会读写上述新表，缺表会 500。
+  `node scripts/run-migration.js migrations/028_new_activity_games.sql`（纯增量建表，回退需删表）。
+  默认配置 `enabled=false`，未开启时页面只显示「活动未开启」，不会触碰新表。
+- 本次不改动线上活动配置、券余额或既有经典玩法数据；新玩法需管理员在后台单独开启。
+
+### 验证
+
+- `npm run typecheck`、`npm run build` 通过；`npm run lint` 仅剩存量错误（不在本次改动文件）。
+- `npx tsx --test tests/*.test.ts` 96 项通过，新增 `tests/activity-games.test.ts` 覆盖出题判分、时间边界、采集权重、阶位合成、开匣抽件、集齐判定与配置兜底；账本测试同步 17/18/19 类型。
+- 新页面 UI 验证依赖迁移 028 应用后开启活动进行；本地无数据库，未对线上数据做任何写入。
+
 ## [0.41.0] - 2026-11-12
 
 ### 变更

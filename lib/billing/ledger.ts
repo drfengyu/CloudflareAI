@@ -65,6 +65,9 @@ export const TOPUP_TYPE_LABEL: Record<number, string> = {
   14: "过期作废",
   15: "活动券兑换",
   16: "礼包赠送",
+  17: "每日试炼",
+  18: "灵宠工坊",
+  19: "星匣图鉴",
 };
 
 const DAY_OF = (column: string) => `strftime('%Y-%m-%d', ${column} / 1000, 'unixepoch', '+8 hours')`;
@@ -79,7 +82,7 @@ const DAY_OF = (column: string) => `strftime('%Y-%m-%d', ${column} / 1000, 'unix
 export const LEDGER_CATEGORY_TYPES: Record<Exclude<LedgerCategory, "usage">, number[]> = {
   recharge: [1, 2, 5, 13],
   reward: [3, 4, 7, 8, 9, 10, 16],
-  activity: [6, 11, 12, 15],
+  activity: [6, 11, 12, 15, 17, 18, 19],
   expire: [TOPUP_TYPE_EXPIRE],
 };
 
@@ -336,6 +339,9 @@ const EXPIRE_SOURCE_LABEL: { pattern: RegExp; label: string }[] = [
   { pattern: /消费返利/, label: "消费返利到期" },
   { pattern: /任务/, label: "任务奖励到期" },
   { pattern: /雷电行动/, label: "雷电行动到期" },
+  { pattern: /每日试炼/, label: "每日试炼到期" },
+  { pattern: /灵宠工坊/, label: "灵宠工坊到期" },
+  { pattern: /星匣图鉴/, label: "星匣图鉴到期" },
   { pattern: /站内信/, label: "站内信奖励到期" },
 ];
 

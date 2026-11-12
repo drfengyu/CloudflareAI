@@ -10,10 +10,16 @@ import { DashboardInfoForm } from "./dashboard-info-form";
 import { LotteryForm } from "./lottery-form";
 import { RaidenForm } from "./raiden-form";
 import { FlipForm } from "./flip-form";
+import { TrialForm } from "./trial-form";
+import { WorkshopForm } from "./workshop-form";
+import { CollectionForm } from "./collection-form";
 import { CouponPackForm } from "./pack-form";
 import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
 import { sanitizeRaidenConfig } from "@/lib/raiden/config";
 import { sanitizeFlipConfig } from "@/lib/flip/config";
+import { sanitizeTrialConfig } from "@/lib/trial/config";
+import { sanitizeWorkshopConfig } from "@/lib/workshop/config";
+import { sanitizeCollectionConfig } from "@/lib/collection/config";
 import { sanitizeCouponPackConfig } from "@/lib/activity/pack-config";
 import { sanitizeCashbackTiers } from "@/lib/cashback/config";
 import { RECHARGE_ACTIVITY_DEFAULT_START, sanitizeBonusTiers } from "@/lib/payment/bonus";
@@ -74,6 +80,9 @@ export default async function AdminSettingsPage() {
   const lotteryConfig = parseConfig(settings.lottery_config, sanitizeLotteryConfig);
   const raidenConfig = parseConfig(settings.raiden_config, sanitizeRaidenConfig);
   const flipConfig = parseConfig(settings.flip_config, sanitizeFlipConfig);
+  const trialConfig = parseConfig(settings.trial_config, sanitizeTrialConfig);
+  const workshopConfig = parseConfig(settings.workshop_config, sanitizeWorkshopConfig);
+  const collectionConfig = parseConfig(settings.collection_config, sanitizeCollectionConfig);
   const packConfig = parseConfig(settings.coupon_pack_config, sanitizeCouponPackConfig);
 
   // 充值赠送与消费返利档位在库里是 JSON，交给表单前先还原成结构化值：
@@ -284,7 +293,34 @@ export default async function AdminSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">限时活动（幸运转盘）</CardTitle>
+            <CardTitle className="text-base">限时活动（每日试炼）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TrialForm initialConfig={trialConfig} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">限时活动（灵宠工坊）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <WorkshopForm initialConfig={workshopConfig} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">限时活动（星匣图鉴）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CollectionForm initialConfig={collectionConfig} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">经典玩法（幸运转盘）</CardTitle>
           </CardHeader>
           <CardContent>
             <LotteryForm initialConfig={lotteryConfig} />
@@ -293,7 +329,7 @@ export default async function AdminSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">限时活动（雷电行动）</CardTitle>
+            <CardTitle className="text-base">经典玩法（雷电行动）</CardTitle>
           </CardHeader>
           <CardContent>
             <RaidenForm initialConfig={raidenConfig} />
@@ -302,7 +338,7 @@ export default async function AdminSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">限时活动（翻牌夺宝）</CardTitle>
+            <CardTitle className="text-base">经典玩法（翻牌夺宝）</CardTitle>
           </CardHeader>
           <CardContent>
             <FlipForm initialConfig={flipConfig} />
@@ -320,6 +356,9 @@ export default async function AdminSettingsPage() {
                 lottery: lotteryConfig.couponUnitCredits,
                 flip: flipConfig.couponUnitCredits,
                 raiden: raidenConfig.couponUnitCredits,
+                trial: trialConfig.couponUnitCredits,
+                workshop: workshopConfig.couponUnitCredits,
+                collection: collectionConfig.couponUnitCredits,
               }}
             />
           </CardContent>

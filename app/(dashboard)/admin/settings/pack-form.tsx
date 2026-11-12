@@ -81,12 +81,14 @@ function Field({
   );
 }
 
+type ActivityKindKey = "lottery" | "flip" | "raiden" | "trial" | "workshop" | "collection";
+
 export function CouponPackForm({
   initialConfig,
   unitCredits,
 }: {
   initialConfig: CouponPackConfig;
-  unitCredits: { lottery: number; flip: number; raiden: number };
+  unitCredits: Record<ActivityKindKey, number>;
 }) {
   const [rows, setRows] = useState<Row[]>(() =>
     initialConfig.packs.map((pack) => toRow(pack, unitCredits.lottery)),
@@ -151,8 +153,8 @@ export function CouponPackForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        档位由三个活动共用，可增删（最多 {MAX_COUPON_PACKS} 个）：每档填整数张数与倍率，
-        实付价按「张数 × 该活动券单价 × 100 ÷ 倍率」实时折算，三个活动券价不同则实付不同；
+        档位由各限时活动共用，可增删（最多 {MAX_COUPON_PACKS} 个）：每档填整数张数与倍率，
+        实付价按「张数 × 该活动券单价 × 100 ÷ 倍率」实时折算，各活动券价不同则实付不同；
         限购按「用户 + 档位」统计，0 = 不限，每日限购按北京时间自然日重置；
         赠券张数在倍率张数上叠加；赠送的 tcr 到期作废。
       </p>
@@ -161,6 +163,9 @@ export function CouponPackForm({
         {rows.map((row, index) => {
           const setting = preview.packs[index] ?? preview.packs[0];
           const perActivity = [
+            { label: "试炼", credits: unitCredits.trial },
+            { label: "工坊", credits: unitCredits.workshop },
+            { label: "图鉴", credits: unitCredits.collection },
             { label: "转盘", credits: unitCredits.lottery },
             { label: "翻牌", credits: unitCredits.flip },
             { label: "雷电", credits: unitCredits.raiden },

@@ -201,7 +201,7 @@ export const topups = sqliteTable("topup", {
     .references(() => users.id, { onDelete: "cascade" }),
   /** 变动金额（credits，可正可负，支持小数）。 */
   amount: real("amount").notNull(),
-  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励 / 8=消费返利 / 9=任务成就 / 10=充值赠送 / 11=雷电行动（装备/复活为负、通关奖励为正） / 12=翻牌夺宝（票价为负、中奖为正） / 13=站内信奖励 / 14=过期作废（清理 cron 补记，金额为负，createdAt 用原到期时间） / 15=活动券兑换（付出 cr 记负）。 */
+  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励 / 8=消费返利 / 9=任务成就 / 10=充值赠送 / 11=雷电行动（装备/复活为负、通关奖励为正） / 12=翻牌夺宝（票价为负、中奖为正） / 13=站内信奖励 / 14=过期作废（清理 cron 补记，金额为负，createdAt 用原到期时间） / 15=活动券兑换（付出 cr 记负） / 16=礼包赠送 tcr / 17=每日试炼奖励 / 18=灵宠工坊 / 19=星匣图鉴。 */
   type: integer("type").notNull(),
   /** 描述：如"兑换码 ABC123"、"管理员充值"、"后台调整"。 */
   description: text("description"),
@@ -560,7 +560,11 @@ export const activityTaskClaims = sqliteTable(
   ],
 );
 
-export type ActivityKind = "lottery" | "flip" | "raiden";
+/**
+ * 活动 id：前三项是 2026-11 之前上线的经典玩法，保留可玩；后三项是替换上线的新玩法。
+ * 券行、礼包记录与里程碑都按这个值隔离，所以只能加、不能改已有值。
+ */
+export type ActivityKind = "lottery" | "flip" | "raiden" | "trial" | "workshop" | "collection";
 
 /**
  * 任务成就领取记录：一行 = 一个用户领取过某个任务，之后不再重复发。
@@ -916,6 +920,113 @@ export const flipRounds = sqliteTable(
 );
 
 export type FlipRound = typeof flipRounds.$inferSelect;
+
+/**
+ * 限时活动·每日试炼：一次挑战一行。
+ *
+ * 题目与答案在开局时写进这一行，交卷只做对答案——答案从不进响应体。
+ * 每日次数按 `startedAt` 落在北京自然日内的行数统计，不用额外的计数列。
+ */
+export const trialRuns = sqliteTable(
+  "trial_run",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** 活动轮次标识（活动 startAt 字符串）。 */
+    activityKey: text("activityKey").notNull(),
+    /** active=答题中 / scored=已交卷 / expired=超时未交。 */
+    status: text("status").$type<"active" | "scored" | "expired">().notNull().default("active"),
+    /** 题目 JSON：[{prompt, answer}]；answer 只留给服务端判分。 */
+    questions: text("questions").notNull(),
+    questionCount: integer("questionCount").notNull(),
+    /** 答对题数；未交卷为 0。 */
+    correct: integer("correct").notNull().default(0),
+    durationMs: integer("durationMs").notNull().default(0),
+    /** 本次实发 tcr（按答对题数命中档位）。 */
+    rewardCredits: real("rewardCredits").notNull().default(0),
+    startedAt: integer("startedAt", { mode: "timestamp_ms" }).notNull(),
+    submittedAt: integer("submittedAt", { mode: "timestamp_ms" }),
+  },
+  (table) => [index("idx_trial_run_user").on(table.userId, table.activityKey, table.startedAt)],
+);
+
+export type TrialRun = typeof trialRuns.$inferSelect;
+
+/**
+ * 限时活动·灵宠工坊：每用户 × 活动轮次一行养成状态。
+ *
+ * 状态整体存 JSON（各条养成线的各阶数量 + 当日采集次数），写入一律走
+ * `WHERE version = ?` 的乐观锁：两个请求只有一个能推进，另一个收到「操作冲突」。
+ * 奖励只发 tcr，所以这里不存钱，只存合成进度。
+ */
+export const workshopStates = sqliteTable(
+  "workshop_state",
+  {
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    activityKey: text("activityKey").notNull(),
+    /** 乐观锁版本号：每次写入 +1。 */
+    version: integer("version").notNull().default(0),
+    state: text("state").notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.activityKey] })],
+);
+
+export type WorkshopStateRow = typeof workshopStates.$inferSelect;
+
+/** 限时活动·星匣图鉴：每用户 × 活动轮次一行收集状态（已收集条目 + 星尘 + 当日开匣数）。 */
+export const collectionStates = sqliteTable(
+  "collection_state",
+  {
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    activityKey: text("activityKey").notNull(),
+    version: integer("version").notNull().default(0),
+    state: text("state").notNull(),
+    updatedAt: integer("updatedAt", { mode: "timestamp_ms" }).notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.activityKey] })],
+);
+
+export type CollectionStateRow = typeof collectionStates.$inferSelect;
+
+/**
+ * 限时活动的一次性里程碑发放记录（工坊达标、图鉴集齐）。
+ *
+ * 唯一索引是发奖幂等的唯一依据：先插这一行，插到了才发 tcr；发奖失败就把行删掉重来。
+ * `activityKey` 进唯一键，下一轮活动可以重新拿同一档。
+ */
+export const activityMilestones = sqliteTable(
+  "activity_milestone",
+  {
+    id: text("id").primaryKey().$defaultFn(uuid),
+    userId: text("userId")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    activityKind: text("activityKind").$type<ActivityKind>().notNull(),
+    activityKey: text("activityKey").notNull(),
+    /** 里程碑键：工坊 `tier:N`（任意一条线达到该阶），图鉴 `set:key`。 */
+    tierKey: text("tierKey").notNull(),
+    /** 本次实发 tcr。 */
+    rewardCredits: real("rewardCredits").notNull().default(0),
+    createdAt: integer("createdAt", { mode: "timestamp_ms" }).$defaultFn(now),
+  },
+  (table) => [
+    unique("uq_activity_milestone").on(
+      table.userId,
+      table.activityKind,
+      table.activityKey,
+      table.tierKey,
+    ),
+  ],
+);
+
+export type ActivityMilestoneRow = typeof activityMilestones.$inferSelect;
 
 /**
  * 2026-10-17 新增：跨实例的固定窗口限流计数。

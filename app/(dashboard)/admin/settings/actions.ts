@@ -34,6 +34,22 @@ import {
   getCouponPackConfig,
   type CouponPackSetting,
 } from "@/lib/activity/pack-config";
+import {
+  TRIAL_CONFIG_KEY,
+  TRIAL_MAX_QUESTIONS,
+  TRIAL_MIN_SECONDS,
+  sanitizeTrialConfig,
+} from "@/lib/trial/config";
+import {
+  WORKSHOP_CONFIG_KEY,
+  WORKSHOP_TIER_COUNT,
+  sanitizeWorkshopConfig,
+} from "@/lib/workshop/config";
+import {
+  COLLECTION_CONFIG_KEY,
+  COLLECTION_SETS,
+  sanitizeCollectionConfig,
+} from "@/lib/collection/config";
 import { setSetting } from "@/lib/settings";
 import { saveSmtpSettings, type SmtpSettings } from "@/lib/email";
 import { sanitizeBonusTiers } from "@/lib/payment/bonus";
@@ -976,6 +992,208 @@ export async function updateFlipSettings(formData: {
 
   revalidatePath("/admin/settings");
   revalidatePath("/flip");
+
+  return { success: true };
+}
+
+/** 限时活动（每日试炼）配置的保存入口 */
+export async function updateTrialSettings(formData: {
+  enabled: boolean;
+  startAt: string;
+  endAt: string;
+  questionCount: number;
+  timeLimitSeconds: number;
+  dailyRuns: number;
+  runPriceCredits: number;
+  /** 1 张活动券兑换所需的 cr。 */
+  couponUnitCredits: number;
+  rewardValidDays: number;
+  tiers: { correct: number; reward: number }[];
+}) {
+  const currentUserId = await requireUser();
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const startAt = formData.startAt.trim();
+  const endAt = formData.endAt.trim();
+  if (formData.enabled) {
+    const startMs = parseCnWallClock(startAt);
+    const endMs = parseCnWallClock(endAt);
+    if (startMs === null) throw new Error("开始时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs === null) throw new Error("结束时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs <= startMs) throw new Error("结束时间必须晚于开始时间");
+  }
+
+  const questionCount = Math.trunc(
+    requireNumber(formData.questionCount, "每局题数", 1, TRIAL_MAX_QUESTIONS),
+  );
+  const tiers = (formData.tiers ?? []).map((tier, index) => ({
+    correct: Math.trunc(
+      requireNumber(tier?.correct, `奖励第 ${index + 1} 行的答对题数`, 1, questionCount),
+    ),
+    reward: requireNumber(tier?.reward, `奖励第 ${index + 1} 行的 tcr`, 0, 1_000_000),
+  }));
+  if (tiers.length === 0) throw new Error("至少要配一个答对奖励档位");
+
+  const config = sanitizeTrialConfig({
+    enabled: formData.enabled === true,
+    startAt,
+    endAt,
+    questionCount,
+    timeLimitSeconds: Math.trunc(
+      requireNumber(formData.timeLimitSeconds, "单局限时", TRIAL_MIN_SECONDS, 1800),
+    ),
+    dailyRuns: Math.trunc(requireNumber(formData.dailyRuns, "每日挑战次数", 1, 100)),
+    runPriceCredits: requireNumber(formData.runPriceCredits, "单局票价", 0.01, 1_000_000),
+    couponUnitCredits: requireNumber(formData.couponUnitCredits, "活动券单价", 0.01, 1_000_000),
+    rewardValidDays: Math.trunc(requireNumber(formData.rewardValidDays, "奖励有效期", 1, 3650)),
+    tiers,
+  });
+
+  await upsertOption(TRIAL_CONFIG_KEY, JSON.stringify(config));
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/trial");
+
+  return { success: true };
+}
+
+/** 限时活动（灵宠工坊）配置的保存入口 */
+export async function updateWorkshopSettings(formData: {
+  enabled: boolean;
+  startAt: string;
+  endAt: string;
+  dailyGathers: number;
+  gatherCostCredits: number;
+  /** 1 张活动券兑换所需的 cr。 */
+  couponUnitCredits: number;
+  rewardValidDays: number;
+  /** 采集落入 1/2/3 阶的权重。 */
+  gatherWeights: number[];
+  milestones: { tier: number; reward: number }[];
+}) {
+  const currentUserId = await requireUser();
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const startAt = formData.startAt.trim();
+  const endAt = formData.endAt.trim();
+  if (formData.enabled) {
+    const startMs = parseCnWallClock(startAt);
+    const endMs = parseCnWallClock(endAt);
+    if (startMs === null) throw new Error("开始时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs === null) throw new Error("结束时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs <= startMs) throw new Error("结束时间必须晚于开始时间");
+  }
+
+  const gatherWeights = [0, 1, 2].map((index) =>
+    requireNumber(formData.gatherWeights?.[index], `第 ${index + 1} 阶采集权重`, 0, 10_000),
+  );
+  if (gatherWeights.every((weight) => weight === 0)) {
+    throw new Error("采集权重不能全为 0");
+  }
+
+  const milestones = (formData.milestones ?? []).map((milestone, index) => ({
+    tier: Math.trunc(
+      requireNumber(milestone?.tier, `里程碑第 ${index + 1} 行的阶数`, 1, WORKSHOP_TIER_COUNT),
+    ),
+    reward: requireNumber(milestone?.reward, `里程碑第 ${index + 1} 行的 tcr`, 0, 1_000_000),
+  }));
+
+  const config = sanitizeWorkshopConfig({
+    enabled: formData.enabled === true,
+    startAt,
+    endAt,
+    dailyGathers: Math.trunc(requireNumber(formData.dailyGathers, "每日采集次数", 1, 200)),
+    gatherCostCredits: requireNumber(formData.gatherCostCredits, "单次采集票价", 0.01, 1_000_000),
+    couponUnitCredits: requireNumber(formData.couponUnitCredits, "活动券单价", 0.01, 1_000_000),
+    rewardValidDays: Math.trunc(requireNumber(formData.rewardValidDays, "奖励有效期", 1, 3650)),
+    gatherWeights,
+    milestones,
+  });
+
+  await upsertOption(WORKSHOP_CONFIG_KEY, JSON.stringify(config));
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/workshop");
+
+  return { success: true };
+}
+
+/** 限时活动（星匣图鉴）配置的保存入口 */
+export async function updateCollectionSettings(formData: {
+  enabled: boolean;
+  startAt: string;
+  endAt: string;
+  dailyBoxes: number;
+  openCostCredits: number;
+  /** 1 张活动券兑换所需的 cr。 */
+  couponUnitCredits: number;
+  rewardValidDays: number;
+  duplicateDust: number;
+  dustPerItem: number;
+  setRewards: { set: string; reward: number }[];
+}) {
+  const currentUserId = await requireUser();
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const startAt = formData.startAt.trim();
+  const endAt = formData.endAt.trim();
+  if (formData.enabled) {
+    const startMs = parseCnWallClock(startAt);
+    const endMs = parseCnWallClock(endAt);
+    if (startMs === null) throw new Error("开始时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs === null) throw new Error("结束时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs <= startMs) throw new Error("结束时间必须晚于开始时间");
+  }
+
+  const setRewards = COLLECTION_SETS.map((set) => {
+    const row = formData.setRewards?.find((item) => item?.set === set.key);
+    return {
+      set: set.key,
+      reward: requireNumber(row?.reward, `${set.name}集齐奖励`, 0, 1_000_000),
+    };
+  });
+
+  const config = sanitizeCollectionConfig({
+    enabled: formData.enabled === true,
+    startAt,
+    endAt,
+    dailyBoxes: Math.trunc(requireNumber(formData.dailyBoxes, "每日开匣次数", 1, 200)),
+    openCostCredits: requireNumber(formData.openCostCredits, "单次开匣票价", 0.01, 1_000_000),
+    couponUnitCredits: requireNumber(formData.couponUnitCredits, "活动券单价", 0.01, 1_000_000),
+    rewardValidDays: Math.trunc(requireNumber(formData.rewardValidDays, "奖励有效期", 1, 3650)),
+    duplicateDust: Math.trunc(requireNumber(formData.duplicateDust, "重复藏品折算星尘", 0, 1_000)),
+    dustPerItem: Math.trunc(requireNumber(formData.dustPerItem, "定向兑换所需星尘", 1, 1_000_000)),
+    setRewards,
+  });
+
+  await upsertOption(COLLECTION_CONFIG_KEY, JSON.stringify(config));
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/collection");
 
   return { success: true };
 }

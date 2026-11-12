@@ -24,7 +24,11 @@ import {
   type CashbackReward,
   type CashbackTier,
 } from "@/lib/cashback/config";
-import { resolveActivities, type ActivityKind } from "@/lib/activity/coupons";
+import {
+  resolveActivities,
+  resolveLegacyActivities,
+  type ActivityKind,
+} from "@/lib/activity/coupons";
 import { formatAmount, normalizeCurrencyText } from "@/lib/billing/units";
 
 export type CashbackSettings = Awaited<ReturnType<typeof getCashbackSettings>>;
@@ -73,10 +77,10 @@ const fmt = (v: number) => String(round2(v));
 
 /** 后台配置的一档奖励区间，展示成一句人话。 */
 export function rewardRangeLabel(tier: CashbackTier): string {
-  return `随机 ${fmt(tier.minReward)}–${fmt(tier.maxReward)} tcr 或 cr，或至多 3 张转盘活动券`;
+  return `随机 ${fmt(tier.minReward)}–${fmt(tier.maxReward)} tcr 或 cr，或至多 3 张活动券`;
 }
 
-/** 发放时随机挑一个「当前开着」的活动作为券落点；没有活动时券奖励降级成 tcr。 */
+/** 发放时随机挑一个「当前开着」的活动作为券落点；新玩法与经典玩法都在候选里。 */
 export interface CouponTarget {
   kind: ActivityKind;
   activityKey: string;
@@ -85,7 +89,9 @@ export interface CouponTarget {
 }
 
 export async function pickCouponTarget(random: () => number = Math.random): Promise<CouponTarget | null> {
-  const activities = (await resolveActivities()).filter(
+  // 经典玩法仍可玩，返利券落在它上面同样能花出去；只挑一个新玩法会让经典活动期内的券奖励被迫降级成 tcr。
+  const [live, legacy] = await Promise.all([resolveActivities(), resolveLegacyActivities()]);
+  const activities = [...live, ...legacy].filter(
     (item) => item.status === "active" && Boolean(item.activityKey),
   );
   if (activities.length === 0) return null;

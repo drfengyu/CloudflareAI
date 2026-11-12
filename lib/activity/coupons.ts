@@ -17,6 +17,12 @@ import { flipActivityKey, flipActivityWindow } from "@/lib/flip/config";
 import { getFlipConfig } from "@/lib/flip/settings";
 import { raidenActivityKey, raidenActivityWindow } from "@/lib/raiden/config";
 import { getRaidenConfig } from "@/lib/raiden/settings";
+import { trialActivityKey, trialActivityWindow } from "@/lib/trial/config";
+import { getTrialConfig } from "@/lib/trial/settings";
+import { workshopActivityKey, workshopActivityWindow } from "@/lib/workshop/config";
+import { getWorkshopConfig } from "@/lib/workshop/settings";
+import { collectionActivityKey, collectionActivityWindow } from "@/lib/collection/config";
+import { getCollectionConfig } from "@/lib/collection/settings";
 import { getCouponPackConfig, type CouponPackConfig } from "./pack-config";
 import { packGrant } from "./pack-grant";
 import { couponTickets, creditsForTickets, ticketsForCost } from "./ticket-math";
@@ -50,15 +56,27 @@ export const ACTIVITY_META: Record<ActivityKind, ActivityMeta> = {
   lottery: { kind: "lottery", label: "幸运转盘", short: "转盘券", href: "/lottery" },
   flip: { kind: "flip", label: "翻牌夺宝", short: "翻牌券", href: "/flip" },
   raiden: { kind: "raiden", label: "雷电行动", short: "雷电券", href: "/raiden" },
+  trial: { kind: "trial", label: "每日试炼", short: "试炼券", href: "/trial" },
+  workshop: { kind: "workshop", label: "灵宠工坊", short: "工坊券", href: "/workshop" },
+  collection: { kind: "collection", label: "星匣图鉴", short: "星匣券", href: "/collection" },
 };
 
-export const ACTIVITY_KINDS: ActivityKind[] = ["lottery", "flip", "raiden"];
+/** 当前上线的三个玩法：活动中心、顶栏默认只展示它们。 */
+export const LIVE_ACTIVITY_KINDS: ActivityKind[] = ["trial", "workshop", "collection"];
+
+/** 保留可玩的经典玩法：入口收在活动中心的「经典玩法」里。 */
+export const LEGACY_ACTIVITY_KINDS: ActivityKind[] = ["lottery", "flip", "raiden"];
+
+export const ACTIVITY_KINDS: ActivityKind[] = [...LIVE_ACTIVITY_KINDS, ...LEGACY_ACTIVITY_KINDS];
 
 /** 每期从池里按轮次确定一个名字：同一轮所有人看到同一张券，下一轮自然换名。 */
 const COUPON_NAMES: Record<ActivityKind, string[]> = {
   lottery: ["星轨券", "月华券", "流萤券", "极光券", "焰羽券", "银河券"],
   flip: ["翻云券", "玲珑券", "探花券", "锦鲤券", "流光券", "叠翠券"],
   raiden: ["雷霆券", "疾风券", "破阵券", "闪电券", "龙吟券", "霜刃券"],
+  trial: ["试金券", "晨星券", "破晓券", "砺心券", "明镜券", "启程券"],
+  workshop: ["育灵券", "萌宠券", "藤蔓券", "绒尾券", "灵犀券", "匠心券"],
+  collection: ["星匣券", "藏星券", "拾光券", "图鉴券", "银河匣券", "寻踪券"],
 };
 
 export type ActivityStatus = "disabled" | "pending" | "active" | "ended";
@@ -192,10 +210,25 @@ async function resolveActivity(kind: ActivityKind): Promise<ResolvedActivity> {
     status = flipActivityWindow(config).status;
     activityKey = flipActivityKey(config);
     unitCredits = config.couponUnitCredits;
-  } else {
+  } else if (kind === "raiden") {
     const config = await getRaidenConfig();
     status = raidenActivityWindow(config).status;
     activityKey = raidenActivityKey(config);
+    unitCredits = config.couponUnitCredits;
+  } else if (kind === "trial") {
+    const config = await getTrialConfig();
+    status = trialActivityWindow(config).status;
+    activityKey = trialActivityKey(config);
+    unitCredits = config.couponUnitCredits;
+  } else if (kind === "workshop") {
+    const config = await getWorkshopConfig();
+    status = workshopActivityWindow(config).status;
+    activityKey = workshopActivityKey(config);
+    unitCredits = config.couponUnitCredits;
+  } else {
+    const config = await getCollectionConfig();
+    status = collectionActivityWindow(config).status;
+    activityKey = collectionActivityKey(config);
     unitCredits = config.couponUnitCredits;
   }
   return {
@@ -207,8 +240,14 @@ async function resolveActivity(kind: ActivityKind): Promise<ResolvedActivity> {
   };
 }
 
+/** 当前上线玩法的券与状态。 */
 export async function resolveActivities(): Promise<ResolvedActivity[]> {
-  return Promise.all(ACTIVITY_KINDS.map((kind) => resolveActivity(kind)));
+  return Promise.all(LIVE_ACTIVITY_KINDS.map((kind) => resolveActivity(kind)));
+}
+
+/** 经典玩法的券与状态；只在活动中心与各自玩法页用到。 */
+export async function resolveLegacyActivities(): Promise<ResolvedActivity[]> {
+  return Promise.all(LEGACY_ACTIVITY_KINDS.map((kind) => resolveActivity(kind)));
 }
 
 export interface ActivityCouponView extends ResolvedActivity {
@@ -237,7 +276,7 @@ async function readCouponRows(
       .map((item) => `${item.kind}|${item.activityKey}`),
   );
   if (wanted.size === 0) return new Map();
-  // 一个用户的券行最多 3 条，直接按用户取回再筛，避免 D1 对复合表达式 IN 的解析坑。
+  // 一个用户的券行最多 6 条（六种玩法各一），直接按用户取回再筛，避免 D1 对复合表达式 IN 的解析坑。
   const rows = await db
     .select({
       activityKind: activityCoupons.activityKind,
@@ -255,11 +294,14 @@ async function readCouponRows(
 }
 
 /**
- * 一次取齐三种券的余额；活动轮次未配置时余额按 0 展示。
- * `resolveActivities` 需要读三份活动配置，与余额查询并发。
+ * 一次取齐若干种券的余额；默认只取当前上线的三个玩法。
+ * `resolveActivity` 要逐个读活动配置，与余额查询并发。
  */
-export async function listActivityCoupons(userId: string): Promise<ActivityCouponView[]> {
-  const activities = await resolveActivities();
+export async function listActivityCoupons(
+  userId: string,
+  kinds: ActivityKind[] = LIVE_ACTIVITY_KINDS,
+): Promise<ActivityCouponView[]> {
+  const activities = await Promise.all(kinds.map((kind) => resolveActivity(kind)));
   const [balances, usage, packConfig] = await Promise.all([
     readCouponRows(
       userId,
@@ -279,6 +321,11 @@ export async function listActivityCoupons(userId: string): Promise<ActivityCoupo
       packs: packViews(packConfig, usage, item.unitCredits),
     };
   });
+}
+
+/** 经典玩法的券余额：活动中心的「经典玩法」分区使用。 */
+export async function listLegacyActivityCoupons(userId: string): Promise<ActivityCouponView[]> {
+  return listActivityCoupons(userId, LEGACY_ACTIVITY_KINDS);
 }
 
 /** 顶栏货币条的数据：永久余额、未过期临时余额、三种活动券。 */
