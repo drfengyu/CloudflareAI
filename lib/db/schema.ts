@@ -201,7 +201,7 @@ export const topups = sqliteTable("topup", {
     .references(() => users.id, { onDelete: "cascade" }),
   /** 变动金额（credits，可正可负，支持小数）。 */
   amount: real("amount").notNull(),
-  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励 / 8=消费返利 / 9=任务成就 / 10=充值赠送 / 11=雷电行动（装备/复活为负、通关奖励为正） / 12=翻牌夺宝（票价为负、中奖为正） / 13=站内信奖励 / 14=过期作废（清理 cron 补记，金额为负，createdAt 用原到期时间） / 15=活动券兑换（付出 cr 记负） / 16=礼包赠送 tcr / 17=每日试炼奖励 / 18=灵宠工坊 / 19=星匣图鉴。 */
+  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励 / 8=消费返利 / 9=任务成就 / 10=充值赠送 / 11=雷电行动（装备/复活为负、通关奖励为正） / 12=翻牌夺宝（票价为负、中奖为正） / 13=站内信奖励 / 14=过期作废（清理 cron 补记，金额为负，createdAt 用原到期时间） / 15=活动券兑换（付出 cr 记负） / 16=礼包赠送 tcr / 17=每日试炼奖励 / 18=灵宠工坊 / 19=星图共鸣。 */
   type: integer("type").notNull(),
   /** 描述：如"兑换码 ABC123"、"管理员充值"、"后台调整"。 */
   description: text("description"),
@@ -978,7 +978,7 @@ export const workshopStates = sqliteTable(
 
 export type WorkshopStateRow = typeof workshopStates.$inferSelect;
 
-/** 限时活动·星匣图鉴：每用户 × 活动轮次一行收集状态（已收集条目 + 星尘 + 当日开匣数）。 */
+/** 限时活动·星图共鸣：每用户 × 活动轮次一行状态（星石库存 + 已点亮星位 + 星辉 + 当日观星数）。 */
 export const collectionStates = sqliteTable(
   "collection_state",
   {
@@ -996,7 +996,7 @@ export const collectionStates = sqliteTable(
 export type CollectionStateRow = typeof collectionStates.$inferSelect;
 
 /**
- * 限时活动的一次性里程碑发放记录（工坊达标、图鉴集齐）。
+ * 限时活动的一次性里程碑发放记录（工坊达标、星座完成 / 每日共鸣）。
  *
  * 唯一索引是发奖幂等的唯一依据：先插这一行，插到了才发 tcr；发奖失败就把行删掉重来。
  * `activityKey` 进唯一键，下一轮活动可以重新拿同一档。
@@ -1010,7 +1010,7 @@ export const activityMilestones = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     activityKind: text("activityKind").$type<ActivityKind>().notNull(),
     activityKey: text("activityKey").notNull(),
-    /** 里程碑键：工坊 `tier:N`（任意一条线达到该阶），图鉴 `set:key`。 */
+    /** 里程碑键：工坊 `tier:N`（任意一条线达到该阶），星图 `set:key` / `resonance:日期`。 */
     tierKey: text("tierKey").notNull(),
     /** 本次实发 tcr。 */
     rewardCredits: real("rewardCredits").notNull().default(0),

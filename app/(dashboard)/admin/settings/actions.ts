@@ -47,7 +47,7 @@ import {
 } from "@/lib/workshop/config";
 import {
   COLLECTION_CONFIG_KEY,
-  COLLECTION_SETS,
+  CONSTELLATIONS,
   sanitizeCollectionConfig,
 } from "@/lib/collection/config";
 import { setSetting } from "@/lib/settings";
@@ -1128,18 +1128,18 @@ export async function updateWorkshopSettings(formData: {
   return { success: true };
 }
 
-/** 限时活动（星匣图鉴）配置的保存入口 */
+/** 限时活动（星图共鸣）配置的保存入口 */
 export async function updateCollectionSettings(formData: {
   enabled: boolean;
   startAt: string;
   endAt: string;
-  dailyBoxes: number;
-  openCostCredits: number;
+  dailyObserves: number;
+  observeCostCredits: number;
   /** 1 张活动券兑换所需的 cr。 */
   couponUnitCredits: number;
   rewardValidDays: number;
-  duplicateDust: number;
-  dustPerItem: number;
+  /** 每日共鸣：每完成一张星座可领的 tcr。 */
+  resonanceReward: number;
   setRewards: { set: string; reward: number }[];
 }) {
   const currentUserId = await requireUser();
@@ -1163,11 +1163,11 @@ export async function updateCollectionSettings(formData: {
     if (endMs <= startMs) throw new Error("结束时间必须晚于开始时间");
   }
 
-  const setRewards = COLLECTION_SETS.map((set) => {
+  const setRewards = CONSTELLATIONS.map((set) => {
     const row = formData.setRewards?.find((item) => item?.set === set.key);
     return {
       set: set.key,
-      reward: requireNumber(row?.reward, `${set.name}集齐奖励`, 0, 1_000_000),
+      reward: requireNumber(row?.reward, `${set.name}完成奖励`, 0, 1_000_000),
     };
   });
 
@@ -1175,12 +1175,11 @@ export async function updateCollectionSettings(formData: {
     enabled: formData.enabled === true,
     startAt,
     endAt,
-    dailyBoxes: Math.trunc(requireNumber(formData.dailyBoxes, "每日开匣次数", 1, 200)),
-    openCostCredits: requireNumber(formData.openCostCredits, "单次开匣票价", 0.01, 1_000_000),
+    dailyObserves: Math.trunc(requireNumber(formData.dailyObserves, "每日观星次数", 1, 200)),
+    observeCostCredits: requireNumber(formData.observeCostCredits, "单次观星票价", 0.01, 1_000_000),
     couponUnitCredits: requireNumber(formData.couponUnitCredits, "活动券单价", 0.01, 1_000_000),
     rewardValidDays: Math.trunc(requireNumber(formData.rewardValidDays, "奖励有效期", 1, 3650)),
-    duplicateDust: Math.trunc(requireNumber(formData.duplicateDust, "重复藏品折算星尘", 0, 1_000)),
-    dustPerItem: Math.trunc(requireNumber(formData.dustPerItem, "定向兑换所需星尘", 1, 1_000_000)),
+    resonanceReward: requireNumber(formData.resonanceReward, "每日共鸣奖励", 0, 1_000_000),
     setRewards,
   });
 

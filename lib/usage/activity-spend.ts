@@ -19,7 +19,7 @@ const ACTIVITIES = [
   { type: TOPUP_TYPE_FLIP, name: "翻牌夺宝" },
   { type: TOPUP_TYPE_TRIAL, name: "每日试炼" },
   { type: TOPUP_TYPE_WORKSHOP, name: "灵宠工坊" },
-  { type: TOPUP_TYPE_COLLECTION, name: "星匣图鉴" },
+  { type: TOPUP_TYPE_COLLECTION, name: "星图共鸣" },
   { type: COUPON_TOPUP_TYPE, name: "活动券兑换" },
 ] as const;
 

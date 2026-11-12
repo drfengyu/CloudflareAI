@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
-  COLLECTION_SETS,
+  CONSTELLATIONS,
   sanitizeCollectionConfig,
   type CollectionConfig,
 } from "@/lib/collection/config";
@@ -23,15 +23,14 @@ export function CollectionForm({ initialConfig }: { initialConfig: CollectionCon
   const [enabled, setEnabled] = useState(initialConfig.enabled);
   const [startAt, setStartAt] = useState(toField(initialConfig.startAt));
   const [endAt, setEndAt] = useState(toField(initialConfig.endAt));
-  const [dailyBoxes, setDailyBoxes] = useState(String(initialConfig.dailyBoxes));
-  const [openCost, setOpenCost] = useState(String(initialConfig.openCostCredits));
+  const [dailyObserves, setDailyObserves] = useState(String(initialConfig.dailyObserves));
+  const [observeCost, setObserveCost] = useState(String(initialConfig.observeCostCredits));
   const [couponUnit, setCouponUnit] = useState(String(initialConfig.couponUnitCredits));
   const [validDays, setValidDays] = useState(String(initialConfig.rewardValidDays));
-  const [duplicateDust, setDuplicateDust] = useState(String(initialConfig.duplicateDust));
-  const [dustPerItem, setDustPerItem] = useState(String(initialConfig.dustPerItem));
+  const [resonanceReward, setResonanceReward] = useState(String(initialConfig.resonanceReward));
   const [setRewards, setSetRewards] = useState<Record<string, string>>(() =>
     Object.fromEntries(
-      COLLECTION_SETS.map((set) => [
+      CONSTELLATIONS.map((set) => [
         set.key,
         String(initialConfig.setRewards.find((item) => item.set === set.key)?.reward ?? 0),
       ]),
@@ -45,13 +44,12 @@ export function CollectionForm({ initialConfig }: { initialConfig: CollectionCon
         enabled,
         startAt: toStored(startAt),
         endAt: toStored(endAt),
-        dailyBoxes: Number(dailyBoxes),
-        openCostCredits: Number(openCost),
+        dailyObserves: Number(dailyObserves),
+        observeCostCredits: Number(observeCost),
         couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
-        duplicateDust: Number(duplicateDust),
-        dustPerItem: Number(dustPerItem),
-        setRewards: COLLECTION_SETS.map((set) => ({
+        resonanceReward: Number(resonanceReward),
+        setRewards: CONSTELLATIONS.map((set) => ({
           set: set.key,
           reward: Number(setRewards[set.key] ?? 0),
         })),
@@ -60,12 +58,11 @@ export function CollectionForm({ initialConfig }: { initialConfig: CollectionCon
       enabled,
       startAt,
       endAt,
-      dailyBoxes,
-      openCost,
+      dailyObserves,
+      observeCost,
       couponUnit,
       validDays,
-      duplicateDust,
-      dustPerItem,
+      resonanceReward,
       setRewards,
     ],
   );
@@ -78,18 +75,17 @@ export function CollectionForm({ initialConfig }: { initialConfig: CollectionCon
         enabled,
         startAt: toStored(startAt),
         endAt: toStored(endAt),
-        dailyBoxes: Number(dailyBoxes),
-        openCostCredits: Number(openCost),
+        dailyObserves: Number(dailyObserves),
+        observeCostCredits: Number(observeCost),
         couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
-        duplicateDust: Number(duplicateDust),
-        dustPerItem: Number(dustPerItem),
-        setRewards: COLLECTION_SETS.map((set) => ({
+        resonanceReward: Number(resonanceReward),
+        setRewards: CONSTELLATIONS.map((set) => ({
           set: set.key,
           reward: Number(setRewards[set.key] ?? 0),
         })),
       });
-      toast.success("星匣图鉴配置已保存");
+      toast.success("星图共鸣配置已保存");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "保存失败");
     } finally {
@@ -108,12 +104,13 @@ export function CollectionForm({ initialConfig }: { initialConfig: CollectionCon
           className="h-4 w-4 rounded border-border"
         />
         <label htmlFor="collection-enabled" className="text-sm font-medium">
-          开启星匣图鉴
+          开启星图共鸣
         </label>
       </div>
       <p className="text-xs text-muted-foreground">
-        三个星匣各 6 件藏品，开匣先等概率选星匣再按权重抽藏品；重复折算星尘，星尘可定向补缺。
-        修改开始时间等于开启新一轮活动，图鉴与集齐奖励按新轮次重计。
+        三张星座各 9 个星位：观星得到「颜色 + 亮度」星石，嵌入同色且亮度足够的星位点亮它，相邻星位都亮
+        自动连线；整张星座点亮发一次 tcr，并可按天对每座已完成星座共鸣领奖。修改开始时间等于开启新一轮
+        活动，星石、星辉与已点亮星位按新轮次重计。
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -139,24 +136,24 @@ export function CollectionForm({ initialConfig }: { initialConfig: CollectionCon
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <label className="mb-1 block text-sm font-medium">每日开匣次数</label>
+          <label className="mb-1 block text-sm font-medium">每日观星次数</label>
           <input
             type="number"
             min={1}
             step="1"
-            value={dailyBoxes}
-            onChange={(e) => setDailyBoxes(e.target.value)}
+            value={dailyObserves}
+            onChange={(e) => setDailyObserves(e.target.value)}
             className={FIELD_CLASS}
           />
           <p className="mt-1 text-xs text-muted-foreground">按北京时间自然日重置</p>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">单次开匣票价（cr）</label>
+          <label className="mb-1 block text-sm font-medium">单次观星票价（cr）</label>
           <input
             type="number"
             step="1"
-            value={openCost}
-            onChange={(e) => setOpenCost(e.target.value)}
+            value={observeCost}
+            onChange={(e) => setObserveCost(e.target.value)}
             className={FIELD_CLASS}
           />
           <p className="mt-1 text-xs text-muted-foreground">必须是券单价的整数倍</p>
@@ -171,31 +168,19 @@ export function CollectionForm({ initialConfig }: { initialConfig: CollectionCon
             onChange={(e) => setCouponUnit(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">兑换星匣券的单价</p>
+          <p className="mt-1 text-xs text-muted-foreground">兑换星图券的单价</p>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">重复藏品折算星尘</label>
+          <label className="mb-1 block text-sm font-medium">每日共鸣（tcr / 座）</label>
           <input
             type="number"
             min={0}
             step="1"
-            value={duplicateDust}
-            onChange={(e) => setDuplicateDust(e.target.value)}
+            value={resonanceReward}
+            onChange={(e) => setResonanceReward(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">抽到已收录藏品时给多少星尘</p>
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium">定向兑换所需星尘</label>
-          <input
-            type="number"
-            min={1}
-            step="1"
-            value={dustPerItem}
-            onChange={(e) => setDustPerItem(e.target.value)}
-            className={FIELD_CLASS}
-          />
-          <p className="mt-1 text-xs text-muted-foreground">换一件指定未收录藏品</p>
+          <p className="mt-1 text-xs text-muted-foreground">每座已完成星座每天可领一次</p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">奖励有效期（天）</label>
@@ -206,17 +191,17 @@ export function CollectionForm({ initialConfig }: { initialConfig: CollectionCon
             onChange={(e) => setValidDays(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">集齐奖励发 tcr，到期作废</p>
+          <p className="mt-1 text-xs text-muted-foreground">奖励发 tcr，到期作废</p>
         </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium">集齐奖励（tcr）</label>
+        <label className="block text-sm font-medium">完成星座奖励（tcr）</label>
         <div className="mt-2 grid gap-2 sm:grid-cols-3">
-          {COLLECTION_SETS.map((set) => (
+          {CONSTELLATIONS.map((set) => (
             <div key={set.key}>
               <label className="mb-1 block text-xs text-muted-foreground">
-                {set.name}（{set.items.length} 件）
+                {set.name}（{set.nodes.length} 个星位）
               </label>
               <input
                 type="number"
@@ -235,15 +220,15 @@ export function CollectionForm({ initialConfig }: { initialConfig: CollectionCon
 
       <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
         <p className="font-medium">
-          每日 {preview.dailyBoxes} 次 · 单次 {preview.openCostCredits} cr（
-          {Math.max(1, Math.round(preview.openCostCredits / Math.max(1, preview.couponUnitCredits)))} 张券）·
-          重复 +{preview.duplicateDust} 星尘 · 定向 {preview.dustPerItem} 星尘
+          每日 {preview.dailyObserves} 次观星 · 单次 {preview.observeCostCredits} cr（
+          {Math.max(1, Math.round(preview.observeCostCredits / Math.max(1, preview.couponUnitCredits)))} 张券）·
+          每日共鸣 {preview.resonanceReward} tcr / 座
         </p>
         <p className="mt-1 text-muted-foreground">
-          集齐奖励：
+          完成奖励：
           {preview.setRewards
             .map((item) => {
-              const set = COLLECTION_SETS.find((entry) => entry.key === item.set);
+              const set = CONSTELLATIONS.find((entry) => entry.key === item.set);
               return `${set?.name ?? item.set} ${item.reward} tcr`;
             })
             .join(" · ")}
@@ -251,7 +236,7 @@ export function CollectionForm({ initialConfig }: { initialConfig: CollectionCon
       </div>
 
       <Button type="submit" disabled={loading}>
-        {loading ? "保存中…" : "保存星匣图鉴配置"}
+        {loading ? "保存中…" : "保存星图共鸣配置"}
       </Button>
     </form>
   );

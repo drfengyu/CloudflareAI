@@ -8,59 +8,72 @@ import {
 } from "@/lib/activity/rewards";
 import { cnDateString } from "@/lib/date";
 import {
-  COLLECTION_SETS,
+  CONSTELLATIONS,
+  CONSTELLATION_SHARDS,
+  CRAFT_SHARDS,
+  MELT_SHARDS,
+  STAR_BRIGHTNESS_NAMES,
+  STAR_COLOR_META,
+  TOPUP_TYPE_COLLECTION,
   collectionActivityKey,
   collectionActivityWindow,
-  collectionItemKey,
-  completedSets,
-  findCollectionItem,
-  isSetComplete,
-  rollCollectionItem,
-  TOPUP_TYPE_COLLECTION,
+  completedConstellations,
+  isBrightness,
+  isStarColor,
+  nodeById,
+  rollStarStone,
   type CollectionConfig,
+  type StarColor,
 } from "./config";
+import {
+  addStones,
+  emptyCollectionState,
+  normalizeCollectionState,
+  placeStarStone,
+  type CollectionState,
+} from "./state";
 
 /**
- * 星匣图鉴的写入侧。
+ * 星图共鸣的写入侧。
  *
- * 状态（已收集条目 / 星尘 / 当日开匣数）整体存 JSON，写入用乐观锁版本号；
- * 开匣先扣券，CAS 连续失败时退回。集齐奖励先占 `activity_milestone` 唯一键再发 tcr。
+ * 状态（星石库存 / 已点亮星位 / 星辉 / 当日观星数）整体存 JSON，写入用乐观锁版本号；
+ * 观星先扣券，任何一步失败都退回。完成星座与每日共鸣先占 `activity_milestone` 唯一键再发 tcr。
  */
 
 export class CollectionError extends Error {}
 
-export interface CollectionState {
-  day: string;
-  boxesToday: number;
-  dust: number;
-  /** 藏品键 `setKey/itemKey`。 */
-  owned: string[];
-}
+export type { CollectionState } from "./state";
 
 export interface CollectionSnapshot {
   version: number;
   state: CollectionState;
 }
 
-function emptyState(day = cnDateString()): CollectionState {
-  return { day, boxesToday: 0, dust: 0, owned: [] };
+export interface CollectionActionResult {
+  state: CollectionState;
+  version: number;
+  milestoneReward: number;
+  completedSets: string[];
 }
 
-export function normalizeCollectionState(raw: unknown, day = cnDateString()): CollectionState {
-  const base = emptyState(day);
-  if (!raw || typeof raw !== "object") return base;
-  const it = raw as Partial<CollectionState>;
-  const sameDay = typeof it.day === "string" && it.day === day;
-  const valid = new Set(COLLECTION_SETS.flatMap((set) => set.items.map((item) => collectionItemKey(set.key, item.key))));
-  const owned = Array.isArray(it.owned) ? it.owned : [];
-  base.owned = Array.from(
-    new Set(owned.filter((key): key is string => typeof key === "string" && valid.has(key))),
-  );
-  base.dust = Math.max(0, Math.min(1_000_000, Math.trunc(Number(it.dust) || 0)));
-  base.boxesToday = sameDay
-    ? Math.max(0, Math.min(1_000_000, Math.trunc(Number(it.boxesToday) || 0)))
-    : 0;
-  return base;
+export interface ObserveResult extends CollectionActionResult {
+  color: StarColor;
+  brightness: 1 | 2 | 3;
+  colorName: string;
+  brightnessName: string;
+  owned: number;
+}
+
+export interface PlaceStarResult extends CollectionActionResult {
+  nodeId: string;
+  color: StarColor;
+  brightness: 1 | 2 | 3;
+  shardsGained: number;
+}
+
+export interface ResonanceResult extends CollectionActionResult {
+  reward: number;
+  constellations: string[];
 }
 
 function assertActiveWindow(config: CollectionConfig): string {
@@ -90,7 +103,7 @@ async function readState(userId: string, activityKey: string): Promise<Collectio
     )
     .limit(1);
   const row = rows[0];
-  if (!row) return { version: 0, state: emptyState() };
+  if (!row) return { version: 0, state: emptyCollectionState() };
   return { version: Number(row.version), state: normalizeCollectionState(safeParse(row.state)) };
 }
 
@@ -98,7 +111,7 @@ async function ensureStateRow(userId: string, activityKey: string): Promise<void
   await d1Run(
     `INSERT OR IGNORE INTO collection_state (userId, activityKey, version, state, updatedAt)
      VALUES (?, ?, 0, ?, ?)`,
-    [userId, activityKey, JSON.stringify(emptyState()), Date.now()],
+    [userId, activityKey, JSON.stringify(emptyCollectionState()), Date.now()],
   );
 }
 
@@ -117,13 +130,28 @@ async function writeState(
   return { version: snapshot.version + 1, state: next };
 }
 
+/** 乐观锁重试包装：apply 抛错即中止，冲突最多重试三次。 */
+async function attemptWrite<T>(
+  userId: string,
+  activityKey: string,
+  apply: (state: CollectionState) => { next: CollectionState; result: T },
+): Promise<{ snapshot: CollectionSnapshot; result: T }> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const snapshot = await readState(userId, activityKey);
+    const { next, result } = apply(snapshot.state);
+    const written = await writeState(userId, activityKey, snapshot, next);
+    if (written) return { snapshot: written, result };
+  }
+  throw new CollectionError("操作冲突，请刷新后重试");
+}
+
 async function grantSetMilestones(input: {
   userId: string;
   activityKey: string;
   config: CollectionConfig;
   state: CollectionState;
 }): Promise<{ reward: number; sets: string[] }> {
-  const done = completedSets(new Set(input.state.owned));
+  const done = completedConstellations(new Set(input.state.nodes));
   if (done.length === 0) return { reward: 0, sets: [] };
   const granted = await listGrantedMilestones(input.userId, "collection", input.activityKey);
   let reward = 0;
@@ -133,7 +161,7 @@ async function grantSetMilestones(input: {
     if (!row || row.reward <= 0) continue;
     const tierKey = `set:${setKey}`;
     if (granted.has(tierKey)) continue;
-    const meta = COLLECTION_SETS.find((set) => set.key === setKey);
+    const meta = CONSTELLATIONS.find((set) => set.key === setKey);
     const result = await grantActivityMilestone({
       userId: input.userId,
       kind: "collection",
@@ -141,7 +169,7 @@ async function grantSetMilestones(input: {
       tierKey,
       reward: row.reward,
       topupType: TOPUP_TYPE_COLLECTION,
-      description: `星匣图鉴集齐「${meta?.name ?? setKey}」奖励`,
+      description: `星图共鸣完成「${meta?.name ?? setKey}」奖励`,
       validDays: input.config.rewardValidDays,
     });
     if (result.granted) {
@@ -152,145 +180,205 @@ async function grantSetMilestones(input: {
   return { reward, sets };
 }
 
-export interface CollectionActionResult {
-  state: CollectionState;
-  version: number;
-  milestoneReward: number;
-  completedSets: string[];
-}
-
-export interface OpenBoxResult extends CollectionActionResult {
-  setKey: string;
-  itemKey: string;
-  itemName: string;
-  setName: string;
-  isNew: boolean;
-  dustGained: number;
-}
-
 /**
- * 开匣：扣一张券的票面，抽一件藏品；重复的折算星尘。
- * 并发写冲突时重试整轮，三次都失败退回券。
+ * 观星：扣一次券，抽一颗星石放进库存。
+ * 每日次数用完或连续冲突时退回券。
  */
-export async function openCollectionBox(
+export async function observeSky(
   userId: string,
   config: CollectionConfig,
-): Promise<OpenBoxResult> {
+): Promise<ObserveResult> {
   const activityKey = assertActiveWindow(config);
   await ensureStateRow(userId, activityKey);
   const paid = await payWithCoupon(
     userId,
     "collection",
     activityKey,
-    config.openCostCredits,
+    config.observeCostCredits,
     config.couponUnitCredits,
   );
   if (!paid.ok) throw new CollectionError(paid.reason);
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    let snapshot: CollectionSnapshot;
-    try {
-      snapshot = await readState(userId, activityKey);
-    } catch (error) {
-      // 读不到状态时还没有写库，券可以安全退回。
-      await refundCouponPayment(paid.payment);
-      throw error;
-    }
-    if (snapshot.state.boxesToday >= config.dailyBoxes) {
-      await refundCouponPayment(paid.payment);
-      throw new CollectionError(`今日开匣次数已用完（${config.dailyBoxes} 次），明天再来`);
-    }
-    const rolled = rollCollectionItem();
-    const key = collectionItemKey(rolled.setKey, rolled.itemKey);
-    const owned = new Set(snapshot.state.owned);
-    const isNew = !owned.has(key);
-    const dustGained = isNew ? 0 : config.duplicateDust;
-    if (isNew) owned.add(key);
-
-    const next: CollectionState = {
-      ...snapshot.state,
-      day: cnDateString(),
-      boxesToday: snapshot.state.boxesToday + 1,
-      dust: Math.min(1_000_000, snapshot.state.dust + dustGained),
-      owned: Array.from(owned),
-    };
-    const written = await writeState(userId, activityKey, snapshot, next);
-    if (!written) continue;
-
-    const milestone = await grantSetMilestones({
-      userId,
-      activityKey,
-      config,
-      state: written.state,
+  try {
+    const { snapshot, result } = await attemptWrite(userId, activityKey, (state) => {
+      if (state.observesToday >= config.dailyObserves) {
+        throw new CollectionError(`今日观星次数已用完（${config.dailyObserves} 次），明天再来`);
+      }
+      const stone = rollStarStone();
+      addStones(state, stone.color, stone.brightness, 1);
+      state.day = cnDateString();
+      state.observesToday += 1;
+      return {
+        next: state,
+        result: { stone, owned: state.observesToday },
+      };
     });
-    const meta = findCollectionItem(rolled.setKey, rolled.itemKey)!;
+    const { stone, owned } = result;
     return {
-      state: written.state,
-      version: written.version,
-      milestoneReward: milestone.reward,
-      completedSets: milestone.sets,
-      setKey: rolled.setKey,
-      itemKey: rolled.itemKey,
-      itemName: meta.item.name,
-      setName: meta.set.name,
-      isNew,
-      dustGained,
+      state: snapshot.state,
+      version: snapshot.version,
+      milestoneReward: 0,
+      completedSets: [],
+      color: stone.color,
+      brightness: stone.brightness,
+      colorName: STAR_COLOR_META[stone.color].name,
+      brightnessName: STAR_BRIGHTNESS_NAMES[stone.brightness],
+      owned,
     };
+  } catch (error) {
+    await refundCouponPayment(paid.payment);
+    throw error;
   }
-
-  await refundCouponPayment(paid.payment);
-  throw new CollectionError("操作冲突，请刷新后重试");
 }
 
-/** 星尘定向兑换：只换未收集的藏品，价格按配置的星尘数。 */
-export async function redeemCollectionItem(
+/** 把星石嵌进星位；点亮整张星座时额外给星辉并结算完成奖励。 */
+export async function placeCollectionStar(
   userId: string,
-  setId: string,
-  itemKey: string,
+  nodeId: string,
   config: CollectionConfig,
-): Promise<CollectionActionResult & { setKey: string; itemKey: string }> {
+): Promise<PlaceStarResult> {
   const activityKey = assertActiveWindow(config);
-  const meta = findCollectionItem(setId, itemKey);
-  if (!meta) throw new CollectionError("藏品不存在");
-
   await ensureStateRow(userId, activityKey);
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const snapshot = await readState(userId, activityKey);
-    const key = collectionItemKey(setId, itemKey);
-    const owned = new Set(snapshot.state.owned);
-    if (owned.has(key)) throw new CollectionError("这件藏品已经收集过了");
-    if (snapshot.state.dust < config.dustPerItem) {
-      throw new CollectionError(`星尘不足：兑换需要 ${config.dustPerItem}，当前 ${snapshot.state.dust}`);
-    }
-    if (isSetComplete(owned, setId)) throw new CollectionError("这个星匣已经集齐了");
-    owned.add(key);
-    const next: CollectionState = {
-      ...snapshot.state,
-      dust: snapshot.state.dust - config.dustPerItem,
-      owned: Array.from(owned),
-    };
-    const written = await writeState(userId, activityKey, snapshot, next);
-    if (!written) continue;
 
-    const milestone = await grantSetMilestones({
-      userId,
-      activityKey,
-      config,
-      state: written.state,
-    });
+  const { snapshot, result } = await attemptWrite(userId, activityKey, (state) => {
+    const before = new Set(completedConstellations(new Set(state.nodes)));
+    const placed = placeStarStone(state, nodeId);
+    if (!placed.ok) throw new CollectionError(placed.reason);
+    const node = nodeById(nodeId);
+    if (!node) throw new CollectionError("星位不存在");
+    const newly = completedConstellations(new Set(state.nodes)).filter((key) => !before.has(key));
+    const shardsGained = newly.length * CONSTELLATION_SHARDS;
+    if (shardsGained > 0) state.shards = Math.min(1_000_000, state.shards + shardsGained);
     return {
-      state: written.state,
-      version: written.version,
-      milestoneReward: milestone.reward,
-      completedSets: milestone.sets,
-      setKey: setId,
-      itemKey,
+      next: state,
+      result: { nodeId: node.id, brightness: placed.brightness, color: node.color, newly },
     };
-  }
-  throw new CollectionError("操作冲突，请刷新后重试");
+  });
+
+  const milestone = await grantSetMilestones({
+    userId,
+    activityKey,
+    config,
+    state: snapshot.state,
+  });
+  return {
+    state: snapshot.state,
+    version: snapshot.version,
+    milestoneReward: milestone.reward,
+    completedSets: milestone.sets,
+    nodeId: result.nodeId,
+    color: result.color,
+    brightness: result.brightness,
+    shardsGained: result.newly.length * CONSTELLATION_SHARDS,
+  };
 }
 
-/** 补领已集齐但还没发过的星匣奖励。 */
+/** 熔炼一颗星石换星辉。 */
+export async function meltStarStone(
+  userId: string,
+  color: StarColor,
+  brightness: 1 | 2 | 3,
+  config: CollectionConfig,
+): Promise<CollectionActionResult & { shardsGained: number }> {
+  const activityKey = assertActiveWindow(config);
+  if (!isStarColor(color) || !isBrightness(brightness)) {
+    throw new CollectionError("星石颜色或亮度无效");
+  }
+  const { snapshot } = await attemptWrite(userId, activityKey, (state) => {
+    if ((state.stones[color]?.[brightness - 1] ?? 0) <= 0) {
+      throw new CollectionError("这颗星石已经用完了");
+    }
+    state.stones[color][brightness - 1] -= 1;
+    state.shards = Math.min(1_000_000, state.shards + MELT_SHARDS[brightness]);
+    return { next: state, result: null };
+  });
+  return {
+    state: snapshot.state,
+    version: snapshot.version,
+    milestoneReward: 0,
+    completedSets: [],
+    shardsGained: MELT_SHARDS[brightness],
+  };
+}
+
+/** 用星辉定向凝出一颗指定颜色 / 亮度的星石。 */
+export async function craftStarStone(
+  userId: string,
+  color: StarColor,
+  brightness: 1 | 2 | 3,
+  config: CollectionConfig,
+): Promise<CollectionActionResult & { shardsSpent: number }> {
+  const activityKey = assertActiveWindow(config);
+  if (!isStarColor(color) || !isBrightness(brightness)) {
+    throw new CollectionError("星石颜色或亮度无效");
+  }
+  const cost = CRAFT_SHARDS[brightness];
+  const { snapshot } = await attemptWrite(userId, activityKey, (state) => {
+    if (state.shards < cost) {
+      throw new CollectionError(`星辉不足：凝星需要 ${cost}，当前 ${state.shards}`);
+    }
+    state.shards -= cost;
+    addStones(state, color, brightness, 1);
+    return { next: state, result: null };
+  });
+  return {
+    state: snapshot.state,
+    version: snapshot.version,
+    milestoneReward: 0,
+    completedSets: [],
+    shardsSpent: cost,
+  };
+}
+
+/**
+ * 每日共鸣：每完成一张星座，按配置领一份 tcr。
+ * 每天只能领一次，按 `resonance:<日期>` 占里程碑唯一键防止重复发放。
+ */
+export async function claimCollectionResonance(
+  userId: string,
+  config: CollectionConfig,
+): Promise<ResonanceResult> {
+  const activityKey = assertActiveWindow(config);
+  const today = cnDateString();
+  const { snapshot, result } = await attemptWrite(userId, activityKey, (state) => {
+    if (state.resonanceDay === today) {
+      throw new CollectionError("今天已经共鸣过了，明天再来");
+    }
+    const done = completedConstellations(new Set(state.nodes));
+    if (done.length === 0) throw new CollectionError("还没有点亮的星座，先把星位连起来");
+    state.resonanceDay = today;
+    return { next: state, result: done };
+  });
+
+  let reward = 0;
+  if (config.resonanceReward > 0) {
+    const granted = await listGrantedMilestones(userId, "collection", activityKey);
+    if (!granted.has(`resonance:${today}`)) {
+      const grantedResult = await grantActivityMilestone({
+        userId,
+        kind: "collection",
+        activityKey,
+        tierKey: `resonance:${today}`,
+        reward: Math.round(config.resonanceReward * result.length * 100) / 100,
+        topupType: TOPUP_TYPE_COLLECTION,
+        description: `星图共鸣 · ${result.length} 座星座 · ${today}`,
+        validDays: config.rewardValidDays,
+      });
+      reward = grantedResult.granted ? grantedResult.reward : 0;
+    }
+  }
+
+  return {
+    state: snapshot.state,
+    version: snapshot.version,
+    milestoneReward: reward,
+    completedSets: [],
+    reward,
+    constellations: result,
+  };
+}
+
+/** 补领已完成但还没发出的星座奖励。 */
 export async function claimCollectionMilestones(
   userId: string,
   config: CollectionConfig,
@@ -315,6 +403,6 @@ export async function getCollectionSnapshot(
   userId: string,
   activityKey: string | null,
 ): Promise<CollectionSnapshot> {
-  if (!activityKey) return { version: 0, state: emptyState() };
+  if (!activityKey) return { version: 0, state: emptyCollectionState() };
   return readState(userId, activityKey);
 }

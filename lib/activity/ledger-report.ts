@@ -27,17 +27,22 @@ interface ActivityLedgerMeta {
   label: string;
   /** 该活动自己的奖励流水类型；`15/16` 无独立类型，靠描述匹配。 */
   rewardType: number | null;
-  /** 描述里的活动名关键字（兑换 / 礼包流水的归属依据）。 */
-  match: string | null;
+  /** 描述里的活动名关键字（兑换 / 礼包流水的归属依据），兼容旧活动名。 */
+  match: string[] | null;
 }
 
 export const ACTIVITY_LEDGER_META: ActivityLedgerMeta[] = [
-  { key: "trial", label: "每日试炼", rewardType: TOPUP_TYPE_TRIAL, match: "试炼" },
-  { key: "workshop", label: "灵宠工坊", rewardType: TOPUP_TYPE_WORKSHOP, match: "工坊" },
-  { key: "collection", label: "星匣图鉴", rewardType: TOPUP_TYPE_COLLECTION, match: "星匣" },
-  { key: "lottery", label: "幸运转盘", rewardType: TOPUP_TYPE_LOTTERY, match: "转盘" },
-  { key: "flip", label: "翻牌夺宝", rewardType: TOPUP_TYPE_FLIP, match: "翻牌" },
-  { key: "raiden", label: "雷电行动", rewardType: TOPUP_TYPE_RAIDEN, match: "雷电" },
+  { key: "trial", label: "每日试炼", rewardType: TOPUP_TYPE_TRIAL, match: ["试炼"] },
+  { key: "workshop", label: "灵宠工坊", rewardType: TOPUP_TYPE_WORKSHOP, match: ["工坊"] },
+  {
+    key: "collection",
+    label: "星图共鸣",
+    rewardType: TOPUP_TYPE_COLLECTION,
+    match: ["星图", "星匣"],
+  },
+  { key: "lottery", label: "幸运转盘", rewardType: TOPUP_TYPE_LOTTERY, match: ["转盘"] },
+  { key: "flip", label: "翻牌夺宝", rewardType: TOPUP_TYPE_FLIP, match: ["翻牌"] },
+  { key: "raiden", label: "雷电行动", rewardType: TOPUP_TYPE_RAIDEN, match: ["雷电"] },
 ];
 
 export const ACTIVITY_LEDGER_OTHER_LABEL = "未归属活动券";
@@ -67,7 +72,9 @@ export function activityKeyForRow(typeCode: number, description: string | null):
   if (direct) return direct;
   if (typeCode !== COUPON_TOPUP_TYPE && typeCode !== PACK_BONUS_TOPUP_TYPE) return null;
   const text = description ?? "";
-  const matched = ACTIVITY_LEDGER_META.find((item) => item.match && text.includes(item.match));
+  const matched = ACTIVITY_LEDGER_META.find((item) =>
+    item.match?.some((keyword) => text.includes(keyword)),
+  );
   return matched?.key ?? "other";
 }
 
@@ -76,8 +83,11 @@ function attributionCase(alias = ""): string {
   const prefix = alias ? `${alias}.` : "";
   return `CASE
   ${ACTIVITY_LEDGER_META.map((item) => `WHEN ${prefix}type = ${item.rewardType} THEN '${item.key}'`).join("\n  ")}
-  ${ACTIVITY_LEDGER_META.map(
-    (item) => `WHEN ${prefix}type IN (${COUPON_TOPUP_TYPE}, ${PACK_BONUS_TOPUP_TYPE}) AND ${prefix}description LIKE '%${item.match}%' THEN '${item.key}'`,
+  ${ACTIVITY_LEDGER_META.flatMap((item) =>
+    (item.match ?? []).map(
+      (keyword) =>
+        `WHEN ${prefix}type IN (${COUPON_TOPUP_TYPE}, ${PACK_BONUS_TOPUP_TYPE}) AND ${prefix}description LIKE '%${keyword}%' THEN '${item.key}'`,
+    ),
   ).join("\n  ")}
   ELSE 'other'
 END`;

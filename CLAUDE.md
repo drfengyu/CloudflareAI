@@ -534,8 +534,17 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.45.0（2026-11-12，灵宠工坊改版为红白机式养成）
-**下一版本**：v0.46.0（尚未选型）
+**当前版本**：v0.46.0（2026-11-12，星匣图鉴改版为「星图共鸣」）
+**下一版本**：v0.47.0（尚未选型）
+
+- v0.46.0 星匣图鉴改版为「星图共鸣」：`lib/collection/config.ts`（极光 / 深海 / 古树三张星座 ×
+  9 个星位，星石颜色 + 亮度、观星概率、熔炼 / 凝星价格、星座奖励与旧配置字段兼容）、
+  `lib/collection/state.ts`（星石库存、同色亮度足够的嵌入与优先消耗、脏值归一、旧星匣存档迁移：
+  未集齐藏品折星石、已集齐星匣直接点亮整张星座）、`lib/collection/store.ts`（观星先扣券失败退券、
+  `WHERE version = ?` 乐观锁、完成星座与每日共鸣占 `activity_milestone` 唯一键后发 tcr）。
+  前台 `/collection` 重做为星空画布（点选星位、亮线、库存、熔炼 / 凝星、每日共鸣），后台表单改为
+  每日观星 / 观星票价 / 券单价 / 每日共鸣 / 有效期 / 星座完成奖励。全部状态仍在
+  `collection_state.state` JSON，无需新迁移。
 
 - v0.45.0 灵宠工坊改版为红白机式养成：`lib/workshop/pets.ts`（灵宠个体、面板、经验、自动进化）、
   `lib/workshop/state.ts`（存档结构、脏值归一、旧版各阶数量迁移）、`lib/workshop/battle.ts`

@@ -2,78 +2,186 @@ import { snapCostToUnit } from "@/lib/activity/ticket-math";
 import { parseCnWallClock } from "@/lib/date";
 
 /**
- * 限时活动·星匣图鉴的纯配置与抽取规则。
+ * 限时活动·星图共鸣的纯配置与抽取规则。
  *
- * 三个星匣各 6 件藏品：开匣先等概率选星匣，再按条目权重选藏品。
- * 抽到重复藏品折算星尘，星尘可以定向兑换任意未收集的藏品——保底不靠隐藏概率。
+ * 三张星座各 9 个星位：观星得到「颜色 + 亮度」星石，嵌入同色星位点亮它，
+ * 相邻星位都点亮时自动连线；一个星座 9 颗全亮即完成，发 tcr 并可按天共鸣。
+ * 不想要的星石可熔成星辉，星辉能定向凝出指定颜色 / 亮度的星石。
  */
 
 export const COLLECTION_CONFIG_KEY = "collection_config";
 
-/** `topup.type`：19=星匣图鉴集齐奖励（只发 tcr）。 */
+/** `topup.type`：19=星图共鸣完成 / 共鸣奖励（只发 tcr）。 */
 export const TOPUP_TYPE_COLLECTION = 19;
 
-/** 每个星匣的藏品数。 */
-export const COLLECTION_SET_SIZE = 6;
+export type StarColor = "blue" | "teal" | "gold";
 
-export interface CollectionItemMeta {
-  key: string;
-  name: string;
-  /** 相对权重；同匣内按权重抽。 */
-  weight: number;
+export const STAR_COLORS: StarColor[] = ["blue", "teal", "gold"];
+
+export function isStarColor(value: unknown): value is StarColor {
+  return typeof value === "string" && (STAR_COLORS as string[]).includes(value);
 }
 
-export interface CollectionSetMeta {
+export function isBrightness(value: unknown): value is 1 | 2 | 3 {
+  return value === 1 || value === 2 || value === 3;
+}
+
+export const STAR_COLOR_META: Record<StarColor, { name: string; hex: string }> = {
+  blue: { name: "星蓝", hex: "#7dd3fc" },
+  teal: { name: "潮青", hex: "#5eead4" },
+  gold: { name: "日金", hex: "#fbbf24" },
+};
+
+/** 1~3 亮度的名字，下标即亮度。 */
+export const STAR_BRIGHTNESS_NAMES = ["", "微光", "辉光", "耀光"];
+
+/** 熔炼一颗星石得到的星辉。 */
+export const MELT_SHARDS: Record<1 | 2 | 3, number> = { 1: 1, 2: 2, 3: 3 };
+
+/** 定向凝出一颗星石需要的星辉。 */
+export const CRAFT_SHARDS: Record<1 | 2 | 3, number> = { 1: 3, 2: 6, 3: 10 };
+
+/** 点亮一整张星座额外返还的星辉，帮助补完下一张。 */
+export const CONSTELLATION_SHARDS = 5;
+
+export interface StarNode {
+  /** `${constellationKey}-${序号}`。 */
+  id: string;
+  /** 0~100 的 SVG 坐标。 */
+  x: number;
+  y: number;
+  color: StarColor;
+  brightness: 1 | 2 | 3;
+}
+
+export interface Constellation {
   key: string;
   name: string;
   subtitle: string;
-  items: CollectionItemMeta[];
+  nodes: StarNode[];
+  /** 连线两端都是星位 id；两点都点亮时画亮线。 */
+  edges: [string, string][];
 }
 
-export const COLLECTION_SETS: CollectionSetMeta[] = [
-  {
-    key: "aurora",
-    name: "极光星匣",
-    subtitle: "被极光洗过的夜空碎片",
-    items: [
-      { key: "shard", name: "微光碎片", weight: 100 },
-      { key: "dust", name: "星屑", weight: 100 },
-      { key: "prism", name: "极光棱镜", weight: 80 },
-      { key: "meteor", name: "流星核", weight: 60 },
-      { key: "eye", name: "银河之眼", weight: 35 },
-      { key: "crown", name: "极光王冠", weight: 15 },
+function buildConstellation(
+  key: string,
+  name: string,
+  subtitle: string,
+  rawNodes: Array<[number, number, StarColor, 1 | 2 | 3]>,
+  rawEdges: Array<[number, number]>,
+): Constellation {
+  const nodes = rawNodes.map(([x, y, color, brightness], index) => ({
+    id: `${key}-${index + 1}`,
+    x,
+    y,
+    color,
+    brightness,
+  }));
+  return {
+    key,
+    name,
+    subtitle,
+    nodes,
+    edges: rawEdges.map(([a, b]) => [nodes[a - 1].id, nodes[b - 1].id] as [string, string]),
+  };
+}
+
+export const CONSTELLATIONS: Constellation[] = [
+  buildConstellation(
+    "aurora",
+    "极光座",
+    "一条横过夜空的极光带，越靠近天顶越亮。",
+    [
+      [10, 80, "blue", 1],
+      [20, 66, "blue", 1],
+      [30, 52, "teal", 2],
+      [40, 40, "blue", 2],
+      [50, 32, "gold", 3],
+      [60, 40, "teal", 2],
+      [70, 54, "teal", 1],
+      [80, 68, "gold", 3],
+      [90, 82, "gold", 1],
     ],
-  },
-  {
-    key: "abyss",
-    name: "深海星匣",
-    subtitle: "沉在海底的星图残页",
-    items: [
-      { key: "pearl", name: "泡沫珍珠", weight: 100 },
-      { key: "conch", name: "潮声螺", weight: 100 },
-      { key: "coral", name: "珊瑚灯", weight: 80 },
-      { key: "scale", name: "深渊鳞", weight: 60 },
-      { key: "moon", name: "海月镜", weight: 35 },
-      { key: "crown", name: "潮汐之冠", weight: 15 },
+    [
+      [1, 2],
+      [2, 3],
+      [3, 4],
+      [4, 5],
+      [5, 6],
+      [6, 7],
+      [7, 8],
+      [8, 9],
+      [3, 6],
     ],
-  },
-  {
-    key: "grove",
-    name: "古树星匣",
-    subtitle: "年轮里藏着另一片星空",
-    items: [
-      { key: "seed", name: "苔藓种子", weight: 100 },
-      { key: "vine", name: "萤火藤", weight: 100 },
-      { key: "ring", name: "年轮石", weight: 80 },
-      { key: "bell", name: "花语铃", weight: 60 },
-      { key: "laurel", name: "月桂枝", weight: 35 },
-      { key: "crown", name: "古树王冠", weight: 15 },
+  ),
+  buildConstellation(
+    "abyss",
+    "深海座",
+    "海底星图卷成的一枚螺壳，越往中心越暗。",
+    [
+      [50, 18, "teal", 1],
+      [66, 24, "gold", 3],
+      [78, 38, "blue", 2],
+      [78, 56, "teal", 2],
+      [64, 70, "gold", 3],
+      [46, 72, "blue", 1],
+      [30, 60, "teal", 1],
+      [26, 42, "blue", 1],
+      [38, 30, "gold", 1],
     ],
-  },
+    [
+      [1, 2],
+      [2, 3],
+      [3, 4],
+      [4, 5],
+      [5, 6],
+      [6, 7],
+      [7, 8],
+      [8, 9],
+      [9, 1],
+    ],
+  ),
+  buildConstellation(
+    "grove",
+    "古树座",
+    "年轮与枝桠拼成的树形，根须扎进星河。",
+    [
+      [50, 14, "gold", 3],
+      [34, 26, "gold", 2],
+      [66, 26, "gold", 2],
+      [22, 42, "teal", 1],
+      [78, 42, "teal", 1],
+      [38, 46, "blue", 2],
+      [62, 46, "blue", 2],
+      [42, 64, "teal", 1],
+      [58, 64, "blue", 3],
+    ],
+    [
+      [1, 2],
+      [1, 3],
+      [2, 4],
+      [3, 5],
+      [2, 6],
+      [3, 7],
+      [4, 6],
+      [5, 7],
+      [6, 8],
+      [7, 9],
+      [8, 9],
+    ],
+  ),
 ];
 
+export function allStarNodes(): StarNode[] {
+  return CONSTELLATIONS.flatMap((constellation) => constellation.nodes);
+}
+
+export function nodeById(nodeId: string): StarNode | null {
+  return allStarNodes().find((node) => node.id === nodeId) ?? null;
+}
+
 export interface CollectionSetReward {
-  /** 星匣 key。 */
+  /** 星座 key。 */
   set: string;
   reward: number;
 }
@@ -82,19 +190,17 @@ export interface CollectionConfig {
   enabled: boolean;
   startAt: string;
   endAt: string;
-  /** 每日最多开匣次数（按北京时间自然日）。 */
-  dailyBoxes: number;
-  /** 单次开匣票价（cr），必须是券单价的整数倍。 */
-  openCostCredits: number;
+  /** 每日最多观星次数（按北京时间自然日）。 */
+  dailyObserves: number;
+  /** 单次观星票价（cr），必须是券单价的整数倍。 */
+  observeCostCredits: number;
   /** 1 张活动券兑换所需的 cr（券面单价）。 */
   couponUnitCredits: number;
   /** 奖励 tcr 的有效天数。 */
   rewardValidDays: number;
-  /** 重复藏品折算的星尘。 */
-  duplicateDust: number;
-  /** 定向兑换一件藏品需要的星尘。 */
-  dustPerItem: number;
-  /** 集齐一个星匣的一次性 tcr。 */
+  /** 每日共鸣：每完成一张星座可领的 tcr。 */
+  resonanceReward: number;
+  /** 完成一张星座的一次性 tcr。 */
   setRewards: CollectionSetReward[];
 }
 
@@ -102,12 +208,11 @@ export const DEFAULT_COLLECTION_CONFIG: CollectionConfig = {
   enabled: false,
   startAt: "",
   endAt: "",
-  dailyBoxes: 10,
-  openCostCredits: 2,
+  dailyObserves: 10,
+  observeCostCredits: 2,
   couponUnitCredits: 2,
   rewardValidDays: 30,
-  duplicateDust: 2,
-  dustPerItem: 12,
+  resonanceReward: 2,
   setRewards: [
     { set: "aurora", reward: 8 },
     { set: "abyss", reward: 15 },
@@ -127,6 +232,18 @@ function boundedInteger(value: unknown, fallback: number, min: number, max: numb
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 }
 
+/** 旧版配置字段，读回时兜底，避免升级后把管理员调过的次数 / 票价重置。 */
+interface LegacyCollectionConfig {
+  dailyBoxes?: unknown;
+  openCostCredits?: unknown;
+}
+
+function firstNumber(primary: unknown, legacy: unknown, fallback: number): number {
+  if (primary !== undefined && primary !== null) return Number(primary);
+  if (legacy !== undefined && legacy !== null) return Number(legacy);
+  return fallback;
+}
+
 export function sanitizeCollectionSetRewards(raw: unknown): CollectionSetReward[] {
   const arr = Array.isArray(raw) ? raw : [];
   const seen = new Set<string>();
@@ -139,23 +256,25 @@ export function sanitizeCollectionSetRewards(raw: unknown): CollectionSetReward[
       };
     })
     .filter((row) => {
-      if (!COLLECTION_SETS.some((set) => set.key === row.set)) return false;
+      if (!CONSTELLATIONS.some((constellation) => constellation.key === row.set)) return false;
       if (seen.has(row.set)) return false;
       seen.add(row.set);
       return true;
     });
-  // 缺哪个匣就补默认值，避免后台只改了一行导致其余匣集齐后没有奖励。
-  return COLLECTION_SETS.map((set) => {
-    const row = rows.find((item) => item.set === set.key);
-    const fallback = DEFAULT_COLLECTION_CONFIG.setRewards.find((item) => item.set === set.key);
-    return { set: set.key, reward: row?.reward ?? fallback?.reward ?? 0 };
+  // 缺哪张星座就补默认值，避免后台只改了一行导致其余星座完成后没有奖励。
+  return CONSTELLATIONS.map((constellation) => {
+    const row = rows.find((item) => item.set === constellation.key);
+    const fallback = DEFAULT_COLLECTION_CONFIG.setRewards.find(
+      (item) => item.set === constellation.key,
+    );
+    return { set: constellation.key, reward: row?.reward ?? fallback?.reward ?? 0 };
   });
 }
 
 export function sanitizeCollectionConfig(raw: unknown): CollectionConfig {
   const d = DEFAULT_COLLECTION_CONFIG;
   if (!raw || typeof raw !== "object") return d;
-  const it = raw as Partial<CollectionConfig>;
+  const it = raw as Partial<CollectionConfig> & LegacyCollectionConfig;
   const unit = Math.min(
     1_000_000,
     round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
@@ -164,15 +283,26 @@ export function sanitizeCollectionConfig(raw: unknown): CollectionConfig {
     enabled: it.enabled === true,
     startAt: typeof it.startAt === "string" ? it.startAt.trim() : "",
     endAt: typeof it.endAt === "string" ? it.endAt.trim() : "",
-    dailyBoxes: boundedInteger(it.dailyBoxes, d.dailyBoxes, 1, 200),
-    openCostCredits: snapCostToUnit(
-      round2(positiveNumber(it.openCostCredits, d.openCostCredits)),
+    dailyObserves: boundedInteger(
+      firstNumber(it.dailyObserves, it.dailyBoxes, d.dailyObserves),
+      d.dailyObserves,
+      1,
+      200,
+    ),
+    observeCostCredits: snapCostToUnit(
+      round2(
+        positiveNumber(
+          firstNumber(it.observeCostCredits, it.openCostCredits, d.observeCostCredits),
+          d.observeCostCredits,
+        ),
+      ),
       unit,
     ),
     couponUnitCredits: unit,
     rewardValidDays: boundedInteger(it.rewardValidDays, d.rewardValidDays, 1, 3650),
-    duplicateDust: boundedInteger(it.duplicateDust, d.duplicateDust, 0, 1_000),
-    dustPerItem: boundedInteger(it.dustPerItem, d.dustPerItem, 1, 1_000_000),
+    resonanceReward: round2(
+      Math.min(1_000_000, Math.max(0, Number(it.resonanceReward ?? d.resonanceReward) || 0)),
+    ),
     setRewards: sanitizeCollectionSetRewards(it.setRewards),
   };
 }
@@ -203,47 +333,35 @@ export function collectionActivityKey(config: CollectionConfig): string | null {
   return config.startAt.trim();
 }
 
-/** 藏品唯一键：`setKey/itemKey`。 */
-export function collectionItemKey(setKey: string, itemKey: string): string {
-  return `${setKey}/${itemKey}`;
-}
-
-export function findCollectionItem(setKey: string, itemKey: string) {
-  const set = COLLECTION_SETS.find((item) => item.key === setKey);
-  const item = set?.items.find((entry) => entry.key === itemKey);
-  return set && item ? { set, item } : null;
-}
-
-/** 开匣：先等概率选星匣，再按条目权重抽藏品。 */
-export function rollCollectionItem(random: () => number = Math.random): {
-  setKey: string;
-  itemKey: string;
+/** 观星落点：颜色等概率，亮度 1/2/3 = 60% / 30% / 10%。 */
+export function rollStarStone(random: () => number = Math.random): {
+  color: StarColor;
+  brightness: 1 | 2 | 3;
 } {
-  const set = COLLECTION_SETS[Math.min(COLLECTION_SETS.length - 1, Math.floor(random() * COLLECTION_SETS.length))];
-  const total = set.items.reduce((sum, item) => sum + Math.max(0, item.weight), 0);
-  let roll = random() * total;
-  for (const item of set.items) {
-    roll -= Math.max(0, item.weight);
-    if (roll < 0) return { setKey: set.key, itemKey: item.key };
-  }
-  const last = set.items[set.items.length - 1];
-  return { setKey: set.key, itemKey: last.key };
+  const colorRoll = Math.min(0.999999, Math.max(0, random()));
+  const brightnessRoll = Math.min(0.999999, Math.max(0, random()));
+  const color = STAR_COLORS[Math.floor(colorRoll * STAR_COLORS.length)] ?? STAR_COLORS[0];
+  const brightness = brightnessRoll < 0.6 ? 1 : brightnessRoll < 0.9 ? 2 : 3;
+  return { color, brightness };
 }
 
-export function isSetComplete(owned: Set<string>, setKey: string): boolean {
-  const set = COLLECTION_SETS.find((item) => item.key === setKey);
-  if (!set) return false;
-  return set.items.every((item) => owned.has(collectionItemKey(setKey, item.key)));
+/** 一张星座是否 9 个星位全部点亮。 */
+export function constellationComplete(lit: Set<string>, constellationKey: string): boolean {
+  const constellation = CONSTELLATIONS.find((item) => item.key === constellationKey);
+  if (!constellation) return false;
+  return constellation.nodes.every((node) => lit.has(node.id));
 }
 
-/** 已集齐的星匣 key；判定顺序与配置一致。 */
-export function completedSets(owned: Set<string>): string[] {
-  return COLLECTION_SETS.filter((set) => isSetComplete(owned, set.key)).map((set) => set.key);
+/** 已点亮的星座 key；顺序与配置一致。 */
+export function completedConstellations(lit: Set<string>): string[] {
+  return CONSTELLATIONS.filter((constellation) => constellationComplete(lit, constellation.key)).map(
+    (constellation) => constellation.key,
+  );
 }
 
-/** 某个星匣里还没收集的藏品。 */
-export function missingItems(owned: Set<string>, setKey: string): CollectionItemMeta[] {
-  const set = COLLECTION_SETS.find((item) => item.key === setKey);
-  if (!set) return [];
-  return set.items.filter((item) => !owned.has(collectionItemKey(setKey, item.key)));
+/** 一张星座里还没点亮的星位。 */
+export function unlitNodes(lit: Set<string>, constellationKey: string): StarNode[] {
+  const constellation = CONSTELLATIONS.find((item) => item.key === constellationKey);
+  if (!constellation) return [];
+  return constellation.nodes.filter((node) => !lit.has(node.id));
 }

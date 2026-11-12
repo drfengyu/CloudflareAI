@@ -67,7 +67,7 @@ export const TOPUP_TYPE_LABEL: Record<number, string> = {
   16: "礼包赠送",
   17: "每日试炼",
   18: "灵宠工坊",
-  19: "星匣图鉴",
+  19: "星图共鸣",
 };
 
 const DAY_OF = (column: string) => `strftime('%Y-%m-%d', ${column} / 1000, 'unixepoch', '+8 hours')`;
@@ -341,7 +341,7 @@ const EXPIRE_SOURCE_LABEL: { pattern: RegExp; label: string }[] = [
   { pattern: /雷电行动/, label: "雷电行动到期" },
   { pattern: /每日试炼/, label: "每日试炼到期" },
   { pattern: /灵宠工坊/, label: "灵宠工坊到期" },
-  { pattern: /星匣图鉴/, label: "星匣图鉴到期" },
+  { pattern: /星图共鸣|星匣图鉴/, label: "星图共鸣到期" },
   { pattern: /站内信/, label: "站内信奖励到期" },
 ];
 

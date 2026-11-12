@@ -58,7 +58,7 @@ export const ACTIVITY_META: Record<ActivityKind, ActivityMeta> = {
   raiden: { kind: "raiden", label: "雷电行动", short: "雷电券", href: "/raiden" },
   trial: { kind: "trial", label: "每日试炼", short: "试炼券", href: "/trial" },
   workshop: { kind: "workshop", label: "灵宠工坊", short: "工坊券", href: "/workshop" },
-  collection: { kind: "collection", label: "星匣图鉴", short: "星匣券", href: "/collection" },
+  collection: { kind: "collection", label: "星图共鸣", short: "星图券", href: "/collection" },
 };
 
 /** 当前上线的三个玩法：活动中心、顶栏默认只展示它们。 */
@@ -76,7 +76,7 @@ const COUPON_NAMES: Record<ActivityKind, string[]> = {
   raiden: ["雷霆券", "疾风券", "破阵券", "闪电券", "龙吟券", "霜刃券"],
   trial: ["试金券", "晨星券", "破晓券", "砺心券", "明镜券", "启程券"],
   workshop: ["育灵券", "萌宠券", "藤蔓券", "绒尾券", "灵犀券", "匠心券"],
-  collection: ["星匣券", "藏星券", "拾光券", "图鉴券", "银河匣券", "寻踪券"],
+  collection: ["星图券", "观星券", "拾光券", "星辉券", "银河匣券", "寻踪券"],
 };
 
 export type ActivityStatus = "disabled" | "pending" | "active" | "ended";

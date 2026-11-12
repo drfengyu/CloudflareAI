@@ -311,7 +311,7 @@ export default async function AdminSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">限时活动（星匣图鉴）</CardTitle>
+            <CardTitle className="text-base">限时活动（星图共鸣）</CardTitle>
           </CardHeader>
           <CardContent>
             <CollectionForm initialConfig={collectionConfig} />

@@ -41,15 +41,19 @@ import {
   type WorkshopState,
 } from "../lib/workshop/state";
 import {
-  COLLECTION_SETS,
-  collectionItemKey,
-  completedSets,
-  isSetComplete,
-  missingItems,
-  rollCollectionItem,
+  CONSTELLATIONS,
+  rollStarStone,
   sanitizeCollectionConfig,
   sanitizeCollectionSetRewards,
 } from "../lib/collection/config";
+import {
+  addStones,
+  emptyCollectionState,
+  litConstellations,
+  normalizeCollectionState,
+  placeStarStone,
+  starCount,
+} from "../lib/collection/state";
 
 /** 固定种子的 LCG：同一个种子每次跑出同一串随机数，便于断言边界。 */
 function seeded(seed: number): () => number {
@@ -500,50 +504,128 @@ test("防御回合倒地自动换下一只，无人可换判负", () => {
   assert.equal(lost.state.party[0].hp, 0);
 });
 
-// ---------------------------------------------------------------- 星匣图鉴
+// ---------------------------------------------------------------- 星图共鸣
 
-test("开匣先等概率选星匣再按权重抽藏品", () => {
-  assert.deepEqual(rollCollectionItem(sequence([0, 0])), {
-    setKey: COLLECTION_SETS[0].key,
-    itemKey: COLLECTION_SETS[0].items[0].key,
-  });
-  assert.deepEqual(rollCollectionItem(sequence([0.99, 0])), {
-    setKey: COLLECTION_SETS[COLLECTION_SETS.length - 1].key,
-    itemKey: COLLECTION_SETS[COLLECTION_SETS.length - 1].items[0].key,
-  });
-  // 星匣内最后一个位置是 15 权重的王冠，随机数接近 1 时落在它上面。
-  assert.deepEqual(rollCollectionItem(sequence([0, 0.999999])), {
-    setKey: COLLECTION_SETS[0].key,
-    itemKey: "crown",
-  });
-  assert.equal(COLLECTION_SETS.every((set) => set.items.length === 6), true);
+test("观星颜色等概率、亮度 60 / 30 / 10", () => {
+  assert.deepEqual(rollStarStone(sequence([0, 0])), { color: "blue", brightness: 1 });
+  assert.deepEqual(rollStarStone(sequence([0.34, 0.599999])), { color: "teal", brightness: 1 });
+  assert.deepEqual(rollStarStone(sequence([0.67, 0.6])), { color: "gold", brightness: 2 });
+  assert.deepEqual(rollStarStone(sequence([0.999999, 0.9])), { color: "gold", brightness: 3 });
 });
 
-test("集齐判定、缺件列表与集齐奖励补全", () => {
-  const aurora = COLLECTION_SETS[0];
-  const owned = new Set(
-    aurora.items.slice(0, 5).map((item) => collectionItemKey(aurora.key, item.key)),
-  );
+test("星图配置兼容旧字段并把票价对齐券面", () => {
+  const legacy = sanitizeCollectionConfig({
+    dailyBoxes: 4,
+    openCostCredits: 3,
+    couponUnitCredits: 2,
+  });
+  assert.equal(legacy.dailyObserves, 4);
+  // 3 / 2 → 1.5 张，四舍五入 2 张 → 4 cr。
+  assert.equal(legacy.observeCostCredits, 4);
 
-  assert.equal(isSetComplete(owned, aurora.key), false);
-  assert.deepEqual(completedSets(owned), []);
+  const clamped = sanitizeCollectionConfig({
+    observeCostCredits: 5,
+    couponUnitCredits: 2,
+    dailyObserves: 0,
+    resonanceReward: -3,
+    rewardValidDays: 0,
+  });
+  // 5 / 2 → 2.5 张，四舍五入 3 张 → 6 cr。
+  assert.equal(clamped.observeCostCredits, 6);
+  assert.equal(clamped.dailyObserves, 1);
+  assert.equal(clamped.resonanceReward, 0);
+  assert.equal(clamped.rewardValidDays, 1);
+  assert.equal(clamped.setRewards.length, CONSTELLATIONS.length);
+});
+
+test("嵌入星石只认同色且亮度足够，优先消耗刚好够的一档", () => {
+  const state = emptyCollectionState("2026-11-12");
+  const lowBlue = CONSTELLATIONS[0].nodes[0];
+  const midBlue = CONSTELLATIONS[0].nodes[3];
+  const highGold = CONSTELLATIONS[0].nodes[4];
+
+  assert.equal(placeStarStone(state, lowBlue.id).ok, false);
+  assert.equal(placeStarStone(state, highGold.id).ok, false);
+
+  addStones(state, "blue", 2);
+  addStones(state, "blue", 1, 2);
+  assert.deepEqual(placeStarStone(state, lowBlue.id), { ok: true, brightness: 1 });
+  assert.equal(starCount(state, "blue", 1), 1);
+  assert.equal(starCount(state, "blue", 2), 1);
+
+  assert.deepEqual(placeStarStone(state, midBlue.id), { ok: true, brightness: 2 });
+  assert.equal(starCount(state, "blue", 2), 0);
+  assert.equal(placeStarStone(state, lowBlue.id).ok, false);
+
+  // 高亮度星石可以补低亮度星位，只消耗刚好够的那一颗。
+  const spare = emptyCollectionState("2026-11-12");
+  addStones(spare, "blue", 3);
+  assert.deepEqual(placeStarStone(spare, CONSTELLATIONS[0].nodes[1].id), {
+    ok: true,
+    brightness: 3,
+  });
+  assert.equal(starCount(spare, "blue", 3), 0);
+});
+
+test("星座 9 个星位全亮才算完成", () => {
+  const aurora = CONSTELLATIONS[0];
+  const state = emptyCollectionState("2026-11-12");
+  state.nodes = aurora.nodes.slice(0, 8).map((node) => node.id);
+  assert.deepEqual(litConstellations(state), []);
+  state.nodes.push(aurora.nodes[8].id);
+  assert.deepEqual(litConstellations(state), [aurora.key]);
+});
+
+test("旧图鉴存档换算成星石并按新轮次保留进度", () => {
+  const abyss = CONSTELLATIONS.find((item) => item.key === "abyss");
+  assert.ok(abyss);
+  const state = normalizeCollectionState(
+    {
+      day: "2026-11-12",
+      boxesToday: 4,
+      dust: 7,
+      owned: [
+        "aurora/shard",
+        "aurora/dust",
+        "abyss/pearl",
+        "abyss/conch",
+        "abyss/coral",
+        "abyss/scale",
+        "abyss/moon",
+        "abyss/crown",
+      ],
+    },
+    "2026-11-12",
+  );
+  assert.equal(state.observesToday, 4);
+  assert.equal(state.shards, 7);
+  // 极光座前两件旧藏品稀有度对应 1 级星石。
+  assert.equal(starCount(state, "blue", 1), 2);
+  // 集齐的深海座直接点亮整张星座，不再拆成星石。
+  assert.equal(abyss.nodes.every((node) => state.nodes.includes(node.id)), true);
+  assert.equal(state.stones.teal.every((count) => count === 0), true);
+});
+
+test("存档只保留已知星位并夹住星石数量", () => {
+  const state = normalizeCollectionState({
+    stones: { blue: [-2, 3, "x"], teal: "no", gold: [1] },
+    nodes: ["aurora-1", "ghost", 42, "aurora-1"],
+  });
+  assert.deepEqual(state.stones.blue, [0, 3, 0]);
+  assert.deepEqual(state.stones.teal, [0, 0, 0]);
+  assert.deepEqual(state.stones.gold, [1, 0, 0]);
+  assert.deepEqual(state.nodes, ["aurora-1"]);
+});
+
+test("星座完成奖励按固定顺序补齐，未知星座被忽略", () => {
   assert.deepEqual(
-    missingItems(owned, aurora.key).map((item) => item.key),
-    [aurora.items[5].key],
+    sanitizeCollectionSetRewards([{ set: "abyss", reward: 20 }, { set: "ghost", reward: 99 }]),
+    [
+      { set: "aurora", reward: 8 },
+      { set: "abyss", reward: 20 },
+      { set: "grove", reward: 30 },
+    ],
   );
-
-  owned.add(collectionItemKey(aurora.key, aurora.items[5].key));
-  assert.equal(isSetComplete(owned, aurora.key), true);
-  assert.deepEqual(completedSets(owned), [aurora.key]);
-  assert.deepEqual(missingItems(owned, aurora.key), []);
-});
-
-test("图鉴集齐奖励按固定星匣顺序补齐，未知星匣被忽略", () => {
-  assert.deepEqual(sanitizeCollectionSetRewards([{ set: "abyss", reward: 20 }, { set: "ghost", reward: 99 }]), [
-    { set: "aurora", reward: 8 },
-    { set: "abyss", reward: 20 },
-    { set: "grove", reward: 30 },
-  ]);
   // 重复行只认第一条。
   assert.deepEqual(
     sanitizeCollectionSetRewards([
@@ -552,22 +634,4 @@ test("图鉴集齐奖励按固定星匣顺序补齐，未知星匣被忽略", ()
     ]).find((row) => row.set === "grove"),
     { set: "grove", reward: 40 },
   );
-});
-
-test("图鉴配置对齐票价并夹住边界值", () => {
-  const config = sanitizeCollectionConfig({
-    openCostCredits: 5,
-    couponUnitCredits: 2,
-    dailyBoxes: 0,
-    duplicateDust: -3,
-    dustPerItem: 0,
-    rewardValidDays: 0,
-  });
-  // 5 / 2 → 2.5 四舍五入为 3 张 → 6 cr。
-  assert.equal(config.openCostCredits, 6);
-  assert.equal(config.dailyBoxes, 1);
-  assert.equal(config.duplicateDust, 0);
-  assert.equal(config.dustPerItem, 1);
-  assert.equal(config.rewardValidDays, 1);
-  assert.equal(config.setRewards.length, COLLECTION_SETS.length);
 });

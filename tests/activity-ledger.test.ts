@@ -32,6 +32,7 @@ test("共用的兑换 / 礼包流水按描述里的活动名归属", () => {
   assert.equal(activityKeyForRow(15, "兑换试金券 3 张（15 cr 等值，每日试炼）"), "trial");
   assert.equal(activityKeyForRow(16, "购买珍宝礼包赠送 tcr（灵宠工坊）"), "workshop");
   assert.equal(activityKeyForRow(15, "兑换星匣券 1 张（2 cr 等值，星匣图鉴）"), "collection");
+  assert.equal(activityKeyForRow(15, "兑换星图券 1 张（2 cr 等值，星图共鸣）"), "collection");
   assert.equal(activityKeyForRow(15, "兑换星轨券 2 张（4000 cr 等值，幸运转盘）"), "lottery");
   assert.equal(activityKeyForRow(15, "兑换翻云券 1 张（1000 cr 等值，翻牌夺宝）"), "flip");
   assert.equal(activityKeyForRow(15, "兑换雷霆券 1 张（100 cr 等值，雷电行动）"), "raiden");
