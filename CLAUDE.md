@@ -537,6 +537,13 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 **当前版本**：v0.43.2（2026-11-12，活动记录改为按活动分段）
 **下一版本**：v0.44.0（尚未选型）
 
+- v0.44.0 每日试炼改版为「浮游城」：`lib/trial/dungeon.ts` 新增版本 4 地图（每层两扇野区门 +
+  层主房，最多 7 层），种子生成后落 `trial_run.questions`，`questionCount` = 总层数、`correct` = 通关层数。
+  交卷只收 `enter / boss / skill / item` 动作序列，服务端 `simulateTrialDungeon` 确定性重放（剑技冷却、
+  连击加伤、层主残血狂暴、经验升级、宝箱 / 精英装备、营地回血）；超时或瞬交按 0 层，仍用
+  `WHERE status = 'active'` 抢占用局并只发一次 tcr。旧版答题 / 波次 / 地下城局在开局时就地换图不重复扣券。
+  前台重做 HUD / 角色与怪物 SVG / localStorage 断点续战，后台表单上限改 7 层并删除 `lib/trial/questions.ts`。
+
 - v0.43.2 `/admin/activity` 去掉全局时间窗与分页，改为「站点总计 → 每个活动一张卡」：活动时段由
   该活动首末记账日推导，卡内左栏按天、右栏按用户小计，底部活动小计；没有流水不出卡。
   数据侧只留一次 `GROUP BY activityKey, date, userId` 查询（`attributionCase("t")` 带别名 CASE，

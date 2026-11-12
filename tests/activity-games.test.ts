@@ -8,10 +8,12 @@ import {
   type TrialConfig,
 } from "../lib/trial/config";
 import {
-  generateTrialQuestions,
-  publicQuestions,
-  scoreTrialAnswers,
-} from "../lib/trial/questions";
+  generateTrialDungeon,
+  parseTrialDungeon,
+  simulateTrialDungeon,
+  type TrialDungeon,
+  type TrialWave,
+} from "../lib/trial/dungeon";
 import {
   DEFAULT_WORKSHOP_CONFIG,
   WORKSHOP_LINES,
@@ -52,31 +54,187 @@ function trial(overrides: Partial<TrialConfig> = {}): TrialConfig {
 
 // ---------------------------------------------------------------- 每日试炼
 
-test("试炼题目互不相同，交卷只按服务端答案判分", () => {
-  const questions = generateTrialQuestions(10, seeded(7));
-  assert.equal(questions.length, 10);
-  assert.equal(new Set(questions.map((question) => question.prompt)).size, 10);
-  for (const question of questions) {
-    assert.ok(Number.isInteger(question.answer));
-    assert.ok(question.answer >= 0 && question.answer <= 999);
-  }
-
-  assert.equal(scoreTrialAnswers(questions, questions.map((question) => question.answer)), 10);
-  // 字符串数字可以，小数只取整，非数字算错。
-  assert.equal(scoreTrialAnswers(questions, questions.map((question) => String(question.answer))), 10);
-  assert.equal(scoreTrialAnswers(questions, questions.map((question) => question.answer + 0.9)), 10);
-  assert.equal(scoreTrialAnswers(questions, questions.map(() => "abc")), 0);
-  assert.equal(scoreTrialAnswers(questions, []), 0);
-
-  const exposed = publicQuestions(questions) as { prompt: string; answer?: number }[];
-  assert.equal(exposed.length, 10);
-  for (const item of exposed) {
-    assert.equal(item.answer, undefined);
-    assert.equal(typeof item.prompt, "string");
-  }
+const dummyWave = (overrides: Partial<TrialWave> = {}): TrialWave => ({
+  key: "dummy",
+  name: "木桩",
+  title: "测试用",
+  shape: "mire",
+  hp: 1,
+  atk: 5,
+  pattern: ["attack"],
+  ...overrides,
 });
 
-test("试炼配置：题数与档位互相约束，脏值退回可用默认", () => {
+const dummyBoss = (wave: Partial<TrialWave> = {}): TrialDungeon["floors"][number]["boss"] => ({
+  kind: "fight",
+  title: "层主房",
+  hint: "",
+  wave: dummyWave(wave),
+});
+
+function manualDungeon(floors: TrialDungeon["floors"]): TrialDungeon {
+  return { version: 4, seed: 1, heroHp: 100, floors };
+}
+
+test("浮游城生成：每层两个野区门与一间层主房，同种子重放同一张塔", () => {
+  const dungeon = generateTrialDungeon(5, seeded(11));
+  assert.equal(dungeon.floors.length, 5);
+  for (const floor of dungeon.floors) {
+    assert.equal(floor.rooms.length, 2);
+    assert.ok(floor.rooms.some((room) => room.kind === "fight" || room.kind === "elite"));
+    assert.ok(floor.boss.wave);
+    assert.equal(floor.boss.wave?.enrage, true);
+    for (const room of floor.rooms) {
+      if (room.kind === "treasure" || room.kind === "elite") assert.ok(room.relic);
+      if (room.kind !== "treasure" && room.kind !== "rest") assert.ok(room.wave);
+    }
+  }
+  assert.deepEqual(generateTrialDungeon(5, seeded(11)), dungeon);
+  assert.equal(generateTrialDungeon(99, seeded(2)).floors.length, 7);
+  assert.equal(generateTrialDungeon(0, seeded(2)).floors.length, 1);
+});
+
+test("旧版答题 / 单排波次 / 旧地下城对局不胜任浮游城", () => {
+  assert.equal(parseTrialDungeon(null), null);
+  assert.equal(parseTrialDungeon(JSON.stringify([{ prompt: "1+1", answer: 2 }])), null);
+  assert.equal(parseTrialDungeon(JSON.stringify({ version: 2, seed: 1, heroHp: 80, waves: [] })), null);
+  assert.equal(
+    parseTrialDungeon(
+      JSON.stringify({ version: 3, seed: 1, heroHp: 100, floors: [{ rooms: [] }] }),
+    ),
+    null,
+  );
+
+  const generated = generateTrialDungeon(3, seeded(5));
+  assert.deepEqual(parseTrialDungeon(JSON.stringify(generated)), generated);
+});
+
+test("宝箱立即给装备，层主经验会升级并抬升生命上限", () => {
+  const dungeon = manualDungeon([
+    {
+      rooms: [
+        { kind: "treasure", title: "宝箱", hint: "", relic: "bloodpact" },
+        { kind: "rest", title: "营地", hint: "" },
+      ],
+      boss: dummyBoss(),
+    },
+    {
+      rooms: [
+        { kind: "treasure", title: "宝箱", hint: "", relic: "whetstone" },
+        { kind: "rest", title: "营地", hint: "" },
+      ],
+      boss: dummyBoss(),
+    },
+  ]);
+
+  const result = simulateTrialDungeon(dungeon, [
+    { t: "enter", i: 0 },
+    { t: "boss" },
+    { t: "skill", s: "slash" },
+    { t: "boss" },
+    { t: "skill", s: "slash" },
+  ]);
+  assert.deepEqual(result.relics, ["bloodpact"]);
+  // 生命结晶 115，击败 1F 层主（45 EXP）升到 2 级再加 10。
+  assert.equal(result.heroMaxHp, 125);
+  assert.equal(result.heroHp, 125);
+  assert.equal(result.level, 2);
+  assert.equal(result.floorsCleared, 2);
+  assert.equal(result.status, "cleared");
+  assert.equal(result.victory, true);
+  assert.equal(result.events[0].relic, "bloodpact");
+  assert.equal(result.events[1].kind, "boss");
+});
+
+test("精英装备在击破后才生效，营地按上限回血，可以直接挑战层主", () => {
+  const dungeon = manualDungeon([
+    {
+      rooms: [
+        {
+          kind: "elite",
+          title: "精英木桩",
+          hint: "",
+          relic: "whetstone",
+          wave: dummyWave({ hp: 1, atk: 30, pattern: ["attack"] }),
+        },
+        { kind: "rest", title: "营地", hint: "" },
+      ],
+      boss: dummyBoss(),
+    },
+    {
+      rooms: [{ kind: "rest", title: "营地", hint: "" }],
+      boss: dummyBoss(),
+    },
+  ]);
+
+  const entered = simulateTrialDungeon(dungeon, [{ t: "enter", i: 0 }]);
+  assert.deepEqual(entered.relics, []);
+  assert.equal(entered.status, "fighting");
+
+  const afterFight = simulateTrialDungeon(dungeon, [
+    { t: "enter", i: 0 },
+    { t: "skill", s: "guard" },
+    { t: "skill", s: "slash" },
+  ]);
+  assert.deepEqual(afterFight.relics, ["whetstone"]);
+  assert.equal(afterFight.status, "choosing");
+  assert.equal(afterFight.fieldCleared, true);
+  // 守势格挡 14，吃 16 伤害 → 84；清怪回复 6 → 90。
+  assert.equal(afterFight.heroHp, 90);
+
+  const rested = simulateTrialDungeon(dungeon, [
+    { t: "enter", i: 0 },
+    { t: "skill", s: "guard" },
+    { t: "skill", s: "slash" },
+    { t: "boss" },
+    { t: "skill", s: "slash" },
+    { t: "enter", i: 0 },
+  ]);
+  // 层主经验升到 2 级（上限 110，清怪与升级共回 16 → 106），营地补到满。
+  assert.equal(rested.heroMaxHp, 110);
+  assert.equal(rested.heroHp, rested.heroMaxHp);
+  assert.equal(rested.events[2].healed, 4);
+
+  const skipped = simulateTrialDungeon(dungeon, [{ t: "boss" }]);
+  assert.equal(skipped.status, "fighting");
+  assert.equal(skipped.current?.boss, true);
+});
+
+test("同一动作序列可重复重放；非法动作兜底为第一扇门 / 斩击", () => {
+  const dungeon = manualDungeon([
+    {
+      rooms: [{ kind: "fight", title: "木桩", hint: "", wave: dummyWave({ hp: 400, atk: 5 }) }],
+      boss: dummyBoss(),
+    },
+    {
+      rooms: [{ kind: "fight", title: "木桩", hint: "", wave: dummyWave({ hp: 400, atk: 5 }) }],
+      boss: dummyBoss(),
+    },
+  ]);
+  const actions = [
+    { t: "enter", i: 0 },
+    ...Array.from({ length: 40 }, (_, i) => ({
+      t: "skill",
+      s: i % 5 === 0 ? "burst" : i % 3 === 0 ? "guard" : "slash",
+    })),
+    { t: "boss" },
+    { t: "skill", s: "slash" },
+  ];
+  const first = simulateTrialDungeon(dungeon, actions);
+  assert.deepEqual(simulateTrialDungeon(dungeon, actions), first);
+  assert.ok(first.turns > 0);
+  assert.equal(first.floorsCleared >= 1, true);
+
+  const ignored = simulateTrialDungeon(dungeon, ["garbage", 1, null]);
+  assert.equal(ignored.status, "choosing");
+  assert.equal(ignored.turns, 0);
+
+  const fallback = simulateTrialDungeon(dungeon, [{ t: "enter", i: 99 }]);
+  assert.equal(fallback.events.length, 1);
+  assert.equal(fallback.events[0].floor, 1);
+});
+
+test("试炼配置：层数与档位互相约束，脏值退回可用默认", () => {
   const config = sanitizeTrialConfig({
     questionCount: 99,
     timeLimitSeconds: 1,
@@ -92,13 +250,13 @@ test("试炼配置：题数与档位互相约束，脏值退回可用默认", ()
     ],
   });
 
-  assert.equal(config.questionCount, 10);
+  assert.equal(config.questionCount, 7);
   assert.equal(config.timeLimitSeconds, 15);
   assert.equal(config.dailyRuns, 1);
   assert.equal(config.rewardValidDays, 1);
   // 票价按券单价对齐整张：7 → 5。
   assert.equal(config.runPriceCredits, 5);
-  // 重复档位保留第一条，超出题数的被丢弃，奖励不为负。
+  // 重复档位保留第一条，超出层数的被丢弃，奖励不为负。
   assert.deepEqual(config.tiers, [
     { correct: 1, reward: 0 },
     { correct: 3, reward: 2 },
@@ -115,11 +273,11 @@ test("试炼奖励取达到的最高一档，时间边界守住瞬交与超时",
   assert.equal(trialRewardFor(config, 5), 8);
   assert.equal(trialRewardFor(config, 99), 8);
 
-  // 默认 5 题 / 120 秒：最短 20 秒（每题 4 秒），最长 125 秒。
-  assert.deepEqual(trialTimeBounds(config), { minMs: 20_000, maxMs: 125_000 });
-  // 题多到超过限时也不会让最短时间超过限时。
+  // 默认 5 层 / 300 秒：最短 8 秒（下限），最长 305 秒。
+  assert.deepEqual(trialTimeBounds(config), { minMs: 8_000, maxMs: 305_000 });
+  // 每层 1.5 秒，但不超过限时；60 秒限时 → 最短 15 秒。
   assert.deepEqual(trialTimeBounds(trial({ questionCount: 10, timeLimitSeconds: 60 })), {
-    minMs: 40_000,
+    minMs: 15_000,
     maxMs: 65_000,
   });
 });

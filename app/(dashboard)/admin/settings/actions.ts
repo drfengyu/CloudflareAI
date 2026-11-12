@@ -36,7 +36,7 @@ import {
 } from "@/lib/activity/pack-config";
 import {
   TRIAL_CONFIG_KEY,
-  TRIAL_MAX_QUESTIONS,
+  TRIAL_MAX_FLOORS,
   TRIAL_MIN_SECONDS,
   sanitizeTrialConfig,
 } from "@/lib/trial/config";
@@ -1032,7 +1032,7 @@ export async function updateTrialSettings(formData: {
   }
 
   const questionCount = Math.trunc(
-    requireNumber(formData.questionCount, "每局题数", 1, TRIAL_MAX_QUESTIONS),
+    requireNumber(formData.questionCount, "每局层数", 1, TRIAL_MAX_FLOORS),
   );
   const tiers = (formData.tiers ?? []).map((tier, index) => ({
     correct: Math.trunc(

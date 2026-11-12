@@ -101,23 +101,28 @@ export default async function TrialPage() {
       <CardContent>
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
           <li>
-            每局 {config.questionCount} 道整数四则题，限时 {config.timeLimitSeconds} 秒；
-            题目在开局时生成并存在服务端，<b>答案不会下发到浏览器</b>，交卷由服务端判分。
+            每局 {config.questionCount} 层浮游城，限时 {config.timeLimitSeconds} 秒；每层先在两扇野区门里探路
+            （战斗 / 精英 / 宝箱 / 营地），再挑战层主，击败才上楼。
+          </li>
+          <li>
+            剑技是「线性攻击 / 水平弧斩 / 切换防守 / 星屑飞溅」，后两招有冷却；连续进攻累积连击加伤，
+            受伤或防守会清空连击。击杀获得经验，升级提升生命上限并回复 10。
+            宝箱与精英掉装备（可叠加），层主残血进入狂暴；地图与种子存在服务端，<b>交卷只上交动作序列</b>。
           </li>
           <li>
             单局票价 <CouponCount kind="trial" count={priceTickets} />（1 张 ={" "}
             {formatCredits(config.couponUnitCredits)} cr 券面），只扣试炼券；券不足先兑换。
           </li>
           <li>
-            答对题数对应奖励：
+            通关层数对应奖励：
             {config.tiers
-              .map((tier) => ` ${tier.correct} 题 ${formatCredits(trialRewardFor(config, tier.correct))} tcr`)
+              .map((tier) => ` ${tier.correct} 层 ${formatCredits(trialRewardFor(config, tier.correct))} tcr`)
               .join("，")}
             ；奖励 tcr {config.rewardValidDays} 天内有效。
           </li>
           <li>
-            每日最多 {config.dailyRuns} 局（北京时间自然日）。中途关掉页面不算失败，回来接着答同一局；
-            超时交卷按 0 分处理，不返还券。
+            每日最多 {config.dailyRuns} 局（北京时间自然日）。中途关掉页面不算失败，回来接着打同一局；
+            超时按 0 层结算，不返还券。
           </li>
         </ul>
       </CardContent>
@@ -128,7 +133,7 @@ export default async function TrialPage() {
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
         <CardTitle className="text-base">最近挑战</CardTitle>
-        <span className="text-xs text-muted-foreground">最好成绩 {best} 题</span>
+        <span className="text-xs text-muted-foreground">最好成绩 {best} 层</span>
       </CardHeader>
       <CardContent>
         {history.length === 0 ? (
@@ -145,7 +150,7 @@ export default async function TrialPage() {
                 </span>
                 <span className="flex items-center gap-3 tabular-nums">
                   <span>
-                    {row.status === "expired" ? "超时" : `答对 ${row.correct}/${row.questionCount}`}
+                    {row.status === "expired" ? "超时" : `通关 ${row.correct}/${row.questionCount} 层`}
                   </span>
                   <span className={row.reward > 0 ? "font-medium text-success" : "text-muted-foreground"}>
                     {row.reward > 0 ? `+${formatCredits(row.reward)} tcr` : "无奖励"}
@@ -168,7 +173,7 @@ export default async function TrialPage() {
           : { title: "活动已结束", hint: `结束时间（北京时间）：${config.endAt || "未设置"}。` };
     return (
       <>
-        <PageHeader title="每日试炼" description={`${config.questionCount} 题限时挑战 · 答对越多 tcr 越多`} />
+        <PageHeader title="每日试炼" description={`${config.questionCount} 层浮游城 · 越深 tcr 越多`} />
         <PageBody className="space-y-4">
           <Notice title={notice.title} hint={notice.hint} />
           {couponCard}
@@ -181,7 +186,7 @@ export default async function TrialPage() {
 
   return (
     <>
-      <PageHeader title="每日试炼" description={`${config.questionCount} 题限时挑战 · 答对越多 tcr 越多`} />
+      <PageHeader title="每日试炼" description={`${config.questionCount} 层浮游城 · 越深 tcr 越多`} />
       <PageBody className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat
@@ -194,7 +199,7 @@ export default async function TrialPage() {
             icon={Timer}
             label="单局限时"
             value={`${config.timeLimitSeconds} 秒`}
-            hint={`${config.questionCount} 道整数四则`}
+            hint={`共 ${config.questionCount} 层，每层都有层主`}
           />
           <Stat
             icon={Coins}
@@ -206,7 +211,7 @@ export default async function TrialPage() {
             icon={Trophy}
             label="可用活动券"
             value={<CouponCount kind="trial" count={coupon.tickets} iconClassName="h-4 w-4" />}
-            hint={`答对 ${config.questionCount} 题得 ${formatCredits(trialRewardFor(config, config.questionCount))} tcr`}
+            hint={`通关 ${config.questionCount} 层得 ${formatCredits(trialRewardFor(config, config.questionCount))} tcr`}
           />
         </div>
 
@@ -219,7 +224,7 @@ export default async function TrialPage() {
               initialRun={activeRun}
               runsToday={runsToday}
               dailyRuns={config.dailyRuns}
-              questionCount={config.questionCount}
+              floorCount={config.questionCount}
               timeLimitSeconds={config.timeLimitSeconds}
               priceTickets={priceTickets}
               couponTickets={coupon.tickets}

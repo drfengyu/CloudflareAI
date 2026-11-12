@@ -34,10 +34,10 @@ export async function startTrialAction(): Promise<ActionResult<StartedTrial>> {
   }
 }
 
-/** 交卷：答案只在服务端判分，超时按 0 分处理。 */
+/** 交卷：只上传动作序列，服务端按同一套规则重算战果。 */
 export async function submitTrialAction(input: {
   runId: string;
-  answers: unknown[];
+  actions: unknown[];
 }): Promise<ActionResult<TrialSettlement>> {
   try {
     const userId = await requireUser();
@@ -48,7 +48,7 @@ export async function submitTrialAction(input: {
     const data = await submitTrialRun({
       userId,
       runId: String(input.runId ?? ""),
-      answers: Array.isArray(input.answers) ? input.answers : [],
+      actions: Array.isArray(input.actions) ? input.actions : [],
       config,
     });
     revalidatePath("/trial");

@@ -13,17 +13,19 @@ import {
   type TrialConfig,
 } from "./config";
 import {
-  generateTrialQuestions,
-  publicQuestions,
-  scoreTrialAnswers,
-  type TrialQuestionSeed,
-} from "./questions";
+  generateTrialDungeon,
+  parseTrialDungeon,
+  simulateTrialDungeon,
+  type TrialDungeon,
+} from "./dungeon";
 
 /**
  * 每日试炼的写入侧：一次挑战 = 一行 `trial_run`。
  *
- * 题目与答案在开局时落库，交卷只做对答案；判分靠「状态从 active 改到 scored」
- * 的条件更新保证只发一次奖，断网重试拿到的都是同一次结果。
+ * 浮游城地图（层数 + 房间 + 随机种子）在开局时落库，交卷只上交
+ * 「选门 / 出招」的动作序列；服务端用 `lib/trial/dungeon.ts` 重算，
+ * 判分靠「状态从 active 改到 scored」的条件更新保证只发一次奖，
+ * 断网重试拿到的都是同一次结果。
  */
 
 export class TrialError extends Error {}
@@ -48,7 +50,7 @@ export async function countTrialRunsToday(userId: string): Promise<number> {
 
 export interface ActiveTrialRun {
   runId: string;
-  questions: { prompt: string }[];
+  dungeon: TrialDungeon;
   startedAt: number;
   expiresAt: number;
 }
@@ -63,19 +65,6 @@ interface TrialRunRow {
   rewardCredits: number;
   startedAt: Date;
   submittedAt: Date | null;
-}
-
-function parseQuestions(raw: string): TrialQuestionSeed[] {
-  try {
-    const value = JSON.parse(raw);
-    if (!Array.isArray(value)) return [];
-    return value.filter(
-      (item): item is TrialQuestionSeed =>
-        Boolean(item) && typeof item.prompt === "string" && Number.isFinite(Number(item.answer)),
-    ).map((item) => ({ prompt: item.prompt, answer: Number(item.answer) }));
-  } catch {
-    return [];
-  }
 }
 
 /** 还没交卷的一局；超时的由页面提示，不在这里自动结算。 */
@@ -104,10 +93,12 @@ export async function findActiveTrialRun(
     .limit(1);
   const run = rows[0];
   if (!run) return null;
+  const dungeon = parseTrialDungeon(run.questions);
+  if (!dungeon) return null;
   const startedAt = new Date(run.startedAt).getTime();
   return {
     runId: run.id,
-    questions: publicQuestions(parseQuestions(run.questions)),
+    dungeon,
     startedAt,
     expiresAt: startedAt + config.timeLimitSeconds * 1000,
   };
@@ -115,7 +106,7 @@ export async function findActiveTrialRun(
 
 export interface StartedTrial {
   runId: string;
-  questions: { prompt: string }[];
+  dungeon: TrialDungeon;
   startedAt: number;
   expiresAt: number;
   runsToday: number;
@@ -124,9 +115,10 @@ export interface StartedTrial {
 }
 
 /**
- * 开局：校验活动与每日次数 → 扣券 → 生成题目落库。
+ * 开局：校验活动与每日次数 → 扣券 → 生成地下城落库。
  *
  * 已经有一局没交卷时直接复用，不再扣第二次券；券不足一笔不写。
+ * 旧版答题 / 单排波次局（JSON 不是 version 4）就地换成新地图，同样不再扣券。
  */
 export async function startTrialRun(userId: string, config: TrialConfig): Promise<StartedTrial> {
   const activityKey = assertActiveWindow(config);
@@ -134,6 +126,38 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
   if (existing) {
     return {
       ...existing,
+      runsToday: await countTrialRunsToday(userId),
+      dailyRuns: config.dailyRuns,
+      priceCredits: config.runPriceCredits,
+    };
+  }
+
+  const now = new Date();
+  const dungeon = generateTrialDungeon(config.questionCount);
+
+  const stale = await db
+    .select({ id: trialRuns.id })
+    .from(trialRuns)
+    .where(
+      and(
+        eq(trialRuns.userId, userId),
+        eq(trialRuns.activityKey, activityKey),
+        eq(trialRuns.status, "active"),
+      ),
+    )
+    .orderBy(desc(trialRuns.startedAt))
+    .limit(1);
+  if (stale[0]) {
+    await d1Run(
+      `UPDATE trial_run SET questions = ?, questionCount = ?, correct = 0, durationMs = 0, startedAt = ?
+        WHERE id = ? AND userId = ? AND status = 'active'`,
+      [JSON.stringify(dungeon), dungeon.floors.length, now, stale[0].id, userId],
+    );
+    return {
+      runId: stale[0].id,
+      dungeon,
+      startedAt: now.getTime(),
+      expiresAt: now.getTime() + config.timeLimitSeconds * 1000,
       runsToday: await countTrialRunsToday(userId),
       dailyRuns: config.dailyRuns,
       priceCredits: config.runPriceCredits,
@@ -154,8 +178,6 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
   );
   if (!paid.ok) throw new TrialError(paid.reason);
 
-  const now = new Date();
-  const questions = generateTrialQuestions(config.questionCount);
   const runId = crypto.randomUUID();
   try {
     await db.insert(trialRuns).values({
@@ -163,8 +185,8 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
       userId,
       activityKey,
       status: "active",
-      questions: JSON.stringify(questions),
-      questionCount: questions.length,
+      questions: JSON.stringify(dungeon),
+      questionCount: dungeon.floors.length,
       startedAt: now,
     });
   } catch (error) {
@@ -175,7 +197,7 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
 
   return {
     runId,
-    questions: publicQuestions(questions),
+    dungeon,
     startedAt: now.getTime(),
     expiresAt: now.getTime() + config.timeLimitSeconds * 1000,
     runsToday: runsToday + 1,
@@ -187,12 +209,14 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
 export interface TrialSettlement {
   /** true = 这一局之前已经交过（重试），没有重复发奖。 */
   already: boolean;
-  /** true = 超过限时，按 0 分处理。 */
+  /** true = 超过限时，按 0 波处理。 */
   expired: boolean;
-  correct: number;
-  total: number;
+  floorsCleared: number;
+  totalFloors: number;
   reward: number;
   durationMs: number;
+  heroHp: number;
+  victory: boolean;
 }
 
 /**
@@ -202,7 +226,7 @@ export interface TrialSettlement {
 export async function submitTrialRun(input: {
   userId: string;
   runId: string;
-  answers: unknown[];
+  actions: unknown[];
   config: TrialConfig;
 }): Promise<TrialSettlement> {
   const activityKey = trialActivityKey(input.config);
@@ -221,30 +245,34 @@ export async function submitTrialRun(input: {
     return {
       already: true,
       expired: run.status === "expired",
-      correct: run.correct,
-      total: run.questionCount,
+      floorsCleared: run.correct,
+      totalFloors: run.questionCount,
       reward: Number(run.rewardCredits ?? 0),
       durationMs: 0,
+      heroHp: 0,
+      victory: run.status === "scored" && run.correct >= run.questionCount,
     };
   }
 
-  const questions = parseQuestions(run.questions);
-  if (questions.length === 0) throw new TrialError("题目数据异常，请重新开始");
+  const dungeon = parseTrialDungeon(run.questions);
+  if (!dungeon) throw new TrialError("地下城数据异常，请重新开始");
 
   const now = Date.now();
   const startedAt = new Date(run.startedAt).getTime();
   const durationMs = Math.max(0, now - startedAt);
+  const result = simulateTrialDungeon(dungeon, Array.isArray(input.actions) ? input.actions : []);
   const bounds = trialTimeBounds(input.config);
   const expired = durationMs > bounds.maxMs;
   const suspiciouslyFast = durationMs < bounds.minMs;
-  const correct = expired || suspiciouslyFast ? 0 : scoreTrialAnswers(questions, input.answers);
-  const reward = expired ? 0 : trialRewardFor(input.config, correct);
+  const floorsCleared =
+    expired || suspiciouslyFast ? 0 : Math.min(result.floorsCleared, dungeon.floors.length);
+  const reward = expired ? 0 : trialRewardFor(input.config, floorsCleared);
   const status = expired ? "expired" : "scored";
 
   const claimed = await d1Run(
     `UPDATE trial_run SET status = ?, correct = ?, durationMs = ?, rewardCredits = ?, submittedAt = ?
       WHERE id = ? AND userId = ? AND status = 'active'`,
-    [status, correct, durationMs, reward, now, input.runId, input.userId],
+    [status, floorsCleared, durationMs, reward, now, input.runId, input.userId],
   );
   if (claimed.changes !== 1) {
     const latest = await db
@@ -258,13 +286,18 @@ export async function submitTrialRun(input: {
       .from(trialRuns)
       .where(eq(trialRuns.id, input.runId))
       .limit(1);
+    const settled = latest[0];
     return {
       already: true,
-      expired: latest[0]?.status === "expired",
-      correct: Number(latest[0]?.correct ?? 0),
-      total: Number(latest[0]?.questionCount ?? questions.length),
-      reward: Number(latest[0]?.rewardCredits ?? 0),
-      durationMs: Number(latest[0]?.durationMs ?? 0),
+      expired: settled?.status === "expired",
+      floorsCleared: Number(settled?.correct ?? 0),
+      totalFloors: Number(settled?.questionCount ?? dungeon.floors.length),
+      reward: Number(settled?.rewardCredits ?? 0),
+      durationMs: Number(settled?.durationMs ?? 0),
+      heroHp: 0,
+      victory:
+        settled?.status === "scored" &&
+        Number(settled?.correct ?? 0) >= Number(settled?.questionCount ?? 0),
     };
   }
 
@@ -274,7 +307,7 @@ export async function submitTrialRun(input: {
         userId: input.userId,
         amount: reward,
         topupType: TOPUP_TYPE_TRIAL,
-        description: `每日试炼 ${questions.length} 题答对 ${correct} 题奖励`,
+        description: `每日试炼 通关 ${floorsCleared}/${dungeon.floors.length} 层奖励`,
         validDays: input.config.rewardValidDays,
       });
     } catch (error) {
@@ -289,16 +322,20 @@ export async function submitTrialRun(input: {
   return {
     already: false,
     expired,
-    correct,
-    total: questions.length,
+    floorsCleared,
+    totalFloors: dungeon.floors.length,
     reward,
     durationMs,
+    heroHp: result.heroHp,
+    victory: floorsCleared >= dungeon.floors.length,
   };
 }
 
 export interface TrialHistoryRow {
   id: string;
+  /** 通关波数（沿用旧列名）。 */
   correct: number;
+  /** 总波数。 */
   questionCount: number;
   reward: number;
   startedAt: Date;
