@@ -84,7 +84,7 @@ function buildWheelViews(config: LotteryConfig): {
     }
     const single = outerPrizeCredits(config, p.multiplier, 1);
     const batch = outerPrizeCredits(config, p.multiplier, 10);
-    // 永久余额档用绿色调，label 带「永久」标记，与 tcr 临时余额奖品区分。
+    // cr 档用绿色调，label 以 cr 结尾，与 tcr 奖品区分。
     const isPermanent = p.kind === "permanentCredits";
     return {
       label: isPermanent ? formatPermanentPrizeLabel(single) : formatPrizeLabel(single),

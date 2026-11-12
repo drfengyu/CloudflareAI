@@ -410,16 +410,16 @@ estimated    = calculateCredits(model, inputTokens, outputTokens)
 ### 扣减策略（优先级顺序）
 
 ```typescript
-// 1. 优先扣减临时余额（按过期时间升序）
+// 1. 优先扣减tcr 余额（按过期时间升序）
 temporaryBalances
   .where(expiresAt > now)
   .orderBy(expiresAt ASC)
 
-// 2. 临时余额不够，扣减永久余额
+// 2. tcr 余额不够，扣减cr 余额
 user.balanceCredits -= remaining
 ```
 
-### 临时余额特性
+### tcr 余额特性
 
 - **来源**：活动奖励、限时充值、签到奖励
 - **过期时间**：`temporary_balances.expiresAt`
@@ -438,9 +438,9 @@ temporary: [
 total: 18 cr
 
 // 消耗 6 cr
-1. 先扣 3 cr（3天后过期的临时余额）
-2. 再扣 3 cr（7天后过期的临时余额，剩余2cr）
-3. 永久余额不变（10 cr）
+1. 先扣 3 cr（3天后过期的tcr 余额）
+2. 再扣 3 cr（7天后过期的tcr 余额，剩余2cr）
+3. cr 余额不变（10 cr）
 
 // 最终状态
 permanent: 10 cr
@@ -458,18 +458,18 @@ total: 12 cr
 
 | 动作 | 资金流向 | 流水 |
 |------|---------|------|
-| 兑换活动券 / 买珍宝礼包 | 按整张兑换（1 张 = 券单价 cr），先临时余额、再永久余额；礼包实付 = 张数 × 券单价 × 100 ÷ 倍率，实付与到账券面的差额记为**站点亏损 / 用户获利**（`coupon_pack_purchase`） | `topup type=15`，金额为负 |
+| 兑换活动券 / 买珍宝礼包 | 按整张兑换（1 张 = 券单价 cr），先tcr 余额、再cr 余额；礼包实付 = 张数 × 券单价 × 100 ÷ 倍率，实付与到账券面的差额记为**站点亏损 / 用户获利**（`coupon_pack_purchase`） | `topup type=15`，金额为负 |
 | 付费抽 | 只扣当期活动券：按单抽价折**整张**扣券，券不足整笔失败；免费抽不扣券。转盘页不再卖券（v0.38.0） | 无流水（券在兑换 / 礼包时已按 type=15 记账） |
-| 中奖（正数） | 发放到**临时余额**，有效期 `prizeValidDays` 天 | `topup type=6`，金额为正 |
-| 倒扣（负数） | **先扣未过期的临时余额（最早到期的先扣），不够再扣永久余额**；落到本金的部分允许扣成负数（与消费侧 `deductCredits` 同一优先级，2026-10-17 起） | `topup type=6`，金额为负 |
+| 中奖（正数） | 发放到**tcr 余额**，有效期 `prizeValidDays` 天 | `topup type=6`，金额为正 |
+| 倒扣（负数） | **先扣未过期的tcr 余额（最早到期的先扣），不够再扣cr 余额**；落到本金的部分允许扣成负数（与消费侧 `deductCredits` 同一优先级，2026-10-17 起） | `topup type=6`，金额为负 |
 | 累抽赠券 | 不动余额，发当期活动券（配置张数按抽奖等价折算券面） | 无流水（领取记录在 `lottery_milestone_grant`） |
 
 - 抽奖不产生 `usage_log`，因此**不计入看板的调用次数与模型消耗**，只影响余额与流水。
 - 活动流水（`topup type=6/11/12`）在个人账本 `/ledger` 里归入「活动」类别，正负都算；逐次明细仍在
   `/lottery`「我的活动记录」与后台 `/admin/lottery`。钱包页不再列充值记录，只显示最近 8 笔收支。
 - 账本口径是两张表：`topup`（发放与活动收支）+ `usage_log.creditsUsed`（API 消费，不进 `topup`）。
-  到期没花完的临时余额从 v0.29.3 起**逐笔记账**：每日 cron 在删 `temporary_balance` 行之前，
-  按行补一笔负数 `topup type=14`（`createdAt` 用原到期时间，id 为 `expire:<临时余额 id>` 保证幂等），
+  到期没花完的tcr 余额从 v0.29.3 起**逐笔记账**：每日 cron 在删 `temporary_balance` 行之前，
+  按行补一笔负数 `topup type=14`（`createdAt` 用原到期时间，id 为 `expire:<tcr 余额 id>` 保证幂等），
   账本天表因此在到期日看到「过期作废」支出。消费 / 回滚路径删行不补这类流水，避免重复扣。
   2026-11-07 前的历史过期行已被旧版 cron 删掉；同日按可证记录一次性补记了 6 笔
   `type=14` 汇总流水（id 前缀 `expire:backfill:`，只补流水、不动余额），线上用户账目已与余额对平。
@@ -478,7 +478,7 @@ total: 12 cr
   管理员人工调整余额（`type=2`）自 2026-11-07 起正负都写流水，不再制造新差额。
   详见 `docs/features/personal-ledger.md`。
 - D1 经 REST 没有事务，所以扣券与锁券都走 `d1Run` 的条件更新，用返回的 `changes` 判断是否真的命中；
-  开奖按**整批**撤销：任一写入失败就删开奖行、删流水、删临时余额行、反向补回净额、收回发出的券、
+  开奖按**整批**撤销：任一写入失败就删开奖行、删流水、删tcr 余额行、反向补回净额、收回发出的券、
   解锁券，活动券支付的部分退回原券，不存在「10 注里留下 3 注」的半截状态。
 
 ---
@@ -708,7 +708,7 @@ CREATE TABLE usage_log (
 );
 ```
 
-### temporary_balances（临时余额表）
+### temporary_balances（tcr 余额表）
 
 ```sql
 CREATE TABLE temporary_balances (

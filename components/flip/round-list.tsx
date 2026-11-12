@@ -11,7 +11,7 @@ import type { FlipRoundView } from "@/lib/flip/records";
 import { couponTickets } from "@/lib/activity/ticket-math";
 import { CouponCount } from "@/components/activity/coupon-badge";
 
-function Delta({ value }: { value: number }) {
+function Delta({ value, mixed = false }: { value: number; mixed?: boolean }) {
   return (
     <span
       className={cn(
@@ -24,7 +24,7 @@ function Delta({ value }: { value: number }) {
       )}
     >
       {value > 0 ? "+" : ""}
-      {formatCredits(value)} cr
+      {formatCredits(value)} {mixed ? "cr 等值" : "cr"}
     </span>
   );
 }
@@ -142,7 +142,7 @@ export function FlipRoundList({
                         value={round.rewardTickets - couponTickets(round.priceCredits, unitCredits)}
                       />
                     ) : (
-                      <Delta value={reward - round.priceCredits} />
+                      <Delta value={reward - round.priceCredits} mixed />
                     )}
                   </td>
                 </tr>

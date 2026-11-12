@@ -224,7 +224,7 @@ export function validateAttachment(attachment: Attachment): string | null {
         attachment.topupType !== undefined &&
         ![8, 9, 10, MESSAGE_TOPUP_TYPE].includes(attachment.topupType)
       ) {
-        return "永久货币奖励的流水类型必须是 8 / 9 / 10 / 13";
+        return "cr 奖励的流水类型必须是 8 / 9 / 10 / 13";
       }
       return null;
     case "temp_credits":
@@ -237,10 +237,10 @@ export function validateAttachment(attachment: Attachment): string | null {
         attachment.validDays < 1 ||
         attachment.validDays > 365
       ) {
-        return "临时余额有效期需在 1 ~ 365 天之间";
+        return "tcr 有效期需在 1 ~ 365 天之间";
       }
       if (![8, 9, 10].includes(attachment.topupType)) {
-        return "临时余额奖励的流水类型必须是 8 / 9 / 10";
+        return "tcr 奖励的流水类型必须是 8 / 9 / 10";
       }
       if (attachment.cashbackDate && !/^\d{4}-\d{2}-\d{2}$/.test(attachment.cashbackDate)) {
         return "返利日期格式应为 YYYY-MM-DD";
@@ -574,7 +574,7 @@ export async function claimMessage(
         await markRewardClaimed(attachment.rewardClaimId, userId, now);
         return {
           attachment: { ...attachment, credits: amount },
-          note: `${amount} cr 已到账（临时余额，${attachment.validDays} 天内有效）`,
+          note: `${amount} tcr 已到账，${attachment.validDays} 天内有效`,
         };
       }
       case "tickets": {

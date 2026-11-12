@@ -94,7 +94,7 @@ export function ModelAnalyticsCard({
             height={280}
             yAxisLabel="Credits"
             emptyMessage="该时段暂无消耗数据"
-            tooltipFormatter={(value: number) => [`${Math.round(value)} cr`, "消耗"]}
+            tooltipFormatter={(value: number) => [`${Math.round(value)} cr 等值`, "消耗"]}
           />
         ) : null}
 

@@ -1,8 +1,8 @@
-# 定期清理过期临时余额任务
+# 定期清理过期tcr 余额任务
 
 ## 功能说明
 
-自动清理 `temporary_balances` 表中已过期的临时余额记录，防止数据库积累无效数据。
+自动清理 `temporary_balances` 表中已过期的tcr 余额记录，防止数据库积累无效数据。
 
 ## 实现方式
 
@@ -47,7 +47,7 @@ WHERE expiresAt <= NOW()
 **清理对象**：
 - 签到奖励过期（默认 7 天）
 - 活动奖励过期
-- 其他临时余额过期
+- 其他tcr 余额过期
 
 **日志记录**：
 - 清理时间
@@ -188,7 +188,7 @@ curl https://your-domain.com/api/cron/cleanup-expired-balances
 ### 3. 模拟过期数据
 
 ```sql
--- 插入一条过期的临时余额（用于测试）
+-- 插入一条过期的tcr 余额（用于测试）
 INSERT INTO temporary_balances (
   id, userId, amount, expiresAt, description, createdAt
 ) VALUES (

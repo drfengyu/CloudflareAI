@@ -58,8 +58,8 @@ export function createColumns(onManage: (user: UserRow) => void): ColumnDef<User
             <p className="font-medium">{total.toLocaleString()} cr 等值</p>
             {(temporary > 0 || permanent < 0) && (
               <p className="text-xs text-muted-foreground">
-                (永久 {display.displayPermanent.toLocaleString()} cr + 临时{" "}
-                {display.displayTemporary.toLocaleString()} tcr)
+                (cr {display.displayPermanent.toLocaleString()} + tcr{" "}
+                {display.displayTemporary.toLocaleString()})
               </p>
             )}
           </div>

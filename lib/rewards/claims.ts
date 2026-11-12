@@ -283,7 +283,7 @@ export async function issueRechargeTierReward(
       title: `限时充值活动 · 累计满 ${tier.minCny} 奖励`,
       body: [
         `你在本期限时充值活动中累计实付 ${activity.cumulative.toFixed(2)}，已达到「累计满 ${tier.minCny}」档位。`,
-        `奖励 ${tier.bonus.toFixed(2)} cr 已发放，请在站内信领取；领取后进入临时余额，有效期 ${settings.validDays} 天。`,
+        `奖励 ${tier.bonus.toFixed(2)} tcr 已发放，请在站内信领取；领取后 ${settings.validDays} 天内有效。`,
         `活动时间：${settings.startDate} 起${settings.endDate ? `至 ${settings.endDate}` : "，结束时间另行通知"}。`,
       ].join("\n"),
       attachment: {

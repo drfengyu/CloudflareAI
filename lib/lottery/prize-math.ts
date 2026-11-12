@@ -359,10 +359,10 @@ export function formatPrizeLabel(value: number): string {
   return n > 0 ? `+${n} tcr` : `${n} cr`;
 }
 
-/** 永久余额档：不进临时余额，文案固定 cr 并带「永久」标记。 */
+/** cr 余额档：正数直接进 cr、不过期；单位本身就能和 tcr 档区分，不再附带描述词。 */
 export function formatPermanentPrizeLabel(value: number): string {
   const n = round2(value);
-  return n >= 0 ? `+${n} cr 永久` : `${n} cr`;
+  return n >= 0 ? `+${n} cr` : `${n} cr`;
 }
 
 /** 赠券档的文案：不给 cr，只给活动券张数，所以不套 cr 的格式。 */

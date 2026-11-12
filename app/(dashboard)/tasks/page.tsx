@@ -84,10 +84,10 @@ export default async function TasksPage() {
               <li>
                 每日活跃度上限 <b className="text-foreground">100</b>，每 25 一档；每周上限{" "}
                 <b className="text-foreground">300</b>，每 50 一档。达到里程碑自动发站内信，
-                奖励为随机临时货币（tcr），额度逐档递增，周奖励更丰厚。
+                奖励为随机 tcr，额度逐档递增，周奖励更丰厚。
               </li>
               <li>
-                临时货币（tcr）有效期 {board.validDays} 天，到期未用自动作废；永久货币（cr）直接进余额。
+                奖励以 tcr 发放，{board.validDays} 天内有效，到期未用自动作废。
                 站内信里待领取的附件不会被清理。
               </li>
               <li>

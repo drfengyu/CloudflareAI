@@ -375,7 +375,7 @@ export async function exchangeCoupon(
 
   const spend = await spendCredits(userId, amount);
   if (!spend.ok) {
-    throw new Error(`${spend.reason}：兑换 ${tickets} 张需要 ${formatAmount(amount)} cr`);
+    throw new Error(`${spend.reason}：兑换 ${tickets} 张需要 ${formatAmount(amount)} cr 等值`);
   }
 
   try {
@@ -385,14 +385,14 @@ export async function exchangeCoupon(
       userId,
       amount: -amount,
       type: COUPON_TOPUP_TYPE,
-      description: `兑换${activity.couponName} ${tickets} 张（${formatAmount(amount)} cr，${activity.label}）`,
+      description: `兑换${activity.couponName} ${tickets} 张（${formatAmount(amount)} cr 等值，${activity.label}）`,
       createdAt: new Date(),
     });
   } catch (err) {
     await refundPermanentCredits(
       userId,
       amount,
-      `兑换${activity.couponName}失败退回（${formatAmount(amount)} cr）`,
+      `兑换${activity.couponName}失败退回（${formatAmount(amount)} cr 等值）`,
     ).catch(() => undefined);
     throw err;
   }
@@ -433,7 +433,7 @@ export async function buyCouponPack(
   const credits = grant.totalCredits;
 
   const spend = await spendCredits(userId, price);
-  if (!spend.ok) throw new Error(`${spend.reason}：礼包需要 ${formatAmount(price)} cr`);
+  if (!spend.ok) throw new Error(`${spend.reason}：礼包需要 ${formatAmount(price)} cr 等值`);
 
   const purchaseId = crypto.randomUUID();
   const now = new Date();
@@ -503,7 +503,7 @@ export async function buyCouponPack(
         userId,
         amount: pack.tempCredits,
         type: PACK_BONUS_TOPUP_TYPE,
-        description: `购买${pack.name}赠送临时余额（${activity.label}）`,
+        description: `购买${pack.name}赠送 tcr（${activity.label}）`,
         createdAt: now,
       });
     }
@@ -542,7 +542,7 @@ export async function buyCouponPack(
     await refundPermanentCredits(
       userId,
       price,
-      `购买${pack.name}失败退回（${formatAmount(price)} cr）`,
+      `购买${pack.name}失败退回（${formatAmount(price)} cr 等值）`,
     ).catch(() => undefined);
     throw err;
   }

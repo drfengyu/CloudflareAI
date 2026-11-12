@@ -173,9 +173,9 @@ export default async function AdminRaidenPage({
                   />
                   <Metric
                     label="奖励发放"
-                    value={`${formatCredits(report.rewardsPaid)} cr`}
+                    value={`${formatCredits(report.rewardsPaid)} tcr`}
                     tone="negative"
-                    hint="计入临时余额（tcr）"
+                    hint="以 tcr 发放"
                   />
                   <Metric
                     label="出击次数"
@@ -200,7 +200,7 @@ export default async function AdminRaidenPage({
                 </div>
                 <p className="text-[11px] text-muted-foreground">
                   统计范围是当前活动轮次（以开始时间区分），下一轮活动会从零重新统计。
-                  奖励全部发放到临时余额（tcr），过期未使用不会实际付出；这里的净值是 cr 口径，
+                  奖励全部以 tcr 发放，过期未使用不会实际付出；这里的净值是 cr 等值口径，
                   不代表真实资金。
                 </p>
               </>
@@ -235,7 +235,7 @@ export default async function AdminRaidenPage({
                             <td className="px-3 py-2 tabular-nums">{row.clears}</td>
                             <td className="px-3 py-2 tabular-nums">{row.firstClears}</td>
                             <td className="px-3 py-2 tabular-nums">
-                              {formatCredits(row.rewards)} cr
+                              {formatCredits(row.rewards)} tcr
                             </td>
                           </tr>
                         ))}

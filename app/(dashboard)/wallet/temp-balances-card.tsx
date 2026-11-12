@@ -16,7 +16,7 @@ export interface SerializedTempBalance {
 }
 
 /**
- * 临时余额明细。补正计算在服务端完成，这里只做本地分页——数据量小，
+ * tcr 明细。补正计算在服务端完成，这里只做本地分页——数据量小，
  * 翻页不需要再读库。
  */
 export function TempBalancesCard({ balances }: { balances: SerializedTempBalance[] }) {
@@ -31,7 +31,7 @@ export function TempBalancesCard({ balances }: { balances: SerializedTempBalance
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base">临时余额明细</CardTitle>
+        <CardTitle className="text-base">tcr 明细</CardTitle>
         <span className="text-xs text-muted-foreground">
           共 {balances.length} 条 · 每页 {PAGE_SIZE} 条
         </span>
@@ -48,7 +48,7 @@ export function TempBalancesCard({ balances }: { balances: SerializedTempBalance
                   {formatCredits(tb.displayAmount)} tcr
                   {tb.usedForCompensation > 0 && (
                     <span className="ml-2 text-xs text-amber-600 dark:text-amber-400">
-                      （{formatCredits(tb.usedForCompensation)} tcr 已抵扣永久余额的欠费）
+                      （{formatCredits(tb.usedForCompensation)} tcr 已抵扣 cr 欠费）
                     </span>
                   )}
                 </p>

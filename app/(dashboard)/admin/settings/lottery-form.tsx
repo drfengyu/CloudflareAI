@@ -23,7 +23,7 @@ interface InnerRow {
   weight: string;
 }
 interface OuterRow {
-  /** credits=倍数→临时余额（带过期）；permanentCredits=倍数→永久余额（不过期）；tickets=直接赠活动券。 */
+  /** credits=倍数→tcr（带过期）；permanentCredits=倍数→cr（不过期）；tickets=直接赠活动券。 */
   kind: "credits" | "permanentCredits" | "tickets";
   multiplier: string;
   tickets: string;
@@ -304,7 +304,7 @@ export function LotteryForm({ initialConfig }: { initialConfig: LotteryConfig })
 
       <PrizeSection
         title="内圈奖品（固定加/减 cr）"
-        hint="绝对 cr，不随券价自动缩放——券价因此是独立的利润率杠杆。扇区宽度按权重分配，权重同时决定中奖概率；负数先扣用户未过期的临时余额（越早到期越先扣），不够再扣永久余额，本金可能扣成负数。"
+        hint="绝对 cr，不随券价自动缩放——券价因此是独立的利润率杠杆。扇区宽度按权重分配，权重同时决定中奖概率；负数先扣用户未过期的 tcr（越早到期越先扣），不够再扣 cr，本金可能扣成负数。"
         columns={[
           { key: "credits", label: "cr 变动" },
           { key: "weight", label: "权重" },
@@ -438,14 +438,14 @@ function OuterPrizeSection({
     if (!Number.isFinite(m) || row.multiplier.trim() === "") return "—";
     const single = formatPrizeLabel(outerPrizeCredits(config, m, 1));
     const batch = formatPrizeLabel(outerPrizeCredits(config, m, 10));
-    const tag = row.kind === "permanentCredits" ? " 永久" : "";
+    const tag = row.kind === "permanentCredits" ? "（cr）" : "";
     return batch === single ? `${single}${tag}` : `${single}${tag} / 10连 ${batch}${tag}`;
   }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">外圈奖品（倍数·临时余额 / 倍数·永久余额 / 赠送活动券）</p>
+        <p className="text-sm font-medium">外圈奖品（倍数 tcr / 倍数 cr / 赠送活动券）</p>
         <Button
           type="button"
           variant="outline"
@@ -487,8 +487,8 @@ function OuterPrizeSection({
                 onChange={(e) => patch(i, { kind: e.target.value as OuterRow["kind"] })}
                 className="w-24 shrink-0 rounded-lg border border-border bg-card px-2 py-2 text-sm"
               >
-                <option value="credits">倍数·临时</option>
-                <option value="permanentCredits">倍数·永久</option>
+                <option value="credits">倍数 tcr</option>
+                <option value="permanentCredits">倍数 cr</option>
                 <option value="tickets">赠活动券</option>
               </select>
               <input

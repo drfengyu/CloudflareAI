@@ -25,6 +25,7 @@ import {
   type CashbackTier,
 } from "@/lib/cashback/config";
 import { resolveActivities, type ActivityKind } from "@/lib/activity/coupons";
+import { formatAmount, normalizeCurrencyText } from "@/lib/billing/units";
 
 export type CashbackSettings = Awaited<ReturnType<typeof getCashbackSettings>>;
 
@@ -72,10 +73,10 @@ const fmt = (v: number) => String(round2(v));
 
 /** 后台配置的一档奖励区间，展示成一句人话。 */
 export function rewardRangeLabel(tier: CashbackTier): string {
-  return `随机 ${fmt(tier.minReward)}–${fmt(tier.maxReward)} cr 货币或活动券，或 1–3 张转盘活动券`;
+  return `随机 ${fmt(tier.minReward)}–${fmt(tier.maxReward)} tcr 或 cr，或至多 3 张转盘活动券`;
 }
 
-/** 发放时随机挑一个「当前开着」的活动作为券落点；没有活动时券奖励降级成临时货币。 */
+/** 发放时随机挑一个「当前开着」的活动作为券落点；没有活动时券奖励降级成 tcr。 */
 export interface CouponTarget {
   kind: ActivityKind;
   activityKey: string;
@@ -150,12 +151,12 @@ export async function getCashbackActivity(userId: string): Promise<CashbackActiv
         minCredits: tier.minCredits,
         minReward: tier.minReward,
         maxReward: tier.maxReward,
-        rangeLabel: claim?.rewardLabel ?? rewardRangeLabel(tier),
+        rangeLabel: normalizeCurrencyText(claim?.rewardLabel) ?? rewardRangeLabel(tier),
         met: cumulative >= tier.minCredits,
         gap: Math.max(0, round2(tier.minCredits - cumulative)),
         claimState: claimStateOf(claim),
         rewardKind: claim?.rewardKind ?? null,
-        rewardLabel: claim?.rewardLabel ?? null,
+        rewardLabel: normalizeCurrencyText(claim?.rewardLabel),
       };
     }),
   };
@@ -199,13 +200,13 @@ function rewardAttachment(reward: CashbackReward, validDays: number, claimId: st
 function arrivalText(reward: CashbackReward, validDays: number): string {
   switch (reward.kind) {
     case "permanent_credits":
-      return "领取后直接进入永久余额。";
+      return `领取后 ${formatAmount(reward.credits)} cr 直接到账，不过期。`;
     case "tickets":
       return "领取后活动券直接入账，可去幸运转盘使用。";
     case "coupon":
       return "领取后进入当期活动券；当期活动结束后作废。";
     default:
-      return `领取后进入临时余额，有效期 ${validDays} 天。`;
+      return `领取后 ${formatAmount(reward.credits)} tcr 到账，${validDays} 天内有效。`;
   }
 }
 
@@ -226,7 +227,7 @@ export async function issueCashbackTierReward(
   if (!activity.active) throw new Error("消费返利不在进行中");
   const tierView = activity.tiers.find((item) => item.tierKey === tierKey);
   if (!tierView) throw new Error("档位不存在，请刷新页面");
-  if (!tierView.met) throw new Error(`累计消费还差 ${tierView.gap.toFixed(2)} cr，暂未达到这一档`);
+  if (!tierView.met) throw new Error(`累计消费还差 ${tierView.gap.toFixed(2)} cr 等值，暂未达到这一档`);
   if (tierView.claimState === "claimed") throw new Error("这一档奖励已经领取过了");
   if (tierView.claimState === "sent") {
     return { state: "sent", rewardLabel: tierView.rewardLabel ?? "奖励已发放" };
@@ -252,16 +253,16 @@ export async function issueCashbackTierReward(
       .from(rewardClaims)
       .where(eq(rewardClaims.id, reserved.id))
       .limit(1);
-    return { state: "sent", rewardLabel: rows[0]?.rewardLabel ?? reward.label };
+    return { state: "sent", rewardLabel: normalizeCurrencyText(rows[0]?.rewardLabel) ?? reward.label };
   }
 
   try {
     const messageId = await sendMessage({
       userId,
       kind: "reward",
-      title: `消费返利 · 累计满 ${fmt(tierView.minCredits)} cr`,
+      title: `消费返利 · 累计满 ${fmt(tierView.minCredits)} cr 等值`,
       body: [
-        `你在本期消费返利活动中累计消费 ${fmt(activity.cumulative)} cr，已达到「累计满 ${fmt(tierView.minCredits)} cr」档位。`,
+        `你在本期消费返利活动中累计消费 ${fmt(activity.cumulative)} cr 等值，已达到「累计满 ${fmt(tierView.minCredits)} cr 等值」档位。`,
         `本次随机奖励：${reward.label}。`,
         arrivalText(reward, settings.validDays),
         `活动时间：${activity.startDate} 起${activity.endDate ? `至 ${activity.endDate}` : "，结束时间另行通知"}（与限时充值活动同一时间段）。`,

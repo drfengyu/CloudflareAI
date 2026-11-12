@@ -156,7 +156,7 @@ export default async function FlipPage() {
           <li>
             面值正好是券单价整数倍的奖项发<b>整张翻牌券</b>（
             <CouponCount kind="flip" count={1} /> = {formatCredits(config.couponUnitCredits)} cr 券面）；
-            其余奖项进<b>临时余额（tcr）</b>，有效期 {config.rewardValidDays} 天，到期未用自动作废。
+            其余奖项发<b> tcr</b>，{config.rewardValidDays} 天内有效，到期未用自动作废。
             开局票价从当期活动券扣（每局 <CouponCount kind="flip" count={priceTickets} />），
             活动券按本玩法单价兑换（1 张 = {formatCredits(config.couponUnitCredits)} cr），不足需先兑换。
           </li>

@@ -23,7 +23,7 @@ const TICKET_LABEL: Record<DrawRecord["ticketSource"], string> = {
   unknown: "已失效",
 };
 
-function Delta({ value }: { value: number }) {
+function Delta({ value, unit = "cr" }: { value: number; unit?: "cr" | "tcr" }) {
   return (
     <span
       className={cn(
@@ -36,7 +36,7 @@ function Delta({ value }: { value: number }) {
       )}
     >
       {value > 0 ? "+" : ""}
-      {formatCredits(value)} cr
+      {formatCredits(value)} {unit}
     </span>
   );
 }
@@ -66,7 +66,7 @@ function ActivityRoundTable({ records }: { records: DrawRecord[] }) {
             <th className="px-3 py-2 font-medium">时间</th>
             <th className="px-3 py-2 font-medium">圈层</th>
             <th className="px-3 py-2 font-medium">结果</th>
-            <th className="px-3 py-2 font-medium">cr 变动</th>
+            <th className="px-3 py-2 font-medium">变动</th>
             <th className="px-3 py-2 font-medium">活动券</th>
           </tr>
         </thead>
@@ -91,9 +91,9 @@ function ActivityRoundTable({ records }: { records: DrawRecord[] }) {
               </td>
               <td className="px-3 py-2">
                 {r.deltaCredits === 0 && r.grantTickets > 0 ? (
-                  <span className="text-muted-foreground">不发 cr</span>
+                  <span className="text-muted-foreground">发活动券</span>
                 ) : (
-                  <Delta value={r.deltaCredits} />
+                  <Delta value={r.deltaCredits} unit={r.balanceUnit} />
                 )}
               </td>
               <td className="px-3 py-2 text-xs text-muted-foreground">
@@ -180,20 +180,20 @@ export function LotteryRecords({
                   <Stat label="抽奖次数" hint={`外圈命中 ${balance.outerHits} 次`}>
                     {balance.draws}
                   </Stat>
-                  <Stat label="中奖发放">
+                  <Stat label="中奖发放" hint="含 tcr 与 cr">
                     <span className="text-[color:var(--primary)]">
-                      +{formatCredits(balance.paidOut)} cr
+                      +{formatCredits(balance.paidOut)} cr 等值
                     </span>
                   </Stat>
                   <Stat label="倒扣回收">
                     <span className="text-[color:var(--destructive)]">
-                      −{formatCredits(balance.clawedBack)} cr
+                      −{formatCredits(balance.clawedBack)} cr 等值
                     </span>
                   </Stat>
-                  <Stat label="已开奖消耗">
+                  <Stat label="已开奖消耗" hint="按活动券面计">
                     {formatCredits(balance.ticketFace)} cr
                   </Stat>
-                  <Stat label="本期净收益" hint="中奖 − 倒扣 − 消耗">
+                  <Stat label="本期净收益" hint="中奖 − 倒扣 − 消耗（cr 等值）">
                     <Delta value={-balance.net} />
                   </Stat>
                 </div>
@@ -208,7 +208,8 @@ export function LotteryRecords({
             </div>
 
             <p className="text-[11px] text-muted-foreground">
-              收益按已开奖的注计算，消耗取开奖时实际抵扣的活动券面值；普通中奖以临时余额发放（过期未用自动作废），标注「永久」的奖品直接进永久余额、不过期。
+              收益按已开奖的注计算，消耗取开奖时实际抵扣的活动券面值；中奖按注发放 tcr 或 cr——
+              tcr 到期未用自动作废，cr 不过期。
             </p>
           </>
         )}

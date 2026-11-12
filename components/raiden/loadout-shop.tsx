@@ -138,7 +138,7 @@ export function LoadoutShop({
         </p>
         <p className="mt-0.5">
           <span className="text-white/70">掉落：</span>W 机炮 · S 散射 · M 导弹 · L 激光 · P 榴弹 · B 炸弹 ·
-          金色 cr 战利品
+          金色 tcr 战利品
         </p>
         <p className="mt-0.5">
           <span className="text-white/70">子弹：</span>同时只用一种；吃同字母升级，吃别的字母切换并把等级清空，

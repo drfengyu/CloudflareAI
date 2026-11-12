@@ -61,7 +61,7 @@ export default async function InvitePage() {
     <>
       <PageHeader
         title="邀请好友"
-        description="邀请新用户注册，双方获得永久余额奖励"
+        description="邀请新用户注册，双方获得 cr 奖励"
       />
       <PageBody className="space-y-4">
         {!settings.enabled && (
@@ -135,7 +135,8 @@ export default async function InvitePage() {
                 <strong className="text-foreground">
                   {formatCredits(settings.inviteeReward)} cr
                 </strong>
-                （永久余额）。
+                （cr）。
+
               </li>
               <li>奖励在注册时直接发放，并记入钱包的充值记录。</li>
               <li>新账号需要邮箱注册，每个账号只能被邀请一次；注册 IP 有频率限制。</li>

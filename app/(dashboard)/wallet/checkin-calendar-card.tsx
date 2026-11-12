@@ -124,8 +124,8 @@ export function CheckinCalendarCard() {
         const bonus = result.data.streakBonus;
         toast.success(
           bonus > 0
-            ? `签到成功！获得 ${result.data.quotaAwarded.toFixed(2)} cr（含连签 ${result.data.streak} 天奖励 ${bonus.toFixed(2)} cr）`
-            : `签到成功！获得 ${result.data.quotaAwarded.toFixed(2)} cr`,
+            ? `签到成功！获得 ${result.data.quotaAwarded.toFixed(2)} tcr（含连签 ${result.data.streak} 天奖励 ${bonus.toFixed(2)} tcr）`
+            : `签到成功！获得 ${result.data.quotaAwarded.toFixed(2)} tcr`,
         );
         await fetchData(); // 刷新签到数据
         // 刷新页面以更新余额（Server Component 重新渲染）
@@ -221,7 +221,7 @@ export function CheckinCalendarCard() {
               </div>
               <p className="text-sm text-muted-foreground">
                 {checkedToday && todayAward !== undefined
-                  ? `今日 +${todayAward.toFixed(2)} cr`
+                  ? `今日 +${todayAward.toFixed(2)} tcr`
                   : data.stats.streak > 0
                     ? `已连续签到 ${data.stats.streak} 天，今天签到可延续`
                     : "每日签到获得随机额度奖励"}
@@ -359,7 +359,7 @@ export function CheckinCalendarCard() {
                       `（再签 ${data.streakDays - (data.stats.streak % data.streakDays)} 天可达下一档）`}
                   </li>
                 )}
-                <li>奖励将直接进入临时余额（tcr）</li>
+                <li>奖励以 tcr 发放，到期未用自动作废</li>
               </ul>
             </div>
           </CardContent>

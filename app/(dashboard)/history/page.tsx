@@ -110,7 +110,9 @@ export default async function HistoryPage({
                           <span className="w-[100px] text-right">—</span>
                         )}
                         {log.creditsUsed ? (
-                          <span className="font-medium w-[80px] text-right">{log.creditsUsed.toLocaleString()} cr</span>
+                          <span className="font-medium w-[100px] text-right" title="实际扣费（cr 等值，先扣 tcr）">
+                            {log.creditsUsed.toLocaleString()} cr 等值
+                          </span>
                         ) : (
                           <span className="w-[80px] text-right">—</span>
                         )}

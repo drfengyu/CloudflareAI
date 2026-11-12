@@ -24,11 +24,11 @@
 2. 服务端重新校验活动状态、累计金额与档位，写一条 `reward_claim` 占住发放位
    （唯一索引 `uq_reward_claim(userId, activityKind, tierKey)` 挡双击 / 并发）；
 3. 发一封带 `temp_credits` 附件的站内信；
-4. 用户在站内信点「领取」，才写入**临时余额**（有效期 `recharge_bonus_valid_days`，默认 30 天）
+4. 用户在站内信点「领取」，才写入**tcr 余额**（有效期 `recharge_bonus_valid_days`，默认 30 天）
    与钱包流水 `type=10`，并回写 `reward_claim.claimedAt`。
 
 活动页区分「未达标 / 可发放 / 已发到站内信 / 已领取」，已发放但未领取的附件不会被 cron 清理。
-临时余额不并进永久余额：付费用户的主充值本来就是永久的，赠送带期限既能做促销又不让存量无限堆积。
+tcr 余额不并进cr 余额：付费用户的主充值本来就是永久的，赠送带期限既能做促销又不让存量无限堆积。
 `tierKey` 取门槛金额的规范字符串（`normalizeTierKey`），改赠送额度不影响已发记录，改门槛就是另一档。
 
 ## 涉及文件
@@ -37,7 +37,7 @@
 | --- | --- |
 | 逻辑 | `lib/payment/bonus.ts`（设置读取 / 档位裁剪）、`lib/rewards/claims.ts`（累计、发放、幂等） |
 | 表 / 迁移 | `lib/db/schema.ts`（`rewardClaims`）、`migrations/022_reward_claim.sql` |
-| 站内信 | `lib/message/messages.ts`（`temp_credits` 附件，领取时写临时余额与流水） |
+| 站内信 | `lib/message/messages.ts`（`temp_credits` 附件，领取时写tcr 余额与流水） |
 | 配置 | `option` 键 `recharge_bonus_enabled` / `recharge_bonus_start_date` / `recharge_bonus_end_date` / `recharge_bonus_tiers` / `recharge_bonus_valid_days` |
 | 页面 | `app/(dashboard)/cashback/page.tsx`、`components/cashback/recharge-panel.tsx`、`app/(dashboard)/cashback/actions.ts` |
 | 钱包 | `app/(dashboard)/wallet/redeem-code-dialog.tsx`（只提示累计档位与去活动页领取，不再预告本单赠送） |
@@ -48,5 +48,5 @@
 
 - 读侧与界面：`/wallet` 与 `/cashback` 本地实测；累计计算只读核对线上今日已完成订单与 type=10 流水均为 0，
   切换为手动领取不会重复发放历史订单。
-- 发放侧：`issueRechargeTierReward` 的写库形状（`reward_claim` + `temp_credits` 站内信 + 领取后临时余额/流水）
+- 发放侧：`issueRechargeTierReward` 的写库形状（`reward_claim` + `temp_credits` 站内信 + 领取后tcr 余额/流水）
   在本地对真实 D1 测试账号跑通；线上活动配置仍由管理员在后台自行开启。

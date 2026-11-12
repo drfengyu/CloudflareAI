@@ -139,7 +139,7 @@ export default async function PricingPage() {
               <div className="space-y-2 text-sm">
                 <p className="font-medium text-primary">定价说明</p>
                 <ul className="space-y-1 text-muted-foreground">
-                  <li>• 全站统一以 Credits（cr）计价，不涉及其他货币</li>
+                  <li>• 全站统一以 cr 计价；签到、赠送与返利发 tcr，扣费先扣 tcr、再扣 cr</li>
                   <li>• 下列单价即<b>实际扣费价</b>：表价 × 模型倍率 × 基础倍率（当前 ×{baseMultiplier}）</li>
                   <li>• 文本 / 嵌入等按 token 计费的模型单位为「cr / per K input token」</li>
                   <li>• 图像模型按张固定计费（cr / image），不受基础倍率影响</li>

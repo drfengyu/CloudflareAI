@@ -443,7 +443,7 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
 
       <div>
         <label className="block text-sm font-medium mb-1">
-          临时余额有效期（天）
+tcr 有效期（天）
         </label>
         <input
           type="number"
@@ -455,7 +455,7 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
           placeholder="7"
         />
         <p className="mt-1 text-xs text-muted-foreground">
-          签到奖励作为临时余额的有效期（过期自动删除）
+          签到奖励作为 tcr 的有效期（过期自动删除）
         </p>
       </div>
 
@@ -518,10 +518,10 @@ export function CheckinSettingsForm({ initialSettings }: CheckinSettingsFormProp
           <br />
           • 随机奖励：在最小和最大额度之间随机生成
           <br />
-          • 奖励形式：临时余额（有效期 {validDays} 天）
+          • 奖励形式：tcr（有效期 {validDays} 天）
           <br />
-          • 连签奖励：连续签到每满 {streakDays} 天额外发放 {streakReward} cr
-          <br />• 优先消耗：使用时优先扣减临时余额，不够再扣永久余额
+          • 连签奖励：连续签到每满 {streakDays} 天额外发放 {streakReward} tcr
+          <br />• 扣费顺序：先扣 tcr，不够再扣 cr
         </p>
       </div>
 
@@ -591,7 +591,7 @@ export function InviteSettingsForm({ initialSettings }: InviteSettingsFormProps)
             placeholder="300"
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            好友注册成功后发给邀请人的永久余额
+            好友注册成功后发给邀请人的 cr
           </p>
         </div>
 
@@ -610,7 +610,7 @@ export function InviteSettingsForm({ initialSettings }: InviteSettingsFormProps)
             placeholder="200"
           />
           <p className="mt-1 text-xs text-muted-foreground">
-            通过邀请链接注册的新用户额外获得的永久余额
+            通过邀请链接注册的新用户额外获得的 cr
           </p>
         </div>
       </div>
@@ -702,7 +702,7 @@ export function CashbackSettingsForm({ initialSettings }: CashbackSettingsFormPr
             className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
             placeholder="7"
           />
-          <p className="mt-1 text-xs text-muted-foreground">发到临时货币时按这个有效期作废</p>
+          <p className="mt-1 text-xs text-muted-foreground">发 tcr 时按这个有效期作废</p>
         </div>
         <div>
           <label className="block text-sm font-medium mb-1">冲榜窗口（天）</label>
@@ -739,13 +739,13 @@ export function CashbackSettingsForm({ initialSettings }: CashbackSettingsFormPr
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="w-14 shrink-0">档位</span>
           <span className="flex-1">累计满（cr）</span>
-          <span className="flex-1">最少奖励（cr）</span>
-          <span className="flex-1">最多奖励（cr）</span>
+          <span className="flex-1">最少奖励（cr 等值）</span>
+          <span className="flex-1">最多奖励（cr 等值）</span>
           <span className="w-10 shrink-0" />
         </div>
         {tiers.length === 0 ? (
           <p className="mt-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-            还没有档位。开启返利需要至少一档：活动期内累计消费满 X，随机发 Y–Z cr（货币或活动券）或 1–3 张转盘活动券。
+            还没有档位。开启返利需要至少一档：活动期内累计消费满 X，随机发 Y–Z cr 等值（tcr / cr / 活动券）或 1–3 张转盘活动券。
           </p>
         ) : (
           <div className="mt-2 space-y-2">
@@ -795,7 +795,7 @@ export function CashbackSettingsForm({ initialSettings }: CashbackSettingsFormPr
           </div>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
-          与充值阶梯赠送共用同一个活动时间段；按活动期内<b>累计消费</b>判定，达到多档时每档都可领取一次。每档随机发放临时货币 / 永久货币 / 当期活动券 / 1–3 张转盘活动券，奖励区间随档位递增。顺序不用管，保存时按门槛从小到大重排。
+          与充值阶梯赠送共用同一个活动时间段；按活动期内<b>累计消费</b>判定，达到多档时每档都可领取一次。每档随机发放 tcr / cr / 当期活动券 / 1–3 张转盘活动券，奖励区间随档位递增。顺序不用管，保存时按门槛从小到大重排。
         </p>
       </div>
 
@@ -915,7 +915,7 @@ export function RechargeBonusSettingsForm({ initialSettings }: RechargeBonusSett
             className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
             placeholder="30"
           />
-          <p className="mt-1 text-xs text-muted-foreground">赠送进临时余额，到期作废</p>
+          <p className="mt-1 text-xs text-muted-foreground">赠送 tcr，到期作废</p>
         </div>
       </div>
 
@@ -936,12 +936,12 @@ export function RechargeBonusSettingsForm({ initialSettings }: RechargeBonusSett
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="w-14 shrink-0">档位</span>
           <span className="flex-1">实付满（元，LinuxDO 按积分）</span>
-          <span className="flex-1">赠送（cr）</span>
+          <span className="flex-1">赠送（tcr）</span>
           <span className="w-10 shrink-0" />
         </div>
         {tiers.length === 0 ? (
           <p className="mt-2 rounded-lg border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
-            还没有档位。开启赠送需要至少一档：实付满 X 送 Y cr。
+            还没有档位。开启赠送需要至少一档：实付满 X 送 Y tcr。
           </p>
         ) : (
           <div className="mt-2 space-y-2">
@@ -982,7 +982,7 @@ export function RechargeBonusSettingsForm({ initialSettings }: RechargeBonusSett
           </div>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
-          按活动期内<b>累计实付</b>判定，达到多档时每档都可领取一次（不叠加计算）；用户在「限时返利」页逐档发放到站内信，领取后才进临时余额。顺序不用管，保存时按门槛从小到大重排。
+          按活动期内<b>累计实付</b>判定，达到多档时每档都可领取一次（不叠加计算）；用户在「限时返利」页逐档发放到站内信，领取后以 tcr 到账。顺序不用管，保存时按门槛从小到大重排。
         </p>
       </div>
 
@@ -1044,7 +1044,7 @@ export function TaskSettingsForm({ initialSettings }: TaskSettingsFormProps) {
             className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm disabled:opacity-50"
             placeholder="30"
           />
-          <p className="mt-1 text-xs text-muted-foreground">里程碑奖励进临时货币时按这个有效期作废</p>
+          <p className="mt-1 text-xs text-muted-foreground">里程碑奖励按这个有效期作废</p>
         </div>
       </div>
 
@@ -1056,7 +1056,7 @@ export function TaskSettingsForm({ initialSettings }: TaskSettingsFormProps) {
           <br />
           • 每周 6 项任务，满分 300，奖励显著更丰厚
           <br />
-          • 每日每 25 / 每周每 50 活跃度一档，达到后自动发站内信随机奖励（金额逐档递增，发临时货币 tcr）
+          • 每日每 25 / 每周每 50 活跃度一档，达到后自动发站内信随机奖励（金额逐档递增，发 tcr）
           <br />
           • 进度现场读签到、对话、API、消费、玩法与站内信领取记录，不改历史数据
         </p>
@@ -1302,7 +1302,7 @@ export function EpaySettingsForm({ initialSettings }: EpaySettingsFormProps) {
         <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
           <p className="text-xs text-muted-foreground">
             <strong>当前规则：</strong>¥{minCny || "1"} – ¥{maxCny || "1000"}，
-            1 元 = {rateNum} cr（如 ¥100 → {Math.floor(100 * rateNum)} cr，永久余额，无有效期）
+            1 元 = {rateNum} cr（如 ¥100 → {Math.floor(100 * rateNum)} cr，直接到账，不过期）
             <br />
             回调地址：<code className="font-mono">https://cloudai.fuwari.fun/api/pay/epay/notify</code>
           </p>
@@ -1459,7 +1459,7 @@ export function LinuxdoSettingsForm({ initialSettings }: LinuxdoSettingsFormProp
           <p className="text-xs text-muted-foreground">
             <strong>当前规则：</strong>
             {minCny || "1"} – {maxCny || "1000"} 积分，1 积分 = {rateNum} cr
-            （如 100 积分 → {Math.floor(100 * rateNum)} cr，永久余额，无有效期）
+            （如 100 积分 → {Math.floor(100 * rateNum)} cr，直接到账，不过期）
             <br />
             回调地址：<code className="font-mono">https://cloudai.fuwari.fun/api/pay/linuxdo/notify</code>
             <br />

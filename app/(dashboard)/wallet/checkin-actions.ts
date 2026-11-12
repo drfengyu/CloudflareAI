@@ -237,7 +237,7 @@ export async function performCheckin(): Promise<{
     const expiresAt = new Date(Date.now() + settings.validDays * 24 * 60 * 60 * 1000);
     const bonusText =
       streakBonus > 0
-        ? `，含连签 ${streak} 天额外奖励 ${streakBonus.toFixed(2)} cr`
+        ? `，含连签 ${streak} 天额外奖励 ${streakBonus.toFixed(2)} tcr`
         : "";
 
     try {
@@ -256,7 +256,7 @@ export async function performCheckin(): Promise<{
         userId,
         amount: quotaAwarded,
         expiresAt,
-        description: `每日签到奖励 ${baseQuota.toFixed(4)} cr${bonusText}（有效期 ${settings.validDays} 天）`,
+        description: `每日签到奖励 ${baseQuota.toFixed(4)} tcr${bonusText}（有效期 ${settings.validDays} 天）`,
         createdAt: now,
       });
 
@@ -266,7 +266,7 @@ export async function performCheckin(): Promise<{
         userId,
         amount: quotaAwarded,
         type: 3, // 签到充值
-        description: `每日签到奖励 ${baseQuota.toFixed(4)} cr${bonusText}（有效期至 ${expiresAt.toLocaleDateString()}）`,
+        description: `每日签到奖励 ${baseQuota.toFixed(4)} tcr${bonusText}（有效期至 ${expiresAt.toLocaleDateString()}）`,
         createdAt: now,
       });
 

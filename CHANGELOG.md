@@ -5,6 +5,25 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.41.0] - 2026-11-12
+
+### 变更
+
+- 余额只按货币单位展示，取消「临时货币 / 永久货币」说法：新增 `components/currency/money.tsx`（`Money` / `UnitLegend`，金币图标 cr、沙漏图标 tcr），钱包页、顶栏货币条、看板、邀请、兑换码、后台用户与设置等界面统一为 `cr` / `tcr` 单位加图标；tcr 仍标注到期规则，cr 仍标注不过期。
+- 发放与到账提示统一改 tcr：签到与连签、消费返利、任务里程碑、充值阶梯赠送、雷电通关 / 战利品、翻牌、站内信 tcr 附件、流水描述（含 cron 过期作废、礼包赠送）不再误写成 cr。
+- 混合扣费口径（`usage_log.creditsUsed` 无钱包拆分）统一标「cr 等值」：历史、看板、活动页、冲榜、Key 统计、账本说明与报错均按同一口径。
+- 转盘记录逐笔显示奖品所在钱包（`DrawRecord.balanceUnit`，按存储 label 的尾部单位推导），汇总仍用「cr 等值」并注明含 tcr 与 cr；倒扣与净额同样按 cr 等值展示。
+- 翻牌牌面 / 结果与合计改用 `Money` 组件，券奖仍为活动券图标 × 张数；规则文案改为「其余奖项发 tcr」。
+- 历史发放记录渲染归一：新增 `normalizeCurrencyText()`（`lib/billing/units.ts`），把 v0.32 存进 `reward_claim.rewardLabel` 的「X cr 永久货币 / X cr 临时货币」统一成 `X cr` / `X tcr`，任务里程碑、消费返利档位与站内信标题 / 正文读取时转换，不改库里的历史行。
+- 每周任务「本周消费满 500 cr」改为「本周消费满 500 tcr」，与每日任务口径一致。
+- 同步文档：`docs/features/*`、`docs/BILLING_GUIDE.md`、`docs/CRON_CLEANUP.md` 的货币称谓按单位更新。
+
+### 验证
+
+- `npx tsx --test tests/*.test.ts` 85 项通过；`npm run typecheck`、`npm run build` 通过；`npm run lint` 仅剩存量错误（不在本次改动文件）。
+- Playwright 走管理员会话复验 `/wallet`、`/flip`、`/lottery`、`/cashback`、`/tasks`、`/dashboard` 桌面 + 移动：正文不再出现「临时货币 / 永久货币 / 临时余额 / 永久余额」，钱包「先扣 tcr」、转盘「tcr 发放」、返利「cr 等值」均按预期渲染。
+- 无数据库迁移。
+
 ## [0.40.0] - 2026-11-11
 
 ### 新增

@@ -21,7 +21,7 @@ const STATUS_TEXT: Record<ActivityCouponView["status"], string> = {
 /**
  * 活动券的兑换与珍宝礼包：活动页与钱包充值位共用。
  * 兑换按活动配置的「1 张 = X cr」整张购买，券只在当期活动内有效；
- * 兑换与买礼包都按「先临时余额、再永久余额」扣款。余额与到账一律只报整张数。
+ * 兑换与买礼包都按「先 tcr、再 cr」扣款。余额与到账一律只报整张数。
  */
 export function CouponShop({
   activities,
@@ -260,8 +260,8 @@ function CouponShopItem({
           </div>
           <p className={cn("text-[11px]", dark ? "text-white/35" : "text-muted-foreground")}>
             1 张 = {formatCredits(unitCredits)} cr；礼包填整数张数与倍率，实付 = 张数 × 单价 × 100 ÷ 倍率，
-            赠券一并到账；tcr 进入临时余额、到期作废；玩法只扣对应活动券，当期结束后作废；
-            扣款先临时余额（tcr）、再永久余额（cr）。
+            赠券一并到账；赠送的 tcr 到期作废；玩法只扣对应活动券，当期结束后作废；
+            扣款先扣 tcr、再扣 cr。
           </p>
         </>
       ) : (

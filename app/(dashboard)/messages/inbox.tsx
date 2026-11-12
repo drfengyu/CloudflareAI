@@ -10,6 +10,7 @@ import { Pagination } from "@/components/dashboard/pagination";
 import { toast } from "sonner";
 import { formatCnWallClock, formatCnRelativeTime } from "@/lib/date";
 import { formatCredits } from "@/lib/billing/credits";
+import { normalizeCurrencyText } from "@/lib/billing/units";
 import type { InboxPage } from "./actions";
 import { claimAttachment, loadInbox, openMessage, removeMessage } from "./actions";
 import type {
@@ -36,7 +37,7 @@ function attachmentLabel(attachment: Attachment, claimed: boolean): string {
     case "credits":
       return `${formatCredits(attachment.credits)} cr`;
     case "temp_credits":
-      return `${formatCredits(attachment.credits)} tcr（临时余额，${attachment.validDays} 天）`;
+      return `${formatCredits(attachment.credits)} tcr（${attachment.validDays} 天内有效）`;
     case "tickets":
       return `${attachment.count} 张活动券`;
     case "coupon":
@@ -194,7 +195,7 @@ export function MessageInbox({
                         />
                       ) : null}
                       <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                        {row.title}
+                        {normalizeCurrencyText(row.title)}
                       </span>
                       {row.pendingClaim ? (
                         <span className="shrink-0 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-[color:var(--primary)]">
@@ -250,7 +251,9 @@ export function MessageInbox({
                   <ChevronLeft className="mr-0.5 inline h-3.5 w-3.5" />
                   返回列表
                 </button>
-                <h3 className="min-w-0 flex-1 text-base font-semibold">{detail.title}</h3>
+                <h3 className="min-w-0 flex-1 text-base font-semibold">
+                  {normalizeCurrencyText(detail.title)}
+                </h3>
                 <span className="shrink-0 rounded bg-secondary px-1.5 py-0.5 text-[10px] text-muted-foreground">
                   {KIND_LABEL[detail.kind]}
                 </span>
@@ -261,7 +264,9 @@ export function MessageInbox({
                 {detail.sender ? ` · 来自 ${detail.sender}` : " · 系统"}
               </p>
 
-              <div className="whitespace-pre-wrap text-sm leading-6">{detail.body}</div>
+              <div className="whitespace-pre-wrap text-sm leading-6">
+                {normalizeCurrencyText(detail.body)}
+              </div>
 
               {detail.attachment ? (
                 <div className="rounded-lg border border-border bg-secondary/30 p-3">

@@ -95,7 +95,7 @@ export interface HudSnapshot {
   kills: number;
   /** 下一档击杀回满的门槛。 */
   healAt: number;
-  /** 本关拾取到的战利品（cr），通关时并入结算。 */
+  /** 本关拾取到的战利品（tcr），通关时并入结算。 */
   loot: number;
 }
 
@@ -104,7 +104,7 @@ export interface StageClearResult {
   stageScore: number;
   totalScore: number;
   durationMs: number;
-  /** 本关精英/Boss 掉落的战利品 cr。 */
+  /** 本关精英/Boss 掉落的战利品 tcr。 */
   loot: number;
 }
 
@@ -213,7 +213,7 @@ interface PowerUp {
   vy: number;
   t: number;
   type: PickupType;
-  /** 战利品（C）的 cr 面额；其它补给为 0。 */
+  /** 战利品（C）的 tcr 面额；其它补给为 0。 */
   value: number;
   /** 被子弹打中后字母闪烁的剩余时间。 */
   shuffle: number;
@@ -1243,7 +1243,7 @@ export class RaidenEngine {
       this.explodeSfxT = e.kind === "gunship" || e.kind === "tank" ? 0.13 : 0.07;
     }
     if (e.drop) this.spawnPowerUp(e.x, e.y, e.drop);
-    // 精英怪随机掉落战利品（1~3 cr），和常规补给互不冲突。
+    // 精英怪随机掉落战利品（1~3 tcr），和常规补给互不冲突。
     if (e.elite && Math.random() < 0.6) {
       this.spawnLoot(e.x, e.y, 1 + Math.floor(rand(0, 3)));
     }
@@ -1299,7 +1299,7 @@ export class RaidenEngine {
     if (index >= 0) this.powerups.splice(index, 1);
     if (p.type === "C") {
       this.stageLoot += p.value;
-      this.toast(`战利品 +${p.value} cr · 通关结算`);
+      this.toast(`战利品 +${p.value} tcr · 通关结算`);
       this.audio.play("coin");
       this.spawnSpark(p.x, p.y, "#ffd75e", 8);
       this.emitHud(true);
@@ -3572,7 +3572,7 @@ export class RaidenEngine {
       ctx.font = "bold 10px ui-monospace, SFMono-Regular, Menlo, monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(`${p.value}cr`, 0, 0.5);
+      ctx.fillText(`${p.value}tcr`, 0, 0.5);
       ctx.restore();
       return;
     }

@@ -53,7 +53,7 @@ const NUMBER_FIELDS: NumberFieldRow[] = [
   {
     key: "rewardValidDays",
     label: "奖励有效期（天）",
-    hint: "通关奖励进临时余额",
+    hint: "通关奖励进 tcr 余额",
     min: 1,
     max: 3650,
   },
@@ -331,7 +331,7 @@ export function RaidenForm({ initialConfig }: { initialConfig: RaidenConfig }) {
         <p className="text-sm font-medium">关卡奖励（cr）</p>
         <p className="text-xs text-muted-foreground">
           首通奖励每个活动轮次每关只发一次；重复通关奖励每天合计不超过上方的每日封顶。
-          奖励全部进临时余额，到期时间按「奖励有效期」计算。
+          奖励全部以 tcr 发放，到期时间按「奖励有效期」计算。
         </p>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span className="flex-1">关卡</span>

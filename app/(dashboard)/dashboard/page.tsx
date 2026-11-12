@@ -237,7 +237,7 @@ export default async function DashboardPage({
       value: `${formatCredits(balance)} cr 等值`,
       sub:
         balanceInfo.temporary > 0 || balanceInfo.permanent < 0
-          ? `永久 ${formatCredits(displayBalance.displayPermanent)} cr + 临时 ${formatCredits(displayBalance.displayTemporary)} tcr`
+          ? `cr ${formatCredits(displayBalance.displayPermanent)} + tcr ${formatCredits(displayBalance.displayTemporary)}`
           : undefined,
       href: "/wallet",
       actionLabel: "充值",
@@ -246,14 +246,14 @@ export default async function DashboardPage({
       icon: <TrendingUp className="h-4 w-4" />,
       tone: "warning",
       label: "历史消耗",
-      value: `${formatCredits(lifetime.totalCredits)} cr`,
+      value: `${formatCredits(lifetime.totalCredits)} cr 等值`,
       sub: `累计 ${lifetime.totalCalls.toLocaleString()} 次调用`,
     },
     {
       icon: <Coins className="h-4 w-4" />,
       tone: lotteryNet >= 0 ? "success" : "danger",
       label: "活动抽奖",
-      value: `${lotteryNet >= 0 ? "+" : ""}${formatCredits(lotteryNet)} cr`,
+      value: `${lotteryNet >= 0 ? "+" : ""}${formatCredits(lotteryNet)} cr 等值`,
       sub: `累计 ${lotteryStats.draws} 次抽奖`,
     },
   ];
@@ -283,7 +283,7 @@ export default async function DashboardPage({
       icon: <Coins className="h-4 w-4" />,
       tone: "warning",
       label: "统计额度",
-      value: `${formatCredits(summary.totalCredits)} cr`,
+      value: `${formatCredits(summary.totalCredits)} cr 等值`,
       sub: "窗口内实际扣费",
     },
     {
@@ -351,7 +351,7 @@ export default async function DashboardPage({
           <Card className="mt-4 border-warning border-l-4 bg-warning/5">
             <CardContent className="pt-5">
               <p className="text-sm text-warning">
-                ⚠️ 余额不足 1 cr，请及时充值以免影响使用
+                ⚠️ 余额不足 1 cr 等值，请及时充值以免影响使用
               </p>
             </CardContent>
           </Card>

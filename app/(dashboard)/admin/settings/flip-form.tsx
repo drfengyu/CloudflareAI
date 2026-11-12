@@ -158,7 +158,7 @@ export function FlipForm({ initialConfig }: { initialConfig: FlipConfig }) {
             onChange={(e) => setValidDays(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">tcr 奖进临时余额；整张券奖直接进翻牌券</p>
+          <p className="mt-1 text-xs text-muted-foreground">tcr 奖进 tcr 余额；整张券奖直接进翻牌券</p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">每日开局上限（局）</label>

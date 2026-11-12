@@ -15,10 +15,10 @@ import { formatCredits } from "@/lib/billing/credits";
 import { CouponIcon } from "@/components/activity/coupon-badge";
 
 /**
- * 顶栏货币条：永久余额、临时余额与三种活动券。
+ * 顶栏货币条：cr、tcr 与三种活动券。
  *
  * 铃铛左边的数字由布局一次取齐；这里只做展示与跳转，不自己发请求。
- * 永久/临时仍按负数补正口径显示（与钱包、看板一致）；活动券只报「图标 × 整张数」。
+ * 两种余额只以单位区分、按负数补正口径显示（与钱包、看板一致）；活动券只报「图标 × 整张数」。
  */
 
 function exact(value: number): string {
@@ -68,7 +68,7 @@ export function CurrencyBar({ snapshot }: { snapshot: CurrencySnapshot }) {
     <div className="flex items-center gap-0.5">
       <Link
         href="/wallet?recharge=1"
-        title={`永久余额 ${exact(display.permanent)} cr，点击充值`}
+        title={`cr 余额 ${exact(display.permanent)}，点击充值`}
         className="flex items-center gap-0.5 whitespace-nowrap rounded-md px-0.5 py-0.5 text-[10px] font-medium tabular-nums text-foreground transition-colors hover:bg-secondary md:gap-1 md:px-1 md:text-[11px]"
       >
         <Coins className="h-3 w-3 shrink-0 text-emerald-500 md:h-3.5 md:w-3.5" />
@@ -76,7 +76,7 @@ export function CurrencyBar({ snapshot }: { snapshot: CurrencySnapshot }) {
         <PlusBadge />
       </Link>
       <div
-        title={`临时余额 ${exact(display.temporary)} tcr，签到、赠送与返利获得，到期作废`}
+        title={`tcr 余额 ${exact(display.temporary)}，签到、赠送与返利获得，到期作废`}
         className="flex items-center gap-0.5 whitespace-nowrap rounded-md px-0.5 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground md:gap-1 md:px-1 md:text-[11px]"
       >
         <Hourglass className="h-3 w-3 shrink-0 text-teal-500 md:h-3.5 md:w-3.5" />

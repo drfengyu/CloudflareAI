@@ -189,7 +189,7 @@ export function ManageUserDialog({ user, currentUserId, onClose }: ManageUserDia
   };
 
   const handleDelete = async () => {
-    if (!confirm(`确定要删除用户 ${user.email} 吗？\n\n此操作将删除：\n- 用户账户\n- 所有 API Keys\n- 用量记录\n- 充值记录\n- 临时余额\n- 签到记录\n\n此操作不可恢复！`)) {
+    if (!confirm(`确定要删除用户 ${user.email} 吗？\n\n此操作将删除：\n- 用户账户\n- 所有 API Keys\n- 用量记录\n- 充值记录\n- tcr 余额\n- 签到记录\n\n此操作不可恢复！`)) {
       return;
     }
 
@@ -242,9 +242,9 @@ export function ManageUserDialog({ user, currentUserId, onClose }: ManageUserDia
                   <p className="font-medium">当前余额：{user.totalBalance.toLocaleString()} cr 等值</p>
                   {user.temporaryBalance > 0 || user.permanentBalance < 0 ? (
                     <p className="mt-1 text-muted-foreground">
-                      永久：{display.displayPermanent.toLocaleString()} cr · 临时：{display.displayTemporary.toLocaleString()} tcr
+                      cr：{display.displayPermanent.toLocaleString()} · tcr：{display.displayTemporary.toLocaleString()}
                       {user.permanentBalance < 0 ? (
-                        <span className="ml-1 text-amber-600 dark:text-amber-400">（已用临时余额补正）</span>
+                        <span className="ml-1 text-amber-600 dark:text-amber-400">（已用 tcr 补正）</span>
                       ) : null}
                     </p>
                   ) : null}

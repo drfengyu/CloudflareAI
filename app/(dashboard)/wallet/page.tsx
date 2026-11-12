@@ -4,7 +4,8 @@ import { requireUser } from "@/lib/usage/meter";
 import { db } from "@/lib/db/d1-http";
 import { users, temporaryBalances, paymentOrders } from "@/lib/db/schema";
 import { and, desc, eq, gt, inArray } from "drizzle-orm";
-import { Wallet, Clock } from "lucide-react";
+import { Wallet } from "lucide-react";
+import { Money, UnitLegend } from "@/components/currency/money";
 import { RedeemCodeDialog } from "./redeem-code-dialog";
 import { CheckinCalendarCard } from "./checkin-calendar-card";
 import { RechargeOrdersCard } from "./recharge-orders-card";
@@ -143,7 +144,7 @@ export default async function WalletPage({
       />
 
       <PageBody className="pt-2">
-        <PageSection title="余额与签到" subtitle="永久与临时余额构成，签到和兑换码发放的额度" className="border-t-0 pt-0">
+        <PageSection title="余额与签到" subtitle="cr 与 tcr 余额构成，签到和兑换码发放的额度" className="border-t-0 pt-0">
           {/* 余额卡片 */}
           <Card className="border-primary/20 bg-primary/5">
             <CardContent className="pt-5">
@@ -212,17 +213,12 @@ export default async function WalletPage({
 
               <div className="mt-3 space-y-1 text-xs text-muted-foreground">
                 <p className="flex flex-wrap items-center gap-x-2">
-                  <span className="font-medium text-foreground tabular-nums">
-                    永久 {formatCredits(displayBalance.displayPermanent)} cr
-                  </span>
+                  <Money value={displayBalance.displayPermanent} unit="cr" className="font-medium text-foreground" />
                   <span>充值到账，不过期</span>
                 </p>
                 {(temporaryTotal > 0 || permanentBalance < 0) && (
                   <p className="flex flex-wrap items-center gap-x-2">
-                    <span className="flex items-center gap-1 font-medium text-foreground tabular-nums">
-                      <Clock className="h-3 w-3" />
-                      临时 {formatCredits(displayBalance.displayTemporary)} tcr
-                    </span>
+                    <Money value={displayBalance.displayTemporary} unit="tcr" className="font-medium text-foreground" />
                     <span>
                       {earliestExpiry
                         ? `签到、赠送与返利，最早 ${earliestExpiry} 到期`
@@ -232,11 +228,12 @@ export default async function WalletPage({
                 )}
                 {compensated > 0 && (
                   <p className="text-amber-600 dark:text-amber-400">
-                    永久余额实为 −{formatCredits(Math.abs(permanentBalance))} cr，已用{" "}
-                    {formatCredits(compensated)} tcr 临时余额抵扣；上方两项是抵扣后的可用额度
+                    cr 余额实为 −{formatCredits(Math.abs(permanentBalance))} cr，已用{" "}
+                    {formatCredits(compensated)} tcr 抵扣；上方两项是抵扣后的可用额度
                   </p>
                 )}
-                <p>消费先扣临时，再扣永久。</p>
+                <p>扣费先扣 tcr，再扣 cr。</p>
+                <UnitLegend className="pt-1" />
               </div>
             </CardContent>
           </Card>
@@ -256,7 +253,7 @@ export default async function WalletPage({
           </Card>
         </PageSection>
 
-        <PageSection title="收支与临时余额" subtitle="最近几笔收支变动、未到账订单与临时余额有效期">
+        <PageSection title="收支与 tcr" subtitle="最近几笔收支变动、未到账订单与 tcr 有效期">
           <div className="space-y-6">
             <RecentLedgerCard days={recentLedger} />
 

@@ -127,7 +127,7 @@ export function LedgerCard({ initial }: { initial: LedgerOverview }) {
 
         {filter === "all" ? (
           <p className="text-xs text-muted-foreground">
-            临时余额到期没用完时，清理任务会在到期日逐笔记一笔「过期作废」支出，累计支出已包含这部分。
+            tcr 到期没用完时，清理任务会在到期日逐笔记一笔「过期作废」支出，累计支出已包含这部分。
           </p>
         ) : null}
 

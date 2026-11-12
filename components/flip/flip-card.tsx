@@ -2,6 +2,7 @@
 
 import { flipRewardTickets, formatFlipReward } from "@/lib/flip/config";
 import { CouponCount } from "@/components/activity/coupon-badge";
+import { Money } from "@/components/currency/money";
 
 export interface FlipCardProps {
   /** 牌桌上的第几张（0 起），只用于展示编号。 */
@@ -59,7 +60,13 @@ export function FlipCard({ position, reward, unitCredits, picked, disabled, onPi
               winning ? "text-success" : "text-muted-foreground",
             ].join(" ")}
           >
-            {tickets !== null ? <CouponCount kind="flip" count={tickets} /> : label}
+            {tickets !== null ? (
+              <CouponCount kind="flip" count={tickets} />
+            ) : revealed && reward > 0 ? (
+              <Money value={reward} unit="tcr" signed />
+            ) : (
+              label
+            )}
           </span>
           {picked ? <span className="text-[10px] text-muted-foreground">本局所选</span> : null}
         </span>

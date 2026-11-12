@@ -95,12 +95,12 @@ test("消费返利：随机形态按阈值落到货币 / 券 / 活动券", () =>
   assert.equal(tickets.credits, 0);
 });
 
-test("消费返利：没有开着的活动时券奖励降级为临时货币", () => {
+test("消费返利：没有开着的活动时券奖励降级为 tcr", () => {
   const tier = { minCredits: 20000, minReward: 200, maxReward: 1200 };
   const reward = rollCashbackReward(tier, null, queued(0.85, 0.75));
   assert.equal(reward.kind, "temp_credits");
   assert.ok(reward.credits >= 200 && reward.credits <= 1200);
-  assert.match(reward.label, /临时货币/);
+  assert.match(reward.label, /tcr/);
 });
 
 test("消费返利：金额始终夹在配置区间内", () => {

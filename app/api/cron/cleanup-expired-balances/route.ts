@@ -64,7 +64,7 @@ export async function GET(request: Request) {
         userId: row.userId,
         amount: -row.amount,
         type: TOPUP_TYPE_EXPIRE,
-        description: `临时余额过期作废${row.description ? `：${row.description}` : ""}`.slice(0, 300),
+        description: `tcr 过期作废${row.description ? `：${row.description}` : ""}`.slice(0, 300),
         createdAt: new Date(row.expiresAt).getTime(),
       }));
 

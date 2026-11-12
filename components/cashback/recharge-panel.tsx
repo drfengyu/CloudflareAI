@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { formatCredits } from "@/lib/billing/credits";
 import type { RechargeActivityView } from "@/lib/rewards/claims";
 
-/** 阶梯列表：每个达标档位单独发放一次，奖励先发站内信，领取后才到临时余额。 */
+/** 阶梯列表：每个达标档位单独发放一次，奖励先发站内信，领取后才到 tcr 余额。 */
 export function RechargeTierPanel({ activity }: { activity: RechargeActivityView }) {
   const router = useRouter();
   const [busyTier, setBusyTier] = useState<string | null>(null);
@@ -69,7 +69,7 @@ export function RechargeTierPanel({ activity }: { activity: RechargeActivityView
             </div>
             <div className="flex shrink-0 items-center gap-3">
               <span className="text-sm font-semibold text-success tabular-nums">
-                +{formatCredits(tier.claimState === "none" ? tier.bonus : tier.rewardCredits)} cr
+                +{formatCredits(tier.claimState === "none" ? tier.bonus : tier.rewardCredits)} tcr
               </span>
               {tier.claimState === "claimed" ? (
                 <span className="flex items-center gap-1 text-xs text-muted-foreground">

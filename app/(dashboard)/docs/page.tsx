@@ -271,7 +271,7 @@ export OPENAI_API_KEY="sk-cfai-xxxxxxxx"`;
                   <tr>
                     <td className="py-2 pr-4 font-mono">402</td>
                     <td className="py-2 text-muted-foreground">
-                      余额不足，错误信息里带本次预检需要的 cr
+                      余额不足，错误信息里带本次预检需要的 cr 等值
                     </td>
                   </tr>
                   <tr>
@@ -296,7 +296,7 @@ export OPENAI_API_KEY="sk-cfai-xxxxxxxx"`;
               </table>
             </div>
             <p className="mt-3 text-xs text-muted-foreground">
-              成功调用按 token 数从余额扣 cr；失败调用不计费。用量可在{" "}
+              成功调用按 token 数扣费，先扣 tcr、再扣 cr；失败调用不计费。用量可在{" "}
               <Link href="/history" className="text-primary hover:underline">
                 使用记录
               </Link>{" "}

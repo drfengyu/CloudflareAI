@@ -68,7 +68,7 @@ export const columns: ColumnDef<ApiKeyRow>[] = [
           <div className="min-w-[120px]">
             <p className="text-xs font-medium">已用 {actualUsed.toLocaleString()} cr</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              无限额度 · 余额 {Math.round(userBalance).toLocaleString()} cr
+              无限额度 · 余额 {Math.round(userBalance).toLocaleString()} cr 等值
             </p>
           </div>
         );
@@ -149,7 +149,7 @@ export const columns: ColumnDef<ApiKeyRow>[] = [
       return (
         <div className="text-xs">
           <p className="font-medium">{count} 次</p>
-          <p className="text-muted-foreground">{used.toLocaleString()} cr</p>
+          <p className="text-muted-foreground">{used.toLocaleString()} cr 等值</p>
         </div>
       );
     },

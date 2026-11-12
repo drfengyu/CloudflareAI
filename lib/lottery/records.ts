@@ -40,6 +40,8 @@ export interface DrawRecord {
   label: string;
   multiplier: number | null;
   deltaCredits: number;
+  /** 这注的 cr 变动落在哪本账：tcr = 限时余额；cr = 余额（cr 档或倒扣）。 */
+  balanceUnit: "cr" | "tcr";
   baseCredits: number;
   /** 这一注抽中的赠券档抽奖等价张数（外圈赠券档）；不进 cr 账本，展示时按券价折算成活动券。 */
   grantTickets: number;
@@ -354,6 +356,7 @@ export async function listDrawRecords(opts: {
 
   return rows.map((row) => {
     const ticket = row.ticketId ? ticketMap.get(row.ticketId) : undefined;
+    const deltaCredits = Number(row.deltaCredits);
     // 免费抽看 freeDrawDate；有 ticketId 是历史抽奖券（查不到券行=注销级联删除→unknown）；
     // 都没有时按券面区分：活动券直付记单券价(>0)→coupon，历史免费抽券面为 0/null→free。
     const source: TicketSourceLabel = row.freeDrawDate
@@ -371,7 +374,9 @@ export async function listDrawRecords(opts: {
       ring: row.ring,
       label: row.label,
       multiplier: row.multiplier,
-      deltaCredits: Number(row.deltaCredits),
+      deltaCredits,
+      // 奖品文案以单位结尾；历史「cr 永久」也归到 cr。
+      balanceUnit: deltaCredits > 0 && /\btcr\s*$/.test(row.label) ? "tcr" : "cr",
       baseCredits: Number(row.baseCredits),
       grantTickets: Number(row.grantTickets ?? 0),
       createdAt: row.createdAt,

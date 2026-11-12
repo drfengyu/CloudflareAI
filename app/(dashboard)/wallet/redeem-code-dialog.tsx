@@ -278,13 +278,13 @@ export function RedeemCodeDialog({
                 >
                   {amountError && customAmount.trim()
                     ? amountError
-                    : `单笔 ${cfg.min}–${cfg.max} ${cfg.unit}，到账为永久余额，无有效期`}
+                    : `单笔 ${cfg.min}–${cfg.max} ${cfg.unit}，到账为 cr，不过期`}
                 </p>
               </div>
               {bonusTiers.length > 0 ? (
                 <div className="mt-2 rounded-lg border border-primary/20 bg-primary/5 p-2.5 text-xs">
                   <p className="text-muted-foreground">
-                    充值活动：活动期内累计充值达标后，到「限时返利」页手动领取；奖励发放到站内信，领取后进入临时余额（{bonusValidDays} 天内有效）
+                    充值活动：活动期内累计充值达标后，到「限时返利」页手动领取；奖励发放到站内信，领取后进入 tcr（{bonusValidDays} 天内有效）
                   </p>
                   <p className="mt-1 text-muted-foreground">
                     {bonusTiers

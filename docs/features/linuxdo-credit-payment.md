@@ -5,7 +5,7 @@
 
 ## 1. 功能概述
 
-钱包支持使用 **LinuxDO 积分（Credit）** 在线充值，用户选择「LinuxDO 积分」渠道后跳转到 `credit.linux.do` 认证界面，支付成功后平台异步回调，系统验签、幂等发放永久余额。
+钱包支持使用 **LinuxDO 积分（Credit）** 在线充值，用户选择「LinuxDO 积分」渠道后跳转到 `credit.linux.do` 认证界面，支付成功后平台异步回调，系统验签、幂等发放cr 余额。
 
 自 v0.28.1 起，普通用户只可使用已启用的 LinuxDO 积分与兑换码充值；支付宝、微信及同一易支付网关的 QQ 支付仅限管理员（role ≥ 10）。钱包按数据库角色隐藏入口，下单动作重新查库校验权限，不能绕过界面调用。LinuxDO 未启用时，普通用户充值弹窗直接显示兑换码；既有订单查询、回调与余额不变。
 
@@ -101,7 +101,7 @@ LinuxDO Credit 提供两种协议：
 credit.linux.do 认证界面 → 用户确认支付
   │
   ├─ 异步回调（GET /api/pay/linuxdo/notify，最多重试 5 次）
-  │  └─ 验签 + pid/金额校验 → settleRechargeOrder（幂等发放永久余额 + topup 流水）
+  │  └─ 验签 + pid/金额校验 → settleRechargeOrder（幂等发放cr 余额 + topup 流水）
   │
   └─ 回跳 /wallet?paid=1&orderNo=xxx
       └─ 订单卡片轮询 checkOrderStatus（4s 一次，待支付时触发服务端对账）
@@ -187,7 +187,7 @@ sign    = md5(payload + SECRET)   // 小写 hex
 - **订单有效期**：由 LinuxDO 平台配置 `merchant_order_expire_minutes` 决定，超时订单在平台上不可再支付，本系统对账时按 `TRADE_CLOSED`/查无此单处理关闭。
 - **常见平台错误**（`error_msg`）：`不支持的请求类型`（type 非 epay）、`签名验证失败`（拼串或密钥不符）、`金额必须大于0`/`积分小数位数不能超过2位`、`订单已过期`、`订单不存在或已完成`、`余额不足`。
 - **无法支付时**：优先检查 `ldpay_enabled`、`pid`/`key` 是否正确、金额是否在 min/max 范围、签名是否随金额变化重新计算。
-- **计费不变式**：充值发放的是**永久余额**（`user.balanceCredits`），写入 `topup`（type=5），与易支付一致，不会违反既有计费口径。
+- **计费不变式**：充值发放的是**cr 余额**（`user.balanceCredits`），写入 `topup`（type=5），与易支付一致，不会违反既有计费口径。
 
 ## 8. 参考
 

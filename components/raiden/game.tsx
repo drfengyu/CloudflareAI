@@ -526,9 +526,9 @@ export function RaidenGame({
                       ) : null}
                       <p className="mt-1 text-center text-[11px] text-white/55">
                         {clear.settlement.firstClear
-                          ? "首通奖励已发放到临时余额"
+                          ? "首通奖励已发放 tcr"
                           : clear.settlement.reward > 0
-                            ? "重复通关奖励已发放到临时余额"
+                            ? "重复通关奖励已发放 tcr"
                             : "今日重复通关奖励已达上限"}
                         {` · 有效期 ${config.rewardValidDays} 天`}
                       </p>
@@ -887,7 +887,7 @@ function ResultScreen({
 
         <p className="max-w-[300px] text-[11px] leading-relaxed text-white/40">
           {final.rewards > 0
-            ? "奖励已发放至临时余额，可在钱包中查看。"
+            ? "奖励已发放 tcr，可在钱包中查看。"
             : "本次没有获得通关奖励。"}
           {runsLeft > 0 ? ` 今日还可出击 ${runsLeft} 次。` : " 今日出击次数已用完。"}
         </p>

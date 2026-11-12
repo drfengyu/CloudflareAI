@@ -296,13 +296,13 @@ export async function completeStage(input: {
     if (reward > 0) {
       const expiresAt = new Date(now.getTime() + config.rewardValidDays * DAY_MS);
       const meta = RAIDEN_STAGES[stageNo - 1];
-      const lootText = loot > 0 ? `，含战利品 ${loot} cr` : "";
+      const lootText = loot > 0 ? `，含战利品 ${loot} tcr` : "";
       await db.insert(temporaryBalances).values({
         id: tempRowId,
         userId,
         amount: reward,
         expiresAt,
-        description: `雷电行动 ${meta.code}「${meta.name}」${firstClear ? "首通" : "重复通关"}奖励 ${reward} cr（有效期 ${config.rewardValidDays} 天）${lootText}`,
+        description: `雷电行动 ${meta.code}「${meta.name}」${firstClear ? "首通" : "重复通关"}奖励 ${reward} tcr（有效期 ${config.rewardValidDays} 天）${lootText}`,
         createdAt: now,
       });
       await db.insert(topups).values({
@@ -310,7 +310,7 @@ export async function completeStage(input: {
         userId,
         amount: reward,
         type: TOPUP_TYPE_RAIDEN,
-        description: `雷电行动 ${meta.code} ${firstClear ? "首通" : "重复通关"}奖励 ${reward} cr${lootText}`,
+        description: `雷电行动 ${meta.code} ${firstClear ? "首通" : "重复通关"}奖励 ${reward} tcr${lootText}`,
         createdAt: now,
       });
     }

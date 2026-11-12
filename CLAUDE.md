@@ -534,9 +534,13 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.40.0（2026-11-11，翻牌券奖 + 任务门槛改 tcr / 里程碑只发 tcr）
-**下一版本**：v0.41.0（尚未选型）
+**当前版本**：v0.41.0（2026-11-12，货币文案改单位制，发放提示统一 tcr）
+**下一版本**：v0.42.0（尚未选型）
 
+- v0.41.0 界面余额只按单位展示：取消「临时货币 / 永久货币」措辞，新增 `components/currency/money.tsx`
+  （`Money` / `UnitLegend`，金币 cr、沙漏 tcr），钱包 / 顶栏 / 看板 / 邀请 / 兑换码 / 后台用户与设置统一单位加图标。
+  发放、到账与流水提示（签到、返利、里程碑、充值赠送、雷电、翻牌、站内信附件、cron 过期作废）统一为 tcr；
+  混合扣费与汇总仍用「cr 等值」；转盘记录按 label 尾部单位推导 `balanceUnit` 逐笔展示。
 - v0.40.0 翻牌夺宝支持券奖：`flipRewardTickets` 判定奖项面值是否为券单价整数倍，是则翻中发整张
   翻牌活动券（`grantCouponToRound`，不进 tcr、不写 `topup`），否则维持 tcr；`flip_round.rewardTickets`
   记录实发张数（迁移 027），牌桌 / 开牌 / 牌局列表 / 战绩（`wonTickets`）统一按券图标 × 张数展示。

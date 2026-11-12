@@ -7,9 +7,9 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { openFlipRound, revealFlipCard } from "@/app/(dashboard)/flip/actions";
 import { formatCredits } from "@/lib/billing/credits";
-import { formatFlipReward } from "@/lib/flip/config";
 import type { FlipOutcome } from "@/lib/flip/store";
 import { CouponCount } from "@/components/activity/coupon-badge";
+import { Money } from "@/components/currency/money";
 import { FlipCard } from "./flip-card";
 
 export interface FlipBoardProps {
@@ -94,8 +94,10 @@ export function FlipBoard(props: FlipBoardProps) {
                 本局翻开第 {Number(outcome?.position ?? 0) + 1} 张 ·{" "}
                 {outcome && outcome.rewardTickets !== null ? (
                   <CouponCount kind="flip" count={outcome.rewardTickets} />
+                ) : Number(outcome?.reward ?? 0) > 0 ? (
+                  <Money value={Number(outcome?.reward)} unit="tcr" signed iconClassName="h-4 w-4" />
                 ) : (
-                  formatFlipReward(Number(outcome?.reward ?? 0))
+                  "空牌"
                 )}
               </>
             ) : round ? (
@@ -113,7 +115,7 @@ export function FlipBoard(props: FlipBoardProps) {
           </span>
           {outcome && Number(outcome.reward) > 0 && outcome.rewardTickets === null ? (
             <span className="text-xs text-muted-foreground">
-              （tcr 临时余额，{outcome.rewardValidDays} 天内有效）
+              （tcr，{outcome.rewardValidDays} 天内有效）
             </span>
           ) : null}
         </div>
@@ -165,7 +167,7 @@ export function FlipBoard(props: FlipBoardProps) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        牌桌共 {props.cardCount} 张，奖项按券面合计 {formatCredits(props.boardTotal)} tcr
+        牌桌共 {props.cardCount} 张，奖项合计 {formatCredits(props.boardTotal)} tcr
         {props.boardCouponTickets > 0
           ? `（其中 ${props.boardCouponTickets} 张以翻牌券发放）`
           : ""}

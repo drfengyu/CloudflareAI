@@ -91,7 +91,7 @@ export function StartScreen({
           <span>
             今日 <span className="font-mono text-white/90">{runsLeft}</span>/{config.dailyRuns} 次
           </span>
-          <span className="text-cyan-200/50">首通奖励进入临时余额（tcr）</span>
+          <span className="text-cyan-200/50">首通奖励进入 tcr 余额</span>
         </div>
       </div>
 

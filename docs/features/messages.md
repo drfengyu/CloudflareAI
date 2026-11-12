@@ -3,7 +3,7 @@
 ## 用途
 
 - 系统 / 管理员给单个用户发通知（维护公告、补偿说明等）。
-- 带附件的奖励信：cr 余额、临时余额（限时返利 / 充值奖励）、转盘活动券、兑换码、自定义物品 / 凭证。
+- 带附件的奖励信：cr 余额、tcr 余额（限时返利 / 充值奖励）、转盘活动券、兑换码、自定义物品 / 凭证。
   附件不会在发信时入账，用户点「领取」才真正发放。
 - 安全提示：管理员重置密码、用户自助改密、首次设置密码时自动发一封 `security` 信留痕。
 
@@ -39,7 +39,7 @@ WHERE id = ? AND userId = ? AND claimedAt IS NULL AND attachmentKind IS NOT NULL
 入账（余额 / 券）抛错时把 `claimedAt` 回滚为 `NULL`，让用户能重试 —— 与消费返利领取同一模式。
 
 - **cr**：`users.balanceCredits` 原子加，并写一条 `topup type=13`（1–12 已被其他来源占用）。
-- **临时余额**（`temp_credits`）：写 `temporary_balance` 与 `topup`（`type` 由附件指定：8 消费返利 / 10 充值赠送），
+- **tcr 余额**（`temp_credits`）：写 `temporary_balance` 与 `topup`（`type` 由附件指定：8 消费返利 / 10 充值赠送），
   有效期取附件 `validDays`；若带 `cashbackDate` 同时补写 `cashback_claim` 历史行。
   领取成功后回写 `reward_claim.claimedAt`；回写失败不影响已到账的钱，活动页用站内信 `claimedAt` 兜底。
 - **转盘活动券**（`tickets`，旧枚举值保留）：`count` 是活动券张数；领取时取当前转盘轮次

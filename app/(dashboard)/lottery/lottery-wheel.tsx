@@ -1021,8 +1021,8 @@ export function LotteryWheel(props: LotteryWheelProps) {
             <ul className="list-disc space-y-1 pl-4">
               <li>内圈指针停在「外圈入口」时指针变长顶到环带内侧，随后一根贯穿盘面的外圈读数针从落点扫到转停后的那一格奖励上，并停在那一格。</li>
               <li>10 连抽一次转停后依次落 10 根指针；外圈只摇一次，读数针按开奖顺序逐发滑到各自的中奖格。</li>
-              <li>中奖金额以 tcr（临时余额）发放，有效期 {props.prizeValidDays} 天，过期未用自动消失；标「永久」的档位以 cr 发放，不过期。</li>
-              <li>转到倒扣时按 cr 从永久余额扣除，本金可能因此扣成负数。</li>
+              <li>中奖金额以 tcr 发放，有效期 {props.prizeValidDays} 天，过期未用自动消失；标「cr」的档位以 cr 发放，不过期。</li>
+              <li>转到倒扣时按 cr 扣除，本金可能因此扣成负数。</li>
               <li>
                 抽奖按整张扣当期活动券（单抽 {couponCostFor(1)} 张、10 连 {couponCostFor(10)} 张）；
                 外圈活动券档与累抽档位发的是同一种活动券。活动券在下方「活动券与珍宝礼包」按 1 张 ={" "}

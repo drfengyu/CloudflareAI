@@ -14,6 +14,7 @@ import {
 } from "@/lib/db/schema";
 import { cnDateString, cnStartOfToday, parseCnWallClock, shiftDateString } from "@/lib/date";
 import type { getTaskSettings } from "@/lib/settings";
+import { normalizeCurrencyText } from "@/lib/billing/units";
 import {
   attachRewardMessage,
   claimStateOf,
@@ -278,8 +279,8 @@ export const WEEKLY_TASKS: TaskDef[] = [
   },
   {
     key: "weekly_spend",
-    title: "本周消费满 500 cr",
-    hint: "本周累计消耗 500 cr",
+    title: "本周消费满 500 tcr",
+    hint: "本周累计消耗 500 tcr",
     href: "/wallet",
     target: 500,
     points: 60,
@@ -334,7 +335,7 @@ export interface MilestoneReward {
   label: string;
 }
 
-/** 里程碑奖励只发临时货币（tcr），金额在区间内随机。 */
+/** 里程碑奖励只发 tcr，金额在区间内随机。 */
 export function rollMilestoneReward(
   milestone: MilestoneDef,
   random: () => number = Math.random,
@@ -475,7 +476,7 @@ function milestoneViews(
       ...milestone,
       met: points >= milestone.points,
       claimState: claim ? claimStateOf(claim) : justSent ? "sent" : "none",
-      rewardLabel: claim?.rewardLabel ?? justSent ?? null,
+      rewardLabel: normalizeCurrencyText(claim?.rewardLabel ?? justSent),
     };
   });
 }
@@ -532,7 +533,7 @@ async function ensureMilestoneRewards(
         body: [
           `你在${period === "daily" ? "今日" : "本周"}已达到 ${milestone.points} 活跃度。`,
           `随机奖励：${reward.label}，已发放到站内信，请前往领取。`,
-          `领取后进入临时余额，有效期 ${settings.validDays} 天。`,
+          `领取后以 tcr 到账，${settings.validDays} 天内有效。`,
         ].join("\n"),
         attachment,
       });

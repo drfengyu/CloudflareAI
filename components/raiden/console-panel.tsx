@@ -389,7 +389,7 @@ function LivePanel({
         <LiveStat label="本局净收支（cr 等值）" value={`${net >= 0 ? "+" : ""}${formatCredits(net)}`} tone={net >= 0 ? "text-emerald-300" : "text-rose-300"} />
       </div>
       <p className="text-[9px] leading-relaxed text-white/30">
-        奖励以 tcr 发放至临时余额，有效期 {rewardValidDays} 天 · 今日还可出击 {runsLeft} 次
+        奖励以 tcr 发放，有效期 {rewardValidDays} 天 · 今日还可出击 {runsLeft} 次
       </p>
 
       <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-[10px] leading-relaxed text-white/45">
@@ -752,7 +752,7 @@ function RulesPanel({ config }: { config: RaidenConfig }) {
         <li>
           · 首通奖励仅发放一次；重复通关奖励每日封顶 {formatCredits(config.repeatDailyCap)} tcr。
         </li>
-        <li>· 奖励以 tcr 发放到临时余额，有效期 {config.rewardValidDays} 天，可正常抵扣消费。</li>
+        <li>· 奖励以 tcr 发放，有效期 {config.rewardValidDays} 天，可正常抵扣消费。</li>
         <li>
           · 阵亡后可花{" "}
           <CouponCount

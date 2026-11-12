@@ -220,11 +220,11 @@ export default async function CashbackPage() {
             <CardContent className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
               <div className="rounded-lg border border-border px-3 py-2">
                 <div className="text-lg font-semibold tabular-nums">{formatCredits(windowCredits)}</div>
-                <div className="text-[11px] text-muted-foreground">近 {settings.leaderboardDays} 天消耗 cr</div>
+                <div className="text-[11px] text-muted-foreground">近 {settings.leaderboardDays} 天消耗（cr 等值）</div>
               </div>
               <div className="rounded-lg border border-border px-3 py-2">
                 <div className="text-lg font-semibold tabular-nums">{formatCredits(cashback.cumulative)}</div>
-                <div className="text-[11px] text-muted-foreground">活动期累计消费 cr</div>
+                <div className="text-[11px] text-muted-foreground">活动期累计消费（cr 等值）</div>
               </div>
               <div className="rounded-lg border border-border px-3 py-2">
                 <div className="text-lg font-semibold tabular-nums">
@@ -248,17 +248,17 @@ export default async function CashbackPage() {
               </li>
               <li>
                 充值按活动期内<b className="text-foreground">已完成的在线充值累计实付</b>统计：达到的每个档位都能各发一次，
-                不是只取最高一档；LinuxDO 积分与人民币同口径累计。奖励到账为临时余额（tcr），有效期{" "}
+                不是只取最高一档；LinuxDO 积分与人民币同口径累计。奖励以 tcr 到账，有效期{" "}
                 <strong className="text-foreground">{recharge.validDays}</strong> 天。
               </li>
               <li>
-                消费按活动期内<b className="text-foreground">累计消耗的 cr</b> 统计，逐档发放：
-                每档发放时随机一种奖励——临时货币（tcr）、永久货币（cr）、当期活动券或 1–3 张转盘活动券，档位越高区间越高。
-                到账为临时余额时有效期 {cashback.validDays} 天。
+                消费按活动期内<b className="text-foreground">累计消耗（cr 等值）</b> 统计，逐档发放：
+                每档发放时随机一种奖励——tcr、cr、当期活动券或 1–3 张转盘活动券，档位越高区间越高。
+                tcr 奖励有效期 {cashback.validDays} 天。
               </li>
               <li>
                 活动券按各玩法设置的单价（1 张 = X cr，可在玩法页查看）整张兑换，
-                <b className="text-foreground">先花临时余额（tcr）再花永久余额（cr）</b>；
+                <b className="text-foreground">先扣 tcr、再扣 cr</b>；
                 玩法只扣对应活动的券，不能用其他券或余额代替。当期活动结束后券自动作废，下一轮活动会换成另一种券名。
               </li>
               <li>用量按上游真实 token 计，失败调用不计消费也不参与返利；排行榜脱敏展示，只读排名不发奖励。</li>
