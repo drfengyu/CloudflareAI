@@ -13,7 +13,7 @@ export type ChatModelOption = {
 
 /**
  * 可对话的文本模型：Cloudflare hosted 文本模型 + 已启用渠道里定价表标为 text/embeddings 的模型。
- * `/playground/text` 与 `/chat` 共用，避免两处各写一份筛选逻辑。
+ * `/chat` 的模型筛选与展示共用，避免各处各写一份逻辑。
  */
 export async function listTextModelOptions(): Promise<ChatModelOption[]> {
   const catalog = await fetchModelCatalog();

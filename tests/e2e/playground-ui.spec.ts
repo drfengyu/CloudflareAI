@@ -13,14 +13,14 @@ test.describe("Playground UI Components", () => {
     baseURL: BASE_URL,
   });
 
-  test("should load text playground page structure", async ({ page }) => {
-    // 直接访问 playground（可能会重定向到登录）
-    const response = await page.goto("/playground/text");
+  test("should load chat page structure", async ({ page }) => {
+    // 直接访问 AI 对话（可能会重定向到登录）
+    const response = await page.goto("/chat");
 
     // 验证页面加载成功（200 或重定向）
     expect(response?.status()).toBeLessThan(500);
 
-    console.log(`✓ Playground page loads (status: ${response?.status()})`);
+    console.log(`✓ Chat page loads (status: ${response?.status()})`);
   });
 
   test("should have correct meta tags and title", async ({ page }) => {
@@ -59,53 +59,5 @@ test.describe("Playground UI Components", () => {
     } else {
       console.log("✓ No console errors");
     }
-  });
-});
-
-test.describe("Code Verification", () => {
-  test("verify localStorage persistence code is deployed", async ({ page }) => {
-    await page.goto("/playground/text");
-
-    // 注入检查脚本
-    const hasLocalStorageCode = await page.evaluate(() => {
-      // 检查是否有 localStorage 相关代码
-      const scripts = Array.from(document.querySelectorAll("script"));
-      const scriptContent = scripts.map(s => s.textContent || "").join("");
-
-      return scriptContent.includes("localStorage") &&
-             scriptContent.includes("text-playground-state");
-    });
-
-    // 如果页面加载了（即使重定向），这个检查也能表明代码已部署
-    console.log(`✓ localStorage code deployed: ${hasLocalStorageCode}`);
-  });
-
-  test("verify copy button code is deployed", async ({ page }) => {
-    await page.goto("/playground/text");
-
-    const hasCopyCode = await page.evaluate(() => {
-      const scripts = Array.from(document.querySelectorAll("script"));
-      const scriptContent = scripts.map(s => s.textContent || "").join("");
-
-      return scriptContent.includes("copyToClipboard") ||
-             scriptContent.includes("navigator.clipboard");
-    });
-
-    console.log(`✓ Copy button code deployed: ${hasCopyCode}`);
-  });
-
-  test("verify think tag parsing code is deployed", async ({ page }) => {
-    await page.goto("/playground/text");
-
-    const hasThinkTagCode = await page.evaluate(() => {
-      const scripts = Array.from(document.querySelectorAll("script"));
-      const scriptContent = scripts.map(s => s.textContent || "").join("");
-
-      return scriptContent.includes("<think>") ||
-             scriptContent.includes("insideThinkTag") ||
-             scriptContent.includes("reasoning_content");
-    });
-
-    console.log(`✓ Think tag parsing code deployed: ${hasThinkTagCode}`);
   });
 });

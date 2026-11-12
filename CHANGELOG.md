@@ -5,6 +5,23 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.46.1] - 2026-11-12
+
+### 变更
+
+- 移除在线体验里的「文本生成」playground：AI 对话（`/chat`）已覆盖流式文本生成、模型切换与
+  会话落库，保留重复入口只会让两套前端各维护一份调用逻辑。
+- `/playground/text` 旧地址 302 到 `/chat`，旧书签与外部链接不会 404；`/api/ai/text` 继续由
+  AI 对话使用，接口与计量逻辑不变。
+- 模型分类里的文本类入口改指向 `/chat`；侧栏「在线体验」剩 AI 对话 / 文生图 / 图像理解 / 嵌入 / 翻译。
+- 删除 `components/playground/text-gen.tsx` 与只针对该页的 e2e / 验证文档，相关流式计量用例改跑
+  `/chat`。
+
+### 验证
+
+- `npm run typecheck` 通过；改动文件 `npx eslint` 无报错；`npm run build` 通过。
+- `npx tsx --test tests/*.test.ts` 116 个用例全过。
+
 ## [0.46.0] - 2026-11-12
 
 ### 变更

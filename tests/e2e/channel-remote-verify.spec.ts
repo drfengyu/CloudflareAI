@@ -125,7 +125,7 @@ test.describe("Channel Display Verification (Remote)", () => {
   test("Playground 页面的可见性检查（无需登录）", async ({ page }) => {
     // 这些页面重定向到登录，但我们可以验证 HTTP 状态或是否存在
     const playgrounds = [
-      { name: "文本生成", path: "/playground/text" },
+      { name: "AI 对话", path: "/chat" },
       { name: "文生图", path: "/playground/image" },
       { name: "图像理解", path: "/playground/vision" },
       { name: "嵌入向量", path: "/playground/embeddings" },

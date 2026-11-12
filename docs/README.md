@@ -43,7 +43,6 @@
 
 - `PHASE_E_F_TEST_REPORT.md` - Phase E/F 测试报告
 - `TEST_REPORT.md` - 通用测试报告
-- `PLAYGROUND_FIX_VERIFICATION.md` - Playground 验证报告
 
 ### docs/archive/
 归档文档（历史参考）

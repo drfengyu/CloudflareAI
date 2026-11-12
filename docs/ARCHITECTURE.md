@@ -45,7 +45,7 @@ app/
   (dashboard)/            控制台布局与页面
     dashboard/            用量总览
     models/               模型库
-    playground/{text,image,vision,speech,embeddings,translate,video}/
+    playground/{image,vision,embeddings,translate}/
     history/ keys/ settings/
   api/
     ai/[task]/            站内 playground（session 鉴权）

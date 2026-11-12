@@ -34,9 +34,9 @@
 
 ### ✅ 阶段 2：文本模型测试（验证基础倍率）
 
-4. **访问文本 Playground**
+4. **访问 AI 对话**
    ```
-   https://cloudai.fuwari.fun/playground/text
+   https://cloudai.fuwari.fun/chat
    ```
 
 5. **发起文本请求**

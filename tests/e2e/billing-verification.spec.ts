@@ -45,8 +45,8 @@ test.describe('Billing Verification', () => {
   });
 
   test('测试文本模型调用（验证基础倍率）', async ({ page }) => {
-    // 导航到文本 playground
-    await page.goto('http://localhost:3000/playground/text');
+    // 导航到 AI 对话
+    await page.goto('http://localhost:3000/chat');
 
     // 等待页面加载
     await page.waitForSelector('select', { timeout: 5000 });
@@ -59,11 +59,11 @@ test.describe('Billing Verification', () => {
     const balanceBefore = await page.locator('text=当前余额').locator('..').textContent();
     console.log('调用前余额:', balanceBefore);
 
-    // 回到 playground
-    await page.goto('http://localhost:3000/playground/text');
+    // 回到 AI 对话
+    await page.goto('http://localhost:3000/chat');
 
     // 输入测试消息
-    const input = page.getByPlaceholder('输入消息...');
+    const input = page.getByPlaceholder(/输入消息/);
     await input.fill('Hello, this is a test message. Count to 3.');
 
     // 点击发送

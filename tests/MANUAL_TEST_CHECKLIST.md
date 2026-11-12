@@ -48,7 +48,7 @@
 ---
 
 ### 3. 文本模型计费测试
-**路径**: `/playground/text`
+**路径**: `/chat`
 
 **步骤**:
 1. 选择模型：`@cf/meta/llama-3.1-8b-instruct`

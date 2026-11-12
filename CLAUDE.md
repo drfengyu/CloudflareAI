@@ -534,8 +534,12 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.46.0（2026-11-12，星匣图鉴改版为「星图共鸣」）
+**当前版本**：v0.46.1（2026-11-12，移除文本生成 playground）
 **下一版本**：v0.47.0（尚未选型）
+
+- v0.46.1 移除在线体验里的「文本生成」playground：AI 对话 `/chat` 已覆盖流式文本生成、模型切换
+  与会话落库，`/playground/text` 302 到 `/chat`，旧组件 `components/playground/text-gen.tsx` 删除；
+  `/api/ai/text` 继续由 AI 对话使用，计量与渠道路由不变。模型分类的文本入口改指向 `/chat`。
 
 - v0.46.0 星匣图鉴改版为「星图共鸣」：`lib/collection/config.ts`（极光 / 深海 / 古树三张星座 ×
   9 个星位，星石颜色 + 亮度、观星概率、熔炼 / 凝星价格、星座奖励与旧配置字段兼容）、

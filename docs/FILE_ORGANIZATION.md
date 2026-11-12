@@ -64,7 +64,6 @@ docs/
 │
 ├── testing/                       # 测试报告（新增目录）
 │   ├── PHASE_E_F_TEST_REPORT.md
-│   ├── PLAYGROUND_FIX_VERIFICATION.md
 │   └── TEST_REPORT.md
 │
 └── archive/                       # 归档文档（新增目录）

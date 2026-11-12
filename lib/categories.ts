@@ -42,7 +42,7 @@ export const CATEGORIES: Category[] = [
     description: "大语言模型对话、推理、代码、函数调用",
     icon: "MessageSquare",
     tasks: ["Text Generation"],
-    route: "/playground/text",
+    route: "/chat",
   },
   {
     id: "image",
