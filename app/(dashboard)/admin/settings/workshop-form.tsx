@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
   WORKSHOP_TIER_COUNT,
-  gatherWeightSummary,
   sanitizeWorkshopConfig,
   type WorkshopConfig,
 } from "@/lib/workshop/config";
@@ -22,24 +21,27 @@ function toStored(date: string) {
   return date.trim().replace("T", " ");
 }
 
+function ticketCount(cost: number, unit: number) {
+  return Math.max(1, Math.round(cost / Math.max(1, unit)));
+}
+
 type MilestoneRow = { tier: string; reward: string };
 
 export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig }) {
   const [enabled, setEnabled] = useState(initialConfig.enabled);
   const [startAt, setStartAt] = useState(toField(initialConfig.startAt));
   const [endAt, setEndAt] = useState(toField(initialConfig.endAt));
-  const [dailyGathers, setDailyGathers] = useState(String(initialConfig.dailyGathers));
-  const [gatherCost, setGatherCost] = useState(String(initialConfig.gatherCostCredits));
+  const [dailyExplores, setDailyExplores] = useState(String(initialConfig.dailyExplores));
+  const [exploreCost, setExploreCost] = useState(String(initialConfig.exploreCostCredits));
+  const [dailyGyms, setDailyGyms] = useState(String(initialConfig.dailyGyms));
+  const [gymCost, setGymCost] = useState(String(initialConfig.gymCostCredits));
   const [couponUnit, setCouponUnit] = useState(String(initialConfig.couponUnitCredits));
   const [validDays, setValidDays] = useState(String(initialConfig.rewardValidDays));
-  const [weights, setWeights] = useState(() => initialConfig.gatherWeights.slice(0, 3).map(String));
   const [milestones, setMilestones] = useState<MilestoneRow[]>(() =>
     initialConfig.milestones.map((item) => ({ tier: String(item.tier), reward: String(item.reward) })),
   );
   const [loading, setLoading] = useState(false);
 
-  const patchWeight = (index: number, value: string) =>
-    setWeights((prev) => prev.map((row, i) => (i === index ? value : row)));
   const patchMilestone = (index: number, field: keyof MilestoneRow, value: string) =>
     setMilestones((prev) => prev.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
 
@@ -49,14 +51,15 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
         enabled,
         startAt: toStored(startAt),
         endAt: toStored(endAt),
-        dailyGathers: Number(dailyGathers),
-        gatherCostCredits: Number(gatherCost),
+        dailyExplores: Number(dailyExplores),
+        exploreCostCredits: Number(exploreCost),
+        dailyGyms: Number(dailyGyms),
+        gymCostCredits: Number(gymCost),
         couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
-        gatherWeights: weights.map(Number),
         milestones: milestones.map((row) => ({ tier: Number(row.tier), reward: Number(row.reward) })),
       }),
-    [enabled, startAt, endAt, dailyGathers, gatherCost, couponUnit, validDays, weights, milestones],
+    [enabled, startAt, endAt, dailyExplores, exploreCost, dailyGyms, gymCost, couponUnit, validDays, milestones],
   );
 
   async function handleSubmit(e: React.FormEvent) {
@@ -67,11 +70,12 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
         enabled,
         startAt: toStored(startAt),
         endAt: toStored(endAt),
-        dailyGathers: Number(dailyGathers),
-        gatherCostCredits: Number(gatherCost),
+        dailyExplores: Number(dailyExplores),
+        exploreCostCredits: Number(exploreCost),
+        dailyGyms: Number(dailyGyms),
+        gymCostCredits: Number(gymCost),
         couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
-        gatherWeights: weights.map(Number),
         milestones: milestones.map((row) => ({ tier: Number(row.tier), reward: Number(row.reward) })),
       });
       toast.success("灵宠工坊配置已保存");
@@ -97,8 +101,8 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
         </label>
       </div>
       <p className="text-xs text-muted-foreground">
-        两条同阶灵宠合成一只高一阶，合成确定且不花券；产生三阶进度后按里程碑发 tcr。
-        修改开始时间等于开启新一轮活动，灵宠与里程碑按新轮次重计。
+        红白机式养成：开局三选一，探索遇敌、捕捉升级、进化到九阶，三个道馆按徽章顺序解锁更深区域。
+        同阶合成保留为加速路线，不花券。修改开始时间等于开启新一轮活动，灵宠与里程碑按新轮次重计。
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -122,26 +126,26 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <label className="mb-1 block text-sm font-medium">每日采集次数</label>
+          <label className="mb-1 block text-sm font-medium">每日探索次数</label>
           <input
             type="number"
             min={1}
             step="1"
-            value={dailyGathers}
-            onChange={(e) => setDailyGathers(e.target.value)}
+            value={dailyExplores}
+            onChange={(e) => setDailyExplores(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">三条线共用，按北京时间自然日重置</p>
+          <p className="mt-1 text-xs text-muted-foreground">按北京时间自然日重置</p>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">单次采集票价（cr）</label>
+          <label className="mb-1 block text-sm font-medium">单次探索票价（cr）</label>
           <input
             type="number"
             step="1"
-            value={gatherCost}
-            onChange={(e) => setGatherCost(e.target.value)}
+            value={exploreCost}
+            onChange={(e) => setExploreCost(e.target.value)}
             className={FIELD_CLASS}
           />
           <p className="mt-1 text-xs text-muted-foreground">必须是券单价的整数倍</p>
@@ -156,7 +160,30 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
             onChange={(e) => setCouponUnit(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">兑换工坊券的单价</p>
+          <p className="mt-1 text-xs text-muted-foreground">探索与道馆共用这张券</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">每日道馆次数</label>
+          <input
+            type="number"
+            min={1}
+            step="1"
+            value={dailyGyms}
+            onChange={(e) => setDailyGyms(e.target.value)}
+            className={FIELD_CLASS}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">三个道馆共用次数</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">单次道馆票价（cr）</label>
+          <input
+            type="number"
+            step="1"
+            value={gymCost}
+            onChange={(e) => setGymCost(e.target.value)}
+            className={FIELD_CLASS}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">胜利额外掉落 2 球 + 2 药水</p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">奖励有效期（天）</label>
@@ -169,28 +196,6 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
           />
           <p className="mt-1 text-xs text-muted-foreground">里程碑发 tcr，到期作废</p>
         </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium">采集阶级权重（只采 1~3 阶）</label>
-        <div className="mt-2 grid gap-2 sm:grid-cols-3">
-          {[1, 2, 3].map((tier, index) => (
-            <div key={tier}>
-              <label className="mb-1 block text-xs text-muted-foreground">{tier} 阶权重</label>
-              <input
-                type="number"
-                min={0}
-                step="1"
-                value={weights[index] ?? "0"}
-                onChange={(e) => patchWeight(index, e.target.value)}
-                className={FIELD_CLASS}
-              />
-            </div>
-          ))}
-        </div>
-        <p className="mt-1 text-xs text-muted-foreground">
-          当前概率：{gatherWeightSummary(preview)}；权重全为 0 时按默认值兜底。
-        </p>
       </div>
 
       <div>
@@ -248,9 +253,10 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
 
       <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
         <p className="font-medium">
-          每日 {preview.dailyGathers} 次 · 单次 {preview.gatherCostCredits} cr（
-          {Math.max(1, Math.round(preview.gatherCostCredits / Math.max(1, preview.couponUnitCredits)))} 张券）·
-          概率 {gatherWeightSummary(preview)}
+          每日探索 {preview.dailyExplores} 次 · 单次 {formatCredits(preview.exploreCostCredits)} cr（
+          {ticketCount(preview.exploreCostCredits, preview.couponUnitCredits)} 张券）· 每日道馆{" "}
+          {preview.dailyGyms} 次 · 单次 {formatCredits(preview.gymCostCredits)} cr（
+          {ticketCount(preview.gymCostCredits, preview.couponUnitCredits)} 张券）
         </p>
         <p className="mt-1 text-muted-foreground">
           {preview.milestones

@@ -1070,13 +1070,13 @@ export async function updateWorkshopSettings(formData: {
   enabled: boolean;
   startAt: string;
   endAt: string;
-  dailyGathers: number;
-  gatherCostCredits: number;
+  dailyExplores: number;
+  exploreCostCredits: number;
+  dailyGyms: number;
+  gymCostCredits: number;
   /** 1 张活动券兑换所需的 cr。 */
   couponUnitCredits: number;
   rewardValidDays: number;
-  /** 采集落入 1/2/3 阶的权重。 */
-  gatherWeights: number[];
   milestones: { tier: number; reward: number }[];
 }) {
   const currentUserId = await requireUser();
@@ -1100,13 +1100,6 @@ export async function updateWorkshopSettings(formData: {
     if (endMs <= startMs) throw new Error("结束时间必须晚于开始时间");
   }
 
-  const gatherWeights = [0, 1, 2].map((index) =>
-    requireNumber(formData.gatherWeights?.[index], `第 ${index + 1} 阶采集权重`, 0, 10_000),
-  );
-  if (gatherWeights.every((weight) => weight === 0)) {
-    throw new Error("采集权重不能全为 0");
-  }
-
   const milestones = (formData.milestones ?? []).map((milestone, index) => ({
     tier: Math.trunc(
       requireNumber(milestone?.tier, `里程碑第 ${index + 1} 行的阶数`, 1, WORKSHOP_TIER_COUNT),
@@ -1118,11 +1111,12 @@ export async function updateWorkshopSettings(formData: {
     enabled: formData.enabled === true,
     startAt,
     endAt,
-    dailyGathers: Math.trunc(requireNumber(formData.dailyGathers, "每日采集次数", 1, 200)),
-    gatherCostCredits: requireNumber(formData.gatherCostCredits, "单次采集票价", 0.01, 1_000_000),
+    dailyExplores: Math.trunc(requireNumber(formData.dailyExplores, "每日探索次数", 1, 200)),
+    exploreCostCredits: requireNumber(formData.exploreCostCredits, "单次探索票价", 0.01, 1_000_000),
+    dailyGyms: Math.trunc(requireNumber(formData.dailyGyms, "每日道馆次数", 1, 50)),
+    gymCostCredits: requireNumber(formData.gymCostCredits, "单次道馆票价", 0.01, 1_000_000),
     couponUnitCredits: requireNumber(formData.couponUnitCredits, "活动券单价", 0.01, 1_000_000),
     rewardValidDays: Math.trunc(requireNumber(formData.rewardValidDays, "奖励有效期", 1, 3650)),
-    gatherWeights,
     milestones,
   });
 

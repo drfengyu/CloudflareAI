@@ -2,11 +2,12 @@ import { snapCostToUnit } from "@/lib/activity/ticket-math";
 import { parseCnWallClock } from "@/lib/date";
 
 /**
- * 限时活动·灵宠工坊的纯配置与合成规则。
+ * 限时活动·灵宠工坊的纯配置与规则。
  *
- * 玩法：花活动券采集随机阶级的灵宠，两只同阶合成一只高一阶；
- * 任意一条线首次达到 3/5/7/9 阶各领一次 tcr。合成是确定性的，没有随机掉率陷阱，
- * 随机只发生在采集这一层，权重直接写在页面上。
+ * 红白机式养成：三选一初始灵宠，花活动券在区域里探索并捕捉野生灵宠，
+ * 打怪升级、到等级自动进化；集齐徽章解锁更深的地图，三个道馆按顺序挑战。
+ * 两只同阶灵宠仍可合成一只高一阶（不花券，作为加速路径）。
+ * 任意一条线首次达到 3/5/7/9 阶各领一次 tcr。
  */
 
 export const WORKSHOP_CONFIG_KEY = "workshop_config";
@@ -52,16 +53,18 @@ export interface WorkshopConfig {
   enabled: boolean;
   startAt: string;
   endAt: string;
-  /** 每日最多采集次数（按北京时间自然日）。 */
-  dailyGathers: number;
-  /** 单次采集票价（cr），必须是券单价的整数倍。 */
-  gatherCostCredits: number;
+  /** 每日最多探索次数（按北京时间自然日）。 */
+  dailyExplores: number;
+  /** 单次探索票价（cr），必须是券单价的整数倍。 */
+  exploreCostCredits: number;
+  /** 每日最多挑战道馆次数（按北京时间自然日）。 */
+  dailyGyms: number;
+  /** 单次道馆挑战票价（cr），必须是券单价的整数倍。 */
+  gymCostCredits: number;
   /** 1 张活动券兑换所需的 cr（券面单价）。 */
   couponUnitCredits: number;
   /** 奖励 tcr 的有效天数。 */
   rewardValidDays: number;
-  /** 采集落入第 1/2/3 阶的权重，只允许采到前三阶。 */
-  gatherWeights: number[];
   /** 达到某阶的一次性 tcr。 */
   milestones: WorkshopMilestone[];
 }
@@ -70,11 +73,12 @@ export const DEFAULT_WORKSHOP_CONFIG: WorkshopConfig = {
   enabled: false,
   startAt: "",
   endAt: "",
-  dailyGathers: 20,
-  gatherCostCredits: 2,
+  dailyExplores: 20,
+  exploreCostCredits: 2,
+  dailyGyms: 3,
+  gymCostCredits: 5,
   couponUnitCredits: 2,
   rewardValidDays: 30,
-  gatherWeights: [60, 30, 10],
   milestones: [
     { tier: 3, reward: 6 },
     { tier: 5, reward: 15 },
@@ -95,15 +99,16 @@ function boundedInteger(value: unknown, fallback: number, min: number, max: numb
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 }
 
-function sanitizeWeights(raw: unknown): number[] {
-  const arr = Array.isArray(raw) ? raw : [];
-  const weights = [0, 1, 2].map((index) => {
-    const n = Number(arr[index]);
-    return Number.isFinite(n) && n >= 0 ? round2(n) : 0;
-  });
-  return weights.some((weight) => weight > 0)
-    ? weights
-    : [...DEFAULT_WORKSHOP_CONFIG.gatherWeights];
+/** 旧版配置用的字段名，读回时兜底，避免升级后把管理员调过的次数/票价重置。 */
+interface LegacyWorkshopConfig {
+  dailyGathers?: unknown;
+  gatherCostCredits?: unknown;
+}
+
+function firstNumber(primary: unknown, legacy: unknown, fallback: number): number {
+  if (primary !== undefined && primary !== null) return Number(primary);
+  if (legacy !== undefined && legacy !== null) return Number(legacy);
+  return fallback;
 }
 
 export function sanitizeWorkshopMilestones(raw: unknown): WorkshopMilestone[] {
@@ -130,7 +135,7 @@ export function sanitizeWorkshopMilestones(raw: unknown): WorkshopMilestone[] {
 export function sanitizeWorkshopConfig(raw: unknown): WorkshopConfig {
   const d = DEFAULT_WORKSHOP_CONFIG;
   if (!raw || typeof raw !== "object") return d;
-  const it = raw as Partial<WorkshopConfig>;
+  const it = raw as Partial<WorkshopConfig> & LegacyWorkshopConfig;
   const unit = Math.min(
     1_000_000,
     round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
@@ -140,14 +145,28 @@ export function sanitizeWorkshopConfig(raw: unknown): WorkshopConfig {
     enabled: it.enabled === true,
     startAt: typeof it.startAt === "string" ? it.startAt.trim() : "",
     endAt: typeof it.endAt === "string" ? it.endAt.trim() : "",
-    dailyGathers: boundedInteger(it.dailyGathers, d.dailyGathers, 1, 200),
-    gatherCostCredits: snapCostToUnit(
-      round2(positiveNumber(it.gatherCostCredits, d.gatherCostCredits)),
+    dailyExplores: boundedInteger(
+      firstNumber(it.dailyExplores, it.dailyGathers, d.dailyExplores),
+      d.dailyExplores,
+      1,
+      200,
+    ),
+    exploreCostCredits: snapCostToUnit(
+      round2(
+        positiveNumber(
+          firstNumber(it.exploreCostCredits, it.gatherCostCredits, d.exploreCostCredits),
+          d.exploreCostCredits,
+        ),
+      ),
+      unit,
+    ),
+    dailyGyms: boundedInteger(it.dailyGyms, d.dailyGyms, 1, 50),
+    gymCostCredits: snapCostToUnit(
+      round2(positiveNumber(it.gymCostCredits, d.gymCostCredits)),
       unit,
     ),
     couponUnitCredits: unit,
     rewardValidDays: boundedInteger(it.rewardValidDays, d.rewardValidDays, 1, 3650),
-    gatherWeights: sanitizeWeights(it.gatherWeights),
     milestones: milestones.length > 0 ? milestones : d.milestones,
   };
 }
@@ -178,30 +197,9 @@ export function workshopActivityKey(config: WorkshopConfig): string | null {
   return config.startAt.trim();
 }
 
-/** 采集阶级：返回 1..3，权重为 0 的档直接跳过。 */
-export function rollGatherTier(weights: number[], random: () => number = Math.random): number {
-  const safe = weights.slice(0, 3).map((weight) => (Number.isFinite(weight) && weight > 0 ? weight : 0));
-  const total = safe.reduce((sum, weight) => sum + weight, 0);
-  if (total <= 0) return 1;
-  let roll = random() * total;
-  for (let index = 0; index < safe.length; index += 1) {
-    roll -= safe[index];
-    if (roll < 0) return index + 1;
-  }
-  return safe.length;
-}
-
 /** 第 tier 阶（1..9）的名字。 */
 export function workshopTierName(lineKey: string, tier: number): string {
   const line = WORKSHOP_LINES.find((item) => item.key === lineKey) ?? WORKSHOP_LINES[0];
   const index = Math.min(WORKSHOP_TIER_COUNT, Math.max(1, Math.trunc(tier))) - 1;
   return line.tiers[index];
-}
-
-/** 每条线的权重百分比文案，例如「60% / 30% / 10%」。 */
-export function gatherWeightSummary(config: WorkshopConfig): string {
-  const total = config.gatherWeights.reduce((sum, weight) => sum + weight, 0) || 1;
-  return config.gatherWeights
-    .map((weight) => `${Math.round((weight / total) * 100)}%`)
-    .join(" / ");
 }

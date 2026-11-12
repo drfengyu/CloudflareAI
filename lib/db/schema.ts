@@ -957,9 +957,9 @@ export type TrialRun = typeof trialRuns.$inferSelect;
 /**
  * 限时活动·灵宠工坊：每用户 × 活动轮次一行养成状态。
  *
- * 状态整体存 JSON（各条养成线的各阶数量 + 当日采集次数），写入一律走
+ * 状态整体存 JSON（队伍 / 仓库 / 图鉴 / 徽章 / 道具 / 当日探索次数 / 进行中的遭遇），写入一律走
  * `WHERE version = ?` 的乐观锁：两个请求只有一个能推进，另一个收到「操作冲突」。
- * 奖励只发 tcr，所以这里不存钱，只存合成进度。
+ * 奖励只发 tcr，所以这里不存钱，只存养成进度。
  */
 export const workshopStates = sqliteTable(
   "workshop_state",

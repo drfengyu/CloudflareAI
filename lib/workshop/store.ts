@@ -8,7 +8,6 @@ import {
 } from "@/lib/activity/rewards";
 import { cnDateString } from "@/lib/date";
 import {
-  rollGatherTier,
   TOPUP_TYPE_WORKSHOP,
   WORKSHOP_LINES,
   WORKSHOP_TIER_COUNT,
@@ -17,65 +16,50 @@ import {
   workshopTierName,
   type WorkshopConfig,
 } from "./config";
+import {
+  WORKSHOP_POTION_HEAL,
+  WORKSHOP_PARTY_SIZE,
+  WORKSHOP_STARTER_LEVEL,
+  createPet,
+  petDexKeys,
+  petScore,
+  petStats,
+} from "./pets";
+import {
+  areaByKey,
+  createGymEncounter,
+  createWildEncounter,
+  nextGym,
+  resolveWorkshopBattle,
+  type WorkshopBattleAction,
+  type WorkshopBattleResult,
+} from "./battle";
+import {
+  emptyWorkshopState,
+  findPet,
+  healAllParty,
+  highestTier,
+  normalizeWorkshopState,
+  partyAlive,
+  removePet,
+  type WorkshopState,
+} from "./state";
 
 /**
- * 灵宠工坊的写入侧。
+ * 灵宠工坊写入侧。
  *
- * 状态整体存 JSON，写入用 `WHERE version = ?` 的乐观锁：并发采集/合成只有一个能推进，
- * 另一个收到「操作冲突」。采集先扣券再改状态，CAS 全部失败时把券退回。
+ * 整份存档在 `workshop_state.state` JSON，写入用 `WHERE version = ?` 乐观锁：
+ * 并发战斗/捕捉只有一个能推进，另一个收到「操作冲突」。
+ * 探索与道馆先扣券再改状态，任何失败都会把券退回。
  */
 
 export class WorkshopError extends Error {}
 
-export interface WorkshopState {
-  /** 北京日期；换天后 `gathersToday` 归零。 */
-  day: string;
-  gathersToday: number;
-  /** 每条养成线 9 个阶位的数量。 */
-  items: Record<string, number[]>;
-}
+export type { WorkshopState } from "./state";
 
 export interface WorkshopSnapshot {
   version: number;
   state: WorkshopState;
-}
-
-function emptyState(day = cnDateString()): WorkshopState {
-  return {
-    day,
-    gathersToday: 0,
-    items: Object.fromEntries(WORKSHOP_LINES.map((line) => [line.key, Array(WORKSHOP_TIER_COUNT).fill(0)])),
-  };
-}
-
-/** 脏 JSON 兜回可用状态：补齐缺失的线、截断超长数组、换天重置每日次数。 */
-export function normalizeWorkshopState(raw: unknown, day = cnDateString()): WorkshopState {
-  const base = emptyState(day);
-  if (!raw || typeof raw !== "object") return base;
-  const it = raw as Partial<WorkshopState>;
-  const sameDay = typeof it.day === "string" && it.day === day;
-  const items = (it.items && typeof it.items === "object" ? it.items : {}) as Record<string, unknown>;
-  for (const line of WORKSHOP_LINES) {
-    const counts = Array.isArray(items[line.key]) ? (items[line.key] as unknown[]) : [];
-    base.items[line.key] = Array.from({ length: WORKSHOP_TIER_COUNT }, (_, index) => {
-      const n = Math.trunc(Number(counts[index]));
-      return Number.isFinite(n) && n > 0 ? Math.min(99_999, n) : 0;
-    });
-  }
-  base.gathersToday = sameDay
-    ? Math.max(0, Math.min(1_000_000, Math.trunc(Number(it.gathersToday) || 0)))
-    : 0;
-  return base;
-}
-
-function assertActiveWindow(config: WorkshopConfig): string {
-  const window = workshopActivityWindow(config);
-  if (window.status === "disabled") throw new WorkshopError("活动未开启");
-  if (window.status === "pending") throw new WorkshopError("活动尚未开始");
-  if (window.status === "ended") throw new WorkshopError("活动已结束");
-  const key = workshopActivityKey(config);
-  if (!key) throw new WorkshopError("活动轮次无效");
-  return key;
 }
 
 async function readState(userId: string, activityKey: string): Promise<WorkshopSnapshot> {
@@ -85,7 +69,7 @@ async function readState(userId: string, activityKey: string): Promise<WorkshopS
     .where(and(eq(workshopStates.userId, userId), eq(workshopStates.activityKey, activityKey)))
     .limit(1);
   const row = rows[0];
-  if (!row) return { version: 0, state: emptyState() };
+  if (!row) return { version: 0, state: emptyWorkshopState() };
   return {
     version: Number(row.version),
     state: normalizeWorkshopState(safeParse(row.state)),
@@ -102,15 +86,13 @@ function safeParse(raw: string): unknown {
 
 /** 确保状态行存在（version 从 0 起），后续 UPDATE 才有目标行。 */
 async function ensureStateRow(userId: string, activityKey: string): Promise<void> {
-  const now = Date.now();
   await d1Run(
     `INSERT OR IGNORE INTO workshop_state (userId, activityKey, version, state, updatedAt)
      VALUES (?, ?, 0, ?, ?)`,
-    [userId, activityKey, JSON.stringify(emptyState()), now],
+    [userId, activityKey, JSON.stringify(emptyWorkshopState()), Date.now()],
   );
 }
 
-/** 带乐观锁的写入；成功后返回新状态，冲突返回 null。 */
 async function writeState(
   userId: string,
   activityKey: string,
@@ -126,16 +108,29 @@ async function writeState(
   return { version: snapshot.version + 1, state: next };
 }
 
-/** 达到的最高阶（跨三条线），用于判断里程碑。 */
-export function highestTier(state: WorkshopState): number {
-  let max = 0;
-  for (const line of WORKSHOP_LINES) {
-    const counts = state.items[line.key] ?? [];
-    counts.forEach((count, index) => {
-      if (count > 0) max = Math.max(max, index + 1);
-    });
+function assertActiveWindow(config: WorkshopConfig): string {
+  const window = workshopActivityWindow(config);
+  if (window.status === "disabled") throw new WorkshopError("活动未开启");
+  if (window.status === "pending") throw new WorkshopError("活动尚未开始");
+  if (window.status === "ended") throw new WorkshopError("活动已结束");
+  const key = workshopActivityKey(config);
+  if (!key) throw new WorkshopError("活动轮次无效");
+  return key;
+}
+
+/** 读 → 应用 → CAS 写；只处理并发冲突，规则错误原样抛出。 */
+async function attemptWrite<T>(
+  userId: string,
+  activityKey: string,
+  apply: (state: WorkshopState) => { next: WorkshopState; result: T },
+): Promise<{ snapshot: WorkshopSnapshot; result: T }> {
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const snapshot = await readState(userId, activityKey);
+    const { next, result } = apply(snapshot.state);
+    const written = await writeState(userId, activityKey, snapshot, next);
+    if (written) return { snapshot: written, result };
   }
-  return max;
+  throw new WorkshopError("操作冲突，请刷新后重试");
 }
 
 export interface WorkshopActionResult {
@@ -144,8 +139,10 @@ export interface WorkshopActionResult {
   /** 本次新领到的里程碑 tcr 合计。 */
   milestoneReward: number;
   milestoneTiers: number[];
-  /** 采集结果（合成时为空）。 */
-  gathered?: { lineKey: string; tier: number; name: string };
+}
+
+export interface WorkshopBattleActionResult extends WorkshopActionResult {
+  battle: Omit<WorkshopBattleResult, "state">;
 }
 
 async function grantReachedMilestones(input: {
@@ -181,90 +178,333 @@ async function grantReachedMilestones(input: {
   return { reward, tiers };
 }
 
+function withDex(state: WorkshopState, pets: { lineKey: string; tier: number }[]): string[] {
+  const keys = new Set(state.dex);
+  for (const pet of pets) {
+    for (const key of petDexKeys(pet)) keys.add(key);
+  }
+  return [...keys].sort();
+}
+
 /**
- * 采集：扣一张券的票面，随机得到 1~3 阶灵宠。
- * 状态写入冲突（并发操作）时重试整轮；三次都失败就把券退回。
+ * 三选一：第一只灵宠 Lv.5，不花券。选定后本轮活动不能再换。
+ * 旧存档迁移出来的玩家已经自带队伍，会直接跳过这一步。
  */
-export async function gatherWorkshop(
+export async function chooseWorkshopStarter(
   userId: string,
   lineKey: string,
   config: WorkshopConfig,
 ): Promise<WorkshopActionResult> {
   const activityKey = assertActiveWindow(config);
   const line = WORKSHOP_LINES.find((item) => item.key === lineKey);
-  if (!line) throw new WorkshopError("养成线不存在");
+  if (!line) throw new WorkshopError("没有这条养成线");
 
+  await ensureStateRow(userId, activityKey);
+  const { snapshot } = await attemptWrite(userId, activityKey, (state) => {
+    if (state.starter || state.party.length > 0) throw new WorkshopError("已经选过初始灵宠了");
+    const pet = createPet({
+      lineKey: line.key,
+      tier: 1,
+      level: WORKSHOP_STARTER_LEVEL,
+    });
+    return {
+      next: {
+        ...state,
+        starter: line.key,
+        party: [pet],
+        activePetId: pet.id,
+        dex: withDex(state, [pet]),
+      },
+      result: null,
+    };
+  });
+
+  return {
+    state: snapshot.state,
+    version: snapshot.version,
+    milestoneReward: 0,
+    milestoneTiers: [],
+  };
+}
+
+/** 探索：扣一张探索票，按区域刷一只野生灵宠并进入战斗。 */
+export async function exploreWorkshop(
+  userId: string,
+  areaKey: string,
+  config: WorkshopConfig,
+): Promise<WorkshopActionResult> {
+  const activityKey = assertActiveWindow(config);
   await ensureStateRow(userId, activityKey);
   const paid = await payWithCoupon(
     userId,
     "workshop",
     activityKey,
-    config.gatherCostCredits,
+    config.exploreCostCredits,
     config.couponUnitCredits,
   );
   if (!paid.ok) throw new WorkshopError(paid.reason);
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    let snapshot: WorkshopSnapshot;
-    try {
-      snapshot = await readState(userId, activityKey);
-    } catch (error) {
-      // 读不到状态时还没有写库，券可以安全退回。
-      await refundCouponPayment(paid.payment);
-      throw error;
-    }
-    if (snapshot.state.gathersToday >= config.dailyGathers) {
-      await refundCouponPayment(paid.payment);
-      throw new WorkshopError(`今日采集次数已用完（${config.dailyGathers} 次），明天再来`);
-    }
-    const tier = rollGatherTier(config.gatherWeights);
-    const next: WorkshopState = {
-      ...snapshot.state,
-      day: cnDateString(),
-      gathersToday: snapshot.state.gathersToday + 1,
-      items: {
-        ...snapshot.state.items,
-        [line.key]: snapshot.state.items[line.key].map((count, index) =>
-          index === tier - 1 ? count + 1 : count,
-        ),
-      },
-    };
-    const written = await writeState(userId, activityKey, snapshot, next);
-    if (!written) continue;
-
-    const milestone = await grantReachedMilestones({
-      userId,
-      activityKey,
-      config,
-      state: written.state,
+  let outcome: { snapshot: WorkshopSnapshot };
+  try {
+    outcome = await attemptWrite(userId, activityKey, (state) => {
+      if (!state.starter) throw new WorkshopError("先选一只初始灵宠再出发");
+      if (state.encounter) throw new WorkshopError("上一场战斗还没结束");
+      if (!partyAlive(state)) throw new WorkshopError("队伍需要先休息或用点药水");
+      if (state.exploresToday >= config.dailyExplores) {
+        throw new WorkshopError(`今日探索次数已用完（${config.dailyExplores} 次），明天再来`);
+      }
+      const area = areaByKey(areaKey);
+      if (!area) throw new WorkshopError("这片区域不存在");
+      if (state.badges < area.unlockBadges) {
+        throw new WorkshopError(`需要 ${area.unlockBadges} 枚徽章才能进入${area.name}`);
+      }
+      const encounter = createWildEncounter(area.key);
+      if (!encounter) throw new WorkshopError("这片区域暂时没有灵宠");
+      return {
+        next: {
+          ...state,
+          day: cnDateString(),
+          exploresToday: state.exploresToday + 1,
+          encounter,
+        },
+        result: null,
+      };
     });
-    return {
-      state: written.state,
-      version: written.version,
-      milestoneReward: milestone.reward,
-      milestoneTiers: milestone.tiers,
-      gathered: {
-        lineKey: line.key,
-        tier,
-        name: workshopTierName(line.key, tier),
-      },
-    };
+  } catch (error) {
+    await refundCouponPayment(paid.payment);
+    throw error;
   }
 
-  await refundCouponPayment(paid.payment);
-  throw new WorkshopError("操作冲突，请刷新后重试");
+  return {
+    state: outcome.snapshot.state,
+    version: outcome.snapshot.version,
+    milestoneReward: 0,
+    milestoneTiers: [],
+  };
+}
+
+/** 道馆：按徽章数顺序挑战，胜利得徽章与补给，失败不扣额外东西。 */
+export async function challengeWorkshopGym(
+  userId: string,
+  config: WorkshopConfig,
+): Promise<WorkshopActionResult> {
+  const activityKey = assertActiveWindow(config);
+  await ensureStateRow(userId, activityKey);
+  const paid = await payWithCoupon(
+    userId,
+    "workshop",
+    activityKey,
+    config.gymCostCredits,
+    config.couponUnitCredits,
+  );
+  if (!paid.ok) throw new WorkshopError(paid.reason);
+
+  let outcome: { snapshot: WorkshopSnapshot };
+  try {
+    outcome = await attemptWrite(userId, activityKey, (state) => {
+      if (!state.starter) throw new WorkshopError("先选一只初始灵宠再挑战");
+      if (state.encounter) throw new WorkshopError("上一场战斗还没结束");
+      if (!partyAlive(state)) throw new WorkshopError("队伍需要先休息或用点药水");
+      if (state.gymsToday >= config.dailyGyms) {
+        throw new WorkshopError(`今日道馆挑战次数已用完（${config.dailyGyms} 次），明天再来`);
+      }
+      const gym = nextGym(state.badges);
+      if (!gym) throw new WorkshopError("三枚徽章已经集齐，去星陨高地继续探索吧");
+      const encounter = createGymEncounter(gym.stage);
+      if (!encounter) throw new WorkshopError("道馆暂时没有开门");
+      return {
+        next: {
+          ...state,
+          day: cnDateString(),
+          gymsToday: state.gymsToday + 1,
+          encounter,
+        },
+        result: null,
+      };
+    });
+  } catch (error) {
+    await refundCouponPayment(paid.payment);
+    throw error;
+  }
+
+  return {
+    state: outcome.snapshot.state,
+    version: outcome.snapshot.version,
+    milestoneReward: 0,
+    milestoneTiers: [],
+  };
+}
+
+/** 战斗回合：伤害、捕捉、掉落、经验都由服务端结算。 */
+export async function battleWorkshop(
+  userId: string,
+  action: WorkshopBattleAction,
+  config: WorkshopConfig,
+): Promise<WorkshopBattleActionResult> {
+  const activityKey = assertActiveWindow(config);
+  const { snapshot, result } = await attemptWrite(userId, activityKey, (state) => {
+    const resolved = resolveWorkshopBattle(state, action);
+    return { next: resolved.state, result: resolved };
+  });
+
+  const milestone = await grantReachedMilestones({
+    userId,
+    activityKey,
+    config,
+    state: snapshot.state,
+  });
+  const battle: Omit<WorkshopBattleResult, "state"> = {
+    events: result.events,
+    status: result.status,
+    expGained: result.expGained,
+    levelUps: result.levelUps,
+    evolved: result.evolved,
+    captured: result.captured,
+    drops: result.drops,
+  };
+  return {
+    state: snapshot.state,
+    version: snapshot.version,
+    milestoneReward: milestone.reward,
+    milestoneTiers: milestone.tiers,
+    battle,
+  };
+}
+
+/** 免费休息：每天一次，回满整队。 */
+export async function restWorkshopParty(
+  userId: string,
+  config: WorkshopConfig,
+): Promise<WorkshopActionResult & { healed: number }> {
+  const activityKey = assertActiveWindow(config);
+  const today = cnDateString();
+  const { snapshot, result } = await attemptWrite(userId, activityKey, (state) => {
+    if (state.encounter) throw new WorkshopError("战斗中不能休息");
+    if (state.restDay === today) throw new WorkshopError("今天已经休息过了");
+    if (!state.party.some((pet) => pet.hp < petStats(pet.tier, pet.level).maxHp)) {
+      throw new WorkshopError("队伍状态很好，不需要休息");
+    }
+    const next: WorkshopState = { ...state, restDay: today };
+    const healed = healAllParty(next);
+    return { next, result: healed };
+  });
+
+  return {
+    state: snapshot.state,
+    version: snapshot.version,
+    milestoneReward: 0,
+    milestoneTiers: [],
+    healed: result,
+  };
+}
+
+/** 战斗外使用药水：只能对队伍里的灵宠用。 */
+export async function drinkWorkshopPotion(
+  userId: string,
+  petId: string,
+  config: WorkshopConfig,
+): Promise<WorkshopActionResult & { healed: number }> {
+  const activityKey = assertActiveWindow(config);
+  const { snapshot, result } = await attemptWrite(userId, activityKey, (state) => {
+    if (state.encounter) throw new WorkshopError("战斗中请用战斗面板里的药水按钮");
+    if (state.items.potion <= 0) throw new WorkshopError("药水用完了");
+    const found = findPet(state, petId);
+    if (!found || found.where !== "party") throw new WorkshopError("只能给队伍里的灵宠用药水");
+    const maxHp = petStats(found.pet.tier, found.pet.level).maxHp;
+    if (found.pet.hp >= maxHp) throw new WorkshopError("它已经是满血了");
+    const healed = Math.min(maxHp, found.pet.hp + WORKSHOP_POTION_HEAL);
+    const amount = healed - found.pet.hp;
+    return {
+      next: {
+        ...state,
+        items: { ...state.items, potion: state.items.potion - 1 },
+        party: state.party.map((pet) => (pet.id === petId ? { ...pet, hp: healed } : pet)),
+      },
+      result: amount,
+    };
+  });
+
+  return {
+    state: snapshot.state,
+    version: snapshot.version,
+    milestoneReward: 0,
+    milestoneTiers: [],
+    healed: result,
+  };
+}
+
+/** 战斗外换出战灵宠。 */
+export async function setWorkshopActivePet(
+  userId: string,
+  petId: string,
+  config: WorkshopConfig,
+): Promise<WorkshopActionResult> {
+  const activityKey = assertActiveWindow(config);
+  const { snapshot } = await attemptWrite(userId, activityKey, (state) => {
+    if (state.encounter) throw new WorkshopError("战斗中用「换宠」指令");
+    const target = state.party.find((pet) => pet.id === petId);
+    if (!target) throw new WorkshopError("这只灵宠不在队伍里");
+    if (target.hp <= 0) throw new WorkshopError("它已经倒下了，先休息或用药水");
+    return { next: { ...state, activePetId: petId }, result: null };
+  });
+
+  return {
+    state: snapshot.state,
+    version: snapshot.version,
+    milestoneReward: 0,
+    milestoneTiers: [],
+  };
+}
+
+/** 队伍 ↔ 仓库移动；队伍至少留一只。 */
+export async function moveWorkshopPet(
+  userId: string,
+  petId: string,
+  target: "party" | "box",
+  config: WorkshopConfig,
+): Promise<WorkshopActionResult> {
+  const activityKey = assertActiveWindow(config);
+  const { snapshot } = await attemptWrite(userId, activityKey, (state) => {
+    if (state.encounter) throw new WorkshopError("战斗中不能整理队伍");
+    const found = findPet(state, petId);
+    if (!found) throw new WorkshopError("找不到这只灵宠");
+    if (found.where === target) throw new WorkshopError("它已经在那里了");
+    if (target === "party" && state.party.length >= WORKSHOP_PARTY_SIZE) {
+      throw new WorkshopError(`队伍最多 ${WORKSHOP_PARTY_SIZE} 只，先换下一只`);
+    }
+    if (target === "box" && state.party.length <= 1) {
+      throw new WorkshopError("队伍至少要留一只灵宠");
+    }
+    removePet(state, petId);
+    if (target === "party") {
+      state.party.push(found.pet);
+      state.activePetId = state.activePetId ?? found.pet.id;
+    } else {
+      state.box.push(found.pet);
+    }
+    return { next: state, result: null };
+  });
+
+  return {
+    state: snapshot.state,
+    version: snapshot.version,
+    milestoneReward: 0,
+    milestoneTiers: [],
+  };
 }
 
 /**
- * 合成：两只同阶换一只高一阶（确定性的，不消耗活动券）。
- * 第 9 阶是终点，不能继续合成。
+ * 合成：两只同阶换一只高一阶（不花券）。
+ *
+ * 优先消耗等级最低的两只，避免误吃主力；新灵宠等级取两者较高值、满血，
+ * 作为「等级进化」之外的加速路线。
  */
 export async function mergeWorkshop(
   userId: string,
   lineKey: string,
   tier: number,
   config: WorkshopConfig,
-): Promise<WorkshopActionResult> {
+): Promise<WorkshopActionResult & { merged: { name: string; tier: number } }> {
   const activityKey = assertActiveWindow(config);
   const line = WORKSHOP_LINES.find((item) => item.key === lineKey);
   if (!line) throw new WorkshopError("养成线不存在");
@@ -273,37 +513,50 @@ export async function mergeWorkshop(
     throw new WorkshopError("只有 1~8 阶可以合成");
   }
 
-  await ensureStateRow(userId, activityKey);
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const snapshot = await readState(userId, activityKey);
-    const counts = snapshot.state.items[line.key];
-    if ((counts[sourceTier - 1] ?? 0) < 2) {
-      throw new WorkshopError(`两只同阶${workshopTierName(line.key, sourceTier)}才能合成`);
+  const { snapshot, result } = await attemptWrite(userId, activityKey, (state) => {
+    const candidates = [...state.party, ...state.box]
+      .filter((pet) => pet.lineKey === line.key && pet.tier === sourceTier)
+      .sort((a, b) => a.level - b.level || a.exp - b.exp || petScore(a) - petScore(b));
+    if (candidates.length < 2) {
+      throw new WorkshopError(`两只${workshopTierName(line.key, sourceTier)}才能合成`);
     }
-    const nextItems = counts.slice();
-    nextItems[sourceTier - 1] -= 2;
-    nextItems[sourceTier] += 1;
-    const next: WorkshopState = {
-      ...snapshot.state,
-      items: { ...snapshot.state.items, [line.key]: nextItems },
-    };
-    const written = await writeState(userId, activityKey, snapshot, next);
-    if (!written) continue;
+    const [first, second] = candidates;
+    const firstInParty = state.party.some((pet) => pet.id === first.id);
+    const secondInParty = state.party.some((pet) => pet.id === second.id);
+    removePet(state, first.id);
+    removePet(state, second.id);
 
-    const milestone = await grantReachedMilestones({
-      userId,
-      activityKey,
-      config,
-      state: written.state,
+    const merged = createPet({
+      lineKey: line.key,
+      tier: sourceTier + 1,
+      level: Math.max(first.level, second.level),
     });
+    if (firstInParty || secondInParty) {
+      state.party.push(merged);
+      if (!state.activePetId) state.activePetId = merged.id;
+    } else {
+      state.box.push(merged);
+    }
+    state.dex = withDex(state, [merged]);
     return {
-      state: written.state,
-      version: written.version,
-      milestoneReward: milestone.reward,
-      milestoneTiers: milestone.tiers,
+      next: state,
+      result: { name: workshopTierName(line.key, sourceTier + 1), tier: sourceTier + 1 },
     };
-  }
-  throw new WorkshopError("操作冲突，请刷新后重试");
+  });
+
+  const milestone = await grantReachedMilestones({
+    userId,
+    activityKey,
+    config,
+    state: snapshot.state,
+  });
+  return {
+    state: snapshot.state,
+    version: snapshot.version,
+    milestoneReward: milestone.reward,
+    milestoneTiers: milestone.tiers,
+    merged: result,
+  };
 }
 
 /** 领取本活动已达成但还没发过的里程碑（页面上的「补领」用）。 */
@@ -332,6 +585,6 @@ export async function getWorkshopSnapshot(
   userId: string,
   activityKey: string | null,
 ): Promise<WorkshopSnapshot> {
-  if (!activityKey) return { version: 0, state: emptyState() };
+  if (!activityKey) return { version: 0, state: emptyWorkshopState() };
   return readState(userId, activityKey);
 }
