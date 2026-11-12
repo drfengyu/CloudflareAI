@@ -1,0 +1,263 @@
+import type {
+  SagaChapterDef,
+  SagaFormationDef,
+  SagaGeneralDef,
+  SagaItemDef,
+  SagaTacticDef,
+} from "./types";
+
+/** 武将图鉴：史实人物与演义称号，数值为原创平衡。 */
+export const SAGA_GENERALS: SagaGeneralDef[] = [
+  { id: "liubei", name: "刘备", title: "仁德之主", force: 70, intellect: 72, defense: 66, speed: 64, tactics: ["huifu", "guwu"], baseTroops: 180, growth: 10, color: "#3f6212", accent: "#bef264" },
+  { id: "guanyu", name: "关羽", title: "武圣", force: 97, intellect: 75, defense: 82, speed: 60, tactics: ["guwu"], baseTroops: 200, growth: 12, color: "#166534", accent: "#fde68a" },
+  { id: "zhangfei", name: "张飞", title: "燕人", force: 98, intellect: 32, defense: 84, speed: 55, tactics: ["hunluan"], baseTroops: 210, growth: 12, color: "#7f1d1d", accent: "#fca5a5" },
+  { id: "zhaoyun", name: "赵云", title: "常山赵子龙", force: 96, intellect: 76, defense: 84, speed: 78, tactics: ["huoji"], baseTroops: 195, growth: 11, color: "#1e40af", accent: "#bfdbfe", recruitable: true },
+  { id: "huangzhong", name: "黄忠", title: "老当益壮", force: 93, intellect: 62, defense: 76, speed: 56, tactics: ["huoji"], baseTroops: 190, growth: 11, color: "#a16207", accent: "#fde68a", recruitable: true },
+  { id: "machao", name: "马超", title: "锦马超", force: 97, intellect: 48, defense: 78, speed: 80, tactics: ["guwu"], baseTroops: 200, growth: 11, color: "#475569", accent: "#e2e8f0", recruitable: true },
+  { id: "weiyan", name: "魏延", title: "镇北将军", force: 90, intellect: 58, defense: 72, speed: 68, tactics: ["hunluan"], baseTroops: 185, growth: 10, color: "#6b21a8", accent: "#e9d5ff", recruitable: true },
+  { id: "pangtong", name: "庞统", title: "凤雏", force: 42, intellect: 96, defense: 50, speed: 58, tactics: ["huoji", "hunluan"], baseTroops: 150, growth: 8, color: "#4b5563", accent: "#fbbf24", recruitable: true },
+  { id: "fazheng", name: "法正", title: "蜀郡谋主", force: 48, intellect: 92, defense: 54, speed: 62, tactics: ["huifu", "hunluan"], baseTroops: 150, growth: 8, color: "#0f766e", accent: "#99f6e4", recruitable: true },
+  { id: "yanyan", name: "严颜", title: "巴郡老将", force: 88, intellect: 60, defense: 78, speed: 50, tactics: ["guwu"], baseTroops: 180, growth: 10, color: "#78350f", accent: "#fcd34d", recruitable: true },
+  { id: "zhangren", name: "张任", title: "西川枪王", force: 89, intellect: 68, defense: 76, speed: 66, tactics: ["huoji"], baseTroops: 180, growth: 10, color: "#7c2d12", accent: "#fdba74", recruitable: true },
+  { id: "taishici", name: "太史慈", title: "神亭岭", force: 94, intellect: 66, defense: 78, speed: 72, tactics: ["guwu"], baseTroops: 195, growth: 11, color: "#0e7490", accent: "#a5f3fc", recruitable: true },
+  { id: "ganning", name: "甘宁", title: "锦帆贼", force: 92, intellect: 60, defense: 74, speed: 80, tactics: ["huoji"], baseTroops: 190, growth: 11, color: "#9a3412", accent: "#fdba74", recruitable: true },
+  { id: "huaxiong", name: "华雄", title: "汜水关", force: 92, intellect: 40, defense: 76, speed: 62, tactics: ["guwu"], baseTroops: 195, growth: 11, color: "#7f1d1d", accent: "#fecaca", recruitable: true },
+  { id: "lvbu", name: "吕布", title: "飞将", force: 100, intellect: 36, defense: 88, speed: 86, tactics: ["guwu"], baseTroops: 240, growth: 13, color: "#4c1d95", accent: "#fbbf24", recruitable: true, recruitHard: true },
+  { id: "zhugeliang", name: "诸葛亮", title: "卧龙", force: 38, intellect: 100, defense: 58, speed: 60, tactics: ["huoji", "huifu", "hunluan", "guwu"], baseTroops: 160, growth: 8, color: "#1e3a8a", accent: "#bfdbfe", recruitable: true },
+  { id: "zhanghe", name: "张郃", title: "巧变", force: 90, intellect: 66, defense: 78, speed: 72, tactics: ["guwu"], baseTroops: 190, growth: 11, color: "#365314", accent: "#d9f99d", recruitable: true },
+  { id: "zhangjiao", name: "张角", title: "天公将军", force: 55, intellect: 92, defense: 60, speed: 50, tactics: ["huoji", "huifu", "hunluan", "guwu"], baseTroops: 220, growth: 12, color: "#581c87", accent: "#e9d5ff", enemyOnly: true },
+  { id: "zhangbao", name: "张宝", title: "地公将军", force: 60, intellect: 70, defense: 58, speed: 55, tactics: ["huoji"], baseTroops: 180, growth: 10, color: "#6b21a8", accent: "#d8b4fe", enemyOnly: true },
+  { id: "zhangliang", name: "张梁", title: "人公将军", force: 65, intellect: 55, defense: 60, speed: 54, tactics: ["guwu"], baseTroops: 180, growth: 10, color: "#7e22ce", accent: "#e9d5ff", enemyOnly: true },
+  { id: "huangjin_lishi", name: "黄巾力士", title: "黄巾", force: 70, intellect: 20, defense: 62, speed: 48, tactics: [], baseTroops: 150, growth: 8, color: "#a16207", accent: "#fde68a", enemyOnly: true },
+  { id: "chengyuanzhi", name: "程远志", title: "黄巾渠帅", force: 78, intellect: 30, defense: 62, speed: 48, tactics: [], baseTroops: 160, growth: 9, color: "#92400e", accent: "#fde68a", enemyOnly: true },
+  { id: "dengmao", name: "邓茂", title: "黄巾渠帅", force: 72, intellect: 28, defense: 58, speed: 50, tactics: [], baseTroops: 150, growth: 9, color: "#a16207", accent: "#fef3c7", enemyOnly: true },
+  { id: "lisu", name: "李肃", title: "董卓部将", force: 70, intellect: 50, defense: 62, speed: 56, tactics: [], baseTroops: 160, growth: 9, color: "#57534e", accent: "#e7e5e4", enemyOnly: true },
+  { id: "huzhen", name: "胡轸", title: "董卓部将", force: 76, intellect: 40, defense: 66, speed: 52, tactics: [], baseTroops: 165, growth: 9, color: "#44403c", accent: "#d6d3d1", enemyOnly: true },
+  { id: "dongzhuo", name: "董卓", title: "太师", force: 70, intellect: 60, defense: 80, speed: 40, tactics: ["guwu"], baseTroops: 240, growth: 13, color: "#7c2d12", accent: "#fbbf24", enemyOnly: true },
+  { id: "caobao", name: "曹豹", title: "徐州部将", force: 70, intellect: 40, defense: 64, speed: 50, tactics: [], baseTroops: 160, growth: 9, color: "#365314", accent: "#bef264", enemyOnly: true },
+  { id: "chezhou", name: "车胄", title: "徐州刺史", force: 72, intellect: 50, defense: 66, speed: 52, tactics: [], baseTroops: 165, growth: 9, color: "#3f6212", accent: "#d9f99d", enemyOnly: true },
+  { id: "xiahoudun", name: "夏侯惇", title: "独眼", force: 90, intellect: 55, defense: 78, speed: 66, tactics: ["guwu"], baseTroops: 210, growth: 12, color: "#1e3a8a", accent: "#93c5fd", enemyOnly: true },
+  { id: "xiahouyuan", name: "夏侯渊", title: "疾行", force: 88, intellect: 58, defense: 76, speed: 70, tactics: ["guwu"], baseTroops: 205, growth: 11, color: "#1d4ed8", accent: "#bfdbfe", enemyOnly: true },
+  { id: "caoren", name: "曹仁", title: "铁壁", force: 82, intellect: 60, defense: 80, speed: 58, tactics: ["hunluan"], baseTroops: 205, growth: 11, color: "#172554", accent: "#93c5fd", enemyOnly: true },
+  { id: "yanliang", name: "颜良", title: "河北上将", force: 92, intellect: 40, defense: 74, speed: 60, tactics: ["guwu"], baseTroops: 210, growth: 12, color: "#7f1d1d", accent: "#fecaca", enemyOnly: true },
+  { id: "wenchou", name: "文丑", title: "河北上将", force: 91, intellect: 36, defense: 72, speed: 62, tactics: ["guwu"], baseTroops: 210, growth: 12, color: "#991b1b", accent: "#fca5a5", enemyOnly: true },
+  { id: "gaolan", name: "高览", title: "河北四庭柱", force: 86, intellect: 50, defense: 72, speed: 60, tactics: [], baseTroops: 190, growth: 10, color: "#78350f", accent: "#fcd34d", enemyOnly: true },
+  { id: "yuanshao", name: "袁绍", title: "四世三公", force: 70, intellect: 72, defense: 78, speed: 54, tactics: ["huoji", "guwu"], baseTroops: 240, growth: 13, color: "#4c1d95", accent: "#ddd6fe", enemyOnly: true },
+  { id: "caimao", name: "蔡瑁", title: "水军都督", force: 68, intellect: 50, defense: 64, speed: 58, tactics: ["huoji"], baseTroops: 185, growth: 10, color: "#0f766e", accent: "#99f6e4", enemyOnly: true },
+  { id: "zhangyun", name: "张允", title: "水军副将", force: 66, intellect: 48, defense: 62, speed: 60, tactics: ["huoji"], baseTroops: 180, growth: 10, color: "#115e59", accent: "#5eead4", enemyOnly: true },
+  { id: "caocao", name: "曹操", title: "魏武帝", force: 78, intellect: 88, defense: 82, speed: 64, tactics: ["huoji", "huifu", "hunluan", "guwu"], baseTroops: 260, growth: 14, color: "#1e3a8a", accent: "#fbbf24", enemyOnly: true },
+  { id: "liuzhang", name: "刘璋", title: "益州牧", force: 52, intellect: 60, defense: 70, speed: 44, tactics: ["huifu"], baseTroops: 230, growth: 12, color: "#3f6212", accent: "#fde68a", enemyOnly: true },
+  { id: "liukui", name: "刘璝", title: "益州将", force: 78, intellect: 50, defense: 70, speed: 54, tactics: [], baseTroops: 175, growth: 10, color: "#365314", accent: "#d9f99d", enemyOnly: true },
+  { id: "lengbao", name: "冷苞", title: "益州将", force: 76, intellect: 46, defense: 68, speed: 56, tactics: [], baseTroops: 175, growth: 10, color: "#4d7c0f", accent: "#ecfccb", enemyOnly: true },
+  { id: "xuhuang", name: "徐晃", title: "公明", force: 90, intellect: 62, defense: 80, speed: 66, tactics: ["guwu"], baseTroops: 205, growth: 11, color: "#1e40af", accent: "#bfdbfe", enemyOnly: true },
+  { id: "caohong", name: "曹洪", title: "子廉", force: 84, intellect: 50, defense: 76, speed: 58, tactics: [], baseTroops: 195, growth: 10, color: "#1d4ed8", accent: "#dbeafe", enemyOnly: true },
+  { id: "simayi", name: "司马懿", title: "冢虎", force: 60, intellect: 98, defense: 76, speed: 70, tactics: ["huoji", "huifu", "hunluan", "guwu"], baseTroops: 260, growth: 14, color: "#3b0764", accent: "#d8b4fe", enemyOnly: true },
+  { id: "guohuai", name: "郭淮", title: "雍州刺史", force: 82, intellect: 70, defense: 74, speed: 64, tactics: ["huoji"], baseTroops: 200, growth: 11, color: "#312e81", accent: "#c7d2fe", enemyOnly: true },
+  { id: "sunli", name: "孙礼", title: "曹魏将", force: 80, intellect: 58, defense: 70, speed: 62, tactics: [], baseTroops: 190, growth: 10, color: "#3730a3", accent: "#e0e7ff", enemyOnly: true },
+  { id: "jiling", name: "纪灵", title: "三尖刀", force: 88, intellect: 46, defense: 76, speed: 60, tactics: ["guwu"], baseTroops: 195, growth: 11, color: "#713f12", accent: "#fde68a", enemyOnly: true },
+  { id: "qiaorui", name: "桥蕤", title: "袁术上将", force: 80, intellect: 40, defense: 68, speed: 56, tactics: [], baseTroops: 180, growth: 10, color: "#854d0e", accent: "#fef08a", enemyOnly: true },
+  { id: "zhangxun", name: "张勋", title: "袁术大将", force: 82, intellect: 48, defense: 70, speed: 58, tactics: [], baseTroops: 185, growth: 10, color: "#92400e", accent: "#fde68a", enemyOnly: true },
+  { id: "yuanshu", name: "袁术", title: "仲家皇帝", force: 62, intellect: 58, defense: 74, speed: 48, tactics: ["huifu", "guwu"], baseTroops: 230, growth: 12, color: "#78350f", accent: "#fbbf24", enemyOnly: true },
+  { id: "gaoshun", name: "高顺", title: "陷阵营", force: 89, intellect: 58, defense: 82, speed: 64, tactics: ["guwu"], baseTroops: 200, growth: 11, color: "#4c1d95", accent: "#ddd6fe", recruitable: true },
+  { id: "chengong", name: "陈宫", title: "吕布军师", force: 50, intellect: 92, defense: 58, speed: 60, tactics: ["huoji", "hunluan", "huifu"], baseTroops: 170, growth: 9, color: "#5b21b6", accent: "#e9d5ff", enemyOnly: true },
+  { id: "zhangliao", name: "张辽", title: "文远", force: 94, intellect: 78, defense: 82, speed: 74, tactics: ["guwu"], baseTroops: 205, growth: 12, color: "#312e81", accent: "#c7d2fe", recruitable: true, recruitHard: true },
+  { id: "caoxing", name: "曹性", title: "吕布部将", force: 78, intellect: 40, defense: 66, speed: 62, tactics: [], baseTroops: 170, growth: 9, color: "#581c87", accent: "#d8b4fe", enemyOnly: true },
+];
+
+export const SAGA_GENERAL_BY_ID = new Map(SAGA_GENERALS.map((g) => [g.id, g]));
+
+export const SAGA_STARTER_IDS = ["liubei", "guanyu", "zhangfei"] as const;
+
+export const SAGA_TACTICS: SagaTacticDef[] = [
+  { id: "huoji", name: "火计", desc: "智力伤害，攻击全体敌军", cost: 1 },
+  { id: "huifu", name: "回复", desc: "回复兵力最少的友军", cost: 1 },
+  { id: "hunluan", name: "混乱", desc: "令一名敌将混乱 2 回合", cost: 1 },
+  { id: "guwu", name: "鼓舞", desc: "全队攻击提升 3 回合", cost: 1 },
+];
+
+export const SAGA_TACTIC_BY_ID = new Map(SAGA_TACTICS.map((t) => [t.id, t]));
+
+export const SAGA_FORMATIONS: SagaFormationDef[] = [
+  { id: "yulin", name: "鱼鳞", desc: "攻击 +15%，防御 -5%", atk: 115, def: 95, spd: 100, beats: "heyi" },
+  { id: "heyi", name: "鹤翼", desc: "速度 +15%，攻击 +5%", atk: 105, def: 100, spd: 115, beats: "fengshi" },
+  { id: "fengshi", name: "锋矢", desc: "攻击 +25%，防御 -15%", atk: 125, def: 85, spd: 105, beats: "fangyuan" },
+  { id: "fangyuan", name: "方圆", desc: "防御 +25%，速度 -10%", atk: 90, def: 125, spd: 90, beats: "changshe" },
+  { id: "changshe", name: "长蛇", desc: "速度 +25%，防御 -10%", atk: 100, def: 90, spd: 125, beats: "yulin" },
+];
+
+export const SAGA_FORMATION_BY_ID = new Map(SAGA_FORMATIONS.map((f) => [f.id, f]));
+
+export const SAGA_ITEMS: SagaItemDef[] = [
+  { id: "iron_sword", name: "铁剑", kind: "weapon", priceGold: 30, atk: 8, desc: "攻击 +8" },
+  { id: "spear", name: "长枪", kind: "weapon", priceGold: 60, atk: 14, desc: "攻击 +14" },
+  { id: "blade", name: "大刀", kind: "weapon", priceGold: 100, atk: 20, desc: "攻击 +20" },
+  { id: "guandao", name: "偃月刀", kind: "weapon", priceGold: 160, atk: 27, desc: "攻击 +27" },
+  { id: "cloth", name: "布甲", kind: "armor", priceGold: 25, def: 6, desc: "防御 +6" },
+  { id: "leather", name: "皮甲", kind: "armor", priceGold: 55, def: 11, desc: "防御 +11" },
+  { id: "iron_armor", name: "铁甲", kind: "armor", priceGold: 100, def: 17, desc: "防御 +17" },
+  { id: "heavy_armor", name: "重铠", kind: "armor", priceGold: 160, def: 23, desc: "防御 +23" },
+  { id: "herb", name: "伤药", kind: "consumable", priceGold: 15, heal: 60, desc: "回复 60 兵力", stack: true },
+  { id: "medicine", name: "良药", kind: "consumable", priceGold: 35, heal: 150, desc: "回复 150 兵力", stack: true },
+  { id: "secret_medicine", name: "秘药", kind: "supply", priceTickets: 1, supply: "heal", desc: "此行：一名武将兵力回满", stack: true },
+  { id: "revive_token", name: "兵符", kind: "supply", priceTickets: 2, supply: "revive", desc: "此行：复活一名败将（四成兵力）", stack: true },
+  { id: "tiger_tally", name: "虎符", kind: "supply", priceTickets: 2, supply: "troops", desc: "此行：全队兵力上限 +10%" },
+  { id: "wind_talisman", name: "风行符", kind: "supply", priceTickets: 1, supply: "speed", desc: "此行：全队速度 +3" },
+  { id: "war_drum", name: "战鼓", kind: "supply", priceTickets: 2, supply: "attack", desc: "此行：全队攻击 +15%" },
+  { id: "stratagem", name: "锦囊", kind: "supply", priceTickets: 1, supply: "tactic", desc: "此行：每名武将开局计策点 +2" },
+];
+
+export const SAGA_ITEM_BY_ID = new Map(SAGA_ITEMS.map((i) => [i.id, i]));
+
+export const SAGA_GOLD_SHOP_IDS = SAGA_ITEMS.filter((i) => i.kind !== "supply").map((i) => i.id);
+export const SAGA_SUPPLY_SHOP_IDS = SAGA_ITEMS.filter((i) => i.kind === "supply").map((i) => i.id);
+
+export const SAGA_CHAPTERS: SagaChapterDef[] = [
+  {
+    index: 0,
+    name: "桃园起兵",
+    subtitle: "讨伐黄巾",
+    town: "涿郡",
+    blurb: "黄巾四起，涿郡募兵。桃园三人带着乡勇出城，先破黄巾前哨。",
+    story: [
+      "汉室倾颓，黄巾席卷八州，涿郡张榜募兵。",
+      "刘关张桃园结义，聚乡勇五百，首战程远志、邓茂。",
+      "广宗城下会战张角，破了黄巾本阵，讨逆之路从这里开始。",
+    ],
+    stages: ["涿郡郊外", "黄巾哨营", "青州道口", "长社坡", "阳城驿", "广宗城下", "黄巾本阵"],
+    field: ["chengyuanzhi", "dengmao", "huangjin_lishi", "zhangbao"],
+    elite: ["zhangbao", "zhangliang"],
+    boss: "zhangjiao",
+    guards: ["zhangbao", "zhangliang"],
+    unlock: null,
+  },
+  {
+    index: 1,
+    name: "汜水关",
+    subtitle: "讨伐董卓",
+    town: "陈留",
+    blurb: "诸侯会盟，兵进汜水。华雄连斩数将，关外战鼓震天。",
+    story: [
+      "董卓入京，废立天子，天下震动。",
+      "曹操发檄，诸侯会盟，孙坚为先锋直逼汜水关。",
+      "华雄连斩数将，关羽温酒斩之，联军进抵洛阳。",
+    ],
+    stages: ["陈留城外", "汜水关前", "虎牢关道", "荥阳坂", "偃师古道", "洛阳郊野", "洛阳宫阙"],
+    field: ["lisu", "huzhen", "huaxiong"],
+    elite: ["huaxiong", "huzhen"],
+    boss: "dongzhuo",
+    guards: ["lvbu", "huaxiong"],
+    unlock: null,
+  },
+  {
+    index: 2,
+    name: "徐州风云",
+    subtitle: "讨伐袁术",
+    town: "小沛",
+    blurb: "陶谦让徐州，袁术称帝来争。小沛城小兵少，只能以战养战。",
+    story: [
+      "曹操为父报仇兴兵徐州，刘备借兵救陶谦。",
+      "陶谦三让徐州，刘备领徐州牧；袁术遣纪灵来争，辕门射戟。",
+      "袁术称帝，众叛亲离，终败于江亭；赵云在古城来投。",
+    ],
+    stages: ["小沛城郊", "盱眙道口", "纪灵营寨", "淮北平原", "寿春城下", "江亭渡口", "仲家宫阙"],
+    field: ["jiling", "qiaorui", "zhangxun", "caobao"],
+    elite: ["jiling", "qiaorui"],
+    boss: "yuanshu",
+    guards: ["jiling", "zhangxun"],
+    unlock: "zhaoyun",
+  },
+  {
+    index: 3,
+    name: "白门楼",
+    subtitle: "讨伐吕布",
+    town: "下邳",
+    blurb: "吕布袭取徐州，曹操亲征下邳。水淹城池，温侯困守白门楼。",
+    story: [
+      "吕布袭取徐州，与袁术时和时战。",
+      "曹操亲征下邳，引沂泗之水灌城，吕布困守白门楼。",
+      "陈宫就义，高顺不屈；吕布殒命，张辽归心。",
+    ],
+    stages: ["徐州城外", "泗水渡口", "下邳道", "陷阵大营", "白门楼前", "水淹城垣", "温侯本阵"],
+    field: ["gaoshun", "zhangliao", "chengong", "caoxing"],
+    elite: ["gaoshun", "zhangliao"],
+    boss: "lvbu",
+    guards: ["gaoshun", "zhangliao"],
+    unlock: "zhangliao",
+  },
+  {
+    index: 4,
+    name: "官渡之战",
+    subtitle: "河北争锋",
+    town: "延津",
+    blurb: "袁绍兵多粮足，颜良文丑当先。延津渡口，一场硬仗。",
+    story: [
+      "袁绍并河北四州，南下攻许都。",
+      "白马延津，关羽斩颜良、诛文丑。",
+      "曹操夜袭乌巢，一把火烧尽河北粮草；刘备南走荆州，三顾茅庐。",
+    ],
+    stages: ["延津渡口", "白马坡", "延津南岸", "乌巢粮道", "官渡壁垒", "黎阳古道", "邺城本阵"],
+    field: ["yanliang", "wenchou", "gaolan", "zhanghe"],
+    elite: ["yanliang", "wenchou"],
+    boss: "yuanshao",
+    guards: ["zhanghe", "gaolan"],
+    unlock: "zhugeliang",
+  },
+  {
+    index: 5,
+    name: "赤壁之战",
+    subtitle: "孙刘联军",
+    town: "江夏",
+    blurb: "曹军南下，江夏整军。水寨连舟，火计可破百万兵。",
+    story: [
+      "曹操挟八十三万之众饮马长江。",
+      "孙刘结盟，周瑜督水军，黄盖献诈降火船。",
+      "东南风起，赤壁烈焰烧尽连环船，曹军北还。",
+    ],
+    stages: ["江夏水寨", "三江口", "赤壁矶", "乌林港", "华容道", "南郡城郊", "荆襄大营"],
+    field: ["caimao", "zhangyun", "caoren", "xiahouyuan"],
+    elite: ["caimao", "zhangyun"],
+    boss: "caocao",
+    guards: ["caoren", "xuhuang"],
+    unlock: "huangzhong",
+  },
+  {
+    index: 6,
+    name: "入蜀之路",
+    subtitle: "西川归心",
+    town: "涪城",
+    blurb: "西川险道，张任严颜扼守。取涪城，方可图成都。",
+    story: [
+      "刘璋暗弱，张松献西川图本。",
+      "刘备入川，涪城会盟后反目；雒城折了庞统。",
+      "孔明张飞入援，成都开城，西川归心。",
+    ],
+    stages: ["涪城道", "雒城关", "绵竹隘", "巴郡江岸", "葭萌关", "成都郊外", "成都宫门"],
+    field: ["liukui", "lengbao", "zhangren", "yanyan"],
+    elite: ["zhangren", "yanyan"],
+    boss: "liuzhang",
+    guards: ["zhangren", "yanyan"],
+    unlock: "machao",
+  },
+  {
+    index: 7,
+    name: "五丈原",
+    subtitle: "秋风斜谷",
+    town: "五丈原",
+    blurb: "汉中已定，先主进位汉中王。斜谷秋风，魏军坚守，冢虎不出。",
+    story: [
+      "汉中已定，先主进位汉中王，荆州却已易手。",
+      "先主崩于白帝，托孤孔明；南中平后，六出祁山。",
+      "渭水对垒，冢虎不出；秋风五丈原，讨逆之路行至最后一战。",
+    ],
+    stages: ["斜谷口", "陈仓道", "渭水南岸", "北原营寨", "武功水", "五丈原上", "魏军大营"],
+    field: ["guohuai", "sunli", "caohong", "zhanghe"],
+    elite: ["guohuai", "sunli"],
+    boss: "simayi",
+    guards: ["guohuai", "sunli"],
+    unlock: "weiyan",
+  },
+];
+
+export const SAGA_CHAPTER_BY_INDEX = new Map(SAGA_CHAPTERS.map((c) => [c.index, c]));
+
+export const SAGA_SKILLS_HINT = "攻击 / 计策 / 防御 / 道具 / 招降";

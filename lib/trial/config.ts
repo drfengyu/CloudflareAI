@@ -2,11 +2,12 @@ import { snapCostToUnit } from "@/lib/activity/ticket-math";
 import { parseCnWallClock } from "@/lib/date";
 
 /**
- * 限时活动·每日试炼的纯配置与判分规则。
+ * 限时活动·每日试炼（三国讨逆传）的纯配置与判分规则。
  *
- * 玩法是横版动作浮游城：每层两扇野区门（战斗 / 精英 / 宝箱 / 营地）
- * 加一间层主房，玩家实时移动、跳跃、出剑技，击败层主上楼。地图与种子在开局时落库，
- * 交卷只上交每帧按键掩码，服务端用 `lib/trial/dungeon.ts` 按 60Hz 重放层数与剩余血量。
+ * 玩法是连续剧情的回合 RPG：从当前城镇出发，依次攻克野外战斗、精英与首领节点；
+ * 走完当前地方的全部剧情，主线才推进到下一处地方。存档（武将、金币、装备、
+ * 图鉴）一直保留，不设次数与时间限制。节点在出城时落库，收兵只上传编制/
+ * 购物/战斗指令，服务端用 `lib/trial/saga/` 按种子重放。
  * 这里不 import 任何读库代码，后台表单与页面都要在服务端/浏览器两侧复用。
  */
 
@@ -15,13 +16,11 @@ export const TRIAL_CONFIG_KEY = "trial_config";
 /** `topup.type`：17=每日试炼奖励（只发 tcr，非负）。 */
 export const TOPUP_TYPE_TRIAL = 17;
 
-/** 每局最多几层：小怪池够用，也拉得开难度档。 */
+/** 每处地方最多几处节点：野外遭遇 + 精英 + 首领，足够撑起一段剧情。 */
 export const TRIAL_MAX_FLOORS = 7;
-/** 单局最短时长下限（秒）：给足战斗动画与决策时间，同时防脚本瞬交。 */
-export const TRIAL_MIN_SECONDS = 15;
 
 export interface TrialTier {
-  /** 通关多少层起；同层数取最高档。 */
+  /** 攻克多少处节点起；同节点数取最高档。 */
   correct: number;
   /** 该档 tcr。 */
   reward: number;
@@ -32,19 +31,15 @@ export interface TrialConfig {
   /** 北京墙钟 `YYYY-MM-DD HH:mm`。 */
   startAt: string;
   endAt: string;
-  /** 每局层数（沿用 `questionCount` 字段名，避免动表结构）。 */
+  /** 每处地方的节点数（沿用 `questionCount` 字段名，避免动表结构）。 */
   questionCount: number;
-  /** 单局限时（秒），超时交卷按 0 分并标记 expired。 */
-  timeLimitSeconds: number;
-  /** 每日最多挑战次数（按北京时间自然日）。 */
-  dailyRuns: number;
-  /** 单局票价（cr），必须是券单价的整数倍。 */
+  /** 每次出城的军令价（cr），必须是券单价的整数倍。 */
   runPriceCredits: number;
   /** 1 张活动券兑换所需的 cr（券面单价）。 */
   couponUnitCredits: number;
-  /** 奖励 tcr 的有效天数。 */
+  /** 剧情通关奖励 tcr 的有效天数。 */
   rewardValidDays: number;
-  /** 通关层数 → tcr 档位。 */
+  /** 攻克节点数 → tcr 档位（只有走完当前剧情才发）。 */
   tiers: TrialTier[];
 }
 
@@ -53,8 +48,6 @@ export const DEFAULT_TRIAL_CONFIG: TrialConfig = {
   startAt: "",
   endAt: "",
   questionCount: 5,
-  timeLimitSeconds: 300,
-  dailyRuns: 3,
   runPriceCredits: 5,
   couponUnitCredits: 5,
   rewardValidDays: 30,
@@ -78,7 +71,7 @@ function boundedInteger(value: unknown, fallback: number, min: number, max: numb
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 }
 
-/** 档位按层数升序去重；0 层档不配也能跑（没命中就拿 0）。 */
+/** 档位按节点数升序去重；0 档不配也能跑（没命中就拿 0）。 */
 export function sanitizeTrialTiers(raw: unknown, questionCount: number): TrialTier[] {
   const arr = Array.isArray(raw) ? raw : [];
   const seen = new Set<number>();
@@ -108,15 +101,13 @@ export function sanitizeTrialConfig(raw: unknown): TrialConfig {
     1_000_000,
     round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
   );
-  const questionCount = boundedInteger(it.questionCount, d.questionCount, 1, TRIAL_MAX_FLOORS);
+  const questionCount = boundedInteger(it.questionCount, d.questionCount, 2, TRIAL_MAX_FLOORS);
   const tiers = sanitizeTrialTiers(it.tiers, questionCount);
   return {
     enabled: it.enabled === true,
     startAt: typeof it.startAt === "string" ? it.startAt.trim() : "",
     endAt: typeof it.endAt === "string" ? it.endAt.trim() : "",
     questionCount,
-    timeLimitSeconds: boundedInteger(it.timeLimitSeconds, d.timeLimitSeconds, TRIAL_MIN_SECONDS, 1800),
-    dailyRuns: boundedInteger(it.dailyRuns, d.dailyRuns, 1, 100),
     runPriceCredits: snapCostToUnit(
       round2(positiveNumber(it.runPriceCredits, d.runPriceCredits)),
       unit,
@@ -151,7 +142,7 @@ export function trialActivityKey(config: TrialConfig): string | null {
   return config.startAt.trim();
 }
 
-/** 命中档位：通关层数达到的最高一档；不够任何档位就是 0。 */
+/** 命中档位：通关节点数达到的最高一档；调用方只在走完当前剧情时使用。 */
 export function trialRewardFor(config: TrialConfig, correct: number): number {
   const safe = Math.max(0, Math.trunc(Number(correct) || 0));
   let reward = 0;
@@ -159,12 +150,4 @@ export function trialRewardFor(config: TrialConfig, correct: number): number {
     if (safe >= tier.correct) reward = tier.reward;
   }
   return round2(reward);
-}
-
-/** 服务端判分用的时间边界：最短 = 每层 1.5 秒（下限 8 秒，防脚本瞬交），最长 = 限时 + 5 秒宽限。 */
-export function trialTimeBounds(config: TrialConfig): { minMs: number; maxMs: number } {
-  return {
-    minMs: Math.max(8000, Math.min(config.timeLimitSeconds * 1000, config.questionCount * 1500)),
-    maxMs: config.timeLimitSeconds * 1000 + 5000,
-  };
 }

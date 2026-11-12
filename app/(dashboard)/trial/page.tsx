@@ -1,4 +1,4 @@
-import { Coins, Swords, Timer, Trophy } from "lucide-react";
+import { Flag, ScrollText, Swords, Ticket, Trophy, Users } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageBody } from "@/components/dashboard/section";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,12 +16,16 @@ import {
 } from "@/lib/trial/config";
 import { getTrialConfig } from "@/lib/trial/settings";
 import {
-  countTrialRunsToday,
+  campaignComplete,
   findActiveTrialRun,
   listTrialRuns,
+  loadTrialSave,
   type ActiveTrialRun,
   type TrialHistoryRow,
+  type TrialSaveState,
 } from "@/lib/trial/store";
+import { SAGA_CHAPTERS } from "@/lib/trial/saga/data";
+import { partyPower } from "@/lib/trial/saga/state";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +46,7 @@ function Stat({
   value,
   hint,
 }: {
-  icon: typeof Coins;
+  icon: typeof Flag;
   label: string;
   value: React.ReactNode;
   hint: React.ReactNode;
@@ -72,15 +76,21 @@ export default async function TrialPage() {
   const priceTickets = ticketsForCost(config.runPriceCredits, config.couponUnitCredits);
 
   const track = windowInfo.status === "active" || windowInfo.status === "ended";
-  const [activeRun, runsToday, history]: [ActiveTrialRun | null, number, TrialHistoryRow[]] = track
-    ? await Promise.all([
-        findActiveTrialRun(userId, activityKey, config),
-        countTrialRunsToday(userId),
-        listTrialRuns(userId, activityKey, 8),
-      ])
-    : [null, 0, []];
+  const [saveState, activeRun, history]: [
+    TrialSaveState,
+    ActiveTrialRun | null,
+    TrialHistoryRow[],
+  ] = await Promise.all([
+    loadTrialSave(userId, activityKey),
+    windowInfo.status === "active" ? findActiveTrialRun(userId, activityKey) : Promise.resolve(null),
+    track ? listTrialRuns(userId, activityKey, 8) : Promise.resolve([]),
+  ]);
 
-  const best = history.reduce((max, row) => Math.max(max, row.correct), 0);
+  const save = saveState.save;
+  const chapter = SAGA_CHAPTERS[Math.min(SAGA_CHAPTERS.length - 1, save.chapter)];
+  const place = `${chapter.town} · ${chapter.name}`;
+  const dexCount = new Set([...save.met, ...save.recruited]).size;
+  const finished = campaignComplete(save);
 
   const couponCard = (
     <Card>
@@ -101,29 +111,30 @@ export default async function TrialPage() {
       <CardContent>
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
           <li>
-            每局 {config.questionCount} 层浮游城，限时 {config.timeLimitSeconds} 秒；横版动作操作：每层先在两扇野区门
-            里探路（战斗 / 精英 / 宝箱 / 营地），再挑战层主，击败才上楼。
+            从当前城镇出城行军，沿剧情路线依次攻克 {config.questionCount} 处节点；
+            只有平定此处全部节点，剧情才会推进到下一处地方。等级、金币、装备、招降武将都写进存档，
+            兵败也不会丢进度。
           </li>
           <li>
-            A/D 移动、W/空格 跳跃、J 斩击、K 弧斩、L 星屑飞溅、S 格挡、E 回复结晶、F 进门；弧斩与星屑有冷却。
-            连续命中累积连击加伤，受伤会清空连击；敌人抬手出现「!」是出招预警，跳起来可以躲开横斩。
-            击杀获得经验，升级提升生命上限并回复 10；宝箱与精英掉装备（可叠加），层主残血进入狂暴。
-            地图与种子存在服务端，<b>交卷只上交每帧按键序列</b>。
+            战斗为<b>兵力制回合制</b>：每回合给每名武将下「攻击 / 计策 / 防御 / 道具 / 招降」指令；
+            五将上阵、十二人待命，阵型（鱼鳞 / 鹤翼 / 锋矢 / 方圆 / 长蛇）互相克制，
+            计策消耗计策点，敌将兵力低于三成时可以招降。
           </li>
           <li>
-            单局票价 <CouponCount kind="trial" count={priceTickets} />（1 张 ={" "}
-            {formatCredits(config.couponUnitCredits)} cr 券面），只扣试炼券；券不足先兑换。
+            每次出城消耗 <CouponCount kind="trial" count={priceTickets} />（1 张 ={" "}
+            {formatCredits(config.couponUnitCredits)} cr 券面），只扣试炼券；军需帐也用试炼券，
+            补给只在这次行军中生效。城镇里的铁匠铺和药铺花金币。
           </li>
           <li>
-            通关层数对应奖励：
+            平定一处地方发通关奖励：
             {config.tiers
-              .map((tier) => ` ${tier.correct} 层 ${formatCredits(trialRewardFor(config, tier.correct))} tcr`)
+              .map((tier) => ` 攻克 ${tier.correct} 处节点 ${formatCredits(trialRewardFor(config, tier.correct))} tcr`)
               .join("，")}
-            ；奖励 tcr {config.rewardValidDays} 天内有效。
+            ；按达到的最高档发放，奖励 tcr {config.rewardValidDays} 天内有效。未平定不发。
           </li>
           <li>
-            每日最多 {config.dailyRuns} 局（北京时间自然日）。中途关掉页面不算失败，回来接着打同一局；
-            超时按 0 层结算，不返还券。
+            不设次数与时限。中途关掉页面不算失败，回来接着走当前剧情；
+            战报只上传编制 / 购物 / 战斗指令，由服务端按种子重放判定。
           </li>
         </ul>
       </CardContent>
@@ -133,12 +144,12 @@ export default async function TrialPage() {
   const historyCard = (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base">最近挑战</CardTitle>
-        <span className="text-xs text-muted-foreground">最好成绩 {best} 层</span>
+        <CardTitle className="text-base">行军录</CardTitle>
+        <span className="text-xs text-muted-foreground">已平定 {save.stats.wins} 处地方</span>
       </CardHeader>
       <CardContent>
         {history.length === 0 ? (
-          <p className="text-sm text-muted-foreground">本活动还没有挑战记录。</p>
+          <p className="text-sm text-muted-foreground">还没有行军记录。</p>
         ) : (
           <div className="space-y-1">
             {history.map((row) => (
@@ -151,7 +162,7 @@ export default async function TrialPage() {
                 </span>
                 <span className="flex items-center gap-3 tabular-nums">
                   <span>
-                    {row.status === "expired" ? "超时" : `通关 ${row.correct}/${row.questionCount} 层`}
+                    {row.status === "active" ? "行军中" : `攻克 ${row.correct}/${row.questionCount} 处`}
                   </span>
                   <span className={row.reward > 0 ? "font-medium text-success" : "text-muted-foreground"}>
                     {row.reward > 0 ? `+${formatCredits(row.reward)} tcr` : "无奖励"}
@@ -160,6 +171,45 @@ export default async function TrialPage() {
               </div>
             ))}
           </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const progressCard = (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">讨逆路线</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-1">
+        {SAGA_CHAPTERS.map((row) => {
+          const cleared = row.index < save.chapter;
+          const current = !finished && row.index === save.chapter;
+          return (
+            <div
+              key={row.index}
+              className={
+                current
+                  ? "flex items-center justify-between rounded-lg border border-primary/60 bg-primary/5 px-3 py-2 text-sm"
+                  : "flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
+              }
+            >
+              <span>
+                {cleared ? `${row.town} · ${row.name}` : current ? place : "？？？"}
+                {current ? <span className="ml-2 text-xs text-primary">当前</span> : null}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {cleared ? "已定" : current ? "剧情进行中" : "未至"}
+              </span>
+            </div>
+          );
+        })}
+        {finished ? (
+          <p className="pt-1 text-xs text-muted-foreground">八处地方皆定，讨逆之路已经走完。</p>
+        ) : (
+          <p className="pt-1 text-xs text-muted-foreground">
+            走完当前地方的剧情，才会出现下一处地名。
+          </p>
         )}
       </CardContent>
     </Card>
@@ -174,7 +224,7 @@ export default async function TrialPage() {
           : { title: "活动已结束", hint: `结束时间（北京时间）：${config.endAt || "未设置"}。` };
     return (
       <>
-        <PageHeader title="每日试炼" description={`${config.questionCount} 层浮游城 · 越深 tcr 越多`} />
+        <PageHeader title="三国讨逆传" description={place} />
         <PageBody className="space-y-4">
           <Notice title={notice.title} hint={notice.hint} />
           {couponCard}
@@ -187,24 +237,27 @@ export default async function TrialPage() {
 
   return (
     <>
-      <PageHeader title="每日试炼" description={`${config.questionCount} 层浮游城 · 越深 tcr 越多`} />
+      <PageHeader
+        title="三国讨逆传"
+        description={`${place} · 剧情回合制兵团战`}
+      />
       <PageBody className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat
-            icon={Swords}
-            label="今日进度"
-            value={`${runsToday} / ${config.dailyRuns} 局`}
-            hint={activeRun ? "有一局还没交卷" : "每日 0 点重置"}
+            icon={Flag}
+            label="当前所在"
+            value={chapter.town}
+            hint={finished ? "讨逆之路已走完" : `${chapter.name} · ${chapter.subtitle}`}
           />
           <Stat
-            icon={Timer}
-            label="单局限时"
-            value={`${config.timeLimitSeconds} 秒`}
-            hint={`共 ${config.questionCount} 层，每层都有层主`}
+            icon={ScrollText}
+            label="平定地方"
+            value={`${save.stats.wins} / ${SAGA_CHAPTERS.length}`}
+            hint={save.stats.wins > 0 ? "已走完的剧情地点" : "尚未平定第一处"}
           />
           <Stat
-            icon={Coins}
-            label="单局票价"
+            icon={Ticket}
+            label="出城军令"
             value={<CouponCount kind="trial" count={priceTickets} iconClassName="h-4 w-4" />}
             hint={`1 张 = ${formatCredits(config.couponUnitCredits)} cr 券面`}
           />
@@ -212,30 +265,54 @@ export default async function TrialPage() {
             icon={Trophy}
             label="可用活动券"
             value={<CouponCount kind="trial" count={coupon.tickets} iconClassName="h-4 w-4" />}
-            hint={`通关 ${config.questionCount} 层得 ${formatCredits(trialRewardFor(config, config.questionCount))} tcr`}
+            hint={`图鉴 ${dexCount} 人 · 战力 ${partyPower(save)}`}
           />
         </div>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">开始试炼</CardTitle>
+            <CardTitle className="text-base">
+              {chapter.town} · {chapter.name}
+              <span className="ml-2 text-xs font-normal text-muted-foreground">{chapter.subtitle}</span>
+            </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
+            <p className="text-sm text-muted-foreground">{chapter.blurb}</p>
             <TrialGame
               initialRun={activeRun}
-              runsToday={runsToday}
-              dailyRuns={config.dailyRuns}
-              floorCount={config.questionCount}
-              timeLimitSeconds={config.timeLimitSeconds}
+              save={save}
+              initialTickets={coupon.tickets}
               priceTickets={priceTickets}
-              couponTickets={coupon.tickets}
               unitCredits={config.couponUnitCredits}
-              rewardValidDays={config.rewardValidDays}
+              nodeCount={config.questionCount}
               maxReward={trialRewardFor(config, config.questionCount)}
+              rewardValidDays={config.rewardValidDays}
             />
           </CardContent>
         </Card>
 
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Stat
+            icon={Swords}
+            label="行军次数"
+            value={`${save.stats.runs} 次`}
+            hint={`累计胜仗 ${save.stats.battlesWon}`}
+          />
+          <Stat
+            icon={Users}
+            label="编成武将"
+            value={`${save.party.length + save.reserve.length} 人`}
+            hint={`上阵 ${save.party.length} 人 · 待命 ${save.reserve.length} 人`}
+          />
+          <Stat
+            icon={ScrollText}
+            label="图鉴收录"
+            value={`${dexCount} 人`}
+            hint={`招降 ${save.stats.recruited} 人 · 单次最远 ${save.stats.bestCleared} 处`}
+          />
+        </div>
+
+        {progressCard}
         {couponCard}
         {historyCard}
         {rulesCard}

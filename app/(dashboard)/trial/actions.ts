@@ -5,9 +5,11 @@ import { requireUser } from "@/lib/usage/meter";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getTrialConfig } from "@/lib/trial/settings";
 import {
+  buyTrialSupply,
   startTrialRun,
   submitTrialRun,
   type StartedTrial,
+  type SupplyPurchaseResult,
   type TrialSettlement,
 } from "@/lib/trial/store";
 
@@ -18,7 +20,7 @@ function fail(error: unknown, fallback: string): { success: false; error: string
   return { success: false, error: error instanceof Error ? error.message : fallback };
 }
 
-/** 开始一局：没交卷的旧局直接复用，不会重复扣券。 */
+/** 出城：还没收兵的行军直接复用，不会重复扣券。 */
 export async function startTrialAction(): Promise<ActionResult<StartedTrial>> {
   try {
     const userId = await requireUser();
@@ -30,14 +32,14 @@ export async function startTrialAction(): Promise<ActionResult<StartedTrial>> {
     revalidatePath("/trial");
     return { success: true, data };
   } catch (error) {
-    return fail(error, "开始试炼失败");
+    return fail(error, "出城失败");
   }
 }
 
-/** 交卷：只上传每帧按键掩码，服务端用种子逐帧重放。 */
+/** 收兵：只上传编制/购物/战斗指令，服务端按种子重放并写入剧情进度。 */
 export async function submitTrialAction(input: {
   runId: string;
-  actions: unknown[];
+  commands: unknown[];
 }): Promise<ActionResult<TrialSettlement>> {
   try {
     const userId = await requireUser();
@@ -48,13 +50,41 @@ export async function submitTrialAction(input: {
     const data = await submitTrialRun({
       userId,
       runId: String(input.runId ?? ""),
-      actions: Array.isArray(input.actions) ? input.actions : [],
+      commands: Array.isArray(input.commands) ? input.commands : [],
       config,
     });
     revalidatePath("/trial");
     revalidatePath("/wallet");
     return { success: true, data };
   } catch (error) {
-    return fail(error, "交卷失败");
+    return fail(error, "收兵失败");
+  }
+}
+
+/** 行军军需：扣活动券，把购买记进这次行军。 */
+export async function buyTrialSupplyAction(input: {
+  runId: string;
+  itemId: string;
+  purchaseId: string;
+  cmdIndex: number;
+}): Promise<ActionResult<SupplyPurchaseResult>> {
+  try {
+    const userId = await requireUser();
+    if (!(await checkRateLimit(`trial-shop:${userId}`, { window: 60_000, limit: 40 }))) {
+      return { success: false, error: "购买太频繁，请稍后再试" };
+    }
+    const config = await getTrialConfig();
+    const data = await buyTrialSupply({
+      userId,
+      runId: String(input.runId ?? ""),
+      itemId: String(input.itemId ?? ""),
+      purchaseId: String(input.purchaseId ?? ""),
+      cmdIndex: Number(input.cmdIndex) || 0,
+      config,
+    });
+    revalidatePath("/trial");
+    return { success: true, data };
+  } catch (error) {
+    return fail(error, "购买失败");
   }
 }

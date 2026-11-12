@@ -1,31 +1,43 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { d1Run, db } from "@/lib/db/d1-http";
 import { trialRuns } from "@/lib/db/schema";
-import { payWithCoupon, refundCouponPayment } from "@/lib/activity/coupons";
+import {
+  couponTicketBalance,
+  payWithCoupon,
+  refundCouponPayment,
+} from "@/lib/activity/coupons";
 import { grantTempCredits } from "@/lib/activity/rewards";
-import { cnStartOfToday } from "@/lib/date";
 import {
   TOPUP_TYPE_TRIAL,
   trialActivityKey,
   trialActivityWindow,
   trialRewardFor,
-  trialTimeBounds,
   type TrialConfig,
 } from "./config";
+import { SAGA_CHAPTERS, SAGA_ITEM_BY_ID } from "./saga/data";
 import {
-  generateTrialDungeon,
-  parseTrialDungeon,
-  simulateTrialDungeon,
-  type TrialDungeon,
-} from "./dungeon";
+  generateSagaRun,
+  parseSagaRun,
+  sanitizeSagaCommands,
+  settleSagaRun,
+  SAGA_MAX_PURCHASES,
+} from "./saga/run";
+import { initialTrialSave, normalizeTrialSave } from "./saga/state";
+import {
+  SAGA_MAX_COMMANDS,
+  type SagaPurchase,
+  type SagaRun,
+  type SagaRunResult,
+  type TrialSave,
+} from "./saga/types";
 
 /**
- * 每日试炼的写入侧：一次挑战 = 一行 `trial_run`。
+ * 每日试炼·三国讨逆传的写入侧：进入一章 = 一行 `trial_run`。
  *
- * 浮游城地图（层数 + 房间 + 随机种子）在开局时落库，交卷只上交
- * 每帧按键掩码；服务端用 `lib/trial/dungeon.ts` 按 60Hz 确定性重放，
- * 判分靠「状态从 active 改到 scored」的条件更新保证只发一次奖，
- * 断网重试拿到的都是同一次结果。
+ * 玩法是连续剧情：存档里的 `chapter` 指向当前所在城镇，只有走完当前剧情才推进。
+ * 存档、节点、商店购买与战果都装在 `questions` 列的 SagaRun JSON 里：
+ * 进入一处地方时生成节点并落库，收兵只上传编制/购物/战斗指令，服务端按种子确定性重放。
+ * 上一处地方的 `endSave` 就是下一处地方的起点，跨城镇成长不需要新表。
  */
 
 export class TrialError extends Error {}
@@ -40,47 +52,56 @@ function assertActiveWindow(config: TrialConfig): string {
   return key;
 }
 
-export async function countTrialRunsToday(userId: string): Promise<number> {
+/** 八处地方全部平定后主线走完，不再开新的行军。 */
+export function campaignComplete(save: TrialSave): boolean {
+  return save.stats.wins >= SAGA_CHAPTERS.length;
+}
+
+export interface TrialSaveState {
+  save: TrialSave;
+  sourceRunId: string | null;
+}
+
+/** 取最近一次已收兵行军留下的存档；没有可继承的存档就发初始三人组。 */
+export async function loadTrialSave(
+  userId: string,
+  activityKey: string | null,
+): Promise<TrialSaveState> {
+  if (!activityKey) return { save: initialTrialSave(), sourceRunId: null };
   const rows = await db
-    .select({ n: sql<number>`COUNT(*)` })
+    .select({ id: trialRuns.id, questions: trialRuns.questions })
     .from(trialRuns)
-    .where(and(eq(trialRuns.userId, userId), gte(trialRuns.startedAt, cnStartOfToday())));
-  return Number(rows[0]?.n ?? 0);
+    .where(
+      and(
+        eq(trialRuns.userId, userId),
+        eq(trialRuns.activityKey, activityKey),
+        inArray(trialRuns.status, ["scored", "expired"]),
+      ),
+    )
+    .orderBy(desc(trialRuns.startedAt))
+    .limit(8);
+  for (const row of rows) {
+    const run = parseSagaRun(row.questions);
+    if (run?.endSave) return { save: normalizeTrialSave(run.endSave), sourceRunId: row.id };
+  }
+  return { save: initialTrialSave(), sourceRunId: null };
 }
 
 export interface ActiveTrialRun {
   runId: string;
-  dungeon: TrialDungeon;
+  run: SagaRun;
+  save: TrialSave;
   startedAt: number;
-  expiresAt: number;
 }
 
-interface TrialRunRow {
-  id: string;
-  activityKey: string;
-  status: string;
-  questions: string;
-  questionCount: number;
-  correct: number;
-  rewardCredits: number;
-  startedAt: Date;
-  submittedAt: Date | null;
-}
-
-/** 还没交卷的一局；超时的由页面提示，不在这里自动结算。 */
+/** 还没收兵的一次行军；活动结束后也允许回来接着走剧情。 */
 export async function findActiveTrialRun(
   userId: string,
   activityKey: string | null,
-  config: TrialConfig,
 ): Promise<ActiveTrialRun | null> {
   if (!activityKey) return null;
   const rows = await db
-    .select({
-      id: trialRuns.id,
-      activityKey: trialRuns.activityKey,
-      questions: trialRuns.questions,
-      startedAt: trialRuns.startedAt,
-    })
+    .select({ id: trialRuns.id, questions: trialRuns.questions, startedAt: trialRuns.startedAt })
     .from(trialRuns)
     .where(
       and(
@@ -91,49 +112,49 @@ export async function findActiveTrialRun(
     )
     .orderBy(desc(trialRuns.startedAt))
     .limit(1);
-  const run = rows[0];
+  const row = rows[0];
+  if (!row) return null;
+  const run = parseSagaRun(row.questions);
   if (!run) return null;
-  const dungeon = parseTrialDungeon(run.questions);
-  if (!dungeon) return null;
-  const startedAt = new Date(run.startedAt).getTime();
+  const startedAt = new Date(row.startedAt).getTime();
   return {
-    runId: run.id,
-    dungeon,
+    runId: row.id,
+    run,
+    save: run.startSave,
     startedAt,
-    expiresAt: startedAt + config.timeLimitSeconds * 1000,
   };
 }
 
-export interface StartedTrial {
-  runId: string;
-  dungeon: TrialDungeon;
-  startedAt: number;
-  expiresAt: number;
-  runsToday: number;
-  dailyRuns: number;
+export interface StartedTrial extends ActiveTrialRun {
   priceCredits: number;
 }
 
+function newSeed(): number {
+  const buffer = new Uint32Array(1);
+  crypto.getRandomValues(buffer);
+  return buffer[0];
+}
+
 /**
- * 开局：校验活动与每日次数 → 扣券 → 生成地下城落库。
+ * 从当前城镇出城：校验活动与剧情进度 → 扣券 → 生成这一路的节点落库。
  *
- * 已经有一局没交卷时直接复用，不再扣第二次券；券不足一笔不写。
- * 旧版对局（JSON 版本不是 5）就地换成新地图，同样不再扣券。
+ * 已经有一次行军没收兵时直接复用，不再扣第二次券；旧版（v5 及更早）的数据
+ * 就地换成新存档与新路线，同样不再扣券。主线走完后不再开新行军。
  */
 export async function startTrialRun(userId: string, config: TrialConfig): Promise<StartedTrial> {
   const activityKey = assertActiveWindow(config);
-  const existing = await findActiveTrialRun(userId, activityKey, config);
+  const existing = await findActiveTrialRun(userId, activityKey);
   if (existing) {
     return {
       ...existing,
-      runsToday: await countTrialRunsToday(userId),
-      dailyRuns: config.dailyRuns,
       priceCredits: config.runPriceCredits,
     };
   }
 
-  const now = new Date();
-  const dungeon = generateTrialDungeon(config.questionCount);
+  const { save } = await loadTrialSave(userId, activityKey);
+  if (campaignComplete(save)) {
+    throw new TrialError("讨逆之路已经走完，全剧终");
+  }
 
   const stale = await db
     .select({ id: trialRuns.id })
@@ -147,26 +168,31 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
     )
     .orderBy(desc(trialRuns.startedAt))
     .limit(1);
+
+  const now = Date.now();
+  const buildRun = () =>
+    generateSagaRun({
+      activityKey,
+      save,
+      nodeCount: config.questionCount,
+      seed: newSeed(),
+    });
+
   if (stale[0]) {
+    // 旧版本对局（文字题 / 横版动作）解析失败会走到这里：换新地图重开，不重复扣券。
+    const run = buildRun();
     await d1Run(
       `UPDATE trial_run SET questions = ?, questionCount = ?, correct = 0, durationMs = 0, startedAt = ?
         WHERE id = ? AND userId = ? AND status = 'active'`,
-      [JSON.stringify(dungeon), dungeon.floors.length, now, stale[0].id, userId],
+      [JSON.stringify(run), run.nodes.length, new Date(now), stale[0].id, userId],
     );
     return {
       runId: stale[0].id,
-      dungeon,
-      startedAt: now.getTime(),
-      expiresAt: now.getTime() + config.timeLimitSeconds * 1000,
-      runsToday: await countTrialRunsToday(userId),
-      dailyRuns: config.dailyRuns,
+      run,
+      save: run.startSave,
+      startedAt: now,
       priceCredits: config.runPriceCredits,
     };
-  }
-
-  const runsToday = await countTrialRunsToday(userId);
-  if (runsToday >= config.dailyRuns) {
-    throw new TrialError(`今日挑战次数已用完（${config.dailyRuns} 次），明天再来`);
   }
 
   const paid = await payWithCoupon(
@@ -178,6 +204,7 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
   );
   if (!paid.ok) throw new TrialError(paid.reason);
 
+  const run = buildRun();
   const runId = crypto.randomUUID();
   try {
     await db.insert(trialRuns).values({
@@ -185,9 +212,9 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
       userId,
       activityKey,
       status: "active",
-      questions: JSON.stringify(dungeon),
-      questionCount: dungeon.floors.length,
-      startedAt: now,
+      questions: JSON.stringify(run),
+      questionCount: run.nodes.length,
+      startedAt: new Date(now),
     });
   } catch (error) {
     await db.delete(trialRuns).where(eq(trialRuns.id, runId)).catch(() => undefined);
@@ -197,36 +224,45 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
 
   return {
     runId,
-    dungeon,
-    startedAt: now.getTime(),
-    expiresAt: now.getTime() + config.timeLimitSeconds * 1000,
-    runsToday: runsToday + 1,
-    dailyRuns: config.dailyRuns,
+    run,
+    save: run.startSave,
+    startedAt: now,
     priceCredits: config.runPriceCredits,
   };
 }
 
 export interface TrialSettlement {
-  /** true = 这一局之前已经交过（重试），没有重复发奖。 */
+  /** true = 这次行军之前已经收过兵（重试），没有重复发奖。 */
   already: boolean;
-  /** true = 超过限时，按 0 波处理。 */
-  expired: boolean;
-  floorsCleared: number;
-  totalFloors: number;
+  cleared: number;
+  total: number;
   reward: number;
   durationMs: number;
-  heroHp: number;
   victory: boolean;
+  result: SagaRunResult | null;
+}
+
+function settlementFromStored(run: SagaRun, cleared: number, total: number): TrialSettlement {
+  const result = run.result ?? null;
+  return {
+    already: true,
+    cleared,
+    total,
+    reward: 0,
+    durationMs: 0,
+    victory: result?.victory ?? cleared >= total,
+    result,
+  };
 }
 
 /**
- * 交卷：先条件更新占住这一局，再发奖；发奖失败把状态改回 active 让用户能重交。
- * 活动结束后仍允许交卷——只要这一局属于当前轮次，按开局时的价格结算。
+ * 收兵：先条件更新占住这次行军，再发奖；发奖失败把状态改回 active 让用户能重试。
+ * tcr 只在平定此处（攻克全章、推进剧情）时发放，且主线走完后不再重复发。
  */
 export async function submitTrialRun(input: {
   userId: string;
   runId: string;
-  actions: unknown[];
+  commands: unknown[];
   config: TrialConfig;
 }): Promise<TrialSettlement> {
   const activityKey = trialActivityKey(input.config);
@@ -237,42 +273,43 @@ export async function submitTrialRun(input: {
     .from(trialRuns)
     .where(and(eq(trialRuns.id, input.runId), eq(trialRuns.userId, input.userId)))
     .limit(1);
-  const run = rows[0] as TrialRunRow | undefined;
-  if (!run) throw new TrialError("挑战不存在");
-  if (run.activityKey !== activityKey) throw new TrialError("这局挑战不属于当前活动");
+  const row = rows[0];
+  if (!row) throw new TrialError("行军不存在");
+  if (row.activityKey !== activityKey) throw new TrialError("这次行军不属于当前活动");
+  const run = parseSagaRun(row.questions);
+  if (!run) throw new TrialError("行军数据异常，请重新出发");
 
-  if (run.status !== "active") {
-    return {
-      already: true,
-      expired: run.status === "expired",
-      floorsCleared: run.correct,
-      totalFloors: run.questionCount,
-      reward: Number(run.rewardCredits ?? 0),
-      durationMs: 0,
-      heroHp: 0,
-      victory: run.status === "scored" && run.correct >= run.questionCount,
-    };
+  if (row.status !== "active") {
+    const stored = settlementFromStored(run, Number(row.correct), Number(row.questionCount));
+    return { ...stored, reward: Number(row.rewardCredits ?? 0), durationMs: Number(row.durationMs ?? 0) };
   }
 
-  const dungeon = parseTrialDungeon(run.questions);
-  if (!dungeon) throw new TrialError("地下城数据异常，请重新开始");
-
   const now = Date.now();
-  const startedAt = new Date(run.startedAt).getTime();
+  const startedAt = new Date(row.startedAt).getTime();
   const durationMs = Math.max(0, now - startedAt);
-  const result = simulateTrialDungeon(dungeon, Array.isArray(input.actions) ? input.actions : []);
-  const bounds = trialTimeBounds(input.config);
-  const expired = durationMs > bounds.maxMs;
-  const suspiciouslyFast = durationMs < bounds.minMs;
-  const floorsCleared =
-    expired || suspiciouslyFast ? 0 : Math.min(result.floorsCleared, dungeon.floors.length);
-  const reward = expired ? 0 : trialRewardFor(input.config, floorsCleared);
-  const status = expired ? "expired" : "scored";
+  const commands = sanitizeSagaCommands(input.commands.slice(0, SAGA_MAX_COMMANDS));
+  const settled = settleSagaRun(run, commands);
+  const cleared = settled.cleared;
+  const reward =
+    settled.victory && run.startSave.stats.wins < SAGA_CHAPTERS.length
+      ? trialRewardFor(input.config, cleared)
+      : 0;
+  const status = "scored";
+  const storedRun: SagaRun = { ...run, endSave: settled.endSave, result: settled.result };
 
   const claimed = await d1Run(
-    `UPDATE trial_run SET status = ?, correct = ?, durationMs = ?, rewardCredits = ?, submittedAt = ?
+    `UPDATE trial_run SET status = ?, correct = ?, durationMs = ?, rewardCredits = ?, questions = ?, submittedAt = ?
       WHERE id = ? AND userId = ? AND status = 'active'`,
-    [status, floorsCleared, durationMs, reward, now, input.runId, input.userId],
+    [
+      status,
+      cleared,
+      durationMs,
+      reward,
+      JSON.stringify(storedRun),
+      now,
+      input.runId,
+      input.userId,
+    ],
   );
   if (claimed.changes !== 1) {
     const latest = await db
@@ -282,22 +319,32 @@ export async function submitTrialRun(input: {
         questionCount: trialRuns.questionCount,
         rewardCredits: trialRuns.rewardCredits,
         durationMs: trialRuns.durationMs,
+        questions: trialRuns.questions,
       })
       .from(trialRuns)
       .where(eq(trialRuns.id, input.runId))
       .limit(1);
-    const settled = latest[0];
+    const stored = latest[0];
+    const latestRun = parseSagaRun(stored?.questions);
+    const fallback = latestRun
+      ? settlementFromStored(
+          latestRun,
+          Number(stored?.correct ?? 0),
+          Number(stored?.questionCount ?? run.nodes.length),
+        )
+      : {
+          already: true,
+          cleared: 0,
+          total: run.nodes.length,
+          reward: 0,
+          durationMs: 0,
+          victory: false,
+          result: null,
+        };
     return {
-      already: true,
-      expired: settled?.status === "expired",
-      floorsCleared: Number(settled?.correct ?? 0),
-      totalFloors: Number(settled?.questionCount ?? dungeon.floors.length),
-      reward: Number(settled?.rewardCredits ?? 0),
-      durationMs: Number(settled?.durationMs ?? 0),
-      heroHp: 0,
-      victory:
-        settled?.status === "scored" &&
-        Number(settled?.correct ?? 0) >= Number(settled?.questionCount ?? 0),
+      ...fallback,
+      reward: Number(stored?.rewardCredits ?? 0),
+      durationMs: Number(stored?.durationMs ?? 0),
     };
   }
 
@@ -307,7 +354,7 @@ export async function submitTrialRun(input: {
         userId: input.userId,
         amount: reward,
         topupType: TOPUP_TYPE_TRIAL,
-        description: `每日试炼 通关 ${floorsCleared}/${dungeon.floors.length} 层奖励`,
+        description: `三国讨逆传 平定${settled.result.chapterName || "此地"}奖励`,
         validDays: input.config.rewardValidDays,
       });
     } catch (error) {
@@ -321,28 +368,125 @@ export async function submitTrialRun(input: {
 
   return {
     already: false,
-    expired,
-    floorsCleared,
-    totalFloors: dungeon.floors.length,
+    cleared,
+    total: run.nodes.length,
     reward,
     durationMs,
-    heroHp: result.heroHp,
-    victory: floorsCleared >= dungeon.floors.length,
+    victory: settled.victory,
+    result: settled.result,
+  };
+}
+
+export interface SupplyPurchaseResult {
+  purchases: SagaPurchase[];
+  /** 买完这一笔后，本活动还剩多少张券。 */
+  tickets: number;
+}
+
+const PURCHASE_ID_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
+
+/**
+ * 行军军需：真实扣活动券，把购买记录追加进行军 JSON。
+ *
+ * 用「整段 JSON 相等」做乐观锁：并发下单只有一单能写进去，另一单退款；
+ * 同一个 purchaseId 重复提交直接返回当前购买列表，不会二次扣费。
+ */
+export async function buyTrialSupply(input: {
+  userId: string;
+  runId: string;
+  itemId: string;
+  purchaseId: string;
+  cmdIndex: number;
+  config: TrialConfig;
+}): Promise<SupplyPurchaseResult> {
+  const activityKey = assertActiveWindow(input.config);
+  const purchaseId = String(input.purchaseId ?? "");
+  if (!PURCHASE_ID_PATTERN.test(purchaseId)) throw new TrialError("购买凭据无效");
+  const item = SAGA_ITEM_BY_ID.get(String(input.itemId ?? ""));
+  if (!item || item.kind !== "supply" || !item.priceTickets) throw new TrialError("该商品不在军需商店");
+
+  const rows = await db
+    .select({
+      id: trialRuns.id,
+      status: trialRuns.status,
+      questions: trialRuns.questions,
+      activityKey: trialRuns.activityKey,
+    })
+    .from(trialRuns)
+    .where(and(eq(trialRuns.id, input.runId), eq(trialRuns.userId, input.userId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new TrialError("行军不存在");
+  if (row.activityKey !== activityKey) throw new TrialError("这次行军不属于当前活动");
+  if (row.status !== "active") throw new TrialError("这次行军已经结束");
+  const run = parseSagaRun(row.questions);
+  if (!run) throw new TrialError("行军数据异常，请重新出发");
+
+  if (run.purchases.some((purchase) => purchase.id === purchaseId)) {
+    return {
+      purchases: run.purchases,
+      tickets: await couponTicketBalance(input.userId, "trial", activityKey, input.config.couponUnitCredits),
+    };
+  }
+  if (run.purchases.length >= SAGA_MAX_PURCHASES) throw new TrialError("这次行军买得够多了");
+  const passive = item.supply !== "heal" && item.supply !== "revive";
+  if (passive && run.purchases.some((purchase) => purchase.itemId === item.id)) {
+    throw new TrialError(`${item.name}每次行军只能生效一份`);
+  }
+
+  const cmdIndex = Math.max(0, Math.min(SAGA_MAX_COMMANDS, Math.trunc(Number(input.cmdIndex) || 0)));
+  const cost = item.priceTickets * input.config.couponUnitCredits;
+  const paid = await payWithCoupon(
+    input.userId,
+    "trial",
+    activityKey,
+    cost,
+    input.config.couponUnitCredits,
+  );
+  if (!paid.ok) throw new TrialError(paid.reason);
+
+  const next: SagaRun = {
+    ...run,
+    purchases: [
+      ...run.purchases,
+      {
+        id: purchaseId,
+        itemId: item.id,
+        tickets: item.priceTickets,
+        at: Date.now(),
+        cmdIndex,
+      },
+    ],
+    shopSeq: run.shopSeq + 1,
+  };
+  const updated = await d1Run(
+    `UPDATE trial_run SET questions = ?
+      WHERE id = ? AND userId = ? AND status = 'active' AND questions = ?`,
+    [JSON.stringify(next), input.runId, input.userId, row.questions],
+  );
+  if (updated.changes !== 1) {
+    await refundCouponPayment(paid.payment);
+    throw new TrialError("行军状态已变化，请刷新页面后重试");
+  }
+
+  return {
+    purchases: next.purchases,
+    tickets: await couponTicketBalance(input.userId, "trial", activityKey, input.config.couponUnitCredits),
   };
 }
 
 export interface TrialHistoryRow {
   id: string;
-  /** 通关波数（沿用旧列名）。 */
+  /** 攻克的节点数（沿用旧列名）。 */
   correct: number;
-  /** 总波数。 */
+  /** 这趟行军的总节点数。 */
   questionCount: number;
   reward: number;
   startedAt: Date;
   status: string;
 }
 
-/** 本活动最近的挑战记录（含超时未交卷）。 */
+/** 本活动最近的行军记录（含仍在进行的）。 */
 export async function listTrialRuns(
   userId: string,
   activityKey: string | null,

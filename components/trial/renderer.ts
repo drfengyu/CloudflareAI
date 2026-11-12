@@ -1,1100 +1,1020 @@
+import type { SagaBattleEvent, SagaBattleState } from "@/lib/trial/saga/types";
+
 /**
- * 试炼回廊的像素渲染层（480×270 逻辑画布，CSS 整数感放大）。
+ * 三国讨逆传的 Canvas 美术：城镇长街与回合战斗两张场景。
  *
- * 只负责画：视差浮空城、每层配色、门、角色与怪物像素画、伤害数字与火花。
- * 所有玩法结果都来自 `lib/trial/dungeon.ts` 的确定性状态，这里不改变任何账目。
+ * 内部按 960×540 绘制（对外 16:9 自适应），全部用渐变与几何形状原创绘制，
+ * 走吞食天地 2 那种厚重的古战场插画风：暖色天光、墨色山影、金边木牌，
+ * 不做硬像素化，靠光影与层次撑住观感。
  */
 
-import {
-  TRIAL_BOSS_DOOR_X,
-  TRIAL_DOOR_X,
-  TRIAL_ENEMY_SPAWN_X,
-  TRIAL_GROUND_Y,
-  TRIAL_HERO_START_X,
-  TRIAL_INTERACT_RADIUS,
-  TRIAL_VIEW_H,
-  TRIAL_VIEW_W,
-  TRIAL_WORLD_W,
-  type TrialEvent,
-  type TrialGameState,
-  type TrialIntent,
-  type TrialRoomKind,
-  type TrialWaveShape,
-} from "@/lib/trial/dungeon";
+export const VIEW_W = 960;
+export const VIEW_H = 540;
+const GROUND_Y = 436;
+const WORLD_W = 1880;
 
-export interface TrialTheme {
-  sky: [string, string];
-  horizon: string;
-  accent: string;
-  accentSoft: string;
-  ground: string;
-  edge: string;
-  star: string;
-  tower: string;
-  island: string;
+export type TownSpotId = "record" | "forge" | "herb" | "supply" | "hall" | "gate";
+
+export interface TownSpot {
+  id: TownSpotId;
+  label: string;
+  hint: string;
+  x: number;
+  w: number;
+  h: number;
 }
 
-/** 每层一套配色：层数越深，色调越冷、越危险。 */
-export const TRIAL_THEMES: TrialTheme[] = [
-  { sky: ["#0d1738", "#2a1c55"], horizon: "#6d4bb5", accent: "#67e8f9", accentSoft: "#164e63", ground: "#0a1024", edge: "#38bdf8", star: "#dbeafe", tower: "#1b2450", island: "#232f63" },
-  { sky: ["#081f33", "#0f3b4a"], horizon: "#0e7490", accent: "#5eead4", accentSoft: "#134e4a", ground: "#071723", edge: "#2dd4bf", star: "#ccfbf1", tower: "#123243", island: "#17424f" },
-  { sky: ["#1c1235", "#3b1d5e"], horizon: "#a855f7", accent: "#e879f9", accentSoft: "#4a1d63", ground: "#120a26", edge: "#c084fc", star: "#f5d0fe", tower: "#2a1a4d", island: "#392465" },
-  { sky: ["#2a1220", "#5b1a2e"], horizon: "#be123c", accent: "#fda4af", accentSoft: "#5f1428", ground: "#170911", edge: "#fb7185", star: "#ffe4e6", tower: "#3c1424", island: "#571a2e" },
-  { sky: ["#0b2230", "#173f3a"], horizon: "#0d9488", accent: "#fbbf24", accentSoft: "#4d3a0a", ground: "#08161b", edge: "#f59e0b", star: "#fef3c7", tower: "#14302e", island: "#1b463f" },
-  { sky: ["#101a3a", "#26206b"], horizon: "#4338ca", accent: "#a5b4fc", accentSoft: "#312e81", ground: "#0a0f24", edge: "#818cf8", star: "#e0e7ff", tower: "#1c2254", island: "#2a2f6e" },
-  { sky: ["#241a08", "#4a2c0c"], horizon: "#b45309", accent: "#fcd34d", accentSoft: "#5c3a08", ground: "#160f04", edge: "#fbbf24", star: "#fef9c3", tower: "#3a2a10", island: "#513911" },
+export const TOWN_SPOTS: TownSpot[] = [
+  { id: "record", label: "桃园碑", hint: "查看存档、武将与图鉴", x: 96, w: 132, h: 150 },
+  { id: "forge", label: "铁匠铺", hint: "用金币打造武器与防具", x: 366, w: 214, h: 190 },
+  { id: "herb", label: "药铺", hint: "用金币购买伤药与良药", x: 702, w: 198, h: 178 },
+  { id: "supply", label: "军需帐", hint: "用试炼券购买此行军需", x: 1018, w: 232, h: 186 },
+  { id: "hall", label: "编成所", hint: "编队、阵型、装备与图鉴", x: 1332, w: 214, h: 192 },
+  { id: "gate", label: "城门", hint: "出征下一处节点", x: 1642, w: 196, h: 236 },
 ];
 
-const ROOM_TONE: Record<TrialRoomKind, { frame: string; glow: string; label: string }> = {
-  fight: { frame: "#475569", glow: "#94a3b8", label: "野区" },
-  elite: { frame: "#7c3aed", glow: "#c4b5fd", label: "精英" },
-  treasure: { frame: "#b45309", glow: "#fcd34d", label: "宝箱" },
-  rest: { frame: "#047857", glow: "#6ee7b7", label: "营地" },
-};
-
-const BOSS_TONE = { frame: "#9f1239", glow: "#fda4af", label: "层主" };
-
-const INTENT_TEXT: Record<TrialIntent, string> = {
-  attack: "攻击",
-  guard: "举盾",
-  charge: "蓄力",
-};
-
-function mod(value: number, size: number): number {
-  return ((value % size) + size) % size;
+export function townSpotNear(playerX: number): TownSpot | null {
+  let best: TownSpot | null = null;
+  let bestDist = 128;
+  for (const spot of TOWN_SPOTS) {
+    const center = spot.x + spot.w / 2;
+    const dist = Math.abs(playerX - center);
+    if (dist < bestDist) {
+      best = spot;
+      bestDist = dist;
+    }
+  }
+  return best;
 }
 
-function themeFor(state: TrialGameState): TrialTheme {
-  return TRIAL_THEMES[Math.min(state.floorIndex, TRIAL_THEMES.length - 1)];
-}
+const uiFont = (size: number): string =>
+  `600 ${size}px "Noto Serif SC", "Songti SC", "STSong", serif`;
 
-/** 镜头目标：战斗中偏向敌人一点，让双方都在画面里。 */
-export function focusCamera(state: TrialGameState): number {
-  const hero = state.hero;
-  const focus = state.enemy ? hero.x * 0.62 + state.enemy.x * 0.38 : hero.x;
-  return Math.min(TRIAL_WORLD_W - TRIAL_VIEW_W, Math.max(0, focus - TRIAL_VIEW_W / 2));
-}
-
-export function smoothCamera(previous: number, target: number): number {
-  if (previous < 0) return target;
-  const next = previous + (target - previous) * 0.18;
-  return Math.abs(next - target) < 0.4 ? target : next;
-}
-
-/* ------------------------------------------------------------------ 背景 */
-
-function drawBackground(
-  ctx: CanvasRenderingContext2D,
-  state: TrialGameState,
-  cam: number,
-  theme: TrialTheme,
-  now: number,
-): void {
-  const sky = ctx.createLinearGradient(0, 0, 0, TRIAL_VIEW_H);
-  sky.addColorStop(0, theme.sky[0]);
-  sky.addColorStop(0.72, theme.sky[1]);
-  sky.addColorStop(1, theme.horizon);
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, TRIAL_VIEW_W, TRIAL_VIEW_H);
-
-  // 星屑：位置由种子决定，镜头缓慢视差。
-  for (let i = 0; i < 46; i += 1) {
-    const px = mod(state.seed * (i * 73 + 17), 940) - cam * 0.08;
-    const wrapped = mod(px, 940) - 40;
-    if (wrapped < -4 || wrapped > TRIAL_VIEW_W + 4) continue;
-    const py = mod(state.seed * (i * 37 + 11), 150) + 8;
-    const twinkle = mod(state.tick + i * 13, 90) < 45 ? 1 : 0.45;
-    ctx.globalAlpha = twinkle;
-    ctx.fillStyle = theme.star;
-    ctx.fillRect(Math.round(wrapped), Math.round(py), i % 5 === 0 ? 2 : 1, i % 5 === 0 ? 2 : 1);
-  }
-  ctx.globalAlpha = 1;
-
-  // 月亮与光晕。
-  const moonX = 392 - cam * 0.04;
-  const moonY = 46;
-  const halo = ctx.createRadialGradient(moonX, moonY, 4, moonX, moonY, 38);
-  halo.addColorStop(0, "rgba(254,243,199,0.5)");
-  halo.addColorStop(1, "rgba(254,243,199,0)");
-  ctx.fillStyle = halo;
-  ctx.fillRect(moonX - 40, moonY - 40, 80, 80);
-  ctx.fillStyle = "#fef3c7";
-  ctx.beginPath();
-  ctx.arc(moonX, moonY, 11, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "rgba(180,160,120,0.35)";
-  ctx.fillRect(moonX - 6, moonY - 3, 4, 3);
-  ctx.fillRect(moonX + 2, moonY + 2, 3, 2);
-
-  // 远层塔群。
-  const farOffset = -cam * 0.22;
-  ctx.fillStyle = theme.tower;
-  for (let i = -1; i < 10; i += 1) {
-    const wx = farOffset + i * 132 + mod(state.seed + i * 91, 46);
-    const h = 40 + mod(state.seed + i * 53, 70);
-    ctx.fillRect(Math.round(wx), TRIAL_GROUND_Y - h - 26, 22, h + 26);
-    ctx.fillRect(Math.round(wx - 5), TRIAL_GROUND_Y - h - 34, 32, 10);
-    ctx.fillStyle = theme.accentSoft;
-    ctx.fillRect(Math.round(wx + 6), TRIAL_GROUND_Y - h - 18, 4, 3);
-    ctx.fillStyle = theme.tower;
-  }
-
-  // 中景浮岛。
-  const midOffset = -cam * 0.45;
-  for (let i = -1; i < 8; i += 1) {
-    const wx = midOffset + i * 210 + mod(state.seed + i * 37, 80);
-    const wy = 128 + mod(state.seed + i * 17, 24);
-    ctx.fillStyle = theme.island;
-    ctx.beginPath();
-    ctx.moveTo(wx, wy);
-    ctx.lineTo(wx + 64, wy);
-    ctx.lineTo(wx + 46, wy + 16);
-    ctx.lineTo(wx + 18, wy + 22);
-    ctx.lineTo(wx + 4, wy + 12);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = theme.accentSoft;
-    ctx.fillRect(wx + 18, wy - 12, 3, 14);
-    ctx.fillRect(wx + 26, wy - 20, 3, 22);
-    ctx.beginPath();
-    ctx.moveTo(wx + 27.5, wy - 24);
-    ctx.lineTo(wx + 34, wy - 14);
-    ctx.lineTo(wx + 21, wy - 14);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.13)";
-    ctx.fillRect(wx + 8, wy + 4, 12, 2);
-    ctx.fillRect(wx + 28, wy + 6, 8, 2);
-  }
-
-  // 缓慢飘动的薄云。
-  const drift = now * 0.004;
-  ctx.fillStyle = "rgba(255,255,255,0.05)";
-  for (let i = 0; i < 4; i += 1) {
-    const cx = mod(i * 180 + drift - cam * 0.3, TRIAL_VIEW_W + 220) - 110;
-    const cy = 90 + i * 18;
-    ctx.fillRect(Math.round(cx), cy, 74, 5);
-    ctx.fillRect(Math.round(cx + 12), cy - 5, 44, 5);
-  }
-
-  // 光圈边缘。
-  const vignette = ctx.createRadialGradient(
-    TRIAL_VIEW_W / 2,
-    TRIAL_VIEW_H / 2,
-    120,
-    TRIAL_VIEW_W / 2,
-    TRIAL_VIEW_H / 2,
-    300,
-  );
-  vignette.addColorStop(0, "rgba(0,0,0,0)");
-  vignette.addColorStop(1, "rgba(0,0,0,0.42)");
-  ctx.fillStyle = vignette;
-  ctx.fillRect(0, 0, TRIAL_VIEW_W, TRIAL_VIEW_H);
-}
-
-function drawGround(
-  ctx: CanvasRenderingContext2D,
-  state: TrialGameState,
-  cam: number,
-  theme: TrialTheme,
-): void {
-  ctx.fillStyle = theme.ground;
-  ctx.fillRect(0, TRIAL_GROUND_Y, TRIAL_VIEW_W, TRIAL_VIEW_H - TRIAL_GROUND_Y);
-  ctx.fillStyle = theme.edge;
-  ctx.fillRect(0, TRIAL_GROUND_Y, TRIAL_VIEW_W, 2);
-  ctx.fillStyle = "rgba(0,0,0,0.35)";
-  ctx.fillRect(0, TRIAL_GROUND_Y + 2, TRIAL_VIEW_W, 3);
-
-  const offset = mod(-cam, 28);
-  for (let x = offset - 28; x < TRIAL_VIEW_W + 28; x += 28) {
-    ctx.fillStyle = "rgba(255,255,255,0.06)";
-    ctx.fillRect(Math.round(x), TRIAL_GROUND_Y + 6, 16, 2);
-    ctx.fillStyle = "rgba(0,0,0,0.3)";
-    ctx.fillRect(Math.round(x + 14), TRIAL_GROUND_Y + 6, 2, TRIAL_VIEW_H - TRIAL_GROUND_Y);
-  }
-
-  // 平台下缘的浮空云。
-  const cloudShift = mod(-cam * 0.6, 160);
-  for (let i = -1; i < 4; i += 1) {
-    const cx = cloudShift + i * 160;
-    ctx.fillStyle = "rgba(148,163,184,0.08)";
-    ctx.fillRect(Math.round(cx), TRIAL_GROUND_Y + 26, 96, 8);
-    ctx.fillRect(Math.round(cx + 22), TRIAL_GROUND_Y + 20, 52, 8);
-  }
-}
-
-/* ------------------------------------------------------------------ 门 */
-
-function drawDoor(
+function roundRect(
   ctx: CanvasRenderingContext2D,
   x: number,
-  cam: number,
-  tone: { frame: string; glow: string; label: string },
-  title: string,
-  hint: string,
-  active: boolean,
-  faded: boolean,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
 ): void {
-  const sx = Math.round(x - cam);
-  const base = TRIAL_GROUND_Y;
-  const w = 36;
-  const h = 62;
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
 
+function paintBackdrop(ctx: CanvasRenderingContext2D, time: number): void {
+  const sky = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+  sky.addColorStop(0, "#141d33");
+  sky.addColorStop(0.34, "#2d3350");
+  sky.addColorStop(0.62, "#7a4a4a");
+  sky.addColorStop(0.8, "#d08a58");
+  sky.addColorStop(1, "#e8b57a");
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+  const sun = ctx.createRadialGradient(760, 300, 10, 760, 300, 220);
+  sun.addColorStop(0, "rgba(255,226,170,0.9)");
+  sun.addColorStop(0.3, "rgba(255,190,120,0.35)");
+  sun.addColorStop(1, "rgba(255,170,90,0)");
+  ctx.fillStyle = sun;
+  ctx.fillRect(520, 120, 440, 360);
+
+  // 远山：三层墨色剪影
+  const layers: { base: number; amp: number; color: string; phase: number }[] = [
+    { base: 316, amp: 42, color: "#2a3345", phase: 0.4 },
+    { base: 344, amp: 34, color: "#232c3c", phase: 1.7 },
+    { base: 372, amp: 26, color: "#1c2431", phase: 3.1 },
+  ];
+  for (const layer of layers) {
+    ctx.fillStyle = layer.color;
+    ctx.beginPath();
+    ctx.moveTo(-20, VIEW_H);
+    for (let x = -20; x <= VIEW_W + 20; x += 24) {
+      const y =
+        layer.base -
+        Math.abs(Math.sin((x / VIEW_W) * Math.PI * 3 + layer.phase)) * layer.amp -
+        Math.sin(x / 140 + layer.phase) * 8;
+      ctx.lineTo(x, y);
+    }
+    ctx.lineTo(VIEW_W + 20, VIEW_H);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // 薄雾
+  const mist = ctx.createLinearGradient(0, 300, 0, 420);
+  mist.addColorStop(0, "rgba(226,196,160,0)");
+  mist.addColorStop(1, "rgba(226,196,160,0.16)");
+  ctx.fillStyle = mist;
+  ctx.fillRect(0, 300, VIEW_W, 140);
+
+  // 飘动的云/尘
+  ctx.fillStyle = "rgba(255,220,180,0.09)";
+  for (let i = 0; i < 5; i++) {
+    const x = ((time * (8 + i * 3) + i * 240) % (VIEW_W + 240)) - 120;
+    const y = 120 + i * 34 + Math.sin(time + i) * 6;
+    ctx.beginPath();
+    ctx.ellipse(x, y, 80 + i * 16, 10 + i * 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function paintGround(ctx: CanvasRenderingContext2D, camera: number): void {
+  const ground = ctx.createLinearGradient(0, GROUND_Y - 26, 0, VIEW_H);
+  ground.addColorStop(0, "#4a4433");
+  ground.addColorStop(0.4, "#3a3729");
+  ground.addColorStop(1, "#23231c");
+  ctx.fillStyle = ground;
+  ctx.fillRect(0, GROUND_Y - 26, VIEW_W, VIEW_H - GROUND_Y + 26);
+
+  // 石板路
+  ctx.fillStyle = "#5c5341";
+  ctx.fillRect(0, GROUND_Y + 6, VIEW_W, 76);
+  ctx.strokeStyle = "rgba(24,22,18,0.5)";
+  ctx.lineWidth = 1;
+  const offset = camera % 96;
+  for (let x = -offset - 96; x < VIEW_W + 96; x += 96) {
+    ctx.strokeRect(x, GROUND_Y + 6, 96, 38);
+    ctx.strokeRect(x + 48, GROUND_Y + 44, 96, 38);
+  }
+  ctx.fillStyle = "rgba(255,214,150,0.05)";
+  ctx.fillRect(0, GROUND_Y + 6, VIEW_W, 3);
+}
+
+function paintTree(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number, tint: string): void {
   ctx.save();
-  ctx.globalAlpha = faded ? 0.35 : 1;
-
-  // 门框
-  ctx.fillStyle = tone.frame;
-  ctx.fillRect(sx - w / 2, base - h, 5, h);
-  ctx.fillRect(sx + w / 2 - 5, base - h, 5, h);
-  ctx.fillRect(sx - w / 2, base - h, w, 5);
-  ctx.fillRect(sx - w / 2 + 2, base - h - 6, w - 4, 4);
-
-  // 门内辉光
-  const glow = ctx.createLinearGradient(0, base - h + 5, 0, base);
-  glow.addColorStop(0, tone.glow);
-  glow.addColorStop(1, "rgba(2,6,23,0.9)");
-  ctx.globalAlpha = faded ? 0.18 : active ? 0.85 : 0.5;
-  ctx.fillStyle = glow;
-  ctx.fillRect(sx - w / 2 + 5, base - h + 5, w - 10, h - 5);
-  ctx.globalAlpha = faded ? 0.35 : 1;
-
-  // 顶部宝石
-  ctx.fillStyle = tone.glow;
-  ctx.fillRect(sx - 2, base - h - 8, 4, 4);
-
-  if (active) {
-    const pulse = Math.floor(Date.now() / 180) % 2 === 0 ? 1 : 0;
-    ctx.strokeStyle = tone.glow;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(sx - w / 2 - 2 - pulse, base - h - 2 - pulse, w + 4 + pulse * 2, h + 4 + pulse * 2);
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "#2c2418";
+  ctx.fillRect(-5, -54, 10, 58);
+  ctx.strokeStyle = "#3a2d1c";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(0, -40);
+  ctx.lineTo(-22, -62);
+  ctx.moveTo(0, -48);
+  ctx.lineTo(20, -66);
+  ctx.stroke();
+  const blobs: [number, number, number, string][] = [
+    [-22, -74, 26, tint],
+    [20, -80, 30, tint],
+    [0, -102, 32, tint],
+    [-6, -66, 22, tint],
+  ];
+  for (const [bx, by, r, color] of blobs) {
+    const grad = ctx.createRadialGradient(bx - r * 0.3, by - r * 0.4, 2, bx, by, r);
+    grad.addColorStop(0, "rgba(126,150,74,0.95)");
+    grad.addColorStop(0.7, color);
+    grad.addColorStop(1, "#25301f");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(bx, by, r, 0, Math.PI * 2);
+    ctx.fill();
   }
-
-  ctx.font = '10px "PingFang SC", "Microsoft YaHei", sans-serif';
-  ctx.textAlign = "center";
-  ctx.fillStyle = faded ? "#64748b" : "#f8fafc";
-  ctx.fillText(title, sx, base - h - 12);
-  if (faded || title !== tone.label) {
-    ctx.font = '8px "PingFang SC", "Microsoft YaHei", sans-serif';
-    ctx.fillStyle = faded ? "#475569" : tone.glow;
-    ctx.fillText(faded ? "已探索" : tone.label, sx, base - h - 24);
-  }
-  if (hint) {
-    ctx.font = '8px "PingFang SC", "Microsoft YaHei", sans-serif';
-    ctx.shadowColor = "rgba(2,6,23,0.95)";
-    ctx.shadowBlur = 3;
-    ctx.fillStyle = faded ? "rgba(148,163,184,0.6)" : "rgba(226,232,240,0.85)";
-    ctx.fillText(hint, sx, base + 13);
-    ctx.shadowBlur = 0;
-  }
-
   ctx.restore();
 }
 
-function drawDoors(
-  ctx: CanvasRenderingContext2D,
-  state: TrialGameState,
-  cam: number,
-): void {
-  const floor = state.dungeon.floors[state.floorIndex];
-  if (!floor || state.phase !== "explore") return;
-  const heroX = state.hero.x;
-  const explore = state.phase === "explore";
-
-  floor.rooms.forEach((room, index) => {
-    const x = TRIAL_DOOR_X[index] ?? TRIAL_DOOR_X[TRIAL_DOOR_X.length - 1];
-    const near = explore && !state.fieldCleared && Math.abs(heroX - x) <= TRIAL_INTERACT_RADIUS;
-    drawDoor(
-      ctx,
-      x,
-      cam,
-      ROOM_TONE[room.kind],
-      room.title,
-      room.kind === "fight" ? (room.wave?.title ?? "") : room.hint,
-      near,
-      state.fieldCleared,
-    );
-  });
-
-  const boss = floor.boss;
-  const nearBoss = explore && Math.abs(heroX - TRIAL_BOSS_DOOR_X) <= TRIAL_INTERACT_RADIUS;
-  drawDoor(
-    ctx,
-    TRIAL_BOSS_DOOR_X,
-    cam,
-    BOSS_TONE,
-    `层主 · ${boss.wave?.name ?? "???"}`,
-    state.fieldCleared ? "上楼之门" : "可跳过野区直接挑战",
-    nearBoss,
-    false,
-  );
+function paintLantern(ctx: CanvasRenderingContext2D, x: number, y: number, time: number): void {
+  ctx.strokeStyle = "#2a241c";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x, y - 96);
+  ctx.lineTo(x, y - 54);
+  ctx.stroke();
+  const glow = ctx.createRadialGradient(x, y - 46, 2, x, y - 46, 34 + Math.sin(time * 2 + x) * 3);
+  glow.addColorStop(0, "rgba(255,190,110,0.55)");
+  glow.addColorStop(1, "rgba(255,150,70,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(x - 40, y - 86, 80, 80);
+  ctx.fillStyle = "#b8452f";
+  roundRect(ctx, x - 9, y - 54, 18, 24, 6);
+  ctx.fill();
+  ctx.fillStyle = "#ffd89a";
+  ctx.fillRect(x - 4, y - 49, 8, 14);
+  ctx.fillStyle = "#e8c07a";
+  ctx.fillRect(x - 10, y - 58, 20, 3);
+  ctx.fillRect(x - 10, y - 31, 20, 3);
 }
 
-/* ------------------------------------------------------------------ 主角 */
+function paintBuilding(ctx: CanvasRenderingContext2D, spot: TownSpot, time: number): void {
+  const x = spot.x;
+  const w = spot.w;
+  const baseY = GROUND_Y + 8;
+  const bodyH = spot.h - 54;
+  const topY = baseY - bodyH;
+  const center = x + w / 2;
 
-function drawHero(
-  ctx: CanvasRenderingContext2D,
-  state: TrialGameState,
-  cam: number,
-  theme: TrialTheme,
-): void {
-  const hero = state.hero;
-  if (hero.invuln > 0 && Math.floor(state.tick / 3) % 2 === 0) return;
+  if (spot.id === "record") {
+    // 桃园石碑
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.beginPath();
+    ctx.ellipse(center, baseY + 4, 54, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#5d5648";
+    roundRect(ctx, center - 34, topY + 44, 68, bodyH - 40, 8);
+    ctx.fill();
+    ctx.fillStyle = "#7a7160";
+    roundRect(ctx, center - 28, topY + 50, 56, bodyH - 52, 6);
+    ctx.fill();
+    ctx.fillStyle = "#2f2a22";
+    ctx.font = uiFont(20);
+    ctx.textAlign = "center";
+    ctx.fillText("桃", center, topY + 92);
+    ctx.fillText("园", center, topY + 118);
+    ctx.fillText("碑", center, topY + 144);
+    ctx.fillStyle = "#3e4d33";
+    ctx.beginPath();
+    ctx.arc(x + 18, topY + 52, 18, 0, Math.PI * 2);
+    ctx.arc(x + w - 18, topY + 58, 15, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
 
-  const sx = Math.round(hero.x - cam);
-  const sy = Math.round(hero.y);
-  const airborne = hero.y < TRIAL_GROUND_Y;
-  const runFrame = Math.floor(state.tick / 6) % 2;
-  const swing = hero.moving && !airborne ? (runFrame === 0 ? 3 : -3) : 0;
+  if (spot.id === "supply") {
+    // 军需帐：三角军帐 + 木箱
+    ctx.fillStyle = "rgba(0,0,0,0.32)";
+    ctx.beginPath();
+    ctx.ellipse(center, baseY + 4, w * 0.46, 12, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const tent = ctx.createLinearGradient(x, topY, x, baseY);
+    tent.addColorStop(0, "#8a7a55");
+    tent.addColorStop(1, "#4d4534");
+    ctx.fillStyle = tent;
+    ctx.beginPath();
+    ctx.moveTo(center, topY + 6);
+    ctx.lineTo(x + w - 8, baseY);
+    ctx.lineTo(x + 8, baseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(40,34,24,0.7)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(center, topY + 8);
+    ctx.lineTo(center, baseY);
+    ctx.stroke();
+    ctx.fillStyle = "#2b2418";
+    ctx.fillRect(center - 26, baseY - 52, 52, 52);
+    ctx.fillStyle = "#a8352c";
+    ctx.beginPath();
+    ctx.moveTo(center + 4, topY + 22);
+    ctx.lineTo(center + 52, topY + 32);
+    ctx.lineTo(center + 52, topY + 92);
+    ctx.lineTo(center + 4, topY + 82);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#f3d9a0";
+    ctx.font = uiFont(30);
+    ctx.textAlign = "center";
+    ctx.fillText("軍", center + 28, topY + 66);
+    ctx.fillStyle = "#6d5a3b";
+    ctx.fillRect(x + 10, baseY - 26, 34, 26);
+    ctx.fillRect(x + w - 44, baseY - 22, 30, 22);
+    return;
+  }
 
-  // 影子
-  const shadowScale = airborne ? 0.6 : 1;
-  ctx.fillStyle = "rgba(2,6,23,0.55)";
+  if (spot.id === "gate") {
+    // 城门楼
+    ctx.fillStyle = "#2b2a24";
+    ctx.fillRect(x - 40, baseY - 128, w + 80, 128);
+    ctx.fillStyle = "#3c3a30";
+    for (let row = 0; row < 5; row++) {
+      for (let col = 0; col < 8; col++) {
+        ctx.fillRect(x - 36 + col * 34 + (row % 2) * 12, baseY - 124 + row * 25, 28, 19);
+      }
+    }
+    ctx.fillStyle = "#1a1916";
+    ctx.beginPath();
+    ctx.moveTo(center - 52, baseY);
+    ctx.lineTo(center - 52, baseY - 92);
+    ctx.arc(center, baseY - 92, 52, Math.PI, 0);
+    ctx.lineTo(center + 52, baseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#6d2f26";
+    ctx.fillRect(center - 44, baseY - 84, 88, 84);
+    ctx.strokeStyle = "#c9a15a";
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 4; i++) ctx.strokeRect(center - 40 + i * 21, baseY - 78, 18, 78);
+    // 城楼
+    const roofY = baseY - 210;
+    ctx.fillStyle = "#3b2c22";
+    ctx.fillRect(center - 82, roofY + 42, 164, 34);
+    ctx.fillStyle = "#5c3428";
+    ctx.beginPath();
+    ctx.moveTo(center - 100, roofY + 48);
+    ctx.quadraticCurveTo(center, roofY - 8, center + 100, roofY + 48);
+    ctx.quadraticCurveTo(center + 60, roofY + 58, center, roofY + 30);
+    ctx.quadraticCurveTo(center - 60, roofY + 58, center - 100, roofY + 48);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#e7c27a";
+    ctx.font = uiFont(20);
+    ctx.textAlign = "center";
+    ctx.fillText("出 征", center, roofY + 50);
+    // 旗
+    for (const dir of [-1, 1]) {
+      const fx = center + dir * 92;
+      ctx.strokeStyle = "#2a231b";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(fx, roofY + 40);
+      ctx.lineTo(fx, roofY - 34);
+      ctx.stroke();
+      const wave = Math.sin(time * 2 + dir) * 4;
+      ctx.fillStyle = "#a8352c";
+      ctx.beginPath();
+      ctx.moveTo(fx, roofY - 34);
+      ctx.lineTo(fx + dir * 34, roofY - 26 + wave);
+      ctx.lineTo(fx, roofY - 4);
+      ctx.closePath();
+      ctx.fill();
+    }
+    return;
+  }
+
+  // 普通店铺：墙、屋顶、匾额
+  ctx.fillStyle = "rgba(0,0,0,0.34)";
   ctx.beginPath();
-  ctx.ellipse(sx, TRIAL_GROUND_Y + 1, 11 * shadowScale, 3 * shadowScale, 0, 0, Math.PI * 2);
+  ctx.ellipse(center, baseY + 4, w * 0.5, 12, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  ctx.save();
-  ctx.translate(sx, sy);
-  if (hero.facing < 0) ctx.scale(-1, 1);
+  const wall = ctx.createLinearGradient(x, topY, x, baseY);
+  if (spot.id === "forge") {
+    wall.addColorStop(0, "#6b4a33");
+    wall.addColorStop(1, "#3f2c20");
+  } else if (spot.id === "herb") {
+    wall.addColorStop(0, "#8a7a5f");
+    wall.addColorStop(1, "#5a4d3a");
+  } else {
+    wall.addColorStop(0, "#6f4a3c");
+    wall.addColorStop(1, "#432c25");
+  }
+  ctx.fillStyle = wall;
+  ctx.fillRect(x + 12, topY + 40, w - 24, bodyH - 40);
 
-  const hurt = hero.hurtFlash > 0;
-  if (hurt) ctx.filter = "brightness(2.2)";
+  // 木梁
+  ctx.strokeStyle = "rgba(38,28,20,0.8)";
+  ctx.lineWidth = 6;
+  ctx.strokeRect(x + 16, topY + 44, w - 32, bodyH - 48);
+  ctx.beginPath();
+  ctx.moveTo(center, topY + 44);
+  ctx.lineTo(center, baseY);
+  ctx.stroke();
+
+  // 屋顶（飞檐）
+  ctx.fillStyle = spot.id === "herb" ? "#324236" : "#3a2820";
+  ctx.beginPath();
+  ctx.moveTo(x - 18, topY + 50);
+  ctx.quadraticCurveTo(center, topY - 26, x + w + 18, topY + 50);
+  ctx.quadraticCurveTo(center + w * 0.28, topY + 30, center, topY + 62);
+  ctx.quadraticCurveTo(center - w * 0.28, topY + 30, x - 18, topY + 50);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = "rgba(180,140,80,0.5)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x - 6, topY + 46);
+  ctx.quadraticCurveTo(center, topY - 14, x + w + 6, topY + 46);
+  ctx.stroke();
+
+  // 匾额
+  ctx.fillStyle = "#2a1f16";
+  roundRect(ctx, center - 52, topY + 58, 104, 30, 4);
+  ctx.fill();
+  ctx.strokeStyle = "#c9a15a";
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.fillStyle = "#ecd39a";
+  ctx.font = uiFont(17);
+  ctx.textAlign = "center";
+  ctx.fillText(spot.label, center, topY + 79);
+
+  // 门与窗
+  ctx.fillStyle = "#241a13";
+  ctx.fillRect(center - 30, baseY - 62, 60, 62);
+  ctx.fillStyle = "rgba(255,190,110,0.18)";
+  ctx.fillRect(center - 26, baseY - 58, 52, 44);
+  ctx.fillStyle = "#201710";
+  for (let i = 0; i < 4; i++) ctx.fillRect(center - 26 + i * 13, baseY - 58, 2, 44);
+
+  if (spot.id === "forge") {
+    const glow = ctx.createRadialGradient(center + 52, baseY - 34, 2, center + 52, baseY - 34, 46);
+    glow.addColorStop(0, "rgba(255,150,60,0.85)");
+    glow.addColorStop(1, "rgba(255,110,40,0)");
+    ctx.fillStyle = glow;
+    ctx.fillRect(center + 8, baseY - 78, 88, 78);
+    ctx.fillStyle = "#1d1610";
+    ctx.fillRect(center + 36, baseY - 44, 34, 44);
+    ctx.fillStyle = "#ffb15c";
+    ctx.fillRect(center + 42, baseY - 36, 22, 20);
+    ctx.fillStyle = "#2a231b";
+    ctx.fillRect(center - w / 2 + 30, baseY - 22, 28, 8);
+    ctx.fillRect(center - w / 2 + 40, baseY - 22, 8, 22);
+  }
+  if (spot.id === "herb") {
+    for (let i = 0; i < 3; i++) {
+      ctx.strokeStyle = "#54432c";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + 34 + i * 12, topY + 50);
+      ctx.lineTo(x + 34 + i * 12, topY + 74);
+      ctx.stroke();
+      ctx.fillStyle = "#8a5a2d";
+      ctx.beginPath();
+      ctx.ellipse(x + 34 + i * 12, topY + 80, 6, 9, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  if (spot.id === "hall") {
+    for (const dir of [-1, 1]) {
+      const fx = center + dir * (w / 2 + 2);
+      ctx.strokeStyle = "#2a231b";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(fx, topY + 40);
+      ctx.lineTo(fx, topY - 10);
+      ctx.stroke();
+      ctx.fillStyle = "#7d2f2a";
+      ctx.beginPath();
+      ctx.moveTo(fx, topY - 10);
+      ctx.lineTo(fx + dir * 18, topY - 4 + Math.sin(time * 2 + dir) * 2);
+      ctx.lineTo(fx, topY + 14);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+}
+
+function paintPlayer(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  time: number,
+  moving: boolean,
+  facing: 1 | -1,
+  color: string,
+  accent: string,
+): void {
+  const bob = moving ? Math.abs(Math.sin(time * 9)) * 3 : Math.sin(time * 2) * 1.2;
+  const step = moving ? Math.sin(time * 9) * 5 : 0;
+  const baseY = GROUND_Y + 12;
+  ctx.save();
+  ctx.translate(x, baseY - bob);
+  ctx.scale(facing, 1);
+
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.beginPath();
+  ctx.ellipse(0, 4 + bob, 22, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
 
   // 腿
-  ctx.fillStyle = hurt ? "#fecdd3" : "#1e1b4b";
-  ctx.fillRect(-6 + swing, -10, 4, 10);
-  ctx.fillRect(2 - swing, -10, 4, 10);
-  ctx.fillStyle = "#0f172a";
-  ctx.fillRect(-7 + swing, -2, 6, 3);
-  ctx.fillRect(1 - swing, -2, 6, 3);
+  ctx.fillStyle = "#2c2a26";
+  ctx.fillRect(-9 + step * 0.4, -20, 8, 22);
+  ctx.fillRect(2 - step * 0.4, -20, 8, 22);
 
-  // 披风
-  ctx.fillStyle = hurt ? "#fda4af" : "#4338ca";
+  // 战袍
+  const robe = ctx.createLinearGradient(0, -62, 0, -16);
+  robe.addColorStop(0, color);
+  robe.addColorStop(1, "rgba(20,24,20,0.95)");
+  ctx.fillStyle = robe;
   ctx.beginPath();
-  ctx.moveTo(-8, -27);
-  ctx.lineTo(7, -27);
-  ctx.lineTo(11, -8);
-  ctx.lineTo(4, -4);
-  ctx.lineTo(0, -11);
-  ctx.lineTo(-7, -4);
-  ctx.lineTo(-12, -9);
+  ctx.moveTo(-16, -20);
+  ctx.lineTo(-13, -56);
+  ctx.quadraticCurveTo(0, -66, 13, -56);
+  ctx.lineTo(16, -20);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-13, -52);
+  ctx.lineTo(13, -52);
+  ctx.stroke();
+
+  // 护肩
+  ctx.fillStyle = "#3a3630";
+  ctx.beginPath();
+  ctx.ellipse(-16, -52, 9, 6, -0.4, 0, Math.PI * 2);
+  ctx.ellipse(16, -52, 9, 6, 0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 头与兜鍪
+  ctx.fillStyle = "#d8b48c";
+  ctx.beginPath();
+  ctx.arc(0, -72, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#4a443a";
+  ctx.beginPath();
+  ctx.arc(0, -76, 11, Math.PI, 0);
+  ctx.fill();
+  ctx.fillRect(-11, -77, 22, 5);
+  ctx.fillStyle = accent;
+  ctx.fillRect(-2, -92, 4, 10);
+  ctx.beginPath();
+  ctx.arc(0, -94, 4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 佩剑
+  ctx.strokeStyle = "#d9d2c2";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(18, -48);
+  ctx.lineTo(30, -18);
+  ctx.stroke();
+  ctx.strokeStyle = "#7a5b32";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(16, -54);
+  ctx.lineTo(20, -44);
+  ctx.stroke();
+  ctx.restore();
+}
+
+export interface TownPaintOptions {
+  time: number;
+  playerX: number;
+  facing: 1 | -1;
+  moving: boolean;
+  near: TownSpot | null;
+  partyColor: string;
+  partyAccent: string;
+  chapter: number;
+}
+
+export function paintTown(ctx: CanvasRenderingContext2D, options: TownPaintOptions): void {
+  const camera = Math.max(0, Math.min(WORLD_W - VIEW_W, options.playerX - VIEW_W / 2));
+  paintBackdrop(ctx, options.time);
+  paintGround(ctx, camera);
+
+  ctx.save();
+  ctx.translate(-camera, 0);
+
+  paintTree(ctx, 40, GROUND_Y + 16, 1.15, "#31452a");
+  paintTree(ctx, 610, GROUND_Y + 12, 0.9, "#34482b");
+  paintTree(ctx, 970, GROUND_Y + 16, 1.0, "#2f4227");
+  paintTree(ctx, 1810, GROUND_Y + 10, 1.2, "#303f26");
+
+  for (const spot of TOWN_SPOTS) paintBuilding(ctx, spot, options.time);
+  paintLantern(ctx, 690, GROUND_Y + 25, options.time);
+  paintLantern(ctx, 1290, GROUND_Y + 25, options.time + 1.3);
+  paintLantern(ctx, 1595, GROUND_Y + 25, options.time + 2.6);
+
+  // 闹市摊位
+  ctx.fillStyle = "#3c2c1e";
+  ctx.fillRect(560, GROUND_Y - 24, 66, 30);
+  ctx.fillStyle = "#8a4b33";
+  ctx.beginPath();
+  ctx.moveTo(552, GROUND_Y - 24);
+  ctx.lineTo(634, GROUND_Y - 24);
+  ctx.lineTo(624, GROUND_Y - 48);
+  ctx.lineTo(562, GROUND_Y - 48);
   ctx.closePath();
   ctx.fill();
 
-  // 围巾
-  ctx.fillStyle = theme.accent;
-  const scarfWave = hero.moving ? (runFrame === 0 ? 1 : -1) : 0;
-  ctx.fillRect(-14, -29 + scarfWave, 7, 3);
-  ctx.fillRect(-18, -27 - scarfWave, 5, 3);
-
-  // 躯干与肩甲
-  ctx.fillStyle = hurt ? "#ffe4e6" : "#6366f1";
-  ctx.fillRect(-6, -28, 12, 12);
-  ctx.fillStyle = hurt ? "#fecdd3" : "#a5b4fc";
-  ctx.fillRect(-8, -28, 4, 5);
-  ctx.fillRect(4, -28, 4, 5);
-  ctx.fillStyle = "#c7d2fe";
-  ctx.fillRect(-1, -26, 2, 8);
-
-  // 头与兜帽
-  ctx.fillStyle = hurt ? "#ffe4e6" : "#312e81";
-  ctx.fillRect(-5, -39, 10, 10);
-  ctx.fillStyle = "#1e1b4b";
-  ctx.fillRect(-4, -35, 8, 5);
-  ctx.fillStyle = theme.accent;
-  ctx.fillRect(-3, -34, 2, 2);
-  ctx.fillRect(1, -34, 2, 2);
-  ctx.fillStyle = "#4f46e5";
-  ctx.fillRect(-6, -40, 6, 3);
-
-  // 剑与剑技
-  const attack = hero.attack;
-  let swordAngle = -24;
-  if (attack) {
-    const total = attack.kind === "arc" ? 24 : attack.kind === "burst" ? 30 : 16;
-    const progress = Math.min(1, attack.frame / total);
-    if (attack.kind === "slash") swordAngle = -120 + progress * 175;
-    else if (attack.kind === "arc") swordAngle = -150 + progress * 215;
-  }
-  if (attack && attack.kind !== "burst") {
-    ctx.save();
-    ctx.translate(5, -24);
-    ctx.rotate((swordAngle * Math.PI) / 180);
-    ctx.fillStyle = "#fde68a";
-    ctx.fillRect(-1, -20, 2, 20);
-    ctx.fillStyle = "#fef9c3";
-    ctx.fillRect(-1, -20, 1, 8);
-    ctx.fillStyle = "#a16207";
-    ctx.fillRect(-3, -1, 6, 2);
-    ctx.fillStyle = "#78350f";
-    ctx.fillRect(-1, 1, 2, 3);
-    ctx.restore();
-
-    if (attack.frame >= 4 && attack.frame <= 12) {
-      ctx.globalAlpha = attack.kind === "arc" ? 0.55 : 0.4;
-      ctx.strokeStyle = attack.kind === "arc" ? theme.accent : "#fef9c3";
-      ctx.lineWidth = attack.kind === "arc" ? 2.5 : 1.5;
-      ctx.beginPath();
-      ctx.arc(4, -22, attack.kind === "arc" ? 24 : 19, -1.9, 0.9);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    }
-  } else {
-    ctx.save();
-    ctx.translate(6, -24);
-    ctx.rotate((swordAngle * Math.PI) / 180);
-    ctx.fillStyle = "#fde68a";
-    ctx.fillRect(-1, -17, 2, 17);
-    ctx.fillStyle = "#a16207";
-    ctx.fillRect(-3, -1, 6, 2);
-    ctx.restore();
-  }
-
-  // 星屑飞溅：自身周围的扩散环
-  if (attack?.kind === "burst" && attack.frame >= 4 && attack.frame <= 20) {
-    const radius = 8 + attack.frame * 3.2;
-    ctx.globalAlpha = Math.max(0, 0.7 - attack.frame / 32);
-    ctx.strokeStyle = theme.accent;
-    ctx.lineWidth = 2;
+  const nearby = options.near;
+  if (nearby) {
+    const cx = nearby.x + nearby.w / 2;
+    const pulse = 0.5 + Math.sin(options.time * 3) * 0.5;
+    const glow = ctx.createRadialGradient(cx, GROUND_Y + 22, 4, cx, GROUND_Y + 22, 60);
+    glow.addColorStop(0, `rgba(255,214,140,${0.28 + pulse * 0.18})`);
+    glow.addColorStop(1, "rgba(255,200,110,0)");
+    ctx.fillStyle = glow;
     ctx.beginPath();
-    ctx.arc(0, -18, radius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = "#fef9c3";
-    for (let i = 0; i < 6; i += 1) {
-      const angle = (i / 6) * Math.PI * 2 + attack.frame * 0.18;
-      ctx.fillRect(
-        Math.cos(angle) * radius - 1,
-        -18 + Math.sin(angle) * radius - 1,
-        2,
-        2,
-      );
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  // 格挡盾
-  if (hero.guarding) {
-    ctx.strokeStyle = "#7dd3fc";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(9, -22, 12, -1.2, 1.2);
-    ctx.stroke();
-    ctx.globalAlpha = 0.25;
-    ctx.fillStyle = "#38bdf8";
-    ctx.beginPath();
-    ctx.arc(9, -22, 12, -1.2, 1.2);
+    ctx.ellipse(cx, GROUND_Y + 22, 68, 20, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.globalAlpha = 1;
+  }
+
+  paintPlayer(
+    ctx,
+    options.playerX,
+    options.time,
+    options.moving,
+    options.facing,
+    options.partyColor,
+    options.partyAccent,
+  );
+
+  if (nearby) {
+    ctx.textAlign = "center";
+    ctx.font = uiFont(14);
+    const label = `按 E / 回车进入${nearby.label}`;
+    const width = ctx.measureText(label).width + 30;
+    const bubbleY = GROUND_Y - 132;
+    ctx.fillStyle = "rgba(18,16,13,0.82)";
+    roundRect(ctx, options.playerX - width / 2, bubbleY, width, 28, 14);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(214,178,116,0.7)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.fillStyle = "#ecd39a";
+    ctx.fillText(label, options.playerX, bubbleY + 19);
   }
 
   ctx.restore();
+
+  // 顶部活动标题
+  const banner = ctx.createLinearGradient(0, 0, 0, 52);
+  banner.addColorStop(0, "rgba(12,14,20,0.72)");
+  banner.addColorStop(1, "rgba(12,14,20,0)");
+  ctx.fillStyle = banner;
+  ctx.fillRect(0, 0, VIEW_W, 52);
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#e8d5ab";
+  ctx.font = uiFont(18);
+  ctx.fillText("三国讨逆传", 26, 32);
+  ctx.fillStyle = "rgba(232,213,171,0.62)";
+  ctx.font = uiFont(12);
+  ctx.fillText(`第 ${options.chapter + 1} 章 · A/D 行走，靠近门口交互`, 140, 31);
+
+  // 暗角
+  const vignette = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, 240, VIEW_W / 2, VIEW_H / 2, 560);
+  vignette.addColorStop(0, "rgba(0,0,0,0)");
+  vignette.addColorStop(1, "rgba(0,0,0,0.42)");
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 }
 
-/* ------------------------------------------------------------------ 怪物 */
-
-function enemyPalette(shape: TrialWaveShape): { body: string; dark: string; glow: string } {
-  switch (shape) {
-    case "wisp":
-      return { body: "#f59e0b", dark: "#7c2d12", glow: "#fef3c7" };
-    case "golem":
-      return { body: "#94a3b8", dark: "#334155", glow: "#fbbf24" };
-    case "serpent":
-      return { body: "#a78bfa", dark: "#4c1d95", glow: "#fef08a" };
-    case "thorn":
-      return { body: "#fb7185", dark: "#881337", glow: "#fecdd3" };
-    case "mirror":
-      return { body: "#67e8f9", dark: "#0c4a6e", glow: "#e0f2fe" };
-    case "warden":
-      return { body: "#4338ca", dark: "#020617", glow: "#facc15" };
-    default:
-      return { body: "#4ade80", dark: "#064e3b", glow: "#d9f99d" };
-  }
+export interface BattleAnimation {
+  events: SagaBattleEvent[];
+  startedAt: number;
+  /** 每条事件占用的动画时长（毫秒）。 */
+  stepMs: number;
 }
 
-function drawEnemyBody(
-  ctx: CanvasRenderingContext2D,
-  shape: TrialWaveShape,
-  tick: number,
-): void {
-  const palette = enemyPalette(shape);
-  const bob = Math.floor(tick / 24) % 2;
-
-  switch (shape) {
-    case "mire": {
-      ctx.fillStyle = palette.body;
-      ctx.beginPath();
-      ctx.ellipse(0, -13, 16, 13, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = palette.dark;
-      ctx.beginPath();
-      ctx.ellipse(0, -9, 12, 8, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = palette.glow;
-      ctx.fillRect(-8, -16, 4, 4);
-      ctx.fillRect(4, -16, 4, 4);
-      ctx.fillStyle = "#022c22";
-      ctx.fillRect(-7, -15, 2, 2);
-      ctx.fillRect(5, -15, 2, 2);
-      ctx.fillStyle = palette.body;
-      ctx.fillRect(-14, -24, 3, 5);
-      ctx.fillRect(11, -24, 3, 5);
-      break;
-    }
-    case "wisp": {
-      const lift = bob * 2;
-      const glow = ctx.createRadialGradient(0, -30 - lift, 2, 0, -30 - lift, 22);
-      glow.addColorStop(0, "rgba(254,243,199,0.9)");
-      glow.addColorStop(1, "rgba(245,158,11,0)");
-      ctx.fillStyle = glow;
-      ctx.fillRect(-22, -52 - lift, 44, 44);
-      ctx.fillStyle = palette.body;
-      ctx.beginPath();
-      ctx.arc(0, -30 - lift, 13, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = palette.glow;
-      ctx.beginPath();
-      ctx.moveTo(0, -18 - lift);
-      ctx.lineTo(6, -6 - lift + bob);
-      ctx.lineTo(-2, -10 - lift);
-      ctx.lineTo(-6, -4 - lift);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = palette.dark;
-      ctx.fillRect(-7, -34 - lift, 4, 4);
-      ctx.fillRect(3, -34 - lift, 4, 4);
-      break;
-    }
-    case "golem": {
-      ctx.fillStyle = palette.body;
-      ctx.fillRect(-15, -36, 30, 36);
-      ctx.fillStyle = palette.dark;
-      ctx.fillRect(-15, -36, 30, 6);
-      ctx.fillRect(-15, -10, 30, 6);
-      ctx.fillRect(-22, -30, 7, 18);
-      ctx.fillRect(15, -30, 7, 18);
-      ctx.fillStyle = palette.glow;
-      ctx.fillRect(-9, -27, 6, 6);
-      ctx.fillRect(3, -27, 6, 6);
-      ctx.fillStyle = "#1e293b";
-      ctx.fillRect(-7, -25, 2, 2);
-      ctx.fillRect(5, -25, 2, 2);
-      ctx.fillStyle = palette.glow;
-      ctx.fillRect(-6, -16, 12, 3);
-      ctx.fillRect(-4, -20, 8, 2);
-      break;
-    }
-    case "serpent": {
-      ctx.strokeStyle = palette.body;
-      ctx.lineWidth = 9;
-      ctx.lineCap = "round";
-      ctx.beginPath();
-      ctx.moveTo(-14, -2);
-      ctx.quadraticCurveTo(18, -2, 12, -18);
-      ctx.quadraticCurveTo(6, -32, -8, -28);
-      ctx.quadraticCurveTo(-18, -25, -12, -38);
-      ctx.stroke();
-      ctx.strokeStyle = palette.dark;
-      ctx.lineWidth = 3;
-      ctx.globalAlpha = 0.4;
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = palette.body;
-      ctx.fillRect(-18, -46 + bob, 14, 10);
-      ctx.fillStyle = palette.dark;
-      ctx.fillRect(-15, -43 + bob, 8, 5);
-      ctx.fillStyle = palette.glow;
-      ctx.fillRect(-13, -42 + bob, 2, 2);
-      ctx.fillRect(-9, -42 + bob, 2, 2);
-      break;
-    }
-    case "thorn": {
-      ctx.fillStyle = palette.dark;
-      ctx.beginPath();
-      for (let i = 0; i < 12; i += 1) {
-        const angle = (i / 12) * Math.PI * 2 + Math.PI / 12;
-        const radius = i % 2 === 0 ? 22 : 10;
-        const px = Math.cos(angle) * radius;
-        const py = -20 + Math.sin(angle) * radius;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = palette.body;
-      ctx.beginPath();
-      ctx.arc(0, -20, 11, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = palette.glow;
-      ctx.fillRect(-5, -22, 3, 3);
-      ctx.fillRect(2, -22, 3, 3);
-      ctx.fillStyle = palette.dark;
-      ctx.fillRect(-2, -15, 4, 2);
-      break;
-    }
-    case "mirror": {
-      ctx.fillStyle = palette.body;
-      ctx.beginPath();
-      ctx.moveTo(0, -46 + bob);
-      ctx.lineTo(15, -22);
-      ctx.lineTo(0, 0);
-      ctx.lineTo(-15, -22);
-      ctx.closePath();
-      ctx.fill();
-      ctx.strokeStyle = palette.glow;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-      ctx.fillStyle = palette.dark;
-      ctx.globalAlpha = 0.65;
-      ctx.beginPath();
-      ctx.arc(0, -23, 7, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      ctx.fillStyle = palette.glow;
-      ctx.fillRect(-2, -25, 4, 4);
-      ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.fillRect(-9, -32, 2, 10);
-      break;
-    }
-    case "warden": {
-      ctx.fillStyle = palette.dark;
-      ctx.beginPath();
-      ctx.moveTo(-18, 0);
-      ctx.lineTo(-14, -42);
-      ctx.lineTo(0, -52);
-      ctx.lineTo(14, -42);
-      ctx.lineTo(18, 0);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = palette.body;
-      ctx.fillRect(-6, -44, 12, 10);
-      ctx.fillStyle = "#0f172a";
-      ctx.fillRect(-4, -42, 8, 6);
-      ctx.fillStyle = palette.glow;
-      ctx.fillRect(-2, -40, 1, 2);
-      ctx.fillRect(1, -40, 1, 2);
-      const lift = bob * 2;
-      const lamp = ctx.createRadialGradient(19, -30 - lift, 1, 19, -30 - lift, 16);
-      lamp.addColorStop(0, "rgba(250,204,21,0.9)");
-      lamp.addColorStop(1, "rgba(250,204,21,0)");
-      ctx.fillStyle = lamp;
-      ctx.fillRect(3, -46 - lift, 32, 32);
-      ctx.fillStyle = palette.glow;
-      ctx.fillRect(16, -30 - lift, 6, 6);
-      break;
-    }
-  }
+export interface BattlePaintOptions {
+  battle: SagaBattleState;
+  time: number;
+  target: number;
+  animation?: BattleAnimation | null;
 }
 
-function drawEnemy(
-  ctx: CanvasRenderingContext2D,
-  state: TrialGameState,
-  cam: number,
-): void {
-  const enemy = state.enemy;
-  if (!enemy) return;
-  const sx = Math.round(enemy.x - cam);
-  const scale = enemy.boss ? 1.45 : 1;
-  const y = TRIAL_GROUND_Y;
-
-  ctx.fillStyle = "rgba(2,6,23,0.55)";
-  ctx.beginPath();
-  ctx.ellipse(sx, y + 1, 16 * scale, 4, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  // 蓄力 / 狂暴 / 护盾光环
-  if (enemy.mode === "charge") {
-    ctx.globalAlpha = 0.35 + (state.tick % 20) * 0.02;
-    ctx.strokeStyle = "#c084fc";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(sx, y - 24 * scale, 26 * scale, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  }
-  if (enemy.enraged) {
-    ctx.globalAlpha = 0.18 + (state.tick % 16) * 0.015;
-    ctx.fillStyle = "#f43f5e";
-    ctx.beginPath();
-    ctx.arc(sx, y - 24 * scale, 26 * scale, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  }
-  if (enemy.shield > 0) {
-    ctx.strokeStyle = "#38bdf8";
-    ctx.globalAlpha = 0.7;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    ctx.arc(sx, y - 24 * scale, 24 * scale, -Math.PI * 0.9, Math.PI * 0.9);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = "#7dd3fc";
-    ctx.font = '8px "Courier New", monospace';
-    ctx.textAlign = "center";
-    ctx.fillText(String(enemy.shield), sx, y - 48 * scale);
-  }
-
-  ctx.save();
-  ctx.translate(sx, y);
-  if (enemy.facing < 0) ctx.scale(-1, 1);
-  ctx.scale(scale, scale);
-  if (enemy.hurtFlash > 0) ctx.filter = "brightness(2.4)";
-  drawEnemyBody(ctx, enemy.shape, state.tick);
-  ctx.restore();
-
-  // 抬手预警
-  if (enemy.mode === "windup") {
-    const flash = Math.floor(state.tick / 4) % 2 === 0;
-    ctx.fillStyle = flash ? "#fbbf24" : "#f97316";
-    ctx.font = 'bold 14px "Courier New", monospace';
-    ctx.textAlign = "center";
-    ctx.fillText("!", sx, y - 62 * scale);
-  }
-
-  // 血条
-  const barW = enemy.boss ? 92 : 44;
-  const barY = y - (enemy.boss ? 76 : 58) * scale;
-  ctx.fillStyle = "rgba(2,6,23,0.75)";
-  ctx.fillRect(sx - barW / 2 - 1, barY - 1, barW + 2, 6);
-  ctx.fillStyle = enemy.boss ? "#f43f5e" : "#fb7185";
-  const ratio = Math.max(0, Math.min(1, enemy.hp / enemy.maxHp));
-  ctx.fillRect(sx - barW / 2, barY, Math.round(barW * ratio), 4);
-  ctx.fillStyle = "rgba(255,255,255,0.35)";
-  ctx.fillRect(sx - barW / 2, barY, Math.round(barW * ratio), 1);
-  ctx.font = enemy.boss
-    ? '9px "PingFang SC", "Microsoft YaHei", sans-serif'
-    : '8px "PingFang SC", "Microsoft YaHei", sans-serif';
-  ctx.textAlign = "center";
-  ctx.fillStyle = enemy.boss ? "#fecdd3" : "#e2e8f0";
-  ctx.fillText(enemy.name, sx, barY - 5);
-  const intent = enemy.pattern[enemy.intentIndex % enemy.pattern.length] ?? "attack";
-  ctx.font = '7px "PingFang SC", "Microsoft YaHei", sans-serif';
-  ctx.fillStyle = enemy.charged ? "#f0abfc" : "rgba(203,213,225,0.72)";
-  ctx.fillText(enemy.charged ? "重击蓄势" : `意图：${INTENT_TEXT[intent]}`, sx, barY + 12);
-}
-
-/* ------------------------------------------------------------------ 特效 */
-
-export type TrialFxKind = "spark" | "text" | "heal" | "ring";
-
-export interface TrialFx {
-  kind: TrialFxKind;
+interface UnitSlot {
   x: number;
   y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  maxLife: number;
-  text: string;
-  color: string;
-  size: number;
+  scale: number;
 }
 
-export function spawnTrialFx(fx: TrialFx[], events: TrialEvent[], state: TrialGameState): void {
-  for (const event of events) {
-    switch (event.type) {
-      case "hit": {
-        fx.push({
-          kind: "text",
-          x: event.x,
-          y: event.y,
-          vx: 0,
-          vy: -0.55,
-          life: 46,
-          maxLife: 46,
-          text: `-${event.amount}`,
-          color: event.combo >= 3 ? "#fbbf24" : "#fef9c3",
-          size: event.combo >= 3 ? 12 : 10,
-        });
-        for (let i = 0; i < 6; i += 1) {
-          fx.push({
-            kind: "spark",
-            x: event.x,
-            y: event.y,
-            vx: Math.cos((i / 6) * Math.PI * 2) * 1.6,
-            vy: Math.sin((i / 6) * Math.PI * 2) * 1.6 - 0.6,
-            life: 20,
-            maxLife: 20,
-            text: "",
-            color: i % 2 === 0 ? "#fef9c3" : "#fbbf24",
-            size: 2,
-          });
-        }
-        break;
-      }
-      case "hurt": {
-        fx.push({
-          kind: "text",
-          x: event.x,
-          y: event.y,
-          vx: 0,
-          vy: -0.5,
-          life: 44,
-          maxLife: 44,
-          text: event.blocked > 0 ? `-${event.amount} (挡 ${event.blocked})` : `-${event.amount}`,
-          color: "#fda4af",
-          size: 10,
-        });
-        for (let i = 0; i < 5; i += 1) {
-          fx.push({
-            kind: "spark",
-            x: event.x,
-            y: event.y,
-            vx: (i % 2 === 0 ? 1 : -1) * (0.6 + i * 0.2),
-            vy: -1.2 + i * 0.2,
-            life: 18,
-            maxLife: 18,
-            text: "",
-            color: "#fb7185",
-            size: 2,
-          });
-        }
-        break;
-      }
-      case "block": {
-        fx.push({
-          kind: "text",
-          x: event.x,
-          y: event.y,
-          vx: 0,
-          vy: -0.45,
-          life: 36,
-          maxLife: 36,
-          text: `格挡 ${event.amount}`,
-          color: "#7dd3fc",
-          size: 9,
-        });
-        break;
-      }
-      case "heal": {
-        fx.push({
-          kind: "text",
-          x: event.x,
-          y: event.y,
-          vx: 0,
-          vy: -0.5,
-          life: 40,
-          maxLife: 40,
-          text: `+${event.amount}`,
-          color: "#6ee7b7",
-          size: 10,
-        });
-        break;
-      }
-      case "kill": {
-        fx.push({
-          kind: "text",
-          x: event.x,
-          y: event.y,
-          vx: 0,
-          vy: -0.4,
-          life: 50,
-          maxLife: 50,
-          text: "击破",
-          color: "#fbbf24",
-          size: 11,
-        });
-        for (let i = 0; i < 10; i += 1) {
-          fx.push({
-            kind: "spark",
-            x: event.x,
-            y: event.y,
-            vx: Math.cos((i / 10) * Math.PI * 2) * 2.2,
-            vy: Math.sin((i / 10) * Math.PI * 2) * 2.2 - 0.8,
-            life: 26,
-            maxLife: 26,
-            text: "",
-            color: i % 2 === 0 ? "#fef9c3" : "#f472b6",
-            size: 2,
-          });
-        }
-        break;
-      }
-      case "relic": {
-        fx.push({
-          kind: "ring",
-          x: event.x,
-          y: event.y,
-          vx: 0,
-          vy: 0,
-          life: 34,
-          maxLife: 34,
-          text: "",
-          color: "#fbbf24",
-          size: 4,
-        });
-        fx.push({
-          kind: "text",
-          x: event.x,
-          y: event.y,
-          vx: 0,
-          vy: -0.4,
-          life: 50,
-          maxLife: 50,
-          text: "获得装备",
-          color: "#fcd34d",
-          size: 9,
-        });
-        break;
-      }
-      case "levelup": {
-        fx.push({
-          kind: "ring",
-          x: event.x,
-          y: event.y,
-          vx: 0,
-          vy: 0,
-          life: 40,
-          maxLife: 40,
-          text: "",
-          color: "#67e8f9",
-          size: 4,
-        });
-        fx.push({
-          kind: "text",
-          x: event.x,
-          y: event.y,
-          vx: 0,
-          vy: -0.45,
-          life: 54,
-          maxLife: 54,
-          text: `LEVEL ${event.level}`,
-          color: "#67e8f9",
-          size: 10,
-        });
-        break;
-      }
-      default:
-        break;
-    }
-    if (event.type === "door") {
-      fx.push({
-        kind: "text",
-        x: state.hero.x,
-        y: state.hero.y - 50,
-        vx: 0,
-        vy: -0.5,
-        life: 40,
-        maxLife: 40,
-        text: event.label,
-        color: "#e2e8f0",
-        size: 9,
-      });
-    }
-  }
-}
-
-export function updateTrialFx(fx: TrialFx[], dt: number): void {
-  const stepScale = Math.min(3, dt / 16.67);
-  for (let i = fx.length - 1; i >= 0; i -= 1) {
-    const item = fx[i];
-    item.life -= stepScale;
-    item.x += item.vx * stepScale;
-    item.y += item.vy * stepScale;
-    if (item.kind === "spark") item.vy += 0.08 * stepScale;
-    if (item.kind === "text") item.vy *= 0.985;
-    if (item.life <= 0) fx.splice(i, 1);
-  }
-}
-
-export function drawTrialFx(
-  ctx: CanvasRenderingContext2D,
-  fx: TrialFx[],
-  cam: number,
-): void {
-  for (const item of fx) {
-    const alpha = Math.max(0, Math.min(1, item.life / item.maxLife));
-    const sx = Math.round(item.x - cam);
-    const sy = Math.round(item.y);
-    ctx.globalAlpha = alpha;
-    if (item.kind === "spark") {
-      ctx.fillStyle = item.color;
-      ctx.fillRect(sx, sy, item.size, item.size);
-    } else if (item.kind === "ring") {
-      const radius = item.size + (1 - alpha) * 22;
-      ctx.strokeStyle = item.color;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(sx, sy, radius, 0, Math.PI * 2);
-      ctx.stroke();
+function unitSlots(count: number, side: "player" | "enemy"): UnitSlot[] {
+  const slots: UnitSlot[] = [];
+  for (let i = 0; i < count; i++) {
+    const row = i % 2;
+    const col = Math.floor(i / 2);
+    if (side === "player") {
+      slots.push({ x: 150 + col * 102 + row * 26, y: 320 + row * 92 + col * 6, scale: 1.05 });
     } else {
-      ctx.font = `${item.size}px "Courier New", "PingFang SC", monospace`;
-      ctx.textAlign = "center";
-      ctx.fillStyle = "rgba(2,6,23,0.65)";
-      ctx.fillText(item.text, sx + 1, sy + 1);
-      ctx.fillStyle = item.color;
-      ctx.fillText(item.text, sx, sy);
+      slots.push({ x: 790 - col * 96 - row * 22, y: 300 + row * 90 + col * 6, scale: 1.05 });
     }
-    ctx.globalAlpha = 1;
   }
+  return slots;
 }
 
-/* ------------------------------------------------------------------ 入口 */
-
-/** 画一帧完整场景。`camera` 由外部平滑后传入（未取整），内部统一取整保持像素对齐。 */
-export function drawTrialScene(
+function paintSquad(
   ctx: CanvasRenderingContext2D,
-  state: TrialGameState,
-  fx: TrialFx[],
-  camera: number,
-  now: number,
+  x: number,
+  y: number,
+  color: string,
+  accent: string,
+  ratio: number,
+  scale: number,
+  facing: 1 | -1,
+  downed: boolean,
 ): void {
-  const cam = Math.round(camera);
-  const theme = themeFor(state);
-  ctx.imageSmoothingEnabled = false;
-  ctx.clearRect(0, 0, TRIAL_VIEW_W, TRIAL_VIEW_H);
-
-  // 受击震屏
-  let shakeX = 0;
-  let shakeY = 0;
-  if (state.hero.hurtFlash > 6) {
-    const phase = state.tick % 4;
-    shakeX = phase === 0 ? 1 : phase === 1 ? -1 : 0;
-    shakeY = phase === 2 ? 1 : 0;
-  }
-
   ctx.save();
-  ctx.translate(shakeX, shakeY);
-  drawBackground(ctx, state, cam, theme, now);
-  drawGround(ctx, state, cam, theme);
-  drawDoors(ctx, state, cam);
-  drawEnemy(ctx, state, cam);
-  drawHero(ctx, state, cam, theme);
+  ctx.translate(x, y);
+  ctx.scale(facing * scale, scale);
+  ctx.globalAlpha = downed ? 0.28 : 1;
 
-  // 起始点的小灯柱
-  const startX = TRIAL_HERO_START_X - cam;
-  ctx.fillStyle = "rgba(103,232,249,0.7)";
-  ctx.fillRect(startX - 1, TRIAL_GROUND_Y - 34, 2, 34);
-  ctx.fillRect(startX - 3, TRIAL_GROUND_Y - 36, 6, 3);
+  ctx.fillStyle = "rgba(0,0,0,0.32)";
+  ctx.beginPath();
+  ctx.ellipse(0, 8, 38, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
 
-  // 刷怪口
-  if (state.enemy) {
-    const portalX = TRIAL_ENEMY_SPAWN_X - cam;
-    ctx.globalAlpha = 0.25 + (state.tick % 30) * 0.008;
-    ctx.fillStyle = "#a855f7";
-    ctx.fillRect(portalX - 2, TRIAL_GROUND_Y - 40, 4, 40);
-    ctx.globalAlpha = 1;
+  const soldiers = Math.max(0, Math.ceil(ratio * 6));
+  for (let i = 0; i < 6; i++) {
+    const sx = -30 + (i % 3) * 22;
+    const sy = -4 + Math.floor(i / 3) * 12;
+    const alpha = i < soldiers ? 0.95 : 0.12;
+    ctx.globalAlpha = (downed ? 0.28 : 1) * alpha;
+    ctx.fillStyle = "#2a2b2e";
+    ctx.fillRect(sx - 3, sy - 12, 6, 12);
+    ctx.fillStyle = color;
+    ctx.fillRect(sx - 5, sy - 18, 10, 8);
+    ctx.fillStyle = accent;
+    ctx.fillRect(sx - 5, sy - 20, 10, 2);
+    ctx.fillStyle = "#c9a17a";
+    ctx.fillRect(sx - 2, sy - 24, 4, 4);
   }
 
-  drawTrialFx(ctx, fx, cam);
+  // 主将
+  ctx.globalAlpha = downed ? 0.32 : 1;
+  ctx.fillStyle = "#231f1a";
+  ctx.fillRect(-9, -40, 7, 30);
+  ctx.fillRect(4, -40, 7, 30);
+  const robe = ctx.createLinearGradient(0, -78, 0, -26);
+  robe.addColorStop(0, color);
+  robe.addColorStop(1, "#1d1a16");
+  ctx.fillStyle = robe;
+  ctx.beginPath();
+  ctx.moveTo(-18, -28);
+  ctx.lineTo(-15, -70);
+  ctx.quadraticCurveTo(0, -80, 15, -70);
+  ctx.lineTo(18, -28);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-14, -66);
+  ctx.lineTo(14, -66);
+  ctx.stroke();
+  ctx.fillStyle = "#3c3830";
+  ctx.beginPath();
+  ctx.ellipse(-18, -66, 9, 6, -0.4, 0, Math.PI * 2);
+  ctx.ellipse(18, -66, 9, 6, 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#d9b58c";
+  ctx.beginPath();
+  ctx.arc(0, -86, 10, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#4c463a";
+  ctx.beginPath();
+  ctx.arc(0, -90, 11, Math.PI, 0);
+  ctx.fill();
+  ctx.fillRect(-11, -91, 22, 4);
+  ctx.fillStyle = accent;
+  ctx.fillRect(-2, -104, 4, 10);
+  ctx.strokeStyle = "#e2d8c4";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(20, -60);
+  ctx.lineTo(36, -14);
+  ctx.stroke();
   ctx.restore();
+}
 
-  // 便携提示：站在门边时在画面底部画 F 键。
-  if (state.phase === "explore") {
-    const near = (x: number) => Math.abs(state.hero.x - x) <= TRIAL_INTERACT_RADIUS;
-    const doorX = TRIAL_DOOR_X.find((x) => !state.fieldCleared && near(x));
-    if (doorX !== undefined || near(TRIAL_BOSS_DOOR_X)) {
-      const keyX = Math.round(state.hero.x - cam);
-      const keyY = Math.round(state.hero.y) - 58;
-      ctx.fillStyle = "rgba(2,6,23,0.8)";
-      ctx.fillRect(keyX - 8, keyY - 10, 16, 14);
-      ctx.strokeStyle = theme.accent;
-      ctx.lineWidth = 1;
-      ctx.strokeRect(keyX - 8, keyY - 10, 16, 14);
-      ctx.fillStyle = theme.accent;
-      ctx.font = 'bold 9px "Courier New", monospace';
-      ctx.textAlign = "center";
-      ctx.fillText("F", keyX, keyY + 1);
-    }
+function findUnit(battle: SagaBattleState, name: string): { unit: typeof battle.party[number]; slot: UnitSlot; side: "player" | "enemy" } | null {
+  const playerSlots = unitSlots(battle.party.length, "player");
+  const enemySlots = unitSlots(battle.enemies.length, "enemy");
+  const pIndex = battle.party.findIndex((unit) => unit.name === name);
+  if (pIndex >= 0) return { unit: battle.party[pIndex], slot: playerSlots[pIndex], side: "player" };
+  const eIndex = battle.enemies.findIndex((unit) => unit.name === name);
+  if (eIndex >= 0) return { unit: battle.enemies[eIndex], slot: enemySlots[eIndex], side: "enemy" };
+  return null;
+}
+
+export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintOptions): void {
+  const { battle, time, target } = options;
+  const anim = options.animation;
+  const elapsed = anim ? time - anim.startedAt : 0;
+  const eventIndex = anim ? Math.floor(elapsed / anim.stepMs) : -1;
+  const currentEvent = anim && eventIndex >= 0 && eventIndex < anim.events.length ? anim.events[eventIndex] : null;
+  const eventProgress = anim
+    ? Math.min(1, Math.max(0, (elapsed - eventIndex * anim.stepMs) / anim.stepMs))
+    : 0;
+
+  paintBackdrop(ctx, time + 4);
+  paintGround(ctx, 0);
+
+  // 战场土坡与军旗
+  const field = ctx.createLinearGradient(0, GROUND_Y - 40, 0, VIEW_H);
+  field.addColorStop(0, "rgba(94,72,46,0.4)");
+  field.addColorStop(1, "rgba(30,26,20,0.85)");
+  ctx.fillStyle = field;
+  ctx.fillRect(0, GROUND_Y - 40, VIEW_W, VIEW_H - GROUND_Y + 40);
+  for (const [bx, color] of [
+    [80, "#7d2f2a"],
+    [330, "#7d2f2a"],
+    [650, "#243a5e"],
+    [880, "#243a5e"],
+  ] as [number, string][]) {
+    ctx.strokeStyle = "#241d15";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(bx, GROUND_Y + 4);
+    ctx.lineTo(bx, GROUND_Y - 156);
+    ctx.stroke();
+    const wave = Math.sin(time * 2 + bx) * 5;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(bx, GROUND_Y - 156);
+    ctx.lineTo(bx + 40, GROUND_Y - 146 + wave);
+    ctx.lineTo(bx, GROUND_Y - 112);
+    ctx.closePath();
+    ctx.fill();
   }
+
+  // 回合横幅
+  ctx.textAlign = "center";
+  ctx.font = uiFont(20);
+  const bannerText = `第 ${battle.round} 回合`;
+  const bannerW = ctx.measureText(bannerText).width + 52;
+  ctx.fillStyle = "rgba(16,14,11,0.76)";
+  roundRect(ctx, VIEW_W / 2 - bannerW / 2, 14, bannerW, 36, 6);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(202,161,90,0.7)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.fillStyle = "#ecd39a";
+  ctx.fillText(bannerText, VIEW_W / 2, 39);
+
+  ctx.font = uiFont(13);
+  ctx.fillStyle = "rgba(236,211,154,0.75)";
+  ctx.textAlign = "left";
+  ctx.fillText(battle.nodeName, 24, 32);
+  if (battle.boss) {
+    ctx.fillStyle = "#e78b6a";
+    ctx.fillText("BOSS", VIEW_W - 70, 32);
+  }
+
+  const playerSlots = unitSlots(battle.party.length, "player");
+  const enemySlots = unitSlots(battle.enemies.length, "enemy");
+
+  const drawUnit = (
+    unit: typeof battle.party[number],
+    slot: UnitSlot,
+    side: "player" | "enemy",
+    index: number,
+  ): void => {
+    let offsetX = 0;
+    const offsetY = 0;
+    let flash = false;
+    if (currentEvent) {
+      const isActor = currentEvent.actor === unit.name;
+      const isTarget = currentEvent.target === unit.name;
+      if (isActor && (currentEvent.kind === "attack" || currentEvent.kind === "tactic")) {
+        const lunge = Math.sin(Math.min(1, eventProgress * 1.6) * Math.PI) * (side === "player" ? 42 : -42);
+        offsetX += lunge;
+      }
+      if (isTarget && eventProgress < 0.7) {
+        offsetX += (side === "player" ? -1 : 1) * Math.sin(eventProgress * Math.PI * 3) * 3;
+        flash = eventProgress < 0.45;
+      }
+    }
+    ctx.save();
+    ctx.translate(offsetX, offsetY);
+    if (flash) {
+      ctx.filter = "brightness(1.8) saturate(0.6)";
+    }
+    paintSquad(
+      ctx,
+      slot.x,
+      slot.y,
+      unit.color,
+      unit.accent,
+      Math.max(0, unit.troops / unit.maxTroops),
+      unit.boss ? slot.scale * 1.2 : slot.scale,
+      side === "player" ? 1 : -1,
+      unit.downed,
+    );
+    ctx.filter = "none";
+    ctx.restore();
+
+    // 名称牌与兵力条
+    const plateW = 106;
+    const plateX = slot.x - plateW / 2;
+    const plateY = slot.y - (unit.boss ? 152 : 132);
+    ctx.fillStyle = "rgba(14,13,11,0.74)";
+    roundRect(ctx, plateX, plateY, plateW, 34, 4);
+    ctx.fill();
+    ctx.strokeStyle = side === "player" ? "rgba(210,180,120,0.55)" : "rgba(190,110,90,0.55)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.textAlign = "center";
+    ctx.fillStyle = unit.downed ? "#8a8378" : "#f0e2c4";
+    ctx.font = uiFont(13);
+    ctx.fillText(`${unit.name} Lv${unit.level}`, slot.x, plateY + 15);
+    const barW = plateW - 16;
+    const ratio = Math.max(0, Math.min(1, unit.troops / unit.maxTroops));
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(slot.x - barW / 2, plateY + 21, barW, 5);
+    ctx.fillStyle = side === "player" ? "#c9a15a" : "#b5533d";
+    ctx.fillRect(slot.x - barW / 2, plateY + 21, barW * ratio, 5);
+    ctx.fillStyle = "rgba(240,226,196,0.85)";
+    ctx.font = uiFont(10);
+    ctx.fillText(`${Math.max(0, Math.round(unit.troops))}/${unit.maxTroops}`, slot.x, plateY + 33);
+
+    if (unit.guard) {
+      ctx.fillStyle = "rgba(120,180,230,0.9)";
+      ctx.font = uiFont(12);
+      ctx.fillText("守", slot.x + 52, plateY + 14);
+    }
+    if (unit.buff > 0) {
+      ctx.fillStyle = "#e7a15a";
+      ctx.fillText("鼓", slot.x + 52, plateY + 30);
+    }
+    if (unit.confused > 0) {
+      ctx.fillStyle = "#c9b2ff";
+      ctx.fillText("乱", slot.x - 52, plateY + 14);
+    }
+    if (unit.downed) {
+      ctx.fillStyle = "rgba(230,200,180,0.7)";
+      ctx.font = uiFont(12);
+      ctx.fillText("败", slot.x, slot.y - 44);
+    }
+
+    if (side === "enemy" && index === target && !unit.downed) {
+      const pulse = 0.6 + Math.sin(time * 4) * 0.4;
+      ctx.strokeStyle = `rgba(240,190,110,${pulse})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(slot.x, slot.y + 6, 46, 13, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "#f0c27a";
+      ctx.beginPath();
+      ctx.moveTo(slot.x, slot.y - 18);
+      ctx.lineTo(slot.x - 7, slot.y - 28);
+      ctx.lineTo(slot.x + 7, slot.y - 28);
+      ctx.closePath();
+      ctx.fill();
+    }
+  };
+
+  battle.party.forEach((unit, index) => {
+    drawUnit(unit, playerSlots[index], "player", index);
+  });
+  battle.enemies.forEach((unit, index) => {
+    drawUnit(unit, enemySlots[index], "enemy", index);
+  });
+
+  // 战斗特效
+  if (currentEvent) {
+    const actor = findUnit(battle, currentEvent.actor);
+    const victim = currentEvent.target ? findUnit(battle, currentEvent.target) : null;
+    if (currentEvent.kind === "attack" && victim) {
+      const progress = Math.min(1, eventProgress / 0.6);
+      ctx.save();
+      ctx.globalAlpha = 1 - progress;
+      ctx.strokeStyle = "#ffe9b8";
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.arc(victim.slot.x, victim.slot.y - 46, 30 + progress * 26, -1.2, 0.9);
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (currentEvent.kind === "tactic" && victim) {
+      for (let i = 0; i < 10; i++) {
+        const angle = (i / 10) * Math.PI * 2;
+        const radius = 10 + eventProgress * 46;
+        ctx.fillStyle = `rgba(255,${120 + i * 4},60,${1 - eventProgress})`;
+        ctx.beginPath();
+        ctx.arc(
+          victim.slot.x + Math.cos(angle) * radius,
+          victim.slot.y - 30 + Math.sin(angle) * radius * 0.6,
+          4 + (i % 3),
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+      }
+    }
+    if (currentEvent.kind === "heal" && victim) {
+      ctx.fillStyle = `rgba(126,230,160,${1 - eventProgress})`;
+      ctx.font = uiFont(22);
+      ctx.textAlign = "center";
+      ctx.fillText("＋", victim.slot.x, victim.slot.y - 66 - eventProgress * 26);
+    }
+    if (currentEvent.kind === "confuse" && victim) {
+      ctx.fillStyle = `rgba(198,170,255,${1 - eventProgress})`;
+      ctx.font = uiFont(20);
+      ctx.textAlign = "center";
+      ctx.fillText("？", victim.slot.x, victim.slot.y - 78 - eventProgress * 18);
+    }
+    if (currentEvent.kind === "recruit" && victim) {
+      ctx.fillStyle = `rgba(240,210,130,${1 - eventProgress})`;
+      ctx.font = uiFont(16);
+      ctx.textAlign = "center";
+      ctx.fillText("归顺", victim.slot.x, victim.slot.y - 70 - eventProgress * 20);
+    }
+    if (typeof currentEvent.amount === "number" && currentEvent.amount > 0 && victim) {
+      ctx.save();
+      ctx.globalAlpha = 1 - Math.max(0, eventProgress - 0.5);
+      ctx.fillStyle = currentEvent.kind === "heal" ? "#8ef0b0" : "#ffd9a0";
+      ctx.font = uiFont(20);
+      ctx.textAlign = "center";
+      ctx.fillText(
+        `${currentEvent.kind === "heal" ? "+" : "-"}${currentEvent.amount}`,
+        victim.slot.x + 24,
+        victim.slot.y - 92 - eventProgress * 24,
+      );
+      ctx.restore();
+    }
+    void actor;
+  }
+
+  // 顶部信息条
+  ctx.textAlign = "left";
+  ctx.font = uiFont(12);
+  ctx.fillStyle = "rgba(236,213,171,0.6)";
+  ctx.fillText("A/D 走位 · 点击城门或店门交互", 26, VIEW_H - 16);
+
+  const vignette = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, 260, VIEW_W / 2, VIEW_H / 2, 580);
+  vignette.addColorStop(0, "rgba(0,0,0,0)");
+  vignette.addColorStop(1, "rgba(0,0,0,0.46)");
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 }

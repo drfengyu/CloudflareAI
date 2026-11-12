@@ -37,7 +37,6 @@ import {
 import {
   TRIAL_CONFIG_KEY,
   TRIAL_MAX_FLOORS,
-  TRIAL_MIN_SECONDS,
   sanitizeTrialConfig,
 } from "@/lib/trial/config";
 import {
@@ -1002,8 +1001,6 @@ export async function updateTrialSettings(formData: {
   startAt: string;
   endAt: string;
   questionCount: number;
-  timeLimitSeconds: number;
-  dailyRuns: number;
   runPriceCredits: number;
   /** 1 张活动券兑换所需的 cr。 */
   couponUnitCredits: number;
@@ -1032,26 +1029,22 @@ export async function updateTrialSettings(formData: {
   }
 
   const questionCount = Math.trunc(
-    requireNumber(formData.questionCount, "每局层数", 1, TRIAL_MAX_FLOORS),
+    requireNumber(formData.questionCount, "每处地方节点数", 2, TRIAL_MAX_FLOORS),
   );
   const tiers = (formData.tiers ?? []).map((tier, index) => ({
     correct: Math.trunc(
-      requireNumber(tier?.correct, `奖励第 ${index + 1} 行的答对题数`, 1, questionCount),
+      requireNumber(tier?.correct, `平定奖励第 ${index + 1} 行的节点数`, 1, questionCount),
     ),
-    reward: requireNumber(tier?.reward, `奖励第 ${index + 1} 行的 tcr`, 0, 1_000_000),
+    reward: requireNumber(tier?.reward, `平定奖励第 ${index + 1} 行的 tcr`, 0, 1_000_000),
   }));
-  if (tiers.length === 0) throw new Error("至少要配一个答对奖励档位");
+  if (tiers.length === 0) throw new Error("至少要配一个平定奖励档位");
 
   const config = sanitizeTrialConfig({
     enabled: formData.enabled === true,
     startAt,
     endAt,
     questionCount,
-    timeLimitSeconds: Math.trunc(
-      requireNumber(formData.timeLimitSeconds, "单局限时", TRIAL_MIN_SECONDS, 1800),
-    ),
-    dailyRuns: Math.trunc(requireNumber(formData.dailyRuns, "每日挑战次数", 1, 100)),
-    runPriceCredits: requireNumber(formData.runPriceCredits, "单局票价", 0.01, 1_000_000),
+    runPriceCredits: requireNumber(formData.runPriceCredits, "每次出城军令", 0.01, 1_000_000),
     couponUnitCredits: requireNumber(formData.couponUnitCredits, "活动券单价", 0.01, 1_000_000),
     rewardValidDays: Math.trunc(requireNumber(formData.rewardValidDays, "奖励有效期", 1, 3650)),
     tiers,

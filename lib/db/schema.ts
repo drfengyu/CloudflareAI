@@ -922,10 +922,11 @@ export const flipRounds = sqliteTable(
 export type FlipRound = typeof flipRounds.$inferSelect;
 
 /**
- * 限时活动·每日试炼：一次挑战一行。
+ * 限时活动·三国讨逆传：一次行军一行。
  *
- * 题目与答案在开局时写进这一行，交卷只做对答案——答案从不进响应体。
- * 每日次数按 `startedAt` 落在北京自然日内的行数统计，不用额外的计数列。
+ * `questions` 存这次行军的 JSON（种子、节点、出发时存档、局内购买），
+ * 交卷只重放客户端上行的指令——金币、等级与胜负都由服务端算，从不采信响应体外的结果。
+ * 剧情存档随最新一行的 `endSave` 延续，没有每日次数或限时。
  */
 export const trialRuns = sqliteTable(
   "trial_run",
@@ -936,12 +937,13 @@ export const trialRuns = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     /** 活动轮次标识（活动 startAt 字符串）。 */
     activityKey: text("activityKey").notNull(),
-    /** active=攻略中 / scored=已交卷 / expired=超时未交。 */
+    /** active=行军中 / scored=已收兵 / expired=旧玩法遗留，不再产生。 */
     status: text("status").$type<"active" | "scored" | "expired">().notNull().default("active"),
-    /** 题目 JSON：[{prompt, answer}]；answer 只留给服务端判分。 */
+    /** 行军 JSON：种子、节点、startSave/endSave、局内购买。 */
     questions: text("questions").notNull(),
+    /** 这一路的总节点数。 */
     questionCount: integer("questionCount").notNull(),
-    /** 答对题数；未交卷为 0。 */
+    /** 已攻克节点数；未收兵为 0。 */
     correct: integer("correct").notNull().default(0),
     durationMs: integer("durationMs").notNull().default(0),
     /** 本次实发 tcr（按答对题数命中档位）。 */

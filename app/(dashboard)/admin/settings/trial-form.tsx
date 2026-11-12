@@ -6,9 +6,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import {
   TRIAL_MAX_FLOORS,
-  TRIAL_MIN_SECONDS,
   sanitizeTrialConfig,
-  trialTimeBounds,
   type TrialConfig,
 } from "@/lib/trial/config";
 import { formatCredits } from "@/lib/billing/credits";
@@ -30,8 +28,6 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
   const [startAt, setStartAt] = useState(toField(initialConfig.startAt));
   const [endAt, setEndAt] = useState(toField(initialConfig.endAt));
   const [questionCount, setQuestionCount] = useState(String(initialConfig.questionCount));
-  const [timeLimit, setTimeLimit] = useState(String(initialConfig.timeLimitSeconds));
-  const [dailyRuns, setDailyRuns] = useState(String(initialConfig.dailyRuns));
   const [price, setPrice] = useState(String(initialConfig.runPriceCredits));
   const [couponUnit, setCouponUnit] = useState(String(initialConfig.couponUnitCredits));
   const [validDays, setValidDays] = useState(String(initialConfig.rewardValidDays));
@@ -50,16 +46,13 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
         startAt: toStored(startAt),
         endAt: toStored(endAt),
         questionCount: Number(questionCount),
-        timeLimitSeconds: Number(timeLimit),
-        dailyRuns: Number(dailyRuns),
         runPriceCredits: Number(price),
         couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
         tiers: tiers.map((row) => ({ correct: Number(row.correct), reward: Number(row.reward) })),
       }),
-    [enabled, startAt, endAt, questionCount, timeLimit, dailyRuns, price, couponUnit, validDays, tiers],
+    [enabled, startAt, endAt, questionCount, price, couponUnit, validDays, tiers],
   );
-  const bounds = trialTimeBounds(preview);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -70,8 +63,6 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
         startAt: toStored(startAt),
         endAt: toStored(endAt),
         questionCount: Number(questionCount),
-        timeLimitSeconds: Number(timeLimit),
-        dailyRuns: Number(dailyRuns),
         runPriceCredits: Number(price),
         couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
@@ -100,8 +91,8 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
         </label>
       </div>
       <p className="text-xs text-muted-foreground">
-        浮游城（层数、野区与层主、随机种子）在开局时由服务端生成并落库，交卷只上传每帧按键序列（60Hz 输入帧）、由服务端重放判定战果；
-        修改开始时间等于开启新一轮活动，个人战绩按新轮次重计。
+        三国讨逆传（剧情地点、敌将、随机种子）在出城时由服务端生成并落库；等级、金币、装备、武将、图鉴随剧情一直保留，
+        收兵只上传编制/购物/战斗指令，由服务端按种子重放判定战果。修改开始时间等于开启新一轮活动，存档与战报按新轮次重计。
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -125,48 +116,22 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">每局层数</label>
+          <label className="mb-1 block text-sm font-medium">每处地方节点数</label>
           <input
             type="number"
-            min={1}
+            min={2}
             max={TRIAL_MAX_FLOORS}
             step="1"
             value={questionCount}
             onChange={(e) => setQuestionCount(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">最多 {TRIAL_MAX_FLOORS} 层（每层两个野区门 + 层主房）</p>
+          <p className="mt-1 text-xs text-muted-foreground">2 ~ {TRIAL_MAX_FLOORS} 处节点（野战 → 精英 → 首领）</p>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">单局限时（秒）</label>
-          <input
-            type="number"
-            min={TRIAL_MIN_SECONDS}
-            step="1"
-            value={timeLimit}
-            onChange={(e) => setTimeLimit(e.target.value)}
-            className={FIELD_CLASS}
-          />
-          <p className="mt-1 text-xs text-muted-foreground">
-            至少 {TRIAL_MIN_SECONDS} 秒；低于 {Math.round(bounds.minMs / 1000)} 秒交卷或超过 {Math.round(bounds.maxMs / 1000)} 秒按 0 层计
-          </p>
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium">每日挑战次数</label>
-          <input
-            type="number"
-            min={1}
-            step="1"
-            value={dailyRuns}
-            onChange={(e) => setDailyRuns(e.target.value)}
-            className={FIELD_CLASS}
-          />
-          <p className="mt-1 text-xs text-muted-foreground">按北京时间自然日重置</p>
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium">单局票价（cr）</label>
+          <label className="mb-1 block text-sm font-medium">每次出城军令（cr）</label>
           <input
             type="number"
             step="1"
@@ -203,7 +168,7 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
 
       <div>
         <div className="flex items-center justify-between gap-2">
-          <label className="block text-sm font-medium">通关层数奖励档位（tcr）</label>
+          <label className="block text-sm font-medium">平定一处地方的奖励档位（tcr）</label>
           <Button
             type="button"
             variant="ghost"
@@ -215,7 +180,7 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
           </Button>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          通关层数达到某档即发该档 tcr，同层数取最高档；档位按层数升序生效。
+          只有走完当前地方的全部剧情才发奖；按攻克节点数达到的最高档发放，未平定不发。
         </p>
         <div className="mt-2 space-y-2">
           {tiers.map((row, index) => (
@@ -229,7 +194,7 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
                 step="1"
                 value={row.correct}
                 onChange={(e) => patchTier(index, "correct", e.target.value)}
-                placeholder="通关层数"
+                placeholder="节点数"
                 className={FIELD_CLASS}
               />
               <input
@@ -257,14 +222,14 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
 
       <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
         <p className="font-medium">
-          每局 {preview.questionCount} 层 / {preview.timeLimitSeconds} 秒 · 每日 {preview.dailyRuns} 局 ·
-          单局 {preview.runPriceCredits} cr 票价（{Math.max(1, Math.round(preview.runPriceCredits / Math.max(1, preview.couponUnitCredits)))} 张券）
+          每处地方 {preview.questionCount} 处节点 · 每次出城 {preview.runPriceCredits} cr 军令（
+          {Math.max(1, Math.round(preview.runPriceCredits / Math.max(1, preview.couponUnitCredits)))} 张券）
         </p>
         <p className="mt-1 text-muted-foreground">
           {preview.tiers
-            .map((tier) => `通关 ${tier.correct} 层 ${formatCredits(tier.reward)} tcr`)
+            .map((tier) => `攻克 ${tier.correct} 处 ${formatCredits(tier.reward)} tcr`)
             .join(" · ")}
-          ；最高单局奖励 {formatCredits(preview.tiers[preview.tiers.length - 1]?.reward ?? 0)} tcr。
+          ；平定一处地方的奖励 {formatCredits(preview.tiers[preview.tiers.length - 1]?.reward ?? 0)} tcr。
         </p>
       </div>
 
