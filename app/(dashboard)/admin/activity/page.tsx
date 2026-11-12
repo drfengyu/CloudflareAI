@@ -1,9 +1,7 @@
-import { Fragment } from "react";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageBody } from "@/components/dashboard/section";
-import { Pagination } from "@/components/dashboard/pagination";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db/d1-http";
 import { users } from "@/lib/db/schema";
@@ -11,16 +9,8 @@ import { requireUser } from "@/lib/usage/meter";
 import { formatCredits } from "@/lib/billing/credits";
 import { cn } from "@/lib/utils";
 import {
-  ACTIVITY_LEDGER_PAGE_DAYS,
-  ACTIVITY_LEDGER_RANGES,
-  listActivityLedgerActivityTotals,
-  listActivityLedgerDays,
-  listActivityLedgerUsers,
-  sumActivityLedger,
-  type ActivityLedgerActivityTotal,
-  type ActivityLedgerDay,
-  type ActivityLedgerRange,
-  type ActivityLedgerUserRow,
+  listActivityLedgerSections,
+  type ActivityLedgerSection,
 } from "@/lib/activity/ledger-report";
 
 export const dynamic = "force-dynamic";
@@ -47,98 +37,148 @@ function Metric({ label, value, hint, tone }: { label: string; value: string; hi
   );
 }
 
-/** 一天的表头行 + 各活动小计行；日期只在表头出现一次。 */
-function DayRows({ day }: { day: ActivityLedgerDay }) {
-  const net = day.income - day.expense;
-  return (
-    <>
-      <tr className="border-t border-border bg-secondary/40 font-medium">
-        <td className="py-2 font-mono">{day.date}</td>
-        <td className="py-2 text-xs text-muted-foreground">当天合计</td>
-        <td className="py-2 text-right text-success tabular-nums">{signed(day.income, "+")}</td>
-        <td className="py-2 text-right text-destructive tabular-nums">{signed(-day.expense, "−")}</td>
-        <td className={cn("py-2 text-right", netTone(net))}>{signed(net, null)}</td>
-        <td className="py-2 text-right text-xs text-muted-foreground tabular-nums">{day.entries}</td>
-      </tr>
-      {day.cells.map((cell) => {
-        const cellNet = cell.income - cell.expense;
-        return (
-          <tr key={cell.key} className="border-t border-border/60 text-xs">
-            <td />
-            <td className="py-1.5 pl-4">{cell.label}</td>
-            <td className="py-1.5 text-right text-success tabular-nums">{signed(cell.income, "+")}</td>
-            <td className="py-1.5 text-right text-destructive tabular-nums">{signed(-cell.expense, "−")}</td>
-            <td className={cn("py-1.5 text-right", netTone(cellNet))}>{signed(cellNet, null)}</td>
-            <td className="py-1.5 text-right text-muted-foreground tabular-nums">{cell.entries}</td>
-          </tr>
-        );
-      })}
-    </>
-  );
+function periodText(section: ActivityLedgerSection): string {
+  if (!section.firstDate || !section.lastDate) return "无记录";
+  return section.firstDate === section.lastDate
+    ? section.firstDate
+    : `${section.firstDate} ~ ${section.lastDate}`;
 }
 
-const USERS_PER_PAGE = 10;
-
-function ActivityTotalRow({ row }: { row: ActivityLedgerActivityTotal }) {
-  const net = row.income - row.expense;
+function SectionCard({ section }: { section: ActivityLedgerSection }) {
+  const net = section.income - section.expense;
   return (
-    <tr className="border-t border-border/60">
-      <td className="py-2 font-medium">{row.label}</td>
-      <td className="py-2 text-right text-success tabular-nums">{signed(row.income, "+")}</td>
-      <td className="py-2 text-right text-destructive tabular-nums">{signed(-row.expense, "−")}</td>
-      <td className={cn("py-2 text-right", netTone(net))}>{signed(net, null)}</td>
-      <td className="py-2 text-right text-muted-foreground tabular-nums">{row.users}</td>
-      <td className="py-2 text-right text-muted-foreground tabular-nums">{row.entries}</td>
-    </tr>
-  );
-}
-
-function UserRows({ rows }: { rows: ActivityLedgerUserRow[] }) {
-  return (
-    <>
-      {rows.map((row) => {
-        const net = row.income - row.expense;
-        return (
-          <tr key={row.userId} className="border-t border-border/60">
-            <td className="max-w-[12rem] truncate py-2 font-medium" title={row.label}>
-              {row.label}
-            </td>
-            <td className="py-2">
-              <div className="flex flex-wrap gap-1">
-                {row.cells.map((cell) => (
-                  <span
-                    key={cell.key}
-                    className="rounded-md border border-border px-1.5 py-0.5 text-[11px] text-muted-foreground"
-                    title={`${cell.label}：付入 ${formatCredits(cell.income)} cr / 领出 ${formatCredits(cell.expense)} cr`}
-                  >
-                    {cell.label}
-                    <span className="ml-1 tabular-nums text-foreground/70">
-                      {cell.income > 0 ? `付 ${formatCredits(cell.income)}` : ""}
-                      {cell.income > 0 && cell.expense > 0 ? " · " : ""}
-                      {cell.expense > 0 ? `领 ${formatCredits(cell.expense)}` : ""}
-                    </span>
-                  </span>
-                ))}
+    <Card>
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <CardTitle className="text-base">{section.label}</CardTitle>
+          <span className="text-xs text-muted-foreground tabular-nums">{periodText(section)}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span>
+            收入 <span className="text-success tabular-nums">{signed(section.income, "+")}</span>
+          </span>
+          <span>
+            支出 <span className="text-destructive tabular-nums">{signed(-section.expense, "−")}</span>
+          </span>
+          <span>
+            净额 <span className={netTone(net)}>{signed(net, null)}</span>
+          </span>
+          <span className="tabular-nums">
+            {section.users} 人 · {section.entries} 笔
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {section.days.length === 0 ? (
+          <p className="text-sm text-muted-foreground">这段时间没有流水。</p>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div>
+              <p className="mb-2 text-sm font-medium">按天</p>
+              <div className="max-h-80 overflow-auto rounded-lg border border-border">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-secondary/80 text-left text-muted-foreground backdrop-blur">
+                    <tr>
+                      <th className="px-2 py-1.5 font-medium">日期</th>
+                      <th className="px-2 py-1.5 text-right font-medium">收入</th>
+                      <th className="px-2 py-1.5 text-right font-medium">支出</th>
+                      <th className="px-2 py-1.5 text-right font-medium">净额</th>
+                      <th className="px-2 py-1.5 text-right font-medium">笔数</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {section.days.map((day) => {
+                      const dayNet = day.income - day.expense;
+                      return (
+                        <tr key={day.date} className="border-t border-border/60">
+                          <td className="px-2 py-1.5 font-mono">{day.date}</td>
+                          <td className="px-2 py-1.5 text-right text-success tabular-nums">
+                            {signed(day.income, "+")}
+                          </td>
+                          <td className="px-2 py-1.5 text-right text-destructive tabular-nums">
+                            {signed(-day.expense, "−")}
+                          </td>
+                          <td className={cn("px-2 py-1.5 text-right", netTone(dayNet))}>
+                            {signed(dayNet, null)}
+                          </td>
+                          <td className="px-2 py-1.5 text-right text-muted-foreground tabular-nums">
+                            {day.entries}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            </td>
-            <td className="py-2 text-right text-success tabular-nums">{signed(row.income, "+")}</td>
-            <td className="py-2 text-right text-destructive tabular-nums">{signed(-row.expense, "−")}</td>
-            <td className={cn("py-2 text-right", netTone(net))}>{signed(net, null)}</td>
-            <td className="py-2 text-right text-muted-foreground tabular-nums">{row.entries}</td>
-          </tr>
-        );
-      })}
-    </>
+            </div>
+
+            <div>
+              <p className="mb-2 text-sm font-medium">
+                按用户小计
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {section.userRows.length} 人，按付入 + 领出倒序
+                </span>
+              </p>
+              <div className="max-h-80 overflow-auto rounded-lg border border-border">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-secondary/80 text-left text-muted-foreground backdrop-blur">
+                    <tr>
+                      <th className="px-2 py-1.5 font-medium">用户</th>
+                      <th className="px-2 py-1.5 text-right font-medium">付入</th>
+                      <th className="px-2 py-1.5 text-right font-medium">领出</th>
+                      <th className="px-2 py-1.5 text-right font-medium">净额</th>
+                      <th className="px-2 py-1.5 text-right font-medium">笔数</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {section.userRows.map((row) => {
+                      const rowNet = row.income - row.expense;
+                      return (
+                        <tr key={row.userId} className="border-t border-border/60">
+                          <td className="max-w-[10rem] truncate px-2 py-1.5" title={row.label}>
+                            {row.label}
+                          </td>
+                          <td className="px-2 py-1.5 text-right text-success tabular-nums">
+                            {signed(row.income, "+")}
+                          </td>
+                          <td className="px-2 py-1.5 text-right text-destructive tabular-nums">
+                            {signed(-row.expense, "−")}
+                          </td>
+                          <td className={cn("px-2 py-1.5 text-right", netTone(rowNet))}>
+                            {signed(rowNet, null)}
+                          </td>
+                          <td className="px-2 py-1.5 text-right text-muted-foreground tabular-nums">
+                            {row.entries}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    <tr className="border-t border-border bg-secondary/40 font-medium">
+                      <td className="px-2 py-1.5">小计</td>
+                      <td className="px-2 py-1.5 text-right text-success tabular-nums">
+                        {signed(section.income, "+")}
+                      </td>
+                      <td className="px-2 py-1.5 text-right text-destructive tabular-nums">
+                        {signed(-section.expense, "−")}
+                      </td>
+                      <td className={cn("px-2 py-1.5 text-right", netTone(net))}>{signed(net, null)}</td>
+                      <td className="px-2 py-1.5 text-right text-muted-foreground tabular-nums">
+                        {section.entries}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
-export default async function AdminActivityLedgerPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ range?: string; page?: string; upage?: string }>;
-}) {
+export default async function AdminActivityLedgerPage() {
   const currentUserId = await requireUser();
-  const params = await searchParams;
 
   const currentUser = await db
     .select({ role: users.role })
@@ -150,55 +190,20 @@ export default async function AdminActivityLedgerPage({
     redirect("/dashboard");
   }
 
-  const rangeIds = ACTIVITY_LEDGER_RANGES.map((item) => item.id as string);
-  const range = (rangeIds.includes(params.range ?? "") ? params.range : "30d") as ActivityLedgerRange;
-
-  const [days, activityTotals, userRows] = await Promise.all([
-    listActivityLedgerDays(range),
-    listActivityLedgerActivityTotals(range),
-    listActivityLedgerUsers(range),
-  ]);
-  const totals = sumActivityLedger(days);
+  const { sections, totals } = await listActivityLedgerSections();
   const net = totals.income - totals.expense;
-
-  const totalPages = Math.max(1, Math.ceil(days.length / ACTIVITY_LEDGER_PAGE_DAYS));
-  const rawPage = Math.trunc(Number(params.page ?? "1"));
-  const page = Number.isFinite(rawPage) ? Math.min(totalPages, Math.max(1, rawPage)) : 1;
-  const pageDays = days.slice((page - 1) * ACTIVITY_LEDGER_PAGE_DAYS, page * ACTIVITY_LEDGER_PAGE_DAYS);
-
-  const userTotalPages = Math.max(1, Math.ceil(userRows.length / USERS_PER_PAGE));
-  const rawUpage = Math.trunc(Number(params.upage ?? "1"));
-  const upage = Number.isFinite(rawUpage) ? Math.min(userTotalPages, Math.max(1, rawUpage)) : 1;
-  const pageUsers = userRows.slice((upage - 1) * USERS_PER_PAGE, upage * USERS_PER_PAGE);
-  const activeUsers = userRows.filter((row) => row.income > 0).length;
 
   return (
     <>
       <PageHeader
         title="活动记录"
-        description="六种限时活动按天汇总的站点收支 · 含各活动本期合计与用户维度"
+        description="按活动汇总站点收支：各活动时段内按天拆分，并给出用户小计与总计"
       />
 
       <PageBody className="space-y-4">
         <Card>
-          <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-            <CardTitle className="text-base">站点收支</CardTitle>
-            <div className="flex gap-1 rounded-lg bg-muted p-1">
-              {ACTIVITY_LEDGER_RANGES.map((tab) => (
-                <a
-                  key={tab.id}
-                  href={`/admin/activity${tab.id === "30d" ? "" : `?range=${tab.id}`}`}
-                  className={cn(
-                    "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-                    range === tab.id
-                      ? "bg-card text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {tab.label}
-                </a>
-              ))}
-            </div>
+          <CardHeader>
+            <CardTitle className="text-base">站点总计</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -220,124 +225,73 @@ export default async function AdminActivityLedgerPage({
                 tone={net >= 0 ? "text-success" : "text-destructive"}
                 hint="收入 − 支出"
               />
-              <Metric label="有账天数" value={`${days.length} 天`} hint={`共 ${totals.entries} 笔流水`} />
+              <Metric
+                label="参与人数"
+                value={`${totals.users} 人`}
+                hint={`${sections.length} 个活动 · ${totals.entries} 笔流水`}
+              />
+            </div>
+
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-secondary/50 text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">活动</th>
+                    <th className="px-3 py-2 font-medium">活动时段</th>
+                    <th className="px-3 py-2 text-right font-medium">收入</th>
+                    <th className="px-3 py-2 text-right font-medium">支出</th>
+                    <th className="px-3 py-2 text-right font-medium">净额</th>
+                    <th className="px-3 py-2 text-right font-medium">人数</th>
+                    <th className="px-3 py-2 text-right font-medium">笔数</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {sections.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-3 py-4 text-sm text-muted-foreground">
+                        还没有任何活动流水。
+                      </td>
+                    </tr>
+                  ) : (
+                    sections.map((section) => {
+                      const sectionNet = section.income - section.expense;
+                      return (
+                        <tr key={section.key} className="hover:bg-secondary/30">
+                          <td className="px-3 py-2 font-medium">{section.label}</td>
+                          <td className="px-3 py-2 text-xs text-muted-foreground tabular-nums">
+                            {periodText(section)}
+                          </td>
+                          <td className="px-3 py-2 text-right text-success tabular-nums">
+                            {signed(section.income, "+")}
+                          </td>
+                          <td className="px-3 py-2 text-right text-destructive tabular-nums">
+                            {signed(-section.expense, "−")}
+                          </td>
+                          <td className={cn("px-3 py-2 text-right", netTone(sectionNet))}>
+                            {signed(sectionNet, null)}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums">{section.users}</td>
+                          <td className="px-3 py-2 text-right tabular-nums">{section.entries}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
 
             <p className="text-xs text-muted-foreground">
               口径：收入 = 用户为活动券 / 礼包实付的 cr 与转盘倒扣；支出 = 活动发放（转盘、翻牌、雷电的
               cr，试炼、工坊、图鉴的 tcr，以及礼包赠送 tcr）。tcr 按 cr 面值计，到期作废不回冲；
               礼包让利（券面 − 实付）不是现金流水，不计入本表。兑换 / 礼包流水按描述里的活动名归属，
-              识别不到的落在「未归属活动券」。
+              识别不到的落在「未归属活动券」。活动时段取该活动实际有账的首末北京日。
             </p>
-
-            <div className="overflow-x-auto">
-              <p className="mb-2 text-sm font-medium">各活动本期收支</p>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-muted-foreground">
-                    <th className="py-2 font-medium">活动</th>
-                    <th className="py-2 text-right font-medium">收入</th>
-                    <th className="py-2 text-right font-medium">支出</th>
-                    <th className="py-2 text-right font-medium">净额</th>
-                    <th className="py-2 text-right font-medium">参与人数</th>
-                    <th className="py-2 text-right font-medium">笔数</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activityTotals.length === 0 ? (
-                    <tr className="border-t border-border/60">
-                      <td colSpan={6} className="py-3 text-sm text-muted-foreground">
-                        该时间段还没有活动收支。
-                      </td>
-                    </tr>
-                  ) : (
-                    activityTotals.map((row) => <ActivityTotalRow key={row.key} row={row} />)
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <p className="text-sm font-medium">按天明细</p>
-
-            {days.length === 0 ? (
-              <p className="text-sm text-muted-foreground">该时间段还没有活动收支。</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-xs text-muted-foreground">
-                      <th className="py-2 font-medium">日期</th>
-                      <th className="py-2 font-medium">活动</th>
-                      <th className="py-2 text-right font-medium">收入</th>
-                      <th className="py-2 text-right font-medium">支出</th>
-                      <th className="py-2 text-right font-medium">净额</th>
-                      <th className="py-2 text-right font-medium">笔数</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pageDays.map((day) => (
-                      <Fragment key={day.date}>
-                        <DayRows day={day} />
-                      </Fragment>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-
-            <Pagination
-              page={page}
-              totalPages={totalPages}
-              basePath="/admin/activity"
-              params={{ range }}
-            />
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-            <CardTitle className="text-base">用户收支</CardTitle>
-            <span className="text-xs text-muted-foreground">
-              窗口内 {userRows.length} 人参与，其中 {activeUsers} 人买过活动券 / 礼包
-            </span>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {userRows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">该时间段还没有用户流水。</p>
-            ) : (
-              <>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-muted-foreground">
-                        <th className="py-2 font-medium">用户</th>
-                        <th className="py-2 font-medium">参与活动（付入 / 领出）</th>
-                        <th className="py-2 text-right font-medium">付入</th>
-                        <th className="py-2 text-right font-medium">领出</th>
-                        <th className="py-2 text-right font-medium">净额</th>
-                        <th className="py-2 text-right font-medium">笔数</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <UserRows rows={pageUsers} />
-                    </tbody>
-                  </table>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  「付入」是用户为活动券 / 礼包花的 cr，「领出」是活动发给他的 cr / tcr 面值，
-                  tcr 到期作废不回收。按付入 + 领出倒序排列。
-                </p>
-                <Pagination
-                  page={upage}
-                  totalPages={userTotalPages}
-                  basePath="/admin/activity"
-                  pageParam="upage"
-                  params={{ range, ...(page > 1 ? { page: String(page) } : {}) }}
-                />
-              </>
-            )}
-          </CardContent>
-        </Card>
+        {sections.map((section) => (
+          <SectionCard key={section.key} section={section} />
+        ))}
       </PageBody>
     </>
   );
