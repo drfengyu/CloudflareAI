@@ -70,13 +70,18 @@ export function activityKeyForRow(typeCode: number, description: string | null):
 }
 
 /** 与 `activityKeyForRow` 同一份元数据生成的 SQL CASE，避免两边各维护一套口径。 */
-const ATTRIBUTION_CASE = `CASE
-  ${ACTIVITY_LEDGER_META.map((item) => `WHEN type = ${item.rewardType} THEN '${item.key}'`).join("\n  ")}
+function attributionCase(alias = ""): string {
+  const prefix = alias ? `${alias}.` : "";
+  return `CASE
+  ${ACTIVITY_LEDGER_META.map((item) => `WHEN ${prefix}type = ${item.rewardType} THEN '${item.key}'`).join("\n  ")}
   ${ACTIVITY_LEDGER_META.map(
-    (item) => `WHEN type IN (${COUPON_TOPUP_TYPE}, ${PACK_BONUS_TOPUP_TYPE}) AND description LIKE '%${item.match}%' THEN '${item.key}'`,
+    (item) => `WHEN ${prefix}type IN (${COUPON_TOPUP_TYPE}, ${PACK_BONUS_TOPUP_TYPE}) AND ${prefix}description LIKE '%${item.match}%' THEN '${item.key}'`,
   ).join("\n  ")}
   ELSE 'other'
 END`;
+}
+
+const ATTRIBUTION_CASE = attributionCase();
 
 const DAY_OF = "strftime('%Y-%m-%d', createdAt / 1000, 'unixepoch', '+8 hours')";
 
@@ -209,5 +214,186 @@ export function sumActivityLedger(days: ActivityLedgerDay[]): {
       entries: sum.entries + day.entries,
     }),
     { income: 0, expense: 0, entries: 0 },
+  );
+}
+
+export interface ActivityLedgerActivityTotal {
+  key: ActivityLedgerKey;
+  label: string;
+  income: number;
+  expense: number;
+  entries: number;
+  /** 窗口内为该活动付过费或领过奖的人数。 */
+  users: number;
+}
+
+interface ActivityTotalRawRow {
+  activityKey: string;
+  income: number;
+  expense: number;
+  entries: number;
+  users: number;
+}
+
+/** 各活动在窗口内的合计，按元数据固定顺序返回；没有流水的活动也保留 0 行。 */
+export function foldActivityTotals(rows: ActivityTotalRawRow[]): ActivityLedgerActivityTotal[] {
+  const byKey = new Map<ActivityLedgerKey, ActivityLedgerActivityTotal>();
+  for (const row of rows) {
+    const key = (ORDER.has(row.activityKey as ActivityLedgerKey)
+      ? row.activityKey
+      : "other") as ActivityLedgerKey;
+    if (!ledgerHasMovement(row)) continue;
+    const current = byKey.get(key) ?? {
+      key,
+      label: LABEL_BY_KEY.get(key) ?? ACTIVITY_LEDGER_OTHER_LABEL,
+      income: 0,
+      expense: 0,
+      entries: 0,
+      users: 0,
+    };
+    current.income += row.income;
+    current.expense += row.expense;
+    current.entries += row.entries;
+    current.users += row.users;
+    byKey.set(key, current);
+  }
+  return [...byKey.values()].sort(
+    (a, b) => (ORDER.get(a.key) ?? 99) - (ORDER.get(b.key) ?? 99),
+  );
+}
+
+export async function listActivityLedgerActivityTotals(
+  range: ActivityLedgerRange,
+): Promise<ActivityLedgerActivityTotal[]> {
+  const win = activityLedgerWindow(range);
+  const rangeFilter = win ? " AND createdAt >= ? AND createdAt < ?" : "";
+  const params = win ? [win.start.getTime(), win.end.getTime()] : [];
+  const rows = await d1All<Record<string, unknown>>(
+    `SELECT ${ATTRIBUTION_CASE} AS activityKey,
+            SUM(CASE WHEN amount < 0 THEN -amount ELSE 0 END) AS income,
+            SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) AS expense,
+            COUNT(*) AS entries,
+            COUNT(DISTINCT userId) AS users
+     FROM topup
+     WHERE type IN (${TYPES.join(", ")}) AND amount <> 0${rangeFilter}
+     GROUP BY activityKey`,
+    params,
+  );
+  return foldActivityTotals(
+    rows.map((row) => ({
+      activityKey: String(row.activityKey ?? "other"),
+      income: num(row.income),
+      expense: num(row.expense),
+      entries: num(row.entries),
+      users: num(row.users),
+    })),
+  );
+}
+
+export interface ActivityLedgerUserCell {
+  key: ActivityLedgerKey;
+  label: string;
+  income: number;
+  expense: number;
+}
+
+export interface ActivityLedgerUserRow {
+  userId: string;
+  /** 显示名；没有昵称时退回邮箱或 userId 前缀。 */
+  label: string;
+  income: number;
+  expense: number;
+  entries: number;
+  cells: ActivityLedgerUserCell[];
+}
+
+interface ActivityUserRawRow {
+  userId: string | null;
+  name: string | null;
+  email: string | null;
+  activityKey: string;
+  income: number;
+  expense: number;
+  entries: number;
+}
+
+/** 用户 × 活动的流水折叠成「一人一行」，附带他在各活动上的出入。 */
+export function foldActivityUsers(rows: ActivityUserRawRow[]): ActivityLedgerUserRow[] {
+  const users = new Map<string, ActivityLedgerUserRow>();
+  for (const row of rows) {
+    if (!row.userId) continue;
+    if (!ledgerHasMovement(row)) continue;
+    const key = (ORDER.has(row.activityKey as ActivityLedgerKey)
+      ? row.activityKey
+      : "other") as ActivityLedgerKey;
+    const label =
+      (row.name && row.name.trim()) ||
+      (row.email && row.email.trim()) ||
+      `${row.userId.slice(0, 8)}…`;
+    const entry = users.get(row.userId) ?? {
+      userId: row.userId,
+      label,
+      income: 0,
+      expense: 0,
+      entries: 0,
+      cells: [],
+    };
+    let cell = entry.cells.find((item) => item.key === key);
+    if (!cell) {
+      cell = {
+        key,
+        label: LABEL_BY_KEY.get(key) ?? ACTIVITY_LEDGER_OTHER_LABEL,
+        income: 0,
+        expense: 0,
+      };
+      entry.cells.push(cell);
+    }
+    cell.income += row.income;
+    cell.expense += row.expense;
+    entry.income += row.income;
+    entry.expense += row.expense;
+    entry.entries += row.entries;
+    users.set(row.userId, entry);
+  }
+  return [...users.values()]
+    .map((user) => ({
+      ...user,
+      cells: user.cells.sort((a, b) => (ORDER.get(a.key) ?? 99) - (ORDER.get(b.key) ?? 99)),
+    }))
+    .sort((a, b) => b.income + b.expense - (a.income + a.expense) || b.entries - a.entries);
+}
+
+/**
+ * 窗口内每个用户的站点收支。一次查询拿到「用户 × 活动」，折叠在 JS 里做，
+ * 避免再为每个人单独查一次（D1 往返比内存折叠贵得多）。
+ */
+export async function listActivityLedgerUsers(
+  range: ActivityLedgerRange,
+): Promise<ActivityLedgerUserRow[]> {
+  const win = activityLedgerWindow(range);
+  const rangeFilter = win ? " AND t.createdAt >= ? AND t.createdAt < ?" : "";
+  const params = win ? [win.start.getTime(), win.end.getTime()] : [];
+  const rows = await d1All<Record<string, unknown>>(
+    `SELECT t.userId AS userId, u.name AS name, u.email AS email,
+            ${attributionCase("t")} AS activityKey,
+            SUM(CASE WHEN t.amount < 0 THEN -t.amount ELSE 0 END) AS income,
+            SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END) AS expense,
+            COUNT(*) AS entries
+     FROM topup t
+     LEFT JOIN user u ON u.id = t.userId
+     WHERE t.type IN (${TYPES.join(", ")}) AND t.amount <> 0${rangeFilter}
+     GROUP BY t.userId, activityKey`,
+    params,
+  );
+  return foldActivityUsers(
+    rows.map((row) => ({
+      userId: row.userId ? String(row.userId) : null,
+      name: row.name ? String(row.name) : null,
+      email: row.email ? String(row.email) : null,
+      activityKey: String(row.activityKey ?? "other"),
+      income: num(row.income),
+      expense: num(row.expense),
+      entries: num(row.entries),
+    })),
   );
 }

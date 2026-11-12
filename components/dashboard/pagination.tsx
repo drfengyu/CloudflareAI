@@ -4,7 +4,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 /**
- * 记录列表的翻页条：保留当前筛选参数，只改 page。
+ * 记录列表的翻页条：保留当前筛选参数，只改页码参数（默认 `page`）。
  *
  * 不传 `totalPages` 时退化为「上一页 / 下一页」——钱包流水按多取一条探测是否还有下一页，
  * 为省一次 COUNT 拿不到总数。传 `onPageChange` 则切换为局部刷新模式：渲染按钮而不是链接，
@@ -16,6 +16,7 @@ export function Pagination({
   hasNext,
   basePath,
   params,
+  pageParam = "page",
   onPageChange,
   disabled,
 }: {
@@ -25,6 +26,8 @@ export function Pagination({
   /** 链接模式的目标路径；局部刷新模式可不传。 */
   basePath?: string;
   params?: Record<string, string | undefined>;
+  /** URL 里的页码参数名；同一页面有多组列表时用来区分。 */
+  pageParam?: string;
   /** 传入后改为局部翻页，不跳转、不改 URL。 */
   onPageChange?: (page: number) => void;
   disabled?: boolean;
@@ -38,7 +41,7 @@ export function Pagination({
     for (const [key, value] of Object.entries(params ?? {})) {
       if (value) qs.set(key, value);
     }
-    if (target > 1) qs.set("page", String(target));
+    if (target > 1) qs.set(pageParam, String(target));
     const query = qs.toString();
     return query ? `${basePath}?${query}` : (basePath ?? "#");
   };

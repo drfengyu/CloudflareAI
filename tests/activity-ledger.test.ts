@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   activityKeyForRow,
   foldActivityLedger,
+  foldActivityTotals,
+  foldActivityUsers,
   sumActivityLedger,
 } from "@/lib/activity/ledger-report";
 
@@ -74,4 +76,44 @@ test("窗口合计等于逐日相加", () => {
     { date: "2026-11-11", activityKey: "workshop", income: 0, expense: 3.5, entries: 1 },
   ]);
   assert.deepEqual(sumActivityLedger(days), { income: 5, expense: 5.5, entries: 3 });
+});
+
+test("各活动合计只保留有流水的活动，并按固定顺序排列", () => {
+  const totals = foldActivityTotals([
+    { activityKey: "lottery", income: 300, expense: 120, entries: 8, users: 3 },
+    { activityKey: "trial", income: 20, expense: 12, entries: 4, users: 2 },
+    { activityKey: "raiden", income: 0.004, expense: 0, entries: 1, users: 1 },
+    { activityKey: "unknown", income: 0, expense: 6, entries: 1, users: 1 },
+  ]);
+
+  assert.deepEqual(
+    totals.map((row) => row.key),
+    ["trial", "lottery", "other"],
+  );
+  const lottery = totals.find((row) => row.key === "lottery");
+  assert.ok(lottery);
+  assert.equal(lottery.income, 300);
+  assert.equal(lottery.expense, 120);
+  assert.equal(lottery.users, 3);
+  assert.equal(totals.find((row) => row.key === "other")?.label, "未归属活动券");
+});
+
+test("用户收支按人合并，活动格子保持固定顺序并按总量倒序", () => {
+  const rows = foldActivityUsers([
+    { userId: "u1", name: "阿岚", email: "a@example.com", activityKey: "lottery", income: 100, expense: 0, entries: 1 },
+    { userId: "u1", name: "阿岚", email: "a@example.com", activityKey: "trial", income: 0, expense: 4, entries: 1 },
+    { userId: "u2", name: null, email: null, activityKey: "trial", income: 5, expense: 0, entries: 1 },
+    { userId: null, name: "无主", email: null, activityKey: "trial", income: 9, expense: 0, entries: 1 },
+    { userId: "u3", name: "零", email: "z@example.com", activityKey: "trial", income: 0.004, expense: 0, entries: 1 },
+  ]);
+
+  assert.deepEqual(
+    rows.map((row) => row.userId),
+    ["u1", "u2"],
+  );
+  assert.deepEqual(rows[0].cells.map((cell) => cell.key), ["trial", "lottery"]);
+  assert.equal(rows[0].income, 100);
+  assert.equal(rows[0].expense, 4);
+  assert.equal(rows[0].entries, 2);
+  assert.equal(rows[1].label, "u2…");
 });
