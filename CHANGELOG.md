@@ -5,6 +5,40 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.49.0] - 2026-11-13
+
+### 新增
+
+- 三国讨逆传新增城镇钱庄，把游戏金币与 tcr 收支打通。兑换规则集中在
+  `lib/trial/saga/bank.ts`：
+  - **金币 → tcr**：100 金 = 1 tcr，每次行军最多存 300 金（3 tcr），收兵结算时到账，
+    与平定奖励合并成一条 type 17 正流水；重放指令为 `{ k: "bank", g }`（100 的整数倍，
+    超出上限的部分不再扣金），结算按 `bankedGold` 发 tcr。
+  - **tcr → 金币**：1 tcr = 50 金，即时到账；`buyTrialGold` 用
+    `spendCredits(..., { temporaryOnly: true })` 只扣有效期内的临时余额，临时余额不足整笔拒绝，
+    不动永久充值余额；金币包购买记录以 CAS 追加（带 `cmdIndex`，重放进存档），冲突自动退还 tcr。
+  - 金币包：50 金 / 1 tcr、100 金 / 2 tcr、200 金 / 4 tcr。
+- 城镇渲染新增钱庄建筑（柜台、铜钱串、算盘），靠近平按 E 打开钱庄面板；
+  HUD 增加 tcr 余额，结算卡单独列出「钱庄存金：X 金 → +Y tcr」。
+
+### 变更
+
+- 否决「1 金 = 10 tcr」：一趟五节点全清给 `255 + 110×地方序` 金币，按 10 倍即
+  2550 ~ 10250 tcr，而一次出城只要 5 cr；半途收兵刷金也能换数千 tcr，等于无限印钞。
+  改为 100:1 + 每趟封顶 3 tcr：存满一趟收益仍低于出城票价，刷金无利可图；
+  反向 1 tcr = 50 金，两向价差 2:1，来回倒每次净亏一半，没有套利空间。
+- `SagaCommand` 新增 `bank`，`SagaRunResult` / `SagaReplayState` 新增 `bankedGold`；
+  指令清洗只保留 100 的整数倍且不超过 300 的存金指令。
+- 收兵战果拆分为 `clearReward`（平定奖励）与 `bankTcr`（存金到账），
+  `settlementFromStored` 能从已有战果里还原两者，断网重试不会重复发放。
+- `spendCredits` 支持 `temporaryOnly` 模式；新增 `getTemporaryBalance` 供页面与钱庄使用。
+- 城镇地名提示从「第 N 章」改为「第 N 处」，继续保持界面不出现「章节 / 局」。
+
+### 验证
+
+- `npm run typecheck`、`npx eslint`（改动文件）、`npx tsx --test tests/*.test.ts`（122 项）、
+  `npm run build` 全部通过。
+
 ## [0.48.0] - 2026-11-13
 
 ### 变更

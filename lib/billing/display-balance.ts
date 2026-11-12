@@ -73,6 +73,19 @@ export function calculateDisplayBalance(
 }
 
 /**
+ * 只看未过期的临时余额（tcr）。钱庄换金只认这笔钱，不拿永久余额兜底。
+ */
+export async function getTemporaryBalance(userId: string, now = new Date()): Promise<number> {
+  const rows = await db
+    .select({ amount: temporaryBalances.amount, expiresAt: temporaryBalances.expiresAt })
+    .from(temporaryBalances)
+    .where(eq(temporaryBalances.userId, userId));
+  return rows
+    .filter((tb) => new Date(tb.expiresAt) > now)
+    .reduce((acc, tb) => acc + tb.amount, 0);
+}
+
+/**
  * 查询用户的实际可用余额 = 永久余额 + 未过期的临时余额。
  *
  * 这是钱包页展示、API key 额度上限校验、未来扣费判断的统一口径。

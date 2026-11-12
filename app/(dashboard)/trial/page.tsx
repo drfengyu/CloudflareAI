@@ -9,6 +9,7 @@ import { formatCredits } from "@/lib/billing/credits";
 import { getActivityCouponView } from "@/lib/activity/coupons";
 import { ticketsForCost } from "@/lib/activity/ticket-math";
 import { requireUser } from "@/lib/usage/meter";
+import { getTemporaryBalance } from "@/lib/billing/display-balance";
 import {
   trialActivityKey,
   trialActivityWindow,
@@ -67,9 +68,10 @@ function Stat({
 
 export default async function TrialPage() {
   const userId = await requireUser();
-  const [config, coupon] = await Promise.all([
+  const [config, coupon, tempCredits] = await Promise.all([
     getTrialConfig(),
     getActivityCouponView(userId, "trial"),
+    getTemporaryBalance(userId),
   ]);
   const windowInfo = trialActivityWindow(config);
   const activityKey = trialActivityKey(config);
@@ -131,6 +133,11 @@ export default async function TrialPage() {
               .map((tier) => ` 攻克 ${tier.correct} 处节点 ${formatCredits(trialRewardFor(config, tier.correct))} tcr`)
               .join("，")}
             ；按达到的最高档发放，奖励 tcr {config.rewardValidDays} 天内有效。未平定不发。
+          </li>
+          <li>
+            城镇钱庄可双向兑换：<b>100 金 = 1 tcr</b>，每次行军最多存 300 金（3 tcr），收兵时到账；
+            <b>1 tcr = 50 金</b>，即时到账，只扣 tcr 不动永久余额。两边价差 2:1，
+            半途收兵刷金换不回军令钱，来回倒也没有套利空间。
           </li>
           <li>
             不设次数与时限。中途关掉页面不算失败，回来接着走当前剧情；
@@ -282,6 +289,7 @@ export default async function TrialPage() {
               initialRun={activeRun}
               save={save}
               initialTickets={coupon.tickets}
+              initialTcr={tempCredits}
               priceTickets={priceTickets}
               unitCredits={config.couponUnitCredits}
               nodeCount={config.questionCount}

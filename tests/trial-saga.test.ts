@@ -21,6 +21,10 @@ import {
   sanitizeSagaCommands,
   settleSagaRun,
 } from "../lib/trial/saga/run";
+import {
+  SAGA_BANK_MAX_GOLD_PER_RUN,
+  bankCreditsForGold,
+} from "../lib/trial/saga/bank";
 import { initialTrialSave } from "../lib/trial/saga/state";
 
 function trial(overrides: Partial<TrialConfig> = {}): TrialConfig {
@@ -146,6 +150,10 @@ test("指令清洗：未知字段、军需商店与错槽装备都被丢弃", ()
     { k: "equip", g: "liubei", slot: "weapon", i: "guandao" },
     { k: "equip", g: "liubei", slot: "weapon", i: "cloth" },
     { k: "party", active: ["liubei", "guanyu", "zhangfei"] },
+    { k: "bank", g: 100 },
+    { k: "bank", g: 150 },
+    { k: "bank", g: 400 },
+    { k: "bank", g: -100 },
     {
       k: "battle",
       rounds: [
@@ -162,10 +170,10 @@ test("指令清洗：未知字段、军需商店与错槽装备都被丢弃", ()
   ]);
   assert.deepEqual(
     commands.map((command) => command.k),
-    ["formation", "shop", "equip", "party", "battle", "leave"],
+    ["formation", "shop", "equip", "party", "bank", "battle", "leave"],
   );
-  const battle = commands[4];
-  assert.equal(battle.k, "battle");
+  const battle = commands.find((command) => command.k === "battle");
+  assert.ok(battle && battle.k === "battle");
   if (battle.k === "battle") {
     assert.equal(battle.rounds.length, 1);
     assert.deepEqual(
@@ -212,6 +220,65 @@ test("军需购买从 cmdIndex 起生效，不会回溯加强已经开打的战�
   const late = troops(replaySagaRun(purchased(1), [battle, { k: "leave" }]));
   assert.ok(applied > baseline, "开战前买虎符，全队兵力上限提高");
   assert.equal(late, baseline, "打完第一场再买，本场不会被加强");
+});
+
+test("钱庄存金：100 金一档、每趟封顶 300 金，超出的指令不再扣金", () => {
+  const startSave = initialTrialSave();
+  startSave.gold = 500;
+  const run = { ...freshRun(51, 3), startSave };
+
+  const banked = replaySagaRun(run, [
+    { k: "bank", g: 100 },
+    { k: "bank", g: 200 },
+    { k: "bank", g: 100 },
+  ]).state;
+  assert.equal(banked.save.gold, 200, "只扣前 300 金");
+  assert.equal(banked.bankedGold, SAGA_BANK_MAX_GOLD_PER_RUN);
+
+  const poorSave = initialTrialSave();
+  poorSave.gold = 250;
+  const poor = replaySagaRun({ ...run, startSave: poorSave }, [{ k: "bank", g: 300 }]).state;
+  assert.equal(poor.save.gold, 250, "金币不足时整笔不扣");
+  assert.equal(poor.bankedGold, 0);
+
+  assert.equal(bankCreditsForGold(0), 0);
+  assert.equal(bankCreditsForGold(100), 1);
+  assert.equal(bankCreditsForGold(300), 3);
+  assert.equal(bankCreditsForGold(1000), 3, "再多的金币也只按上限结算");
+});
+
+test("钱庄换金：金币包按档位从 cmdIndex 起入账，未知档位不加钱", () => {
+  const run = freshRun(61, 2);
+  const purchase = (itemId: string, cmdIndex = 0): SagaRun => ({
+    ...run,
+    purchases: [{ id: `p-${itemId}-${cmdIndex}`, itemId, tickets: 0, at: 1, cmdIndex }],
+  });
+
+  const before = replaySagaRun(run, [{ k: "leave" }]).state.save.gold;
+  const pack = replaySagaRun(purchase("gold_200"), [{ k: "leave" }]).state.save.gold;
+  const unknown = replaySagaRun(purchase("gold_999"), [{ k: "leave" }]).state.save.gold;
+  assert.equal(pack, before + 200);
+  assert.equal(unknown, before);
+
+  // 购买记录挂在 cmdIndex 上：先执行编队，再在第二条指令前入账。
+  const late = replaySagaRun(purchase("gold_50", 1), [
+    { k: "formation", f: "yulin" },
+    { k: "leave" },
+  ]);
+  assert.equal(late.state.save.gold, before + 50);
+});
+
+test("收兵战果记录存金与通关金币，两者互不覆盖", () => {
+  const startSave = initialTrialSave();
+  startSave.gold = 500;
+  const settled = settleSagaRun(easyRun(startSave), [
+    { k: "bank", g: 300 },
+    ...winCommands,
+  ]);
+
+  assert.equal(settled.result.bankedGold, 300);
+  assert.equal(settled.result.goldGained, 30, "钱庄存金不算战斗战利品");
+  assert.equal(settled.endSave.gold, 230, "500 − 300 存金 + 30 战利品");
 });
 
 test("攻克章节：发金币经验、进下一章并解锁武将写进存档", () => {

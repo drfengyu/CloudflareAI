@@ -33,6 +33,12 @@ import {
   sanitizeSagaCommands,
 } from "@/lib/trial/saga/run";
 import { expToNext, generalStats, partyPower } from "@/lib/trial/saga/state";
+import {
+  SAGA_BANK_GOLD_PER_TCR,
+  SAGA_BANK_MAX_GOLD_PER_RUN,
+  SAGA_GOLD_PACKS,
+  bankCreditsForGold,
+} from "@/lib/trial/saga/bank";
 import type {
   FormationId,
   SagaBattleState,
@@ -46,6 +52,7 @@ import type {
 } from "@/lib/trial/saga/types";
 import type { ActiveTrialRun, TrialSettlement } from "@/lib/trial/store";
 import {
+  buyTrialGoldAction,
   buyTrialSupplyAction,
   startTrialAction,
   submitTrialAction,
@@ -57,6 +64,7 @@ import {
   TOWN_SPOTS,
   VIEW_H,
   VIEW_W,
+  WORLD_W,
   type BattleAnimation,
   type TownSpot,
   type TownSpotId,
@@ -83,6 +91,8 @@ export interface TrialGameProps {
   initialRun: ActiveTrialRun | null;
   save: TrialSave;
   initialTickets: number;
+  /** 当前可用 tcr（未过期的临时余额），钱庄换金用。 */
+  initialTcr: number;
   priceTickets: number;
   unitCredits: number;
   nodeCount: number;
@@ -152,6 +162,7 @@ export function TrialGame(props: TrialGameProps) {
     props.initialRun ? loadStoredCommands(props.initialRun.runId, props.initialRun.run.seed) : [],
   );
   const [tickets, setTickets] = useState(props.initialTickets);
+  const [tcr, setTcr] = useState(props.initialTcr);
   const [panel, setPanel] = useState<PanelId>(null);
   const [hallTab, setHallTab] = useState<"party" | "gear" | "formation">("party");
   const [dexTab, setDexTab] = useState<"save" | "dex">("save");
@@ -174,6 +185,9 @@ export function TrialGame(props: TrialGameProps) {
   const heroDef = SAGA_GENERAL_BY_ID.get(save.party[0]?.id ?? "liubei");
   const chapter = SAGA_CHAPTERS[Math.min(SAGA_CHAPTERS.length - 1, save.chapter)];
   const finished = save.stats.wins >= SAGA_CHAPTERS.length;
+  const bankedGold = state?.bankedGold ?? 0;
+  const bankTcr = bankCreditsForGold(bankedGold);
+  const bankRoom = Math.max(0, SAGA_BANK_MAX_GOLD_PER_RUN - bankedGold);
 
   useEffect(() => {
     if (!storageKey) return;
@@ -249,6 +263,49 @@ export function TrialGame(props: TrialGameProps) {
         setRun((prev) => (prev ? { ...prev, purchases: result.data.purchases } : prev));
         setTickets(result.data.tickets);
         toast.success(`${itemName(itemId)}已备好`);
+      } finally {
+        setBusy(null);
+      }
+    },
+    [commands.length, run, runId],
+  );
+
+  const bankGold = useCallback(
+    (gold: number) => {
+      if (!run) return;
+      if (gold > bankRoom) {
+        toast.error(`每次行军最多存 ${SAGA_BANK_MAX_GOLD_PER_RUN} 金`);
+        return;
+      }
+      if (save.gold < gold) {
+        toast.error("金币不够，再打几仗吧");
+        return;
+      }
+      appendCommand({ k: "bank", g: gold });
+      toast.success(`已存 ${gold} 金，收兵时到账 ${bankCreditsForGold(gold)} tcr`);
+    },
+    [appendCommand, bankRoom, run, save.gold],
+  );
+
+  const buyGoldPack = useCallback(
+    async (packId: string) => {
+      if (!runId || !run) return;
+      setBusy(`gold:${packId}`);
+      try {
+        const purchaseId = crypto.randomUUID().replace(/-/g, "").slice(0, 32);
+        const result = await buyTrialGoldAction({
+          runId,
+          packId,
+          purchaseId,
+          cmdIndex: commands.length,
+        });
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
+        setRun((prev) => (prev ? { ...prev, purchases: result.data.purchases } : prev));
+        setTcr(result.data.tcr);
+        toast.success("金币已到账");
       } finally {
         setBusy(null);
       }
@@ -336,7 +393,7 @@ export function TrialGame(props: TrialGameProps) {
             moving = true;
           }
         }
-        player.x = Math.max(80, Math.min(1800, player.x));
+        player.x = Math.max(80, Math.min(WORLD_W - 80, player.x));
         player.moving = moving;
         const spot = townSpotNear(player.x);
         if (spot?.id !== nearRef.current?.id) {
@@ -567,6 +624,10 @@ export function TrialGame(props: TrialGameProps) {
           {formatCredits(save.gold)} 金
         </span>
         <span className={HUD_CELL}>
+          <Coins className="h-3.5 w-3.5 text-emerald-500" />
+          {formatCredits(tcr)} tcr
+        </span>
+        <span className={HUD_CELL}>
           <Users className="h-3.5 w-3.5 text-muted-foreground" />
           战力 {partyPower(save)}
         </span>
@@ -594,7 +655,7 @@ export function TrialGame(props: TrialGameProps) {
             const rect = event.currentTarget.getBoundingClientRect();
             const ratio = VIEW_W / rect.width;
             const clickX = (event.clientX - rect.left) * ratio;
-            const camera = Math.max(0, Math.min(1880 - VIEW_W, playerRef.current.x - VIEW_W / 2));
+            const camera = Math.max(0, Math.min(WORLD_W - VIEW_W, playerRef.current.x - VIEW_W / 2));
             const worldX = clickX + camera;
             const hit = TOWN_SPOTS.find((spot) => worldX >= spot.x - 20 && worldX <= spot.x + spot.w + 20);
             if (hit) {
@@ -1000,6 +1061,72 @@ export function TrialGame(props: TrialGameProps) {
                 </div>
               ) : null}
 
+              {panel === "bank" ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span>存金在收兵时到账；换金即时入账，只扣 tcr。</span>
+                    <span className="flex items-center gap-3 tabular-nums">
+                      <span className="flex items-center gap-1">
+                        <Coins className="h-3.5 w-3.5 text-amber-500" />
+                        {formatCredits(save.gold)} 金
+                      </span>
+                      <span>{formatCredits(tcr)} tcr</span>
+                    </span>
+                  </div>
+
+                  <section className="space-y-2 rounded-lg border border-border p-2.5">
+                    <p className="text-sm font-medium">存金换 tcr</p>
+                    <p className="text-xs text-muted-foreground">
+                      100 金 = 1 tcr，每次行军最多 3 tcr（300 金），收兵时与通关奖励一起到账。
+                      半途收兵刷来的金币换不回 5 cr 的军令钱。
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {[1, 2, 3].map((tier) => {
+                        const gold = tier * SAGA_BANK_GOLD_PER_TCR;
+                        return (
+                          <Button
+                            key={tier}
+                            size="sm"
+                            variant="outline"
+                            disabled={save.gold < gold || bankRoom < gold}
+                            onClick={() => bankGold(gold)}
+                          >
+                            存 {gold} 金 → {tier} tcr
+                          </Button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      本次已存 {bankedGold} 金，收兵可得 {bankTcr} tcr，还可存 {bankRoom} 金。
+                    </p>
+                  </section>
+
+                  <section className="space-y-2 rounded-lg border border-border p-2.5">
+                    <p className="text-sm font-medium">tcr 换金</p>
+                    <p className="text-xs text-muted-foreground">
+                      1 tcr = 50 金，只扣未过期的 tcr，金币即刻入账。
+                    </p>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {SAGA_GOLD_PACKS.map((pack) => (
+                        <Button
+                          key={pack.id}
+                          size="sm"
+                          variant="outline"
+                          disabled={tcr < pack.tcr || busy === `gold:${pack.id}`}
+                          onClick={() => void buyGoldPack(pack.id)}
+                        >
+                          {busy === `gold:${pack.id}` ? "兑换中…" : `${pack.tcr} tcr → ${pack.gold} 金`}
+                        </Button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      换来的金币能买装备与伤药；存金是 100 金换 1 tcr、换金是 1 tcr 买 50 金，
+                      两边价差 2:1，来回倒不会多出钱。
+                    </p>
+                  </section>
+                </div>
+              ) : null}
+
               {panel === "hall" ? (
                 <div className="space-y-3">
                   <div className="flex gap-2">
@@ -1201,6 +1328,7 @@ export function TrialGame(props: TrialGameProps) {
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">
                     <span className={HUD_CELL}>{save.party.length} 将上阵</span>
                     <span className={HUD_CELL}>{formatCredits(save.gold)} 金</span>
+                    <span className={HUD_CELL}>{formatCredits(tcr)} tcr</span>
                     <span className={HUD_CELL}>战力 {partyPower(save)}</span>
                     <span className={HUD_CELL}>{tickets} 张试炼券</span>
                   </div>
@@ -1277,7 +1405,8 @@ export function TrialGame(props: TrialGameProps) {
       <p className="text-xs text-muted-foreground">
         操作：A/D 或 ←/→ 在主街行走，靠近门口按 E / 回车交互，也可以点击建筑或下方按钮。
         战斗为回合制：逐将选择攻击/计策/防守/道具/招降，或按「总攻击」「自动战斗」速战。
-        战斗指令保存在本机，刷新页面可以接着打；行军军需与剧情进度由服务端保存。
+        战斗指令保存在本机，刷新页面可以接着打；行军军需、钱庄换金与剧情进度由服务端保存，
+        钱庄存金随收兵一起结算。
       </p>
     </div>
   );
@@ -1488,7 +1617,8 @@ function GatePanel({
             {busy === "submit" ? "收兵中…" : "收兵结算"}
           </Button>
           <p className="w-full text-xs text-muted-foreground">
-            收兵：只有平定此处才发 tcr；等级、金币与剧情进度立即写入存档，还在进行的战斗不会计入。
+            收兵：只有平定此处才发通关奖励，钱庄存金照常结算；等级、金币与剧情进度立即写入存档，
+            还在进行的战斗不会计入。
           </p>
         </div>
       ) : null}
@@ -1548,9 +1678,18 @@ function SettlementCard({
           </div>
           <div className="rounded-lg border border-border p-2">
             <p className="text-xs text-muted-foreground">通关奖励</p>
-            <p className="tabular-nums font-medium">{formatCredits(settlement.reward)} tcr</p>
+            <p className="tabular-nums font-medium">{formatCredits(settlement.clearReward)} tcr</p>
           </div>
         </div>
+        {settlement.bankTcr > 0 ? (
+          <p className="mt-2 text-sm">
+            钱庄存金：
+            <span className="font-medium text-primary">
+              {settlement.bankGold} 金 → +{formatCredits(settlement.bankTcr)} tcr
+            </span>
+            <span className="ml-2 text-xs text-muted-foreground">与通关奖励一起到账</span>
+          </p>
+        ) : null}
         {result && result.recruited.length > 0 ? (
           <p className="mt-2 text-sm">
             招降成功：
@@ -1585,7 +1724,7 @@ function SettlementCard({
         ) : null}
         {retry ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            未平定此处，不发 tcr；等级、金币、装备与招降武将都保留，整备后可再走一遍。
+            未平定此处不发通关奖励；钱庄存金仍会到账。等级、金币、装备与招降武将都保留，整备后可再走一遍。
           </p>
         ) : null}
         <div className="mt-4 flex flex-wrap gap-2">

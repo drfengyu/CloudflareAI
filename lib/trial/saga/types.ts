@@ -177,6 +177,8 @@ export interface SagaRunResult {
   chapterName: string;
   goldGained: number;
   expGained: number;
+  /** 本次行军在钱庄存下的金币；收兵时按 bank.ts 的汇率折成 tcr。 */
+  bankedGold: number;
   recruited: string[];
   battlesWon: number;
   party: { id: string; name: string; level: number }[];
@@ -208,6 +210,8 @@ export type SagaCommand =
   | { k: "shop"; i: string }
   | { k: "equip"; g: string; slot: "weapon" | "armor"; i: string | null }
   | { k: "party"; active: string[] }
+  /** 钱庄存金：按 100 金一档扣，收兵时统一折成 tcr 发放。 */
+  | { k: "bank"; g: number }
   | { k: "leave" }
   | { k: "battle"; rounds: SagaRoundCommand[][] };
 
@@ -302,6 +306,8 @@ export interface SagaReplayState {
   battle: SagaBattleState | null;
   goldGained: number;
   expGained: number;
+  /** 已经存进钱庄、尚未在收兵时结算 tcr 的金币。 */
+  bankedGold: number;
   recruited: string[];
   battlesWon: number;
 }

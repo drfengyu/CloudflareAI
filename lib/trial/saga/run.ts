@@ -8,6 +8,11 @@ import {
 } from "./data";
 import { startBattle, resolveBattleRound } from "./battle";
 import {
+  SAGA_BANK_GOLD_PER_TCR,
+  SAGA_BANK_MAX_GOLD_PER_RUN,
+  SAGA_GOLD_PACK_BY_ID,
+} from "./bank";
+import {
   applyChapterUnlock,
   buyGoldItem,
   cloneSave,
@@ -353,6 +358,7 @@ export function parseSagaRun(raw: string | null | undefined): SagaRun | null {
             chapterName: String(result.chapterName ?? "").slice(0, 32),
             goldGained: clampInt(Number(result.goldGained) || 0, 0, 9_999_999),
             expGained: clampInt(Number(result.expGained) || 0, 0, 9_999_999),
+            bankedGold: clampInt(Number(result.bankedGold) || 0, 0, SAGA_BANK_MAX_GOLD_PER_RUN),
             recruited: Array.isArray(result.recruited)
               ? result.recruited.filter((name): name is string => typeof name === "string").slice(0, 12)
               : [],
@@ -443,6 +449,17 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
         if (active.length > 0) out.push({ k: "party", active });
         break;
       }
+      case "bank": {
+        const gold = Math.trunc(Number(it.g) || 0);
+        if (
+          gold >= SAGA_BANK_GOLD_PER_TCR &&
+          gold <= SAGA_BANK_MAX_GOLD_PER_RUN &&
+          gold % SAGA_BANK_GOLD_PER_TCR === 0
+        ) {
+          out.push({ k: "bank", g: gold });
+        }
+        break;
+      }
       case "leave": {
         out.push({ k: "leave" });
         break;
@@ -479,13 +496,31 @@ export function createReplayState(run: SagaRun): SagaReplayState {
     battle: null,
     goldGained: 0,
     expGained: 0,
+    bankedGold: 0,
     recruited: [],
     battlesWon: 0,
   };
 }
 
+/** 钱庄存金：只收 100 金的整档，扣到上限为止；返回实际存进去的金币。 */
+export function bankSagaGold(state: SagaReplayState, gold: number): number {
+  const amount = Math.trunc(Number(gold) || 0);
+  if (amount <= 0 || amount % SAGA_BANK_GOLD_PER_TCR !== 0) return 0;
+  const room = SAGA_BANK_MAX_GOLD_PER_RUN - state.bankedGold;
+  const allowed = Math.min(amount, room);
+  if (allowed <= 0 || state.save.gold < allowed) return 0;
+  state.save.gold -= allowed;
+  state.bankedGold += allowed;
+  return allowed;
+}
+
 /** 军需品从购买发生的指令位置起生效，已经打过的仗不会被回溯加强。 */
 function applyPurchase(state: SagaReplayState, purchase: SagaPurchase): void {
+  const goldPack = SAGA_GOLD_PACK_BY_ID.get(purchase.itemId);
+  if (goldPack) {
+    state.save.gold += goldPack.gold;
+    return;
+  }
   const item = SAGA_ITEM_BY_ID.get(purchase.itemId);
   if (!item || item.kind !== "supply") return;
   switch (item.supply) {
@@ -537,6 +572,9 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
         break;
       case "party":
         setActiveParty(state.save, command.active);
+        break;
+      case "bank":
+        bankSagaGold(state, command.g);
         break;
       case "leave":
         index = total;
@@ -609,6 +647,7 @@ export function settleSagaRun(run: SagaRun, commands: SagaCommand[]): SagaSettle
     chapterName: chapter?.name ?? "",
     goldGained: replay.state.goldGained,
     expGained: replay.state.expGained,
+    bankedGold: replay.state.bankedGold,
     recruited: replay.state.recruited
       .map((id) => SAGA_GENERAL_BY_ID.get(id)?.name ?? id)
       .slice(0, 12),

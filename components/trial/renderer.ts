@@ -11,9 +11,9 @@ import type { SagaBattleEvent, SagaBattleState } from "@/lib/trial/saga/types";
 export const VIEW_W = 960;
 export const VIEW_H = 540;
 const GROUND_Y = 436;
-const WORLD_W = 1880;
+export const WORLD_W = 2080;
 
-export type TownSpotId = "record" | "forge" | "herb" | "supply" | "hall" | "gate";
+export type TownSpotId = "record" | "forge" | "bank" | "herb" | "supply" | "hall" | "gate";
 
 export interface TownSpot {
   id: TownSpotId;
@@ -27,10 +27,11 @@ export interface TownSpot {
 export const TOWN_SPOTS: TownSpot[] = [
   { id: "record", label: "桃园碑", hint: "查看存档、武将与图鉴", x: 96, w: 132, h: 150 },
   { id: "forge", label: "铁匠铺", hint: "用金币打造武器与防具", x: 366, w: 214, h: 190 },
-  { id: "herb", label: "药铺", hint: "用金币购买伤药与良药", x: 702, w: 198, h: 178 },
-  { id: "supply", label: "军需帐", hint: "用试炼券购买此行军需", x: 1018, w: 232, h: 186 },
-  { id: "hall", label: "编成所", hint: "编队、阵型、装备与图鉴", x: 1332, w: 214, h: 192 },
-  { id: "gate", label: "城门", hint: "出征下一处节点", x: 1642, w: 196, h: 236 },
+  { id: "bank", label: "钱庄", hint: "金币与 tcr 双向兑换", x: 650, w: 190, h: 182 },
+  { id: "herb", label: "药铺", hint: "用金币购买伤药与良药", x: 920, w: 198, h: 178 },
+  { id: "supply", label: "军需帐", hint: "用试炼券购买此行军需", x: 1190, w: 232, h: 186 },
+  { id: "hall", label: "编成所", hint: "编队、阵型、装备与图鉴", x: 1492, w: 214, h: 192 },
+  { id: "gate", label: "城门", hint: "出征下一处节点", x: 1776, w: 196, h: 236 },
 ];
 
 export function townSpotNear(playerX: number): TownSpot | null {
@@ -351,6 +352,9 @@ function paintBuilding(ctx: CanvasRenderingContext2D, spot: TownSpot, time: numb
   } else if (spot.id === "herb") {
     wall.addColorStop(0, "#8a7a5f");
     wall.addColorStop(1, "#5a4d3a");
+  } else if (spot.id === "bank") {
+    wall.addColorStop(0, "#665a3f");
+    wall.addColorStop(1, "#3a3325");
   } else {
     wall.addColorStop(0, "#6f4a3c");
     wall.addColorStop(1, "#432c25");
@@ -368,7 +372,7 @@ function paintBuilding(ctx: CanvasRenderingContext2D, spot: TownSpot, time: numb
   ctx.stroke();
 
   // 屋顶（飞檐）
-  ctx.fillStyle = spot.id === "herb" ? "#324236" : "#3a2820";
+  ctx.fillStyle = spot.id === "herb" ? "#324236" : spot.id === "bank" ? "#37301f" : "#3a2820";
   ctx.beginPath();
   ctx.moveTo(x - 18, topY + 50);
   ctx.quadraticCurveTo(center, topY - 26, x + w + 18, topY + 50);
@@ -430,6 +434,28 @@ function paintBuilding(ctx: CanvasRenderingContext2D, spot: TownSpot, time: numb
       ctx.ellipse(x + 34 + i * 12, topY + 80, 6, 9, 0, 0, Math.PI * 2);
       ctx.fill();
     }
+  }
+  if (spot.id === "bank") {
+    // 钱庄：门边挂一串铜钱，柜台上摆算盘
+    for (let i = 0; i < 3; i++) {
+      const cy = baseY - 88 + i * 24;
+      ctx.fillStyle = "#c9a15a";
+      ctx.beginPath();
+      ctx.arc(center + 62, cy, 9, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#2a1f16";
+      ctx.fillRect(center + 58, cy - 4, 8, 8);
+      ctx.strokeStyle = "#8a5a2d";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(center + 62, cy - 9);
+      ctx.lineTo(center + 62, cy - (i === 0 ? 26 : 15));
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#4a3520";
+    ctx.fillRect(center - 74, baseY - 30, 42, 8);
+    ctx.fillStyle = "#e7c27a";
+    for (let i = 0; i < 5; i++) ctx.fillRect(center - 71 + i * 8, baseY - 36, 4, 6);
   }
   if (spot.id === "hall") {
     for (const dir of [-1, 1]) {
@@ -555,24 +581,24 @@ export function paintTown(ctx: CanvasRenderingContext2D, options: TownPaintOptio
   ctx.translate(-camera, 0);
 
   paintTree(ctx, 40, GROUND_Y + 16, 1.15, "#31452a");
-  paintTree(ctx, 610, GROUND_Y + 12, 0.9, "#34482b");
-  paintTree(ctx, 970, GROUND_Y + 16, 1.0, "#2f4227");
-  paintTree(ctx, 1810, GROUND_Y + 10, 1.2, "#303f26");
+  paintTree(ctx, 608, GROUND_Y + 12, 0.9, "#34482b");
+  paintTree(ctx, 1135, GROUND_Y + 16, 1.0, "#2f4227");
+  paintTree(ctx, 2010, GROUND_Y + 10, 1.2, "#303f26");
 
   for (const spot of TOWN_SPOTS) paintBuilding(ctx, spot, options.time);
-  paintLantern(ctx, 690, GROUND_Y + 25, options.time);
-  paintLantern(ctx, 1290, GROUND_Y + 25, options.time + 1.3);
-  paintLantern(ctx, 1595, GROUND_Y + 25, options.time + 2.6);
+  paintLantern(ctx, 850, GROUND_Y + 25, options.time);
+  paintLantern(ctx, 1445, GROUND_Y + 25, options.time + 1.3);
+  paintLantern(ctx, 1718, GROUND_Y + 25, options.time + 2.6);
 
   // 闹市摊位
   ctx.fillStyle = "#3c2c1e";
-  ctx.fillRect(560, GROUND_Y - 24, 66, 30);
+  ctx.fillRect(270, GROUND_Y - 24, 66, 30);
   ctx.fillStyle = "#8a4b33";
   ctx.beginPath();
-  ctx.moveTo(552, GROUND_Y - 24);
-  ctx.lineTo(634, GROUND_Y - 24);
-  ctx.lineTo(624, GROUND_Y - 48);
-  ctx.lineTo(562, GROUND_Y - 48);
+  ctx.moveTo(262, GROUND_Y - 24);
+  ctx.lineTo(344, GROUND_Y - 24);
+  ctx.lineTo(334, GROUND_Y - 48);
+  ctx.lineTo(272, GROUND_Y - 48);
   ctx.closePath();
   ctx.fill();
 
@@ -629,7 +655,7 @@ export function paintTown(ctx: CanvasRenderingContext2D, options: TownPaintOptio
   ctx.fillText("三国讨逆传", 26, 32);
   ctx.fillStyle = "rgba(232,213,171,0.62)";
   ctx.font = uiFont(12);
-  ctx.fillText(`第 ${options.chapter + 1} 章 · A/D 行走，靠近门口交互`, 140, 31);
+  ctx.fillText(`第 ${options.chapter + 1} 处 · A/D 行走，靠近门口交互`, 140, 31);
 
   // 暗角
   const vignette = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, 240, VIEW_W / 2, VIEW_H / 2, 560);
