@@ -100,7 +100,7 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
         </label>
       </div>
       <p className="text-xs text-muted-foreground">
-        浮游城（层数、野区与层主、随机种子）在开局时由服务端生成并落库，交卷只上传选门 / 剑技 / 道具序列、由服务端重算战果；
+        浮游城（层数、野区与层主、随机种子）在开局时由服务端生成并落库，交卷只上传每帧按键序列（60Hz 输入帧）、由服务端重放判定战果；
         修改开始时间等于开启新一轮活动，个人战绩按新轮次重计。
       </p>
 

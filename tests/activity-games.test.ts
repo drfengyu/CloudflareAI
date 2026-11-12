@@ -8,10 +8,15 @@ import {
   type TrialConfig,
 } from "../lib/trial/config";
 import {
+  TRIAL_INPUT,
+  createTrialGame,
   generateTrialDungeon,
   parseTrialDungeon,
   simulateTrialDungeon,
+  stepTrialGame,
+  trialInteractTarget,
   type TrialDungeon,
+  type TrialGameState,
   type TrialWave,
 } from "../lib/trial/dungeon";
 import {
@@ -94,11 +99,69 @@ const dummyBoss = (wave: Partial<TrialWave> = {}): TrialDungeon["floors"][number
 });
 
 function manualDungeon(floors: TrialDungeon["floors"]): TrialDungeon {
-  return { version: 4, seed: 1, heroHp: 100, floors };
+  return { version: 5, seed: 1, heroHp: 100, floors };
+}
+
+/** 一路向右走到门前，再按一次 F 进门。 */
+function enterFirstRoom(dungeon: TrialDungeon, frames: number[]): TrialGameState {
+  const state = createTrialGame(dungeon);
+  let n = 0;
+  while (trialInteractTarget(state) === null && n < 600) {
+    frames.push(TRIAL_INPUT.right);
+    stepTrialGame(state, TRIAL_INPUT.right);
+    n += 1;
+  }
+  assert.ok(trialInteractTarget(state), "能走到第一扇门前");
+  frames.push(TRIAL_INPUT.interact);
+  stepTrialGame(state, TRIAL_INPUT.interact);
+  return state;
+}
+
+/** 走到斩击距离内，站定出刀。 */
+function approachEnemy(state: TrialGameState, frames: number[]): void {
+  let n = 0;
+  while (
+    state.phase === "fight" &&
+    state.enemy !== null &&
+    state.enemy.x - state.hero.x > 50 &&
+    n < 900
+  ) {
+    frames.push(TRIAL_INPUT.right);
+    stepTrialGame(state, TRIAL_INPUT.right);
+    n += 1;
+  }
+  assert.ok(state.enemy);
+  assert.ok(state.enemy.x - state.hero.x <= 50, "能走到斩击距离");
+}
+
+/** 交替按松斩击，直到这场战斗结束。 */
+function fightUntilOver(state: TrialGameState, frames: number[], limit = 1200): void {
+  let n = 0;
+  while (state.phase === "fight" && n < limit) {
+    const mask = n % 2 === 0 ? TRIAL_INPUT.attack : 0;
+    frames.push(mask);
+    stepTrialGame(state, mask);
+    n += 1;
+  }
+  assert.notEqual(state.phase, "fight", "战斗在限定帧数内结束");
+}
+
+/** 走到层主门前按 F，进入层主战。 */
+function walkToBossDoor(state: TrialGameState, frames: number[]): void {
+  let n = 0;
+  while (trialInteractTarget(state)?.kind !== "boss" && n < 900) {
+    frames.push(TRIAL_INPUT.right);
+    stepTrialGame(state, TRIAL_INPUT.right);
+    n += 1;
+  }
+  assert.equal(trialInteractTarget(state)?.kind, "boss");
+  frames.push(TRIAL_INPUT.interact);
+  stepTrialGame(state, TRIAL_INPUT.interact);
 }
 
 test("浮游城生成：每层两个野区门与一间层主房，同种子重放同一张塔", () => {
   const dungeon = generateTrialDungeon(5, seeded(11));
+  assert.equal(dungeon.version, 5);
   assert.equal(dungeon.floors.length, 5);
   for (const floor of dungeon.floors) {
     assert.equal(floor.rooms.length, 2);
@@ -115,7 +178,7 @@ test("浮游城生成：每层两个野区门与一间层主房，同种子重�
   assert.equal(generateTrialDungeon(0, seeded(2)).floors.length, 1);
 });
 
-test("旧版答题 / 单排波次 / 旧地下城对局不胜任浮游城", () => {
+test("旧版答题 / 回合制对局不胜任动作版浮游城", () => {
   assert.equal(parseTrialDungeon(null), null);
   assert.equal(parseTrialDungeon(JSON.stringify([{ prompt: "1+1", answer: 2 }])), null);
   assert.equal(parseTrialDungeon(JSON.stringify({ version: 2, seed: 1, heroHp: 80, waves: [] })), null);
@@ -125,134 +188,129 @@ test("旧版答题 / 单排波次 / 旧地下城对局不胜任浮游城", () =>
     ),
     null,
   );
+  const oldTurnBased = { ...generateTrialDungeon(3, seeded(5)), version: 4 };
+  assert.equal(parseTrialDungeon(JSON.stringify(oldTurnBased)), null);
 
   const generated = generateTrialDungeon(3, seeded(5));
   assert.deepEqual(parseTrialDungeon(JSON.stringify(generated)), generated);
 });
 
-test("宝箱立即给装备，层主经验会升级并抬升生命上限", () => {
+test("走进门、击破野怪与层主后通关，整串输入帧可被重放", () => {
+  const dungeon = manualDungeon([
+    {
+      rooms: [
+        { kind: "fight", title: "木桩", hint: "", wave: dummyWave({ atk: 0 }) },
+        { kind: "rest", title: "营地", hint: "" },
+      ],
+      boss: dummyBoss({ name: "层主", atk: 0 }),
+    },
+  ]);
+  const frames: number[] = [];
+  const state = enterFirstRoom(dungeon, frames);
+  assert.equal(state.phase, "fight");
+  assert.ok(state.enemy);
+
+  approachEnemy(state, frames);
+  fightUntilOver(state, frames);
+  assert.equal(state.fieldCleared, true);
+  assert.equal(state.kills, 1);
+  assert.equal(state.phase, "explore");
+
+  walkToBossDoor(state, frames);
+  assert.equal(state.phase, "fight");
+  approachEnemy(state, frames);
+  fightUntilOver(state, frames);
+  assert.equal(state.phase, "won");
+
+  const result = simulateTrialDungeon(dungeon, frames);
+  assert.equal(result.status, "cleared");
+  assert.equal(result.victory, true);
+  assert.equal(result.floorsCleared, 1);
+  assert.equal(result.ticks, frames.length);
+  assert.deepEqual(simulateTrialDungeon(dungeon, frames), result);
+});
+
+test("宝箱进门就给装备，层主经验升级并抬升生命上限", () => {
   const dungeon = manualDungeon([
     {
       rooms: [
         { kind: "treasure", title: "宝箱", hint: "", relic: "bloodpact" },
         { kind: "rest", title: "营地", hint: "" },
       ],
-      boss: dummyBoss(),
-    },
-    {
-      rooms: [
-        { kind: "treasure", title: "宝箱", hint: "", relic: "whetstone" },
-        { kind: "rest", title: "营地", hint: "" },
-      ],
-      boss: dummyBoss(),
+      boss: dummyBoss({ name: "层主", atk: 0 }),
     },
   ]);
+  const frames: number[] = [];
+  const state = enterFirstRoom(dungeon, frames);
+  assert.deepEqual(state.hero.relics, ["bloodpact"]);
+  assert.equal(state.hero.maxHp, 115);
+  assert.equal(state.hero.hp, 115);
+  assert.equal(state.fieldCleared, true);
 
-  const result = simulateTrialDungeon(dungeon, [
-    { t: "enter", i: 0 },
-    { t: "boss" },
-    { t: "skill", s: "slash" },
-    { t: "boss" },
-    { t: "skill", s: "slash" },
-  ]);
-  assert.deepEqual(result.relics, ["bloodpact"]);
-  // 生命结晶 115，击败 1F 层主（45 EXP）升到 2 级再加 10。
-  assert.equal(result.heroMaxHp, 125);
-  assert.equal(result.heroHp, 125);
-  assert.equal(result.level, 2);
-  assert.equal(result.floorsCleared, 2);
+  walkToBossDoor(state, frames);
+  approachEnemy(state, frames);
+  fightUntilOver(state, frames);
+  assert.equal(state.phase, "won");
+  // 层主 45 经验：1 → 2 级，再 +10 生命上限。
+  assert.equal(state.hero.level, 2);
+  assert.equal(state.hero.maxHp, 125);
+
+  const result = simulateTrialDungeon(dungeon, frames);
   assert.equal(result.status, "cleared");
-  assert.equal(result.victory, true);
-  assert.equal(result.events[0].relic, "bloodpact");
-  assert.equal(result.events[1].kind, "boss");
+  assert.deepEqual(result.relics, ["bloodpact"]);
+  assert.equal(result.heroMaxHp, 125);
 });
 
-test("精英装备在击破后才生效，营地按上限回血，可以直接挑战层主", () => {
+test("按住格挡能把横斩伤害压到 0", () => {
   const dungeon = manualDungeon([
     {
       rooms: [
-        {
-          kind: "elite",
-          title: "精英木桩",
-          hint: "",
-          relic: "whetstone",
-          wave: dummyWave({ hp: 1, atk: 30, pattern: ["attack"] }),
-        },
+        { kind: "fight", title: "木桩", hint: "", wave: dummyWave({ hp: 999, atk: 12 }) },
         { kind: "rest", title: "营地", hint: "" },
       ],
-      boss: dummyBoss(),
-    },
-    {
-      rooms: [{ kind: "rest", title: "营地", hint: "" }],
-      boss: dummyBoss(),
+      boss: dummyBoss({ atk: 0 }),
     },
   ]);
-
-  const entered = simulateTrialDungeon(dungeon, [{ t: "enter", i: 0 }]);
-  assert.deepEqual(entered.relics, []);
-  assert.equal(entered.status, "fighting");
-
-  const afterFight = simulateTrialDungeon(dungeon, [
-    { t: "enter", i: 0 },
-    { t: "skill", s: "guard" },
-    { t: "skill", s: "slash" },
-  ]);
-  assert.deepEqual(afterFight.relics, ["whetstone"]);
-  assert.equal(afterFight.status, "choosing");
-  assert.equal(afterFight.fieldCleared, true);
-  // 守势格挡 14，吃 16 伤害 → 84；清怪回复 6 → 90。
-  assert.equal(afterFight.heroHp, 90);
-
-  const rested = simulateTrialDungeon(dungeon, [
-    { t: "enter", i: 0 },
-    { t: "skill", s: "guard" },
-    { t: "skill", s: "slash" },
-    { t: "boss" },
-    { t: "skill", s: "slash" },
-    { t: "enter", i: 0 },
-  ]);
-  // 层主经验升到 2 级（上限 110，清怪与升级共回 16 → 106），营地补到满。
-  assert.equal(rested.heroMaxHp, 110);
-  assert.equal(rested.heroHp, rested.heroMaxHp);
-  assert.equal(rested.events[2].healed, 4);
-
-  const skipped = simulateTrialDungeon(dungeon, [{ t: "boss" }]);
-  assert.equal(skipped.status, "fighting");
-  assert.equal(skipped.current?.boss, true);
+  const play = (guarding: boolean) => {
+    const state = createTrialGame(dungeon);
+    let n = 0;
+    while (trialInteractTarget(state) === null && n < 600) {
+      stepTrialGame(state, TRIAL_INPUT.right);
+      n += 1;
+    }
+    stepTrialGame(state, TRIAL_INPUT.interact);
+    assert.equal(state.phase, "fight");
+    for (let i = 0; i < 900; i += 1) {
+      stepTrialGame(state, guarding ? TRIAL_INPUT.guard : 0);
+    }
+    return state.hero;
+  };
+  const plain = play(false);
+  const guarded = play(true);
+  assert.ok(plain.totalTaken > 0, "不格挡会掉血");
+  assert.equal(guarded.totalTaken, 0, "格挡 14 完全抵消 12 点横斩");
+  assert.equal(guarded.hp, guarded.maxHp);
 });
 
-test("同一动作序列可重复重放；非法动作兜底为第一扇门 / 斩击", () => {
-  const dungeon = manualDungeon([
-    {
-      rooms: [{ kind: "fight", title: "木桩", hint: "", wave: dummyWave({ hp: 400, atk: 5 }) }],
-      boss: dummyBoss(),
-    },
-    {
-      rooms: [{ kind: "fight", title: "木桩", hint: "", wave: dummyWave({ hp: 400, atk: 5 }) }],
-      boss: dummyBoss(),
-    },
-  ]);
-  const actions = [
-    { t: "enter", i: 0 },
-    ...Array.from({ length: 40 }, (_, i) => ({
-      t: "skill",
-      s: i % 5 === 0 ? "burst" : i % 3 === 0 ? "guard" : "slash",
-    })),
-    { t: "boss" },
-    { t: "skill", s: "slash" },
-  ];
-  const first = simulateTrialDungeon(dungeon, actions);
-  assert.deepEqual(simulateTrialDungeon(dungeon, actions), first);
-  assert.ok(first.turns > 0);
-  assert.equal(first.floorsCleared >= 1, true);
+test("输入帧纯函数重放；脏帧与越界掩码不会打乱结算", () => {
+  const dungeon = generateTrialDungeon(2, seeded(21));
+  const frames = Array.from({ length: 300 }, (_, i) =>
+    i % 11 === 0
+      ? TRIAL_INPUT.jump
+      : i % 3 === 0
+        ? TRIAL_INPUT.right
+        : i % 5 === 0
+          ? TRIAL_INPUT.attack
+          : 0,
+  );
+  const first = simulateTrialDungeon(dungeon, frames);
+  assert.deepEqual(simulateTrialDungeon(dungeon, frames), first);
+  assert.equal(first.ticks, frames.length);
 
-  const ignored = simulateTrialDungeon(dungeon, ["garbage", 1, null]);
-  assert.equal(ignored.status, "choosing");
-  assert.equal(ignored.turns, 0);
-
-  const fallback = simulateTrialDungeon(dungeon, [{ t: "enter", i: 99 }]);
-  assert.equal(fallback.events.length, 1);
-  assert.equal(fallback.events[0].floor, 1);
+  const dirty = simulateTrialDungeon(dungeon, ["garbage", 1, null, 999999, -5]);
+  assert.equal(dirty.ticks, 5);
+  assert.equal(dirty.status, "playing");
+  assert.equal(dirty.floorsCleared, 0);
 });
 
 test("试炼配置：层数与档位互相约束，脏值退回可用默认", () => {

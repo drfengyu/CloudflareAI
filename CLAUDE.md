@@ -534,12 +534,18 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.46.1（2026-11-12，移除文本生成 playground）
-**下一版本**：v0.47.0（尚未选型）
+**当前版本**：v0.47.0（2026-11-12，每日试炼改为 2D 横版动作游戏）
+**下一版本**：v0.48.0（尚未选型）
 
-- v0.46.1 移除在线体验里的「文本生成」playground：AI 对话 `/chat` 已覆盖流式文本生成、模型切换
-  与会话落库，`/playground/text` 302 到 `/chat`，旧组件 `components/playground/text-gen.tsx` 删除；
-  `/api/ai/text` 继续由 AI 对话使用，计量与渠道路由不变。模型分类的文本入口改指向 `/chat`。
+- v0.47.0 每日试炼从文字回合制改为 2D 横版角色动作游戏：`lib/trial/dungeon.ts` 重写为
+  60Hz 固定步长引擎——地图版本 5，每帧记录一个输入位掩码（左 / 右 / 跳 / 斩击 / 弧斩 /
+  星屑 / 格挡 / 回血 / 进门），整数物理 + 种子随机，客户端实时演算、服务端 `replayTrialGame`
+  用同一份帧序列逐帧重放，仍不信任浏览器上报的血量与楼层；敌人抬手亮「!」并显示意图，
+  离地 34px 可躲横斩，连击最多 +10，层主残血狂暴，宝箱 / 精英掉可叠层装备。
+  `components/trial/renderer.ts` 新增 480×270 像素 Canvas 渲染（程序化像素精灵、
+  视差背景、7 层配色、粒子与伤害数字），`components/trial/game.tsx` 改为键盘 + 触控输入、
+  rAF 固定步长、`localStorage` 续局与交卷重试。旧回合制 active 局（JSON 版本不是 5）
+  在开局时就地换图且不重复扣券；经济与 `trial_run` 表结构不变。
 
 - v0.46.0 星匣图鉴改版为「星图共鸣」：`lib/collection/config.ts`（极光 / 深海 / 古树三张星座 ×
   9 个星位，星石颜色 + 亮度、观星概率、熔炼 / 凝星价格、星座奖励与旧配置字段兼容）、

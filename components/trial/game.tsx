@@ -1,42 +1,38 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  Crown,
-  FlaskConical,
-  Flame,
-  Gem,
-  Loader2,
-  Shield,
-  Skull,
-  Sparkles,
-  Swords,
-  Timer,
-  Trophy,
-  Wind,
-  Zap,
-} from "lucide-react";
+import { Flame, FlaskConical, Loader2, Shield, Sparkles, Swords, Timer, Trophy } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CouponCount } from "@/components/activity/coupon-badge";
 import { formatCredits } from "@/lib/billing/credits";
 import { cn } from "@/lib/utils";
 import {
+  TRIAL_INPUT,
+  TRIAL_MAX_FRAMES,
   TRIAL_RELICS,
-  TRIAL_SKILLS,
-  simulateTrialDungeon,
-  type TrialAction,
+  TRIAL_TICK_MS,
+  TRIAL_VIEW_H,
+  TRIAL_VIEW_W,
+  expToNext,
+  replayTrialGame,
+  stepTrialGame,
+  trialInteractTarget,
   type TrialDungeon,
-  type TrialIntent,
+  type TrialGameState,
   type TrialRelicId,
-  type TrialRoom,
-  type TrialRoomKind,
-  type TrialSkillId,
-  type TrialTurn,
 } from "@/lib/trial/dungeon";
 import { startTrialAction, submitTrialAction } from "@/app/(dashboard)/trial/actions";
-import { TrialHeroArt, TrialMonsterArt } from "./art";
+import {
+  drawTrialScene,
+  focusCamera,
+  smoothCamera,
+  spawnTrialFx,
+  updateTrialFx,
+  type TrialFx,
+} from "./renderer";
+import { TrialHeroArt } from "./art";
 
 interface TrialRun {
   runId: string;
@@ -68,153 +64,141 @@ interface TrialGameProps {
   maxReward: number;
 }
 
-const SKILL_ICONS: Record<TrialSkillId, typeof Swords> = {
-  slash: Swords,
-  arc: Wind,
-  guard: Shield,
-  burst: Zap,
-};
+/** 动作键位：一套键盘、一套触屏，都折算成同一帧的输入掩码。 */
+const KEYS = {
+  left: ["KeyA", "ArrowLeft"],
+  right: ["KeyD", "ArrowRight"],
+  jump: ["KeyW", "ArrowUp", "Space"],
+  attack: ["KeyJ", "KeyZ"],
+  heavy: ["KeyK", "KeyX"],
+  burst: ["KeyL", "KeyC"],
+  guard: ["KeyS", "ArrowDown"],
+  potion: ["KeyE"],
+  interact: ["KeyF", "Enter"],
+} as const;
 
-const INTENT_META: Record<TrialIntent | "heavy", { label: string; icon: typeof Swords; tone: string }> = {
-  attack: { label: "攻击", icon: Swords, tone: "text-rose-400 border-rose-400/40 bg-rose-500/10" },
-  charge: { label: "蓄力 · 下次重击", icon: Zap, tone: "text-amber-300 border-amber-300/40 bg-amber-400/10" },
-  heavy: { label: "重击！", icon: Flame, tone: "text-orange-300 border-orange-400/50 bg-orange-500/15" },
-  guard: { label: "举盾 · 获得护盾", icon: Shield, tone: "text-sky-300 border-sky-400/40 bg-sky-500/10" },
-};
+const GAME_CODES = new Set<string>(Object.values(KEYS).flat());
+const SCROLL_CODES = new Set(["Space", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
 
-const ROOM_META: Record<TrialRoomKind, { label: string; icon: typeof Swords; tone: string }> = {
-  fight: { label: "野区", icon: Swords, tone: "from-slate-500/15 text-slate-200 border-slate-400/30" },
-  elite: { label: "精英", icon: Skull, tone: "from-violet-500/20 text-violet-200 border-violet-400/40" },
-  treasure: { label: "宝箱", icon: Gem, tone: "from-amber-400/20 text-amber-200 border-amber-400/40" },
-  rest: { label: "营地", icon: Flame, tone: "from-emerald-500/20 text-emerald-200 border-emerald-400/40" },
-};
+const TOUCH_BUTTONS: { label: string; hint: string; mask: number }[] = [
+  { label: "左", hint: "A", mask: TRIAL_INPUT.left },
+  { label: "右", hint: "D", mask: TRIAL_INPUT.right },
+  { label: "跳", hint: "W", mask: TRIAL_INPUT.jump },
+  { label: "斩", hint: "J", mask: TRIAL_INPUT.attack },
+  { label: "弧", hint: "K", mask: TRIAL_INPUT.heavy },
+  { label: "星", hint: "L", mask: TRIAL_INPUT.burst },
+  { label: "盾", hint: "S", mask: TRIAL_INPUT.guard },
+  { label: "药", hint: "E", mask: TRIAL_INPUT.potion },
+  { label: "门", hint: "F", mask: TRIAL_INPUT.interact },
+];
+
+const CONTROLS: { keys: string; label: string }[] = [
+  { keys: "A / D", label: "移动" },
+  { keys: "W / 空格", label: "跳跃" },
+  { keys: "J", label: "斩击" },
+  { keys: "K", label: "弧斩" },
+  { keys: "L", label: "星屑" },
+  { keys: "S", label: "格挡" },
+  { keys: "E", label: "结晶" },
+  { keys: "F", label: "进门" },
+];
+
+interface TrialHud {
+  floor: number;
+  totalFloors: number;
+  hp: number;
+  maxHp: number;
+  level: number;
+  exp: number;
+  expToNext: number;
+  potions: number;
+  combo: number;
+  guarding: boolean;
+  arcCd: number;
+  burstCd: number;
+  relics: TrialRelicId[];
+  prompt: string;
+}
+
+function readMask(keys: Set<string>, touchMask: number): number {
+  const down = (codes: readonly string[]) => codes.some((code) => keys.has(code));
+  let mask = touchMask;
+  if (down(KEYS.left)) mask |= TRIAL_INPUT.left;
+  if (down(KEYS.right)) mask |= TRIAL_INPUT.right;
+  if (down(KEYS.jump)) mask |= TRIAL_INPUT.jump;
+  if (down(KEYS.attack)) mask |= TRIAL_INPUT.attack;
+  if (down(KEYS.heavy)) mask |= TRIAL_INPUT.heavy;
+  if (down(KEYS.burst)) mask |= TRIAL_INPUT.burst;
+  if (down(KEYS.guard)) mask |= TRIAL_INPUT.guard;
+  if (down(KEYS.potion)) mask |= TRIAL_INPUT.potion;
+  if (down(KEYS.interact)) mask |= TRIAL_INPUT.interact;
+  return mask;
+}
+
+function buildHud(state: TrialGameState): TrialHud {
+  const target = trialInteractTarget(state);
+  return {
+    floor: Math.min(state.floorIndex + 1, state.dungeon.floors.length),
+    totalFloors: state.dungeon.floors.length,
+    hp: Math.max(0, state.hero.hp),
+    maxHp: state.hero.maxHp,
+    level: state.hero.level,
+    exp: state.hero.exp,
+    expToNext: expToNext(state.hero.level),
+    potions: state.hero.potions,
+    combo: state.hero.combo,
+    guarding: state.hero.guarding,
+    arcCd: state.hero.cooldownArc,
+    burstCd: state.hero.cooldownBurst,
+    relics: [...state.hero.relics],
+    prompt:
+      state.phase === "fight"
+        ? "J 斩击 · K 弧斩 · L 星屑 · S 格挡 · 跳跃躲横斩"
+        : target
+          ? `按 F 进入「${target.title}」`
+          : state.fieldCleared
+            ? "野区已探索 · 前往右侧层主门"
+            : "左右移动寻找门 · 门边按 F 进入",
+  };
+}
 
 function formatClock(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000));
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
 }
 
-function turnSummary(turn: TrialTurn): string {
-  if (turn.roomCleared) return `击破「${turn.roomName}」，回复 ${turn.healed} 生命`;
-  const parts: string[] = [];
-  if (turn.action === "item") parts.push("使用回复结晶");
-  if (turn.dealt > 0) parts.push(`造成 ${turn.dealt} 伤害`);
-  if (turn.blocked > 0) parts.push(`格挡 ${turn.blocked}`);
-  if (turn.taken > 0) parts.push(`受到 ${turn.taken} 伤害`);
-  if (turn.healed > 0 && (turn.action === "guard" || turn.action === "item")) {
-    parts.push(`回复 ${turn.healed}`);
-  }
-  return parts.join(" · ");
+function percent(value: number, max: number): number {
+  return max > 0 ? Math.max(0, Math.min(100, Math.round((value / max) * 100))) : 0;
 }
 
-function refineActions(raw: string | null): TrialAction[] {
-  if (!raw) return [];
-  try {
-    const value = JSON.parse(raw);
-    if (!Array.isArray(value)) return [];
-    const allowed: TrialSkillId[] = ["slash", "arc", "guard", "burst"];
-    return value
-      .filter((item) => item && typeof item === "object")
-      .filter(
-        (item) =>
-          (item.t === "enter" && Number.isFinite(Number(item.i))) ||
-          item.t === "boss" ||
-          item.t === "item" ||
-          (item.t === "skill" && allowed.includes(item.s as TrialSkillId)),
-      )
-      .slice(0, 600)
-      .map((item) => {
-        if (item.t === "enter") return { t: "enter" as const, i: Math.trunc(Number(item.i)) };
-        if (item.t === "boss") return { t: "boss" as const };
-        if (item.t === "item") return { t: "item" as const };
-        return { t: "skill" as const, s: item.s as TrialSkillId };
-      });
-  } catch {
-    return [];
-  }
-}
-
-function subscribeToNothing(): () => void {
-  return () => {};
-}
-
-function Bar({
-  value,
-  max,
-  tone,
-}: {
-  value: number;
-  max: number;
-  tone: "hero" | "monster" | "exp";
-}) {
-  const ratio = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
-  return (
-    <div
-      className={cn(
-        "w-full overflow-hidden rounded-full bg-black/40 ring-1 ring-white/10",
-        tone === "exp" ? "h-1.5" : "h-2.5",
-      )}
-    >
-      <div
-        className={cn(
-          "h-full rounded-full transition-[width] duration-500 ease-out",
-          tone === "hero"
-            ? "bg-gradient-to-r from-emerald-400 to-teal-300"
-            : tone === "monster"
-              ? "bg-gradient-to-r from-rose-500 to-orange-400"
-              : "bg-gradient-to-r from-cyan-400 to-sky-300",
-        )}
-        style={{ width: `${Math.round(ratio * 100)}%` }}
-      />
-    </div>
-  );
-}
-
-function RelicChips({ relics }: { relics: TrialRelicId[] }) {
+function RelicChips({ relics, compact }: { relics: TrialRelicId[]; compact?: boolean }) {
   if (relics.length === 0) {
-    return <span className="text-xs text-muted-foreground">还没有装备：宝箱与精英怪会给。</span>;
+    return compact ? null : (
+      <span className="text-xs text-muted-foreground">还没有装备：宝箱与精英怪会给。</span>
+    );
   }
   const counts = new Map<TrialRelicId, number>();
   for (const relic of relics) counts.set(relic, (counts.get(relic) ?? 0) + 1);
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className={cn("flex flex-wrap gap-1", compact ? "justify-end" : "gap-1.5")}>
       {[...counts.entries()].map(([id, count]) => {
         const relic = TRIAL_RELICS[id];
         return (
           <span
             key={id}
             title={relic.desc}
-            className="inline-flex items-center gap-1 rounded border border-cyan-400/30 bg-cyan-400/10 px-2 py-0.5 text-xs text-cyan-100"
+            className={cn(
+              "inline-flex items-center gap-1 rounded border border-amber-300/25 bg-amber-400/10 text-amber-100",
+              compact ? "px-1 py-0.5 text-[9px]" : "px-2 py-0.5 text-xs",
+            )}
           >
-            <Sparkles className="h-3 w-3" />
+            <Sparkles className={compact ? "h-2.5 w-2.5" : "h-3 w-3"} />
             {relic.name}
             {count > 1 ? <b className="tabular-nums">×{count}</b> : null}
           </span>
         );
       })}
     </div>
-  );
-}
-
-function FloorTracker({
-  total,
-  cleared,
-}: {
-  total: number;
-  cleared: number;
-}) {
-  return (
-    <span className="flex items-center gap-1">
-      {Array.from({ length: total }, (_, i) => (
-        <span
-          key={i}
-          className={cn(
-            "h-1.5 w-4 rounded-full",
-            i < cleared ? "bg-amber-400" : i === cleared ? "bg-cyan-400" : "bg-border",
-          )}
-        />
-      ))}
-    </span>
   );
 }
 
@@ -272,41 +256,198 @@ export function TrialGame(props: TrialGameProps) {
   const router = useRouter();
   const [run, setRun] = useState<TrialRun | null>(props.initialRun);
   const [runsToday, setRunsToday] = useState(props.runsToday);
-  const [sessionActions, setSessionActions] = useState<TrialAction[] | null>(null);
   const [settlement, setSettlement] = useState<TrialSettlement | null>(null);
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [hud, setHud] = useState<TrialHud | null>(null);
+  const [outcome, setOutcome] = useState<"won" | "dead" | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const framesRef = useRef<number[]>([]);
+  const keysRef = useRef<Set<string>>(new Set());
+  const touchMaskRef = useRef(0);
   const submittingRef = useRef(false);
+  const settledRef = useRef(false);
 
-  const storageKey = run ? `trial-dungeon:${run.runId}` : null;
-  // 刷新后从本地存储恢夆动作序列；服务端仍按同一串动作重算，改存档没用。
-  const resumedRaw = useSyncExternalStore(
-    subscribeToNothing,
-    () => (storageKey ? window.localStorage.getItem(storageKey) ?? "" : ""),
-    () => "",
-  );
-  const resumedActions = useMemo(
-    () => (resumedRaw ? refineActions(resumedRaw) : []),
-    [resumedRaw],
-  );
-  const actions = sessionActions ?? resumedActions;
+  const remainingMs = run ? run.expiresAt - now : 0;
+  const urgent = Boolean(run) && remainingMs <= 30_000;
 
-  const dungeon = run?.dungeon ?? null;
-  const result = useMemo(
-    () => (dungeon ? simulateTrialDungeon(dungeon, actions) : null),
-    [dungeon, actions],
+  const submit = useCallback(
+    async (frames: number[]) => {
+      if (!run || submittingRef.current) return;
+      submittingRef.current = true;
+      setBusy(true);
+      setSubmitError(null);
+      try {
+        const res = await submitTrialAction({ runId: run.runId, actions: frames.slice() });
+        if (!res.success) {
+          setSubmitError(res.error);
+          toast.error(res.error);
+          return;
+        }
+        settledRef.current = true;
+        try {
+          window.localStorage.removeItem(`trial-dungeon:${run.runId}`);
+        } catch {
+          // 私密模式下写不了本地存储，清理失败不影响结算。
+        }
+        setSettlement(res.data);
+        setRun(null);
+        setOutcome(null);
+        setHud(null);
+        if (res.data.reward > 0) {
+          toast.success(
+            `通关 ${res.data.floorsCleared} 层，获得 ${formatCredits(res.data.reward)} tcr`,
+          );
+        } else {
+          toast.message(res.data.expired ? "已超时，本局不发奖励" : "本局没有命中奖励档位");
+        }
+        router.refresh();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "交卷失败，请重试";
+        setSubmitError(message);
+        toast.error(message);
+      } finally {
+        submittingRef.current = false;
+        setBusy(false);
+      }
+    },
+    [router, run],
   );
-  const finished = result ? result.status === "cleared" || result.status === "dead" : false;
-  const last = result?.lastTurn ?? null;
 
+  // 主循环：60Hz 固定步长推进引擎，逐帧记录输入；渲染与 HUD 只读同一份状态。
   useEffect(() => {
-    if (!storageKey) return;
+    const canvas = canvasRef.current;
+    if (!run || !canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const storageKey = `trial-dungeon:${run.runId}`;
+    let frames: number[] = [];
     try {
-      window.localStorage.setItem(storageKey, JSON.stringify(actions));
+      const raw = window.localStorage.getItem(storageKey);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : null;
+      if (Array.isArray(parsed)) {
+        frames = parsed
+          .map((value) => Number(value))
+          .filter((value) => Number.isFinite(value))
+          .map((value) => Math.max(0, Math.min(0xffff, Math.trunc(value))))
+          .slice(0, TRIAL_MAX_FRAMES);
+      }
     } catch {
-      // 私密模式下写不了本地存储，进度只保留在内存里，不影响结算。
+      frames = [];
     }
-  }, [actions, storageKey]);
+    framesRef.current = frames;
+
+    const state = replayTrialGame(run.dungeon, frames);
+    const fx: TrialFx[] = [];
+    let camera = -1;
+    let last = performance.now();
+    let accumulator = 0;
+    let hudTicks = 0;
+    let savedAt = 0;
+    let finished = false;
+    let disposed = false;
+    let raf = 0;
+    const keys = keysRef.current;
+    keys.clear();
+    touchMaskRef.current = 0;
+
+    const save = () => {
+      if (settledRef.current) return;
+      try {
+        window.localStorage.setItem(storageKey, JSON.stringify(framesRef.current));
+      } catch {
+        // 存不下就只保留内存进度，交卷不受影响。
+      }
+    };
+
+    const finish = (kind: "won" | "dead") => {
+      if (finished) return;
+      finished = true;
+      setOutcome(kind);
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (!GAME_CODES.has(event.code)) return;
+      if (SCROLL_CODES.has(event.code)) event.preventDefault();
+      keys.add(event.code);
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      keys.delete(event.code);
+    };
+    const onBlur = () => keys.clear();
+    const onHide = () => {
+      if (document.hidden) save();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("pagehide", onHide);
+    document.addEventListener("visibilitychange", onHide);
+
+    const loop = (time: number) => {
+      if (disposed) return;
+      raf = window.requestAnimationFrame(loop);
+
+      if (!finished && (state.phase === "over" || state.phase === "won")) {
+        finish(state.phase === "won" ? "won" : "dead");
+      }
+      if (!finished && Date.now() >= run.expiresAt) {
+        // 墙钟超时：停帧但保留画面，交卷由外层计时器触发。
+        finished = true;
+      }
+
+      const dt = Math.min(120, Math.max(0, time - last));
+      last = time;
+
+      if (!finished) {
+        accumulator = Math.min(accumulator + dt, TRIAL_TICK_MS * 10);
+        while (accumulator >= TRIAL_TICK_MS) {
+          accumulator -= TRIAL_TICK_MS;
+          const mask = readMask(keys, touchMaskRef.current);
+          frames.push(mask);
+          stepTrialGame(state, mask);
+          if (state.events.length > 0) spawnTrialFx(fx, state.events, state);
+          hudTicks += 1;
+          if (state.phase === "over" || state.phase === "won") break;
+        }
+        if (frames.length > TRIAL_MAX_FRAMES) frames.length = TRIAL_MAX_FRAMES;
+        if (time - savedAt > 900) {
+          savedAt = time;
+          save();
+        }
+        if (hudTicks >= 6) {
+          hudTicks = 0;
+          setHud(buildHud(state));
+        }
+        if (state.phase === "over" || state.phase === "won") {
+          finish(state.phase === "won" ? "won" : "dead");
+        }
+      }
+
+      updateTrialFx(fx, dt);
+      camera = smoothCamera(camera, focusCamera(state));
+      drawTrialScene(ctx, state, fx, camera, time);
+    };
+    raf = window.requestAnimationFrame(loop);
+
+    return () => {
+      disposed = true;
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("pagehide", onHide);
+      document.removeEventListener("visibilitychange", onHide);
+      keys.clear();
+      touchMaskRef.current = 0;
+      save();
+    };
+  }, [run]);
 
   useEffect(() => {
     if (!run) return;
@@ -314,87 +455,49 @@ export function TrialGame(props: TrialGameProps) {
     return () => window.clearInterval(timer);
   }, [run]);
 
-  const remainingMs = run ? run.expiresAt - now : 0;
-
-  const submit = useCallback(
-    async (payload: TrialAction[]) => {
-      if (!run || submittingRef.current) return;
-      submittingRef.current = true;
-      setBusy(true);
-      const res = await submitTrialAction({ runId: run.runId, actions: payload });
-      setBusy(false);
-      submittingRef.current = false;
-      if (!res.success) {
-        toast.error(res.error);
-        return;
-      }
-      try {
-        window.localStorage.removeItem(`trial-dungeon:${run.runId}`);
-      } catch {
-        // 忽略本地存储清理失败。
-      }
-      setSettlement(res.data);
-      setRun(null);
-      setSessionActions(null);
-      if (res.data.reward > 0) {
-        toast.success(
-          `通关 ${res.data.floorsCleared} 层，获得 ${formatCredits(res.data.reward)} tcr`,
-        );
-      } else {
-        toast.message(res.data.expired ? "已超时，本局不发奖励" : "本局没有命中奖励档位");
-      }
-      router.refresh();
-    },
-    [router, run],
-  );
-
+  // 打完收工：先让最后一击的演出播完，再交卷。
   useEffect(() => {
-    if (run && remainingMs <= 0 && !submittingRef.current) {
-      void submit(actions);
-    }
-  }, [actions, remainingMs, run, submit]);
-
-  useEffect(() => {
-    if (!run || !finished || submittingRef.current) return;
-    const timer = window.setTimeout(() => void submit(actions), 1100);
+    if (!run || !outcome || submitError) return;
+    const timer = window.setTimeout(
+      () => void submit(framesRef.current),
+      outcome === "won" ? 1700 : 1300,
+    );
     return () => window.clearTimeout(timer);
-  }, [actions, finished, run, submit]);
+  }, [outcome, run, submit, submitError]);
+
+  // 超时直接交卷：服务端按 expired 记 0 层。
+  useEffect(() => {
+    if (!run || remainingMs > 0 || submitError) return;
+    void submit(framesRef.current);
+  }, [remainingMs, run, submit, submitError]);
 
   async function handleStart() {
     setBusy(true);
     setSettlement(null);
+    setOutcome(null);
+    setSubmitError(null);
+    setHud(null);
     const res = await startTrialAction();
     setBusy(false);
     if (!res.success) {
       toast.error(res.error);
       return;
     }
-    const started = res.data;
+    settledRef.current = false;
     setRun({
-      runId: started.runId,
-      dungeon: started.dungeon,
-      startedAt: started.startedAt,
-      expiresAt: started.expiresAt,
+      runId: res.data.runId,
+      dungeon: res.data.dungeon,
+      startedAt: res.data.startedAt,
+      expiresAt: res.data.expiresAt,
     });
-    setRunsToday(started.runsToday);
-    setSessionActions(null);
+    setRunsToday(res.data.runsToday);
     setNow(Date.now());
     router.refresh();
   }
 
-  function act(action: TrialAction) {
-    if (!run || finished || busy || !result) return;
-    if (action.t === "skill") {
-      if (result.status !== "fighting") return;
-      if (action.s === "arc" && result.cooldowns.arc > 0) return;
-      if (action.s === "burst" && result.cooldowns.burst > 0) return;
-    }
-    if (action.t === "item") {
-      if (result.status !== "fighting" || result.potions <= 0) return;
-    }
-    if (action.t === "boss" && result.status !== "choosing") return;
-    if (action.t === "enter" && (result.status !== "choosing" || result.fieldCleared)) return;
-    setSessionActions((prev) => [...(prev ?? resumedActions), action]);
+  function pressTouch(mask: number, pressed: boolean) {
+    if (pressed) touchMaskRef.current |= mask;
+    else touchMaskRef.current &= ~mask;
   }
 
   if (!run) {
@@ -411,17 +514,30 @@ export function TrialGame(props: TrialGameProps) {
 
         <div className="relative overflow-hidden rounded-xl border border-cyan-400/25 bg-[radial-gradient(circle_at_15%_20%,rgba(34,211,238,0.18),transparent_55%),radial-gradient(circle_at_85%_80%,rgba(99,102,241,0.2),transparent_50%)] p-4">
           <div className="pointer-events-none absolute inset-0 opacity-30 [background-image:linear-gradient(rgba(148,163,184,0.25)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.25)_1px,transparent_1px)] [background-size:28px_28px]" />
-          <div className="relative flex items-center gap-4">
-            <div className="h-20 w-20 shrink-0">
+          <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            <div className="h-20 w-20 shrink-0 sm:h-24 sm:w-24">
               <TrialHeroArt hurt={false} />
             </div>
-            <div className="min-w-0 text-sm">
+            <div className="min-w-0 space-y-2 text-sm">
               <p className="font-display text-base font-semibold tracking-wide text-cyan-100">
-                浮游城 · 逐层攻略
+                浮游城 · 像素攻略
               </p>
-              <p className="mt-1 text-muted-foreground">
-                共 {props.floorCount} 层。每层先在两扇野区门里探路（战斗 / 精英 / 宝箱 / 营地），
-                再进入层主房；击败层主才能上楼。剑技有冷却，连击加伤，层主残血会狂暴。
+              <p className="text-muted-foreground">
+                共 {props.floorCount} 层：先在两扇野区门里探路（战斗 / 精英 / 宝箱 / 营地），
+                再挑战层主；生命跨房间保留，击破升级。抬手的「!」是出招预警，跳起来能躲开横斩。
+              </p>
+              <div className="flex flex-wrap gap-1.5 text-[11px]">
+                {CONTROLS.map((item) => (
+                  <span
+                    key={item.label}
+                    className="rounded border border-white/10 bg-black/25 px-2 py-0.5 text-muted-foreground"
+                  >
+                    <b className="text-cyan-200">{item.keys}</b> {item.label}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                交卷只上传每帧按键序列，服务端用同一套 60Hz 引擎重放判定，改存档无效。
               </p>
             </div>
           </div>
@@ -429,8 +545,9 @@ export function TrialGame(props: TrialGameProps) {
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
-            单局限时 {props.timeLimitSeconds} 秒；本局票价 <CouponCount kind="trial" count={props.priceTickets} />，
-            最高可得 {formatCredits(props.maxReward)} tcr。
+            单局限时 {props.timeLimitSeconds} 秒；本局票价{" "}
+            <CouponCount kind="trial" count={props.priceTickets} />，最高可得{" "}
+            {formatCredits(props.maxReward)} tcr。
           </p>
           <Button
             type="button"
@@ -438,8 +555,8 @@ export function TrialGame(props: TrialGameProps) {
             disabled={busy || !canStart}
             className="font-display tracking-[0.18em]"
           >
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            LINK START
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Swords className="h-4 w-4" />}
+            进入浮游城
           </Button>
         </div>
         {!canStart ? (
@@ -453,360 +570,169 @@ export function TrialGame(props: TrialGameProps) {
     );
   }
 
-  if (!dungeon || !result) return null;
-
-  const urgent = remainingMs <= 30_000;
-  const floorNo = Math.min(result.floorIndex + 1, dungeon.floors.length);
-  const floor = dungeon.floors[Math.min(result.floorIndex, dungeon.floors.length - 1)];
-  const intent = result.current?.nextIntent ? INTENT_META[result.current.nextIntent] : null;
-  const IntentIcon = intent?.icon;
-  const lastTurnKey = result.log.length;
-  const monsterHurt = Boolean(last && last.dealt > 0 && !last.roomCleared);
-  const heroHurt = Boolean(last && last.taken > 0);
-  const recentEvents = result.events.slice(-2).reverse();
+  const totalFloors = hud?.totalFloors ?? run.dungeon.floors.length;
+  const floorNo = hud?.floor ?? 1;
+  const overlay = Boolean(outcome) || busy || Boolean(submitError);
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-        <span className="flex items-center gap-2 text-muted-foreground">
-          <span className="font-display text-base font-semibold tracking-wider text-cyan-200">
-            {floorNo}F
-          </span>
-          <span className="text-xs">/ {dungeon.floors.length}F</span>
-          <FloorTracker total={dungeon.floors.length} cleared={result.floorsCleared} />
-          <span className="rounded border border-cyan-400/30 px-1.5 py-0.5 text-xs text-cyan-200">
-            Lv.{result.level}
-          </span>
-        </span>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 tabular-nums",
-            urgent ? "font-semibold text-destructive" : "text-muted-foreground",
-          )}
-        >
-          <Timer className="h-4 w-4" />
-          {formatClock(remainingMs)}
-        </span>
-      </div>
+    <div className="space-y-2">
+      <div className="relative overflow-hidden rounded-xl border border-cyan-400/25 bg-[#050914]">
+        <canvas
+          ref={canvasRef}
+          width={TRIAL_VIEW_W}
+          height={TRIAL_VIEW_H}
+          className="block w-full touch-none [image-rendering:pixelated]"
+          aria-label="每日试炼动作场景"
+        />
 
-      <div className="space-y-2 rounded-xl border border-border bg-secondary/20 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">
-            试炼者 Lv.{result.level} · 生命 {result.heroHp}/{result.heroMaxHp}
-          </span>
-          <span className="flex items-center gap-2">
-            {result.combo > 0 ? (
-              <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-amber-200">
-                连击 ×{result.combo}
+        <div className="pointer-events-none absolute inset-0 flex flex-col justify-between gap-2 p-2 sm:p-3">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-1 text-[10px] sm:text-xs">
+              <span className="rounded bg-black/55 px-1.5 py-0.5 font-display tracking-widest text-cyan-200 ring-1 ring-cyan-400/30">
+                {floorNo}F / {totalFloors}F
               </span>
-            ) : null}
-            <span className="inline-flex items-center gap-1">
-              <FlaskConical className="h-3 w-3" />
-              回复结晶 ×{result.potions}
-            </span>
-          </span>
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded bg-black/55 px-1.5 py-0.5 tabular-nums ring-1",
+                  urgent ? "text-rose-300 ring-rose-400/40" : "text-slate-200 ring-white/10",
+                )}
+              >
+                <Timer className="h-3 w-3" />
+                {formatClock(remainingMs)}
+              </span>
+              {hud ? (
+                <span className="rounded bg-black/55 px-1.5 py-0.5 text-amber-200 ring-1 ring-amber-300/20">
+                  Lv.{hud.level}
+                </span>
+              ) : null}
+              {hud && hud.combo > 0 ? (
+                <span className="inline-flex items-center gap-1 rounded bg-amber-400/20 px-1.5 py-0.5 text-amber-200 ring-1 ring-amber-300/40">
+                  <Flame className="h-3 w-3" />×{hud.combo}
+                </span>
+              ) : null}
+              {hud?.guarding ? (
+                <span className="inline-flex items-center gap-1 rounded bg-sky-500/20 px-1.5 py-0.5 text-sky-200 ring-1 ring-sky-300/40">
+                  <Shield className="h-3 w-3" />
+                  格挡
+                </span>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <p className="mx-auto w-fit max-w-full truncate rounded bg-black/45 px-2 py-0.5 text-center text-[10px] text-cyan-100/85 sm:text-xs">
+              {hud?.prompt ?? "…"}
+            </p>
+            <div className="flex items-end justify-between gap-2">
+              <div className="w-44 space-y-1 rounded bg-black/35 px-1.5 py-1 sm:w-64">
+                <div className="flex items-center justify-between text-[9px] text-slate-200 sm:text-[10px]">
+                  <span className="inline-flex items-center gap-1">
+                    <Swords className="h-3 w-3 text-emerald-300" />
+                    {hud ? `${hud.hp} / ${hud.maxHp}` : "…"}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <FlaskConical className="h-3 w-3 text-cyan-200" />×{hud?.potions ?? 0}
+                  </span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-sm bg-black/60 ring-1 ring-white/15">
+                  <div
+                    className="h-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-[width] duration-200"
+                    style={{ width: `${percent(hud?.hp ?? 0, hud?.maxHp ?? 1)}%` }}
+                  />
+                </div>
+                <div className="h-1 overflow-hidden rounded-sm bg-black/60">
+                  <div
+                    className="h-full bg-cyan-400"
+                    style={{ width: `${percent(hud?.exp ?? 0, hud?.expToNext ?? 1)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="flex max-w-[52%] flex-col items-end gap-1">
+                <div className="flex flex-wrap justify-end gap-1 text-[9px]">
+                  <span
+                    className={cn(
+                      "rounded px-1 py-0.5 ring-1",
+                      (hud?.arcCd ?? 0) > 0
+                        ? "bg-black/60 text-slate-400 ring-white/10"
+                        : "bg-cyan-500/15 text-cyan-200 ring-cyan-400/30",
+                    )}
+                  >
+                    弧斩 {(hud?.arcCd ?? 0) > 0 ? `${((hud?.arcCd ?? 0) / 60).toFixed(1)}s` : "就绪"}
+                  </span>
+                  <span
+                    className={cn(
+                      "rounded px-1 py-0.5 ring-1",
+                      (hud?.burstCd ?? 0) > 0
+                        ? "bg-black/60 text-slate-400 ring-white/10"
+                        : "bg-fuchsia-500/15 text-fuchsia-200 ring-fuchsia-400/30",
+                    )}
+                  >
+                    星屑 {(hud?.burstCd ?? 0) > 0 ? `${((hud?.burstCd ?? 0) / 60).toFixed(1)}s` : "就绪"}
+                  </span>
+                </div>
+                <RelicChips relics={hud?.relics ?? []} compact />
+              </div>
+            </div>
+          </div>
         </div>
-        <Bar value={result.heroHp} max={result.heroMaxHp} tone="hero" />
-        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-          <span className="w-8 shrink-0">EXP</span>
-          <Bar value={result.exp} max={result.expToNext} tone="exp" />
-          <span className="tabular-nums">
-            {result.exp}/{result.expToNext}
-          </span>
-        </div>
-        <RelicChips relics={result.relics} />
-        {recentEvents.length > 0 ? (
-          <div className="space-y-0.5 text-xs text-muted-foreground">
-            {recentEvents.map((event, i) => (
-              <p key={`${event.floor}-${event.title}-${i}`} className="truncate">
-                {event.floor}F · {event.title}
-                {event.relic ? ` · 获得「${TRIAL_RELICS[event.relic].name}」` : ""}
-                {event.healed > 0 ? ` · 回复 ${event.healed}` : ""}
-                {event.xp > 0 ? ` · EXP +${event.xp}` : ""}
-              </p>
-            ))}
+
+        {overlay ? (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-slate-950/70 p-4 text-center">
+            {submitError ? (
+              <>
+                <p className="text-sm text-rose-300">{submitError}</p>
+                <Button type="button" size="sm" onClick={() => setSubmitError(null)}>
+                  重新交卷
+                </Button>
+              </>
+            ) : (
+              <>
+                <p className="font-display text-lg font-semibold tracking-widest text-cyan-100">
+                  {outcome === "won" ? "登顶" : outcome === "dead" ? "力尽" : "沙漏耗尽"}
+                </p>
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  正在结算…
+                </p>
+              </>
+            )}
           </div>
         ) : null}
       </div>
 
-      {result.status === "choosing" ? (
-        <div className="space-y-2">
-          {result.fieldCleared ? (
-            <p className="text-sm text-muted-foreground">
-              {floorNo}F 野区已探完，前往层主房继续上行。
-            </p>
-          ) : (
-            <>
-              <p className="text-sm text-muted-foreground">
-                {floorNo}F · 选择一条野区路线（也可以直接去层主房）
-              </p>
-              <div className={cn("grid gap-2", floor.rooms.length > 1 && "sm:grid-cols-2")}>
-                {floor.rooms.map((room, index) => (
-                  <RoomDoor
-                    key={`${result.floorIndex}-${index}`}
-                    room={room}
-                    disabled={busy}
-                    onEnter={() => act({ t: "enter", i: index })}
-                  />
-                ))}
-              </div>
-            </>
-          )}
-          <BossDoor
-            floorNo={floorNo}
-            boss={floor.boss}
-            isLast={result.floorIndex >= dungeon.floors.length - 1}
-            disabled={busy}
-            onEnter={() => act({ t: "boss" })}
-          />
-        </div>
-      ) : null}
-
-      {result.status === "fighting" && result.current ? (
-        <>
-          <div className="relative overflow-hidden rounded-2xl border border-cyan-400/20 bg-[radial-gradient(circle_at_20%_15%,rgba(34,211,238,0.18),transparent_55%),radial-gradient(circle_at_85%_80%,rgba(99,102,241,0.22),transparent_50%)] bg-slate-950/40 p-4">
-            <div className="pointer-events-none absolute inset-0 opacity-40 [background-image:radial-gradient(rgba(255,255,255,0.35)_1px,transparent_1px)] [background-size:34px_34px]" />
-
-            {result.current.boss ? (
-              <p className="relative mb-2 text-center font-display text-xs tracking-[0.3em] text-rose-300">
-                FLOOR BOSS
-              </p>
-            ) : null}
-
-            <div className="relative grid grid-cols-[1fr_auto_1fr] items-end gap-2 sm:gap-4">
-              <div className="space-y-2">
-                <div className="relative mx-auto h-28 w-28 sm:h-36 sm:w-36">
-                  <TrialHeroArt hurt={heroHurt} />
-                  {last && last.healed > 0 ? (
-                    <span
-                      key={`heal-${lastTurnKey}`}
-                      className="trial-float pointer-events-none absolute inset-x-0 top-2 text-center text-sm font-semibold text-emerald-300"
-                    >
-                      +{last.healed}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="space-y-1">
-                  <p className="flex items-baseline justify-between text-xs text-muted-foreground">
-                    <span className="font-medium text-foreground">Lv.{result.level}</span>
-                    <span className="tabular-nums">
-                      {result.heroHp} / {result.heroMaxHp}
-                    </span>
-                  </p>
-                  <Bar value={result.heroHp} max={result.heroMaxHp} tone="hero" />
-                </div>
-              </div>
-
-              <div className="pb-10 text-center">
-                <p className="font-display text-lg font-semibold tracking-widest text-cyan-200/80">VS</p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="relative mx-auto h-28 w-28 sm:h-36 sm:w-36">
-                  <div key={lastTurnKey} className="h-full w-full">
-                    <TrialMonsterArt
-                      shape={result.current.room.wave?.shape ?? "mire"}
-                      hurt={monsterHurt}
-                    />
-                  </div>
-                  {last && last.dealt > 0 ? (
-                    <span
-                      key={`dmg-${lastTurnKey}`}
-                      className="trial-float pointer-events-none absolute inset-x-0 top-2 text-center text-lg font-bold text-rose-300 drop-shadow"
-                    >
-                      -{last.dealt}
-                    </span>
-                  ) : null}
-                  {last && last.roomCleared ? (
-                    <span
-                      key={`clear-${lastTurnKey}`}
-                      className="trial-float pointer-events-none absolute inset-x-0 top-2 text-center text-sm font-semibold text-amber-200"
-                    >
-                      击破！
-                    </span>
-                  ) : null}
-                </div>
-                <div className="space-y-1">
-                  <p className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
-                    <span className="truncate font-medium text-foreground">
-                      {result.current.boss ? "层主 · " : ""}
-                      {result.current.room.wave?.name ?? result.current.room.title}
-                    </span>
-                    <span className="shrink-0 tabular-nums">
-                      {result.current.monsterHp} / {result.current.monsterMaxHp}
-                    </span>
-                  </p>
-                  <Bar
-                    value={result.current.monsterHp}
-                    max={result.current.monsterMaxHp}
-                    tone="monster"
-                  />
-                  <div className="flex flex-wrap items-center gap-1">
-                    {result.current.monsterShield > 0 ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-sky-400/40 bg-sky-500/10 px-2 py-0.5 text-xs text-sky-300">
-                        <Shield className="h-3 w-3" />
-                        护盾 {result.current.monsterShield}
-                      </span>
-                    ) : null}
-                    {result.current.enraged ? (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-rose-400/50 bg-rose-500/15 px-2 py-0.5 text-xs font-semibold text-rose-200">
-                        <Flame className="h-3 w-3" />
-                        狂暴 · 伤害 +35%
-                      </span>
-                    ) : null}
-                    {intent && IntentIcon ? (
-                      <span
-                        className={cn(
-                          "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs",
-                          intent.tone,
-                        )}
-                      >
-                        <IntentIcon className="h-3 w-3" />
-                        下一步：{intent.label}
-                      </span>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {last ? (
-              <p className="relative mt-3 truncate rounded-lg bg-black/30 px-3 py-1.5 text-xs text-cyan-100/80">
-                {turnSummary(last)}
-              </p>
-            ) : (
-              <p className="relative mt-3 rounded-lg bg-black/30 px-3 py-1.5 text-xs text-cyan-100/80">
-                {result.current.room.hint}
-              </p>
-            )}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            {TRIAL_SKILLS.map((skill) => {
-              const Icon = SKILL_ICONS[skill.id];
-              const cd = skill.id === "arc" ? result.cooldowns.arc : skill.id === "burst" ? result.cooldowns.burst : 0;
-              return (
-                <Button
-                  key={skill.id}
-                  type="button"
-                  variant={skill.id === "burst" ? "primary" : "outline"}
-                  className="h-auto flex-col items-start gap-1 py-2.5 text-left"
-                  onClick={() => act({ t: "skill", s: skill.id })}
-                  disabled={busy || cd > 0}
-                >
-                  <span className="flex w-full items-center justify-between text-sm font-medium">
-                    {skill.name}
-                    {cd > 0 ? <span className="text-xs opacity-70">冷却 {cd}</span> : <Icon className="h-3.5 w-3.5" />}
-                  </span>
-                  <span className="text-xs font-normal opacity-70">{skill.desc}</span>
-                </Button>
-              );
-            })}
-          </div>
-
-          <Button
+      <div className="grid grid-cols-5 gap-1.5 sm:hidden">
+        {TOUCH_BUTTONS.map((button) => (
+          <button
+            key={button.label}
             type="button"
-            variant="secondary"
-            className="w-full"
-            onClick={() => act({ t: "item" })}
-            disabled={busy || result.potions <= 0}
+            disabled={overlay}
+            className="select-none rounded-lg border border-white/10 bg-secondary/40 py-2 text-sm font-medium text-foreground touch-none active:bg-cyan-500/25 disabled:opacity-50"
+            onPointerDown={(event) => {
+              event.preventDefault();
+              event.currentTarget.setPointerCapture(event.pointerId);
+              pressTouch(button.mask, true);
+            }}
+            onPointerUp={(event) => {
+              event.preventDefault();
+              pressTouch(button.mask, false);
+            }}
+            onPointerCancel={() => pressTouch(button.mask, false)}
+            onPointerLeave={() => pressTouch(button.mask, false)}
+            onContextMenu={(event) => event.preventDefault()}
           >
-            <FlaskConical className="h-4 w-4" />
-            使用回复结晶（剩余 {result.potions}，回复 32 生命）
-          </Button>
+            {button.label}
+            <span className="ml-0.5 text-[10px] text-muted-foreground">{button.hint}</span>
+          </button>
+        ))}
+      </div>
 
-          <p className="text-xs text-muted-foreground">
-            连击每层 +2 伤害（最多 +10），受伤或防守会清空连击；层主残血进入狂暴。
-            生命跨房间保留，升级会提升生命上限并回复 10。
-          </p>
-        </>
-      ) : null}
-
-      {finished ? (
-        <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-          对局结束，正在结算…
-        </p>
-      ) : null}
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+        <span className="hidden sm:inline">
+          A/D 移动 · W/空格 跳跃 · J 斩击 · K 弧斩 · L 星屑 · S 格挡 · E 结晶 · F 进门
+        </span>
+        <span>按键序列实时记录 · 交卷后服务端重放 60Hz 判定</span>
+      </div>
     </div>
-  );
-}
-
-function RoomDoor({
-  room,
-  disabled,
-  onEnter,
-}: {
-  room: TrialRoom;
-  disabled: boolean;
-  onEnter: () => void;
-}) {
-  const meta = ROOM_META[room.kind];
-  const Icon = meta.icon;
-  return (
-    <button
-      type="button"
-      onClick={onEnter}
-      disabled={disabled}
-      className={cn(
-        "group flex items-center gap-3 rounded-xl border bg-gradient-to-br to-transparent p-3 text-left transition",
-        "hover:border-cyan-400/50 hover:shadow-[0_0_24px_-8px_rgba(34,211,238,0.65)] disabled:opacity-60",
-        meta.tone,
-      )}
-    >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-black/30 ring-1 ring-white/10">
-        <Icon className="h-5 w-5" />
-      </span>
-      <span className="min-w-0 space-y-0.5">
-        <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-          {room.title}
-          <span className="rounded-full border border-white/15 px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            {meta.label}
-          </span>
-        </span>
-        <span className="block truncate text-xs text-muted-foreground">{room.hint}</span>
-      </span>
-    </button>
-  );
-}
-
-function BossDoor({
-  floorNo,
-  boss,
-  isLast,
-  disabled,
-  onEnter,
-}: {
-  floorNo: number;
-  boss: TrialRoom;
-  isLast: boolean;
-  disabled: boolean;
-  onEnter: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onEnter}
-      disabled={disabled}
-      className={cn(
-        "flex w-full items-center gap-3 rounded-xl border border-rose-400/40 bg-gradient-to-r from-rose-500/20 via-rose-500/5 to-transparent p-3 text-left transition",
-        "hover:border-rose-300/70 hover:shadow-[0_0_28px_-8px_rgba(244,63,94,0.7)] disabled:opacity-60",
-      )}
-    >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-black/40 text-rose-200 ring-1 ring-rose-400/30">
-        <Crown className="h-5 w-5" />
-      </span>
-      <span className="min-w-0 space-y-0.5">
-        <span className="flex items-center gap-2 text-sm font-medium text-rose-100">
-          层主房 · {boss.wave?.name ?? "层主"}
-          <span className="rounded-full border border-rose-400/40 px-1.5 py-0.5 text-[10px] text-rose-200">
-            {floorNo}F
-          </span>
-        </span>
-        <span className="block truncate text-xs text-rose-200/70">
-          {isLast ? "击败即登顶" : `击败后开启 ${floorNo + 1}F 的转移门`}
-          {boss.wave ? ` · ${boss.wave.hp} 生命 / ${boss.wave.atk} 攻击` : ""}
-        </span>
-      </span>
-    </button>
   );
 }

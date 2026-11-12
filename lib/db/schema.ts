@@ -936,7 +936,7 @@ export const trialRuns = sqliteTable(
       .references(() => users.id, { onDelete: "cascade" }),
     /** 活动轮次标识（活动 startAt 字符串）。 */
     activityKey: text("activityKey").notNull(),
-    /** active=答题中 / scored=已交卷 / expired=超时未交。 */
+    /** active=攻略中 / scored=已交卷 / expired=超时未交。 */
     status: text("status").$type<"active" | "scored" | "expired">().notNull().default("active"),
     /** 题目 JSON：[{prompt, answer}]；answer 只留给服务端判分。 */
     questions: text("questions").notNull(),

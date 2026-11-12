@@ -23,7 +23,7 @@ import {
  * 每日试炼的写入侧：一次挑战 = 一行 `trial_run`。
  *
  * 浮游城地图（层数 + 房间 + 随机种子）在开局时落库，交卷只上交
- * 「选门 / 出招」的动作序列；服务端用 `lib/trial/dungeon.ts` 重算，
+ * 每帧按键掩码；服务端用 `lib/trial/dungeon.ts` 按 60Hz 确定性重放，
  * 判分靠「状态从 active 改到 scored」的条件更新保证只发一次奖，
  * 断网重试拿到的都是同一次结果。
  */
@@ -118,7 +118,7 @@ export interface StartedTrial {
  * 开局：校验活动与每日次数 → 扣券 → 生成地下城落库。
  *
  * 已经有一局没交卷时直接复用，不再扣第二次券；券不足一笔不写。
- * 旧版答题 / 单排波次局（JSON 不是 version 4）就地换成新地图，同样不再扣券。
+ * 旧版对局（JSON 版本不是 5）就地换成新地图，同样不再扣券。
  */
 export async function startTrialRun(userId: string, config: TrialConfig): Promise<StartedTrial> {
   const activityKey = assertActiveWindow(config);

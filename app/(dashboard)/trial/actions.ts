@@ -34,7 +34,7 @@ export async function startTrialAction(): Promise<ActionResult<StartedTrial>> {
   }
 }
 
-/** 交卷：只上传动作序列，服务端按同一套规则重算战果。 */
+/** 交卷：只上传每帧按键掩码，服务端用种子逐帧重放。 */
 export async function submitTrialAction(input: {
   runId: string;
   actions: unknown[];

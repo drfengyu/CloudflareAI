@@ -101,13 +101,14 @@ export default async function TrialPage() {
       <CardContent>
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
           <li>
-            每局 {config.questionCount} 层浮游城，限时 {config.timeLimitSeconds} 秒；每层先在两扇野区门里探路
-            （战斗 / 精英 / 宝箱 / 营地），再挑战层主，击败才上楼。
+            每局 {config.questionCount} 层浮游城，限时 {config.timeLimitSeconds} 秒；横版动作操作：每层先在两扇野区门
+            里探路（战斗 / 精英 / 宝箱 / 营地），再挑战层主，击败才上楼。
           </li>
           <li>
-            剑技是「线性攻击 / 水平弧斩 / 切换防守 / 星屑飞溅」，后两招有冷却；连续进攻累积连击加伤，
-            受伤或防守会清空连击。击杀获得经验，升级提升生命上限并回复 10。
-            宝箱与精英掉装备（可叠加），层主残血进入狂暴；地图与种子存在服务端，<b>交卷只上交动作序列</b>。
+            A/D 移动、W/空格 跳跃、J 斩击、K 弧斩、L 星屑飞溅、S 格挡、E 回复结晶、F 进门；弧斩与星屑有冷却。
+            连续命中累积连击加伤，受伤会清空连击；敌人抬手出现「!」是出招预警，跳起来可以躲开横斩。
+            击杀获得经验，升级提升生命上限并回复 10；宝箱与精英掉装备（可叠加），层主残血进入狂暴。
+            地图与种子存在服务端，<b>交卷只上交每帧按键序列</b>。
           </li>
           <li>
             单局票价 <CouponCount kind="trial" count={priceTickets} />（1 张 ={" "}

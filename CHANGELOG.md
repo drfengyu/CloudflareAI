@@ -5,6 +5,34 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.47.0] - 2026-11-12
+
+### 变更
+
+- 每日试炼从文字回合制改为 2D 横版角色动作游戏：走完一层先在两扇野区门里探路
+  （战斗 / 精英 / 宝箱 / 营地），再挑战层主，击败才上楼；生命、装备与等级跨房间保留。
+- 引擎 `lib/trial/dungeon.ts` 重写为 60Hz 固定步长：地图版本 5，每帧只记录一个输入位掩码
+  （左 / 右 / 跳 / 斩击 / 弧斩 / 星屑 / 格挡 / 回血 / 进门），整数物理 + 种子随机，
+  客户端 `stepTrialGame` 实时演算、服务端 `replayTrialGame` 用同一份帧序列重放，仍然不信任
+  浏览器上报的血量或楼层；交卷只上传输入帧，双端逐帧一致。
+- 新增 `components/trial/renderer.ts`：480×270 像素 Canvas（CSS 整数倍放大 + pixelated），
+  程序化像素精灵、视差夜空 / 浮岛、7 层配色、粒子和飘字伤害，敌人头顶显示名字、血条与意图。
+- 战斗手感：敌人出手前亮「!」并显示意图（攻击 / 举盾 / 蓄力），离地 34px 可躲横斩；
+  连击每次 +2 最多 +10；层主残血狂暴；斩击 / 弧斩 / 星屑带动作帧与冷却，格挡减伤 14。
+- `components/trial/game.tsx` 重写为实时游戏界面：键盘（A/D、W/空格、J、K、L、S、E、F）
+  与手机九宫格触控、rAF 固定步长、HUD 叠层（层数 / 倒计时 / 生命 / 经验 / 连击 / 冷却 / 装备）、
+  `localStorage` 断点续战、超时自动交卷与失败重试。
+- 旧回合制 `active` 局（JSON 版本不是 5）在开局时就地换图且不重复扣券；`trial_run` 表结构、
+  票价、每日局数、超时与瞬交判定、tcr 档位均不变。
+- 前台规则、后台试炼表单说明、`tests/activity-games.test.ts` 与 `docs/features/trial.md` 同步为动作版。
+
+### 验证
+
+- `npm run typecheck` 通过；改动文件 `npx eslint` 无报错；`npm run build` 通过。
+- `npx tsx --test tests/*.test.ts` 117 个用例全过（新增动作引擎重放、格挡减伤、脏帧兜底、旧版本拒收用例）。
+- 无 `.env.local`，无法在真实登录态下跑页面；用 esbuild + Playwright 单独渲染 Canvas 验证
+  5 层流程（探路 → 宝箱 → 层主 → 上楼）无控制台报错，并据截图修正了战斗期门框遮挡与受击闪烁。
+
 ## [0.46.1] - 2026-11-12
 
 ### 变更
