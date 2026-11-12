@@ -5,6 +5,31 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.43.0] - 2026-11-12
+
+### 变更
+
+- 管理端活动记录合并：原「转盘记录」`/admin/lottery` 与「雷电记录」`/admin/raiden` 并为 `/admin/activity`，
+  导航只保留一个「活动记录」；旧地址保留 `redirect` 到新页。
+- 新页按「北京日 × 活动」汇总站点收支：收入 = 活动券 / 礼包实付（`topup.type=15`）与转盘倒扣，
+  支出 = 转盘 / 雷电 / 翻牌 / 试炼 / 工坊 / 图鉴发奖与礼包赠送 tcr；只给每日小计，不列逐笔明细。
+  `type=15/16` 按流水描述里的活动名归属，识别不到的单独列为「未归属活动券」。
+- 删除不再使用的 `components/admin/lottery-report.tsx` 与 `app/(dashboard)/admin/lottery/actions.ts`。
+
+### 上线
+
+- 每日试炼 / 灵宠工坊 / 星匣图鉴已在生产开启：`2026-11-12 04:00 ~ 2026-11-30 23:59`（北京时间），
+  券面单价沿用默认值 5 / 2 / 2 cr，其余参数未改动；关闭方式是在后台三张配置卡取消启用。
+- 迁移 028 已于 2026-11-12 在生产 D1 执行并复查（`trial_run` / `workshop_state` / `collection_state` /
+  `activity_milestone` 及索引）。
+
+### 验证
+
+- `npm run typecheck`、`npm run build` 通过；`npm run lint` 在 `app/`、`lib/`、`components/` 无新增错误。
+- `npx tsx --test tests/*.test.ts` 全部通过，新增 `tests/activity-ledger.test.ts` 覆盖流水归属、
+  同日合并、跨日排序、零头过滤与窗口合计。
+- 活动开启与迁移均通过 D1 HTTP API 执行并读回校验；未对任何用户余额或券包做写入。
+
 ## [0.42.0] - 2026-11-12
 
 ### 新增

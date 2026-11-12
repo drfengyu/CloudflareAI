@@ -466,7 +466,7 @@ total: 12 cr
 
 - 抽奖不产生 `usage_log`，因此**不计入看板的调用次数与模型消耗**，只影响余额与流水。
 - 活动流水（`topup type=6/11/12`）在个人账本 `/ledger` 里归入「活动」类别，正负都算；逐次明细仍在
-  `/lottery`「我的活动记录」与后台 `/admin/lottery`。钱包页不再列充值记录，只显示最近 8 笔收支。
+  `/lottery`「我的活动记录」与后台 `/admin/activity`。钱包页不再列充值记录，只显示最近 8 笔收支。
 - 账本口径是两张表：`topup`（发放与活动收支）+ `usage_log.creditsUsed`（API 消费，不进 `topup`）。
   到期没花完的tcr 余额从 v0.29.3 起**逐笔记账**：每日 cron 在删 `temporary_balance` 行之前，
   按行补一笔负数 `topup type=14`（`createdAt` 用原到期时间，id 为 `expire:<tcr 余额 id>` 保证幂等），

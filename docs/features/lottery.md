@@ -186,7 +186,7 @@ npx tsx --test tests/lottery-simulation.test.ts
 > 后台单抽价与各玩法价格都被 `snapCostToUnit` 吸到券价的整数倍，界面只显示「活动券图标 × 张数」。
 
 > 活动账目（`type=6`）在个人账本 `/ledger` 里归「活动」类别，正负都按天汇总；逐次明细仍在
-> `/lottery`「我的转盘记录」与 `/admin/lottery` 查看。钱包页不再列流水，只留余额、最近 8 笔收支
+> `/lottery`「我的转盘记录」与 `/admin/activity`（六种活动按天汇总）查看。钱包页不再列流水，只留余额、最近 8 笔收支
 > 与「tcr 余额明细」（中奖发放的tcr 余额仍带到期时间）。
 
 **倒扣的扣款顺序（2026-10-17 改）**：`clawbackCredits()`（`lib/lottery/store.ts`）把整批倒扣按
@@ -291,24 +291,14 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
 战绩汇总仍按当期全量算（不受 30 条限制），总数取 `min(当期累计行 draws, 30)`；
 管理员改 `startAt` 开启新一轮后旧轮记录不再显示，当轮结束后仍可查看。
 
-**管理侧**：`/admin/lottery`（顶部导航「管理 → 转盘记录」），按 今日 / 近 7 日 / 近 30 日 / 全部 切窗口——
-切窗口走 `loadActivityReport(range)` 一次换整套（概览数字 + 按用户 + 明细第一页，并回到第 1 页），
-只翻明细走 `listAdminDrawRecords(page, range)`，两者都不改 URL、不整页刷新：
+**管理侧**：转盘的逐次明细、按用户收益与礼包让利已并入 `/admin/activity`
+（六种限时活动按北京日汇总的站点收支，见 `docs/features/activity-ledger.md`）。
+`/admin/lottery` 与导航里的「转盘记录」已移除，旧地址自动跳转到 `/admin/activity`。
 
-| 区块 | 内容 |
-|------|------|
-| 收益概览 | 站点净收益、**已开奖消耗**、**礼包让利**、中奖发放、倒扣回收、参与人数、实际返还率（对照配置口径）。已开奖消耗 = 开奖抵扣的活动券面值（`balance.ticketFace`），计入净收益；礼包让利 = 窗口内 `coupon_pack_purchase` 的 `SUM(到账券面 − 实付)`，即购券优惠掉的金额：记为站点亏损，同时是用户获利；它发生在购券时、不动 cr 余额，所以单独列出、不进净收益 |
-| 按用户 | 每人的抽奖次数、外圈命中、已开奖活动券面值、发放、回收、站点净收益、最近参与时间 |
-| 逐次明细 | 每页 10 条、卡片内局部翻页（`listAdminDrawRecords`，服务端二次校验管理员）：时间、用户、圈层、结果（外圈带倍数与基数）、用户 cr 变动、活动券来源与面值、该注站点净收益；总数取窗口内累计行 `draws` |
-
-**净收益口径**：`活动券面值收入 + 倒扣回收 − 中奖发放`，且**只算已开奖的注**。因此：
-
-- 「倒扣回收」是把用户已有余额划回站点账上，不是新增现金流入。
-- 「中奖发放」走带过期的tcr 余额，过期未用的部分并不会真的付出成本，所以净收益是**偏保守（偏亏）**的估计。
-- 实际返还率 = `（发放 − 回收）/ 已开奖活动券面值`。`multiplierBase = "batch"` 时 10 连抽的单注金额是单抽的约 10 倍，
-  这个比值会远高于配置值，所以卡片把配置那一行标成「配置单抽口径」。
-- **活动券档不进 cr 口径**：抽中活动券的那一注 cr 变动为 0，明细里标「不发 cr」，赠出的活动券按抽奖等价
-  折算入账。它的成本要等这些券被抽掉才兑现，所以当期净收益会**偏好**，页面按「兑付延后」提示。
+**并表后的口径**：统一活动记录按现金流记站点收支——买券 / 礼包实付（`topup.type=15`，描述里带活动名）
+与倒扣回收算转盘收入，中奖发放（`type=6` 正数）算支出。活动券是提前付费、开奖时才发奖，
+所以购券日收入、开奖日支出，不再按券面值在开奖时点确认；活动券档本身不产生 cr 流水。
+返还率与奖池口径仍在 `/admin/settings` 的转盘配置卡里实时预览。
 
 ## 关键文件
 
@@ -317,11 +307,11 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
 | `lib/lottery/prize-math.ts` | 纯计算：类型、配置清洗、活动窗口、按权重开奖、期望返还与返还率。**不 import 任何读库代码**，后台表单据此在浏览器里实时算返还率 |
 | `lib/lottery/config.ts` | `getLotteryConfig()`：读 `option.lottery_config` |
 | `lib/lottery/store.ts` | 账本原语：扣 cr / 发tcr 余额 / 倒扣回收 / 开奖统计增量 / 累抽领取记录 |
-| `lib/lottery/records.ts` | 只读聚合：逐次明细、按用户收益、礼包让利。用户页与管理页共用 |
+| `lib/lottery/records.ts` | 只读聚合：用户侧逐次明细与战绩汇总（管理侧已并入 `/admin/activity`） |
 | `app/(dashboard)/lottery/actions.ts` | `drawLottery` 等抽奖服务端动作 |
 | `app/(dashboard)/lottery/lottery-wheel.tsx` | 双圈 SVG 转盘与结果面板（客户端） |
 | `app/(dashboard)/lottery/lottery-records.tsx` | 「我的转盘记录」卡片（服务端渲染） |
-| `app/(dashboard)/admin/lottery/page.tsx` | 后台转盘记录页（角色 ≥10） |
+| `app/(dashboard)/admin/lottery/page.tsx` | 旧后台入口，跳转到 `/admin/activity` |
 | `app/(dashboard)/admin/settings/lottery-form.tsx` | 后台配置表单 |
 | `scripts/lottery-sim.ts` | 奖池模拟器（只读线上配置，跑蒙特卡洛出体感与收益指标） |
 
