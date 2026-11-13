@@ -23,9 +23,38 @@ import {
 import {
   emptyWorkshopState,
   highestTier,
+  normalizeWorkshopRunShape,
   normalizeWorkshopState,
+  type WorkshopRun,
   type WorkshopState,
 } from "../lib/workshop/state";
+import {
+  WORKSHOP_TILE_CAMP,
+  WORKSHOP_TILE_GRASS,
+  WORKSHOP_TILE_GYM,
+  WORKSHOP_TILE_PATH,
+  WORKSHOP_TILE_ROCK,
+  WORKSHOP_TILE_TALL,
+  WORKSHOP_TILE_TREE,
+  WORKSHOP_TILE_WATER,
+  fieldEncounterChanceAt,
+  fieldHitsSolid,
+  fieldReachable,
+  fieldSpeedAt,
+  fieldStepRandom,
+  fieldTileAt,
+  workshopFieldFor,
+  type WorkshopField,
+} from "../lib/workshop/field";
+import {
+  newWorkshopRun,
+  normalizeWorkshopRun,
+  pushWalkStep,
+  replayWorkshopWalk,
+  sanitizeWalkPath,
+  workshopWalkLimits,
+  type WorkshopWalkPath,
+} from "../lib/workshop/run";
 import {
   CONSTELLATIONS,
   rollStarStone,
@@ -129,7 +158,7 @@ test("旧版「各阶数量」存档换算成灵宠个体，进度不丢", () =>
   assert.equal(state.party[0].level, 8);
   assert.equal(state.box.length, 3);
   assert.equal(state.starter, "ember");
-  assert.equal(state.exploresToday, 4);
+  assert.equal(state.entersToday, 4);
   assert.equal(state.dex.includes("ember:2"), true);
   assert.equal(highestTier(state), 2);
   // 旧存档没有血量口径，迁移后一律满血。
@@ -245,6 +274,244 @@ test("防御回合倒地自动换下一只，无人可换判负", () => {
   assert.equal(lost.status, "lost");
   assert.equal(lost.state.encounter, null);
   assert.equal(lost.state.party[0].hp, 0);
+});
+
+// ---------------------------------------------------------------- 灵宠冒险地图
+
+const MAP_LIMITS = { maxSteps: 600, maxEncounters: 4, maxPathSteps: 96 };
+
+const close = (actual: number, expected: number) => Math.abs(actual - expected) < 1e-9;
+
+/** 造一块齐刷刷的同种地貌，专门用来验概率与速度口径。 */
+function flatField(kind: number, rate = 1): WorkshopField {
+  const cols = 5;
+  const rows = 5;
+  return {
+    areaKey: "ash",
+    seed: 0,
+    cols,
+    rows,
+    tile: 32,
+    terrain: new Array<number>(cols * rows).fill(kind),
+    worldW: cols * 32,
+    worldH: rows * 32,
+    camp: { tx: 1, ty: 1 },
+    gym: { tx: 3, ty: 3 },
+    rate,
+  };
+}
+
+function firstSolid(field: WorkshopField): { tx: number; ty: number } | null {
+  for (let ty = 0; ty < field.rows; ty += 1) {
+    for (let tx = 0; tx < field.cols; tx += 1) {
+      if (fieldHitsSolid(field, (tx + 0.5) * field.tile, (ty + 0.5) * field.tile)) return { tx, ty };
+    }
+  }
+  return null;
+}
+
+test("走位路径只认合法游程，同向合并、越界夹掉", () => {
+  assert.deepEqual(
+    sanitizeWalkPath([[1, 3], [1, 4], [7, 2], [-1, 5], [0, 0], [2, 200]], 96),
+    // 7 号方向和负方向都不存在，0 步不算走路；单条游程最长 64 格
+    [[1, 7], [2, 64]],
+  );
+  assert.deepEqual(sanitizeWalkPath([[0, 50], [1, 50]], 60), [[0, 50], [1, 10]]);
+  assert.deepEqual(sanitizeWalkPath("nope", 96), []);
+  assert.deepEqual(sanitizeWalkPath([[1, 10]], 0), []);
+
+  const path: WorkshopWalkPath = [];
+  pushWalkStep(path, 2);
+  pushWalkStep(path, 2);
+  pushWalkStep(path, 0);
+  assert.deepEqual(path, [[2, 2], [0, 1]]);
+});
+
+test("同一份「区域 + 种子」永远算出同一张图", () => {
+  const field = workshopFieldFor("grove", 20261112);
+  assert.equal(workshopFieldFor("grove", 20261112), field);
+  assert.equal(field.areaKey, "grove");
+  assert.equal(field.seed, 20261112);
+  // 未知区域退回默认区，种子换一张图就换一片地貌
+  assert.equal(workshopFieldFor("nowhere", 1).areaKey, "ash");
+  assert.notEqual(workshopFieldFor("grove", 20261113).terrain.join(), field.terrain.join());
+
+  for (const seed of [1, 9_876_543, 42]) {
+    for (const areaKey of ["ash", "shore", "grove", "spire"]) {
+      const item = workshopFieldFor(areaKey, seed);
+      assert.equal(item.rate > 0, true);
+      // 外圈全是岩石，走不出这张图
+      assert.equal(fieldTileAt(item, 0, 0), WORKSHOP_TILE_ROCK);
+      assert.equal(fieldTileAt(item, -1, 12), WORKSHOP_TILE_ROCK);
+      // 营地与道馆各自占位，且营地一定走得通道馆
+      assert.equal(fieldTileAt(item, item.camp.tx, item.camp.ty), WORKSHOP_TILE_CAMP);
+      assert.equal(fieldTileAt(item, item.gym.tx, item.gym.ty), WORKSHOP_TILE_GYM);
+      assert.equal(fieldReachable(item)[item.gym.ty * item.cols + item.gym.tx], true);
+    }
+  }
+});
+
+test("地貌决定遇敌率、移速与脚底碰撞", () => {
+  const middle = { x: 2.5 * 32, y: 2.5 * 32 };
+  assert.equal(fieldEncounterChanceAt(flatField(WORKSHOP_TILE_TALL), 2, 2), 0.16);
+  assert.equal(fieldEncounterChanceAt(flatField(WORKSHOP_TILE_GRASS), 2, 2), 0.05);
+  assert.equal(fieldEncounterChanceAt(flatField(WORKSHOP_TILE_PATH), 2, 2), 0.015);
+  for (const kind of [WORKSHOP_TILE_CAMP, WORKSHOP_TILE_GYM, WORKSHOP_TILE_WATER, WORKSHOP_TILE_TREE]) {
+    assert.equal(fieldEncounterChanceAt(flatField(kind), 2, 2), 0);
+  }
+  // 区域倍率放大遇敌率：星塔的高草丛
+  assert.equal(close(fieldEncounterChanceAt(flatField(WORKSHOP_TILE_TALL, 1.25), 2, 2), 0.2), true);
+  assert.equal(fieldEncounterChanceAt(flatField(WORKSHOP_TILE_GRASS), -3, 9), 0);
+
+  assert.equal(fieldSpeedAt(flatField(WORKSHOP_TILE_TALL), middle.x, middle.y), 0.78);
+  assert.equal(fieldSpeedAt(flatField(WORKSHOP_TILE_PATH), middle.x, middle.y), 1.18);
+  assert.equal(fieldSpeedAt(flatField(WORKSHOP_TILE_GRASS), middle.x, middle.y), 1);
+
+  // 20 px 的碰撞盒：贴着水边走不进去，踩上去才撞
+  const pond = flatField(WORKSHOP_TILE_GRASS);
+  pond.terrain[2 * pond.cols + 2] = WORKSHOP_TILE_WATER;
+  assert.equal(fieldHitsSolid(pond, middle.x, middle.y), true);
+  assert.equal(fieldHitsSolid(pond, 1.5 * 32, middle.y), false);
+  assert.equal(fieldHitsSolid(pond, 0, 0), true);
+});
+
+test("第几步的随机流只由种子决定，服务端可从任意一步重放", () => {
+  const take = (seed: number, step: number) => {
+    const random = fieldStepRandom(seed, step);
+    return [random(), random(), random()];
+  };
+  assert.deepEqual(take(1234, 7), take(1234, 7));
+  assert.notDeepEqual(take(1234, 7), take(1234, 8));
+  assert.notDeepEqual(take(1234, 7), take(1235, 7));
+});
+
+test("分段重放与整段重放算出同一个游标", () => {
+  const path: WorkshopWalkPath = [[1, 5], [2, 3], [1, 4]];
+  let compared = 0;
+  for (let seed = 1; seed <= 12; seed += 1) {
+    const run = newWorkshopRun({ areaKey: "ash", seed, now: 0 });
+    assert.deepEqual({ tx: run.tx, ty: run.ty }, workshopFieldFor("ash", seed).camp);
+    assert.deepEqual(run, normalizeWorkshopRun(run));
+
+    const whole = replayWorkshopWalk(run, path, MAP_LIMITS);
+    const head = replayWorkshopWalk(run, path.slice(0, 1), MAP_LIMITS);
+    // 中途遇敌会打断这条路径，只比两端都走完的样本
+    if (whole.kind !== "ok" || head.kind !== "ok") continue;
+    const tail = replayWorkshopWalk(head.run, path.slice(1), MAP_LIMITS);
+    assert.deepEqual(
+      { tx: tail.run.tx, ty: tail.run.ty, steps: tail.run.steps, encounters: tail.run.encounters },
+      { tx: whole.run.tx, ty: whole.run.ty, steps: whole.run.steps, encounters: whole.run.encounters },
+    );
+    assert.equal(tail.consumed + head.consumed, whole.consumed);
+    compared += 1;
+  }
+  assert.equal(compared > 0, true);
+});
+
+test("撞墙的那一步不动也不摇骰，走满上限立刻收兵", () => {
+  const start = newWorkshopRun({ areaKey: "grove", seed: 4242, now: 0 });
+  const loop: WorkshopWalkPath = [[1, 300], [2, 300], [3, 300], [0, 300]];
+
+  // 遇敌额度用尽：下一步都不迈，直接判收兵
+  const drained: WorkshopRun = { ...start, encounters: 4 };
+  assert.deepEqual(replayWorkshopWalk(drained, loop, MAP_LIMITS), {
+    kind: "capped",
+    run: drained,
+    consumed: 1,
+    reason: "encounters",
+  });
+  // 步数闸门也在摇骰之前查，免得走满还多摇一只
+  const tired: WorkshopRun = { ...start, steps: 600 };
+  assert.deepEqual(replayWorkshopWalk(tired, loop, MAP_LIMITS), {
+    kind: "capped",
+    run: tired,
+    consumed: 1,
+    reason: "steps",
+  });
+
+  // 门口那条路走满 1200 步也不会越界，且服务端算的遇敌次数不会超过上限
+  const long = replayWorkshopWalk(start, loop, { ...MAP_LIMITS, maxSteps: 120 });
+  assert.equal(long.run.steps <= 120, true);
+  assert.equal(long.run.encounters <= MAP_LIMITS.maxEncounters, true);
+  if (long.kind === "encounter") {
+    assert.equal(long.encounter.kind, "wild");
+    assert.equal(long.run.encounters, 1);
+  }
+
+  // 一路往图外的岩石围墙上挤：顶多迈出营地门口那两格
+  const wall = replayWorkshopWalk(start, [[3, 40]], MAP_LIMITS);
+  assert.equal(wall.run.ty, start.ty);
+  assert.equal(wall.run.tx >= 1, true);
+  assert.equal(wall.run.steps <= 2, true);
+});
+
+test("脏游标回营地：站在树里或图外都按同一张图夹回来", () => {
+  const field = workshopFieldFor("ash", 555);
+  const clean = normalizeWorkshopRun(newWorkshopRun({ areaKey: "ash", seed: 555, now: 0 }));
+  assert.deepEqual({ tx: clean?.tx, ty: clean?.ty }, field.camp);
+
+  const outside = normalizeWorkshopRun({
+    areaKey: "ash",
+    seed: 555,
+    tx: 9_999,
+    ty: -4,
+    steps: 1e9,
+    encounters: -2,
+    startedAt: 0,
+  });
+  assert.equal(outside !== null && outside.tx <= field.cols - 1 && outside.ty >= 0, true);
+  assert.equal(outside !== null && outside.steps <= 1_000_000 && outside.encounters === 0, true);
+  // 未知区域退回默认图，游标也跟着换图夹
+  assert.equal(normalizeWorkshopRun({ ...outside!, areaKey: "nowhere" })?.areaKey, "ash");
+
+  const solid = firstSolid(field);
+  assert.notEqual(solid, null);
+  if (solid) {
+    const sunk = normalizeWorkshopRun({ ...field.camp, areaKey: "ash", seed: 555, steps: 12, encounters: 1, startedAt: 0, tx: solid.tx, ty: solid.ty });
+    assert.deepEqual({ tx: sunk?.tx, ty: sunk?.ty }, field.camp);
+  }
+  assert.equal(normalizeWorkshopRun(null), null);
+});
+
+test("探险存档结构非法就当作没进图，旧字段名照样读回", () => {
+  assert.equal(normalizeWorkshopRunShape(null), null);
+  assert.equal(normalizeWorkshopRunShape("x"), null);
+  assert.equal(normalizeWorkshopRunShape({ seed: 1 }), null);
+  assert.equal(normalizeWorkshopRunShape({ areaKey: "ash", seed: -3 }), null);
+  const row = normalizeWorkshopRunShape({
+    areaKey: "shore",
+    seed: "88",
+    tx: -5,
+    ty: 1e9,
+    steps: 3.9,
+    encounters: "2",
+  });
+  assert.deepEqual(
+    row && { areaKey: row.areaKey, seed: row.seed, tx: row.tx, ty: row.ty, steps: row.steps, encounters: row.encounters },
+    { areaKey: "shore", seed: 88, tx: 0, ty: 9_999, steps: 3, encounters: 2 },
+  );
+
+  const legacy = normalizeWorkshopState({ day: WORKSHOP_DAY, exploresToday: 3 }, WORKSHOP_DAY);
+  assert.equal(legacy.entersToday, 3);
+  assert.equal(legacy.run, null);
+  const withRun = normalizeWorkshopState(
+    { day: WORKSHOP_DAY, run: { areaKey: "ash", seed: 5, tx: 1, ty: 2, steps: 3, encounters: 1 } },
+    WORKSHOP_DAY,
+  );
+  assert.deepEqual(
+    withRun.run && [withRun.run.areaKey, withRun.run.tx, withRun.run.ty, withRun.run.steps],
+    ["ash", 1, 2, 3],
+  );
+  assert.equal(normalizeWorkshopState({ day: WORKSHOP_DAY, run: { areaKey: "", seed: 5 } }, WORKSHOP_DAY).run, null);
+});
+
+test("单趟上限进配置并喂给走位闸门", () => {
+  assert.equal(DEFAULT_WORKSHOP_CONFIG.runMaxSteps, 600);
+  assert.equal(DEFAULT_WORKSHOP_CONFIG.runMaxEncounters, 4);
+  assert.equal(sanitizeWorkshopConfig({ runMaxSteps: 5, runMaxEncounters: 0 }).runMaxSteps, 20);
+  assert.equal(sanitizeWorkshopConfig({ runMaxEncounters: 1e9 }).runMaxEncounters, 50);
+  const config = sanitizeWorkshopConfig({ runMaxSteps: 300, runMaxEncounters: 6 });
+  assert.deepEqual(workshopWalkLimits(config), { maxSteps: 300, maxEncounters: 6, maxPathSteps: 96 });
 });
 
 // ---------------------------------------------------------------- 星图共鸣

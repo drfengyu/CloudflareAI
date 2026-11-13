@@ -5,6 +5,70 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.51.0] - 2026-11-13
+
+### 新增
+
+- 灵宠工坊的冒险地图：`lib/workshop/field.ts` 用纯函数按「区域 + 种子」生成 44×28 格、
+  每格 32 px 的俯视图（外圈岩石封死，高草丛 / 花丛 / 小径 / 水面 / 乱石 / 树林按区域风味
+  成 blob 铺开，`carveRoad` 从营地主干道串到道馆再甩三条岔路，门口各清出一块空地，
+  万一被 blob 切断会沿直线重铺一条并只改标记，保证两次生成算出同一张图）。地貌决定
+  遇敌率（高草丛 16% / 花丛 10% / 普通草 5% / 小径 1.5% / 营地、道馆、水面、岩石不摇）、
+  移速（草丛 0.78、花丛 0.92、小径 1.18）与脚底 20 px 碰撞盒；第 N 步的随机数流
+  `fieldStepRandom(seed, N)` 只由种子与步数决定，所以服务端能从任意一步接着重放。
+- 走位重放：`lib/workshop/run.ts` 的 `sanitizeWalkPath` 只收 `[方向下标, 连续步数]` 的游程
+  路径（非法项整条丢弃、单条最长 64、单次请求最多 96 步），`replayWorkshopWalk` 逐格走一遍
+  并只认自己的结果 —— 撞墙那一步不动、不计步、不摇骰，摇中即停并把遭遇交回去，走满
+  `runMaxSteps` 或 `runMaxEncounters` 直接判收兵（`kind: "capped"`，`run` 置空）。
+- 画面：`components/workshop/field-painter.ts`（红白机式格网画家：地貌装饰、四向主角行走
+  动画、树与小人按 y 排序、小地图、顶部 HUD 与「按 E …」气泡）与
+  `components/workshop/field-canvas.tsx`（逐格行走、键盘 / 屏幕方向键 / 点击贪心走位、
+  攒 24 步或 700 ms 上报一次、服务端结果与本地预测不一致就拉回权威光标）。
+- 存档与配置：`WorkshopState.run` 记录进行中的一趟探险（`areaKey / seed / tx / ty / steps /
+  encounters / startedAt`），地图本身与随机数状态都不入库；后台新增「单趟步数上限」（20~5000，
+  默认 600）与「单趟遇敌上限」（1~50，默认 4）两个输入框。
+
+### 变更
+
+- 玩法口径从「一张券抽一只」改为「一张券进一次图」：`exploreWorkshop` 拆成
+  `enterWorkshopField`（扣券、从营地出生、`entersToday++`）/ `walkWorkshopField`（走位）/
+  `leaveWorkshopField`（收兵，不退券、战斗中拒绝）。`dailyExplores` 默认从 20 降到 5，
+  前台文案与卡片改为「今日进图」，规则说明补「进图 / 走图 / 收兵」。
+- 道馆必须走到门口：`challengeWorkshopGym` 在图里时按服务端光标与道馆格的切比雪夫距离
+  判邻居（超过一格报「先走到地图另一头的道馆门口」），堵掉「传送去道馆」的作弊路径；
+  野外不能休息，走回营地才行（`restWorkshopParty`）。
+- `exploresToday` 更名 `entersToday`，读档时继续接受旧的 `exploresToday` / `gathersToday`；
+  没有 `run` 字段就是没在图上，`null` 兼容旧存档。为避免 `state.ts → field.ts → battle.ts →
+  state.ts` 的循环，`run` 的结构归一在 `state.ts`（`normalizeWorkshopRunShape`），几何归一在
+  `run.ts`（`normalizeWorkshopRun`），由 `store.readState` 串起来调用。
+- 走位相关的 Server Action 限流：`workshop-enter` 30 次/60s、`workshop-walk` 240 次/60s；
+  纯走位（`walk.kind === "ok"`）不回传整页，只在遇敌或收兵时 `revalidatePath`。
+- 画面视野不再写死 16:9：`components/trial/renderer.ts` 新增 `makeSagaView(height)`（逻辑宽固定
+  960，高度取画布 CSS 比例，窄屏 4:3 且不超过屏高 50%、宽屏 16:9，夹在 420~1200），
+  `paintField` / `paintBattle` / 小地图 / HUD / 暗角全部改读 `view`；战斗场景按 `k = h / 540`
+  只平移站位与布景的纵坐标，角色本身不跟着拉伸。`components/trial/game.tsx` 与工坊画布按
+  推导出的高度回写 `canvas.style.height`，位图尺寸仍是「CSS 宽 / 逻辑宽 × devicePixelRatio」。
+  390 px 视口下试炼画面可视高度约 219 → 422 px。
+
+### 验证
+
+- `tsc --noEmit`（392 文件）0 处代码报错；ESLint 对本次改动的 15 个文件（含新增的
+  `field.ts` / `run.ts` / `field-painter.ts` / `field-canvas.tsx`）干净（仓库里 `scripts/*.js`
+  与 `lib/usage/stream-intercept.ts` 的既有报错与本次无关）。
+- `tests/activity-games.test.ts` 从 20 项扩到 27 项，新增：路径游程编码与脏数据夹断、同一
+  「区域 + 种子」复现同一张图且外圈封死 / 营地到道馆连通、地貌决定遇敌率与移速与脚底碰撞、
+  `fieldStepRandom` 只由种子与步数决定、**分段重放与整段重放算出同一个游标**、撞墙不计步与
+  走满上限立即收兵、脏游标回营地、`run` 存档结构归一与 `exploresToday → entersToday` 迁移、
+  单趟上限进配置并喂给走位闸门。用 TypeScript API 把这 11 个纯模块编成 CJS 后逐条跑过，
+  27/27 通过。
+- 画布层做了无 DOM 的冒烟测试：用只认标准成员的桩 `CanvasRenderingContext2D`（对每个数值参数
+  查 `NaN`、对渐变色标与 `globalAlpha` 查取值范围）渲染工坊画面 7224 帧（5 个区域 × 4 个种子 ×
+  全部视野高度 × 4 个朝向 × 三档徽章 × 营地 / 道馆 / 空地交互点）与试炼画面 paintField 6336 帧、
+  paintBattle 900 帧（1~5 将 × 1~3 敌 × Boss / 胜负三阶段 × 10 种事件动画），异常与非法取值均为 0。
+- 本机未安装 Node / npm，`npm run build`、`npm run dev` 与 Playwright 未跑，所以**两张地图的实际
+  观感（配色、格子对齐、镜头跟随、手机触屏走位）尚未在浏览器里验证**；上真机前请先跑
+  `npm run dev` 看 `/workshop` 与 `/trial`。
+
 ## [0.50.1] - 2026-11-13
 
 ### 变更

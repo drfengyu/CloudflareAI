@@ -39,10 +39,27 @@ export interface WorkshopInventory {
   potion: number;
 }
 
+/**
+ * 进行中的一趟探险：只存「在哪个区域、哪张图、光标在哪格、走了多少步、遇了几次」。
+ * 地图形状由 `areaKey + seed` 复现，所以这里存的这点数据就是服务端权威状态。
+ */
+export interface WorkshopRun {
+  areaKey: string;
+  seed: number;
+  /** 服务端权威光标（格坐标）。 */
+  tx: number;
+  ty: number;
+  /** 本次进图已走过的有效步数。 */
+  steps: number;
+  /** 本次进图已触发的野生遇敌数（道馆不计）。 */
+  encounters: number;
+  startedAt: number;
+}
+
 export interface WorkshopState {
-  /** 北京日期；换天后探索/道馆次数重置。 */
+  /** 北京日期；换天后进图/道馆次数重置。 */
   day: string;
-  exploresToday: number;
+  entersToday: number;
   gymsToday: number;
   /** 初始三选一选中的养成线；null = 还没选。 */
   starter: string | null;
@@ -54,6 +71,8 @@ export interface WorkshopState {
   /** 已获得的道馆徽章数 0~3。 */
   badges: number;
   activePetId: string | null;
+  /** 进行中的探险（野外走位）；null = 不在地图里。 */
+  run: WorkshopRun | null;
   /** 进行中的遭遇；null = 不在战斗里。 */
   encounter: WorkshopEncounter | null;
   /** 最近一次「休息」的北京日期，每天一次。 */
@@ -69,7 +88,7 @@ export function emptyInventory(): WorkshopInventory {
 export function emptyWorkshopState(day = cnDateString()): WorkshopState {
   return {
     day,
-    exploresToday: 0,
+    entersToday: 0,
     gymsToday: 0,
     starter: null,
     party: [],
@@ -78,6 +97,7 @@ export function emptyWorkshopState(day = cnDateString()): WorkshopState {
     items: emptyInventory(),
     badges: 0,
     activePetId: null,
+    run: null,
     encounter: null,
     restDay: "",
   };
@@ -185,6 +205,31 @@ export function migrateLegacyItems(rawItems: unknown): WorkshopPet[] {
   return pets.sort((a, b) => b.tier - a.tier || b.level - a.level || a.id.localeCompare(b.id));
 }
 
+/**
+ * 探险 run 的结构校验：只保证字段是有限整数与合法区域 key，
+ * 格坐标是否真在这张图上要问 `run.ts`（它才知道地图长什么样）。
+ */
+export function normalizeWorkshopRunShape(raw: unknown): WorkshopRun | null {
+  if (!raw || typeof raw !== "object") return null;
+  const it = raw as Partial<WorkshopRun>;
+  if (typeof it.areaKey !== "string" || !it.areaKey) return null;
+  const num = (value: unknown, fallback: number, max: number): number => {
+    const n = Math.trunc(Number(value));
+    return Number.isFinite(n) ? Math.min(max, Math.max(0, n)) : fallback;
+  };
+  const seed = Math.trunc(Number(it.seed));
+  if (!Number.isFinite(seed) || seed < 0) return null;
+  return {
+    areaKey: it.areaKey,
+    seed,
+    tx: num(it.tx, 0, 9_999),
+    ty: num(it.ty, 0, 9_999),
+    steps: num(it.steps, 0, 10_000_000),
+    encounters: num(it.encounters, 0, 10_000),
+    startedAt: num(it.startedAt, Date.now(), Number.MAX_SAFE_INTEGER),
+  };
+}
+
 function normalizeInventory(raw: unknown): WorkshopInventory {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return emptyInventory();
   const row = raw as Partial<WorkshopInventory>;
@@ -201,7 +246,11 @@ function normalizeInventory(raw: unknown): WorkshopInventory {
 export function normalizeWorkshopState(raw: unknown, day = cnDateString()): WorkshopState {
   const base = emptyWorkshopState(day);
   if (!raw || typeof raw !== "object") return base;
-  const it = raw as Partial<WorkshopState> & { items?: unknown; gathersToday?: unknown };
+  const it = raw as Partial<WorkshopState> & {
+    items?: unknown;
+    gathersToday?: unknown;
+    exploresToday?: unknown;
+  };
   const sameDay = typeof it.day === "string" && it.day === day;
 
   let party = normalizePets(it.party, WORKSHOP_PARTY_SIZE);
@@ -224,8 +273,8 @@ export function normalizeWorkshopState(raw: unknown, day = cnDateString()): Work
   base.box = box;
   base.starter = starter;
   base.badges = Math.min(WORKSHOP_GYM_COUNT, clampCount(it.badges));
-  base.exploresToday = sameDay
-    ? Math.min(1_000_000, clampCount(it.exploresToday ?? it.gathersToday))
+  base.entersToday = sameDay
+    ? Math.min(1_000_000, clampCount(it.entersToday ?? it.exploresToday ?? it.gathersToday))
     : 0;
   base.gymsToday = sameDay ? Math.min(1_000_000, clampCount(it.gymsToday)) : 0;
   base.restDay = typeof it.restDay === "string" ? it.restDay : "";
@@ -237,6 +286,7 @@ export function normalizeWorkshopState(raw: unknown, day = cnDateString()): Work
   base.dex = [...dex].sort();
 
   base.encounter = normalizeEncounter(it.encounter);
+  base.run = normalizeWorkshopRunShape(it.run);
   if (base.encounter && (party.length === 0 || !party.some((pet) => pet.hp > 0))) {
     base.encounter = null;
   }

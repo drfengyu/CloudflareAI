@@ -534,8 +534,38 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.50.1（2026-11-13，行军画面做大 + 高分屏清晰度）
-**下一版本**：v0.51.0（尚未选型）
+**当前版本**：v0.51.0（2026-11-13，灵宠工坊改为进图制冒险地图 + 视野按画布比例推导）
+**下一版本**：v0.52.0（尚未选型）
+
+- v0.51.0 灵宠工坊从「一张券抽一只」改为**进图制的俯视角冒险地图**（与 v0.50.0 的行军大地图
+  同一套思路，但遭遇改为逐格随机）：新增 `lib/workshop/field.ts`（纯函数
+  `generateWorkshopField({ areaKey, seed })` 生成 44×28 格、每格 32 px 的格网，外圈岩石封死，
+  地貌 blob + 主干道与三条岔路由 `carveRoad` 串起营地与道馆，另有 20 px 脚底碰撞盒、减速、
+  遇敌率、可达性 BFS、交互点查询、`fieldStepRandom(seed, 第 N 步)` 与按「区域 + 种子」的
+  64 条 LRU 缓存）；`lib/workshop/run.ts`（`sanitizeWalkPath` 收 `[方向下标, 步数][]` 游程路径、
+  `replayWorkshopWalk` 逐格重放并按脚下地貌摇遇敌、`normalizeWorkshopRun` 按真实地图夹住光标、
+  `workshopWalkLimits` 从配置取闸）；`components/workshop/field-painter.ts` + `field-canvas.tsx`
+  （红白机式画家 + 逐格行走、攒路径上报、服务端游标纠偏）。数据模型：
+  `WorkshopState.exploresToday` → `entersToday`（旧字段读回兼容），新增
+  `run = { areaKey, seed, tx, ty, steps, encounters, startedAt }`；配置新增 `runMaxSteps`
+  （默认 600，夹 20~5000）与 `runMaxEncounters`（默认 4，夹 1~50），`dailyExplores` 默认从 20
+  降到 5（一张券换一整趟）。服务端动作 `enterWorkshopField` / `walkWorkshopField` /
+  `leaveWorkshopField` 取代 `exploreWorkshop`，道馆挑战必须把光标走到道馆跟前一格，野外不能
+  休息。**走位可被服务端验证**：地图与随机流都是种子的纯函数，客户端只上传方向序列，
+  撞墙不计步、遇敌即停、走满上限由服务端收兵；单次请求最多 96 步（限流
+  `workshop-walk` 240 次/60s）。为避免 `state.ts` → `field.ts` → `battle.ts` → `state.ts` 的循环，
+  `run` 的结构归一留在 `state.ts`（`normalizeWorkshopRunShape`），几何归一放 `run.ts` 并由
+  `store.readState` 串起来。
+- v0.51.0 画面视野改为按画布比例推导（0.50.1 之后逻辑视野仍是死的 16:9，手机上画面虽然铺满
+  了宽度，可视区域却压成一条）：`components/trial/renderer.ts` 的 `makeSagaView(height)` 固定
+  逻辑宽 960、高度取画布 CSS 比例（窄屏 4:3 且不超过屏高 50%，宽屏 16:9，夹在 420~1200），
+  `paintField` / `paintBattle` / 小地图 / HUD / 暗角全部改读 `view`；战斗场景用 `k = h / 540`
+  只平移排好的站位与布景纵坐标、不拉伸角色本身。`game.tsx` 依据推导出的高度回写
+  `canvas.style.height`，位图尺寸仍是「CSS 宽 / 960 × dpr」。工坊地图同理（固定宽 640，
+  `makeWorkshopView` 导高度，窄屏 4:3 不超过屏高 42%）。验证除 typecheck / lint / 27 项单测外，
+  还用无 DOM 的桩 `CanvasRenderingContext2D` 跑了 7000+ 帧工坊画面与 1500+ 帧试炼画面，
+  查 `NaN` 坐标、非法渐变色标、越界 alpha 与不存在的 context 成员，均为 0；真机与浏览器实测
+  仍未做（本机无 Node / npm，起不了 dev server）。
 
 - v0.50.1 行军画面尺寸与清晰度：试炼页 `PageBody` 用 `px-3 sm:px-5 lg:max-w-[1440px] lg:px-8`
   覆盖默认窄版心，画布容器在窄屏 `-mx-5` 满幅出血到卡片两边；`components/trial/game.tsx`

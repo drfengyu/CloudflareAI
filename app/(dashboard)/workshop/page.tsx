@@ -47,9 +47,13 @@ function rulesCard(config: WorkshopConfig, exploreTickets: number, gymTickets: n
             焰尾狐 → 森语鹿 → 潮汐鲸 → 焰尾狐（克制 ×1.5，被克 ×0.67）。
           </li>
           <li>
-            <b>探索</b>一次花 <CouponCount kind="workshop" count={exploreTickets} />
-            （1 张 = {formatCredits(config.couponUnitCredits)} cr 券面），在区域里遇到野生灵宠，
-            打赢给经验与随机补给，也可以直接扔球捕捉。
+            <b>进图</b>一次花 <CouponCount kind="workshop" count={exploreTickets} />
+            （1 张 = {formatCredits(config.couponUnitCredits)} cr 券面）：从营地出发，
+            在高草丛、花丛里走动就会遇到野生灵宠，打赢给经验与随机补给，也可以直接扔球捕捉。
+          </li>
+          <li>
+            一张图能走 {config.runMaxSteps} 步、最多遇 {config.runMaxEncounters} 只灵宠，
+            走满就自动收兵；随时可以按「收兵离开」回营地。地图每次进图重新生成。
           </li>
           <li>
             <b>捕捉</b>：对手血量越低越好抓；队伍最多 3 只，仓库 60 只。战斗中可以换宠、用药水或逃跑，
@@ -70,7 +74,7 @@ function rulesCard(config: WorkshopConfig, exploreTickets: number, gymTickets: n
             ；奖励 {config.rewardValidDays} 天内有效。
           </li>
           <li>
-            每日最多探索 {config.dailyExplores} 次、挑战道馆 {config.dailyGyms} 次（北京时间自然日）；
+            每日最多进图 {config.dailyExplores} 次、挑战道馆 {config.dailyGyms} 次（北京时间自然日）；
             每天还能免费休息一次，回满整队。
           </li>
         </ul>
@@ -121,7 +125,7 @@ export default async function WorkshopPage() {
           : { title: "活动已结束", hint: `结束时间（北京时间）：${config.endAt || "未设置"}。` };
     return (
       <>
-        <PageHeader title="灵宠工坊" description="三选一 · 探索捕捉 · 道馆徽章" />
+        <PageHeader title="灵宠工坊" description="三选一 · 进图捕捉 · 道馆徽章" />
         <PageBody className="space-y-4">
           <Notice title={notice.title} hint={notice.hint} />
           {couponCard}
@@ -135,16 +139,16 @@ export default async function WorkshopPage() {
 
   return (
     <>
-      <PageHeader title="灵宠工坊" description="三选一 · 探索捕捉 · 道馆徽章" />
+      <PageHeader title="灵宠工坊" description="三选一 · 进图捕捉 · 道馆徽章" />
       <PageBody className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardContent className="flex flex-col gap-1 py-4">
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Map className="h-3.5 w-3.5" /> 今日探索
+                <Map className="h-3.5 w-3.5" /> 今日进图
               </p>
               <p className="text-xl font-semibold tabular-nums">
-                {snapshot.state.exploresToday ?? 0} / {config.dailyExplores}
+                {snapshot.state.entersToday} / {config.dailyExplores}
               </p>
               <p className="text-xs text-muted-foreground">每日 0 点重置</p>
             </CardContent>
@@ -180,7 +184,7 @@ export default async function WorkshopPage() {
                 <CouponCount kind="workshop" count={ownTickets} iconClassName="h-4 w-4" />
               </p>
               <p className="text-xs text-muted-foreground">
-                探索 <CouponCount kind="workshop" count={exploreTickets} /> / 次
+                进图 <CouponCount kind="workshop" count={exploreTickets} /> / 次
               </p>
             </CardContent>
           </Card>
@@ -214,6 +218,7 @@ export default async function WorkshopPage() {
               grantedTiers={grantedTiers}
               dailyExplores={config.dailyExplores}
               dailyGyms={config.dailyGyms}
+              runLimits={{ maxSteps: config.runMaxSteps, maxEncounters: config.runMaxEncounters }}
               exploreTickets={exploreTickets}
               gymTickets={gymTickets}
               couponTickets={ownTickets}

@@ -1065,6 +1065,9 @@ export async function updateWorkshopSettings(formData: {
   endAt: string;
   dailyExplores: number;
   exploreCostCredits: number;
+  /** 一趟探险的步数与遇敌上限。 */
+  runMaxSteps: number;
+  runMaxEncounters: number;
   dailyGyms: number;
   gymCostCredits: number;
   /** 1 张活动券兑换所需的 cr。 */
@@ -1104,8 +1107,10 @@ export async function updateWorkshopSettings(formData: {
     enabled: formData.enabled === true,
     startAt,
     endAt,
-    dailyExplores: Math.trunc(requireNumber(formData.dailyExplores, "每日探索次数", 1, 200)),
-    exploreCostCredits: requireNumber(formData.exploreCostCredits, "单次探索票价", 0.01, 1_000_000),
+    dailyExplores: Math.trunc(requireNumber(formData.dailyExplores, "每日进图次数", 1, 200)),
+    exploreCostCredits: requireNumber(formData.exploreCostCredits, "单次进图票价", 0.01, 1_000_000),
+    runMaxSteps: Math.trunc(requireNumber(formData.runMaxSteps, "单趟步数上限", 20, 5000)),
+    runMaxEncounters: Math.trunc(requireNumber(formData.runMaxEncounters, "单趟遇敌上限", 1, 50)),
     dailyGyms: Math.trunc(requireNumber(formData.dailyGyms, "每日道馆次数", 1, 50)),
     gymCostCredits: requireNumber(formData.gymCostCredits, "单次道馆票价", 0.01, 1_000_000),
     couponUnitCredits: requireNumber(formData.couponUnitCredits, "活动券单价", 0.01, 1_000_000),

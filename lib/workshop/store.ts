@@ -28,7 +28,6 @@ import {
 import {
   areaByKey,
   createGymEncounter,
-  createWildEncounter,
   nextGym,
   resolveWorkshopBattle,
   type WorkshopBattleAction,
@@ -42,8 +41,17 @@ import {
   normalizeWorkshopState,
   partyAlive,
   removePet,
+  type WorkshopEncounter,
   type WorkshopState,
 } from "./state";
+import {
+  newWorkshopRun,
+  normalizeWorkshopRun,
+  replayWorkshopWalk,
+  sanitizeWalkPath,
+  workshopRunField,
+  workshopWalkLimits,
+} from "./run";
 
 /**
  * 灵宠工坊写入侧。
@@ -70,10 +78,10 @@ async function readState(userId: string, activityKey: string): Promise<WorkshopS
     .limit(1);
   const row = rows[0];
   if (!row) return { version: 0, state: emptyWorkshopState() };
-  return {
-    version: Number(row.version),
-    state: normalizeWorkshopState(safeParse(row.state)),
-  };
+  const state = normalizeWorkshopState(safeParse(row.state));
+  // run 的结构在 state.ts 里校过，这里再按真实的图夹一次坐标
+  state.run = normalizeWorkshopRun(state.run);
+  return { version: Number(row.version), state };
 }
 
 function safeParse(raw: string): unknown {
@@ -227,8 +235,17 @@ export async function chooseWorkshopStarter(
   };
 }
 
-/** 探索：扣一张探索票，按区域刷一只野生灵宠并进入战斗。 */
-export async function exploreWorkshop(
+function actionResult(snapshot: WorkshopSnapshot): WorkshopActionResult {
+  return {
+    state: snapshot.state,
+    version: snapshot.version,
+    milestoneReward: 0,
+    milestoneTiers: [],
+  };
+}
+
+/** 进图：扣一张探索票，按区域 + 种子生成冒险地图，主角从营地出发。 */
+export async function enterWorkshopField(
   userId: string,
   areaKey: string,
   config: WorkshopConfig,
@@ -249,23 +266,26 @@ export async function exploreWorkshop(
     outcome = await attemptWrite(userId, activityKey, (state) => {
       if (!state.starter) throw new WorkshopError("先选一只初始灵宠再出发");
       if (state.encounter) throw new WorkshopError("上一场战斗还没结束");
+      if (state.run) throw new WorkshopError("你已经在地图里了，先回营地结束这趟探险");
       if (!partyAlive(state)) throw new WorkshopError("队伍需要先休息或用点药水");
-      if (state.exploresToday >= config.dailyExplores) {
-        throw new WorkshopError(`今日探索次数已用完（${config.dailyExplores} 次），明天再来`);
+      if (state.entersToday >= config.dailyExplores) {
+        throw new WorkshopError(`今日进图次数已用完（${config.dailyExplores} 次），明天再来`);
       }
       const area = areaByKey(areaKey);
       if (!area) throw new WorkshopError("这片区域不存在");
       if (state.badges < area.unlockBadges) {
         throw new WorkshopError(`需要 ${area.unlockBadges} 枚徽章才能进入${area.name}`);
       }
-      const encounter = createWildEncounter(area.key);
-      if (!encounter) throw new WorkshopError("这片区域暂时没有灵宠");
+      const run = newWorkshopRun({
+        areaKey: area.key,
+        seed: (Math.random() * 0x1_0000_0000) >>> 0,
+      });
       return {
         next: {
           ...state,
           day: cnDateString(),
-          exploresToday: state.exploresToday + 1,
-          encounter,
+          entersToday: state.entersToday + 1,
+          run,
         },
         result: null,
       };
@@ -275,12 +295,76 @@ export async function exploreWorkshop(
     throw error;
   }
 
-  return {
-    state: outcome.snapshot.state,
-    version: outcome.snapshot.version,
-    milestoneReward: 0,
-    milestoneTiers: [],
+  return actionResult(outcome.snapshot);
+}
+
+export interface WorkshopWalkActionResult extends WorkshopActionResult {
+  walk: {
+    kind: "ok" | "encounter" | "capped";
+    /** 服务端认定的光标位置，客户端拿它校正主角。 */
+    tx: number;
+    ty: number;
+    steps: number;
+    encounters: number;
+    /** 本次请求里服务端实际处理掉的路径步数（撞墙的步不计）。 */
+    consumed: number;
+    /** 撞了哪道上限；capped 之外为 null。 */
+    reason: "steps" | "encounters" | null;
+    encounter: WorkshopEncounter | null;
   };
+}
+
+/** 走位：客户端上传游程路径，服务端逐格重放，撞到草丛就摇遇敌。 */
+export async function walkWorkshopField(
+  userId: string,
+  rawPath: unknown,
+  config: WorkshopConfig,
+): Promise<WorkshopWalkActionResult> {
+  const activityKey = assertActiveWindow(config);
+  const limits = workshopWalkLimits(config);
+  const path = sanitizeWalkPath(rawPath, limits.maxPathSteps);
+  const { snapshot, result } = await attemptWrite(userId, activityKey, (state) => {
+    if (!state.run) throw new WorkshopError("这趟探险已经收兵，重新进图吧");
+    if (state.encounter) throw new WorkshopError("上一场战斗还没结束");
+    const outcome = replayWorkshopWalk(state.run, path, limits);
+    return {
+      next: {
+        ...state,
+        // 走到上限就地收兵；遇敌则冻结光标，等这场打完接着走
+        run: outcome.kind === "capped" ? null : outcome.run,
+        encounter: outcome.kind === "encounter" ? outcome.encounter : state.encounter,
+      },
+      result: outcome,
+    };
+  });
+
+  return {
+    ...actionResult(snapshot),
+    walk: {
+      kind: result.kind,
+      tx: result.run.tx,
+      ty: result.run.ty,
+      steps: result.run.steps,
+      encounters: result.run.encounters,
+      consumed: result.consumed,
+      reason: result.kind === "capped" ? result.reason : null,
+      encounter: result.kind === "encounter" ? result.encounter : null,
+    },
+  };
+}
+
+/** 收兵回营：不扣券，这趟探险的步数与遇敌额度一起作废。 */
+export async function leaveWorkshopField(
+  userId: string,
+  config: WorkshopConfig,
+): Promise<WorkshopActionResult> {
+  const activityKey = assertActiveWindow(config);
+  const { snapshot } = await attemptWrite(userId, activityKey, (state) => {
+    if (!state.run) throw new WorkshopError("已经不在地图里了");
+    if (state.encounter) throw new WorkshopError("战斗还没结束，先撤退或打完");
+    return { next: { ...state, run: null }, result: null };
+  });
+  return actionResult(snapshot);
 }
 
 /** 道馆：按徽章数顺序挑战，胜利得徽章与补给，失败不扣额外东西。 */
@@ -307,6 +391,13 @@ export async function challengeWorkshopGym(
       if (!partyAlive(state)) throw new WorkshopError("队伍需要先休息或用点药水");
       if (state.gymsToday >= config.dailyGyms) {
         throw new WorkshopError(`今日道馆挑战次数已用完（${config.dailyGyms} 次），明天再来`);
+      }
+      // 在地图里就得真走到道馆门口；券照扣，位置由服务端的光标说了算
+      if (state.run) {
+        const field = workshopRunField(state.run);
+        const dx = Math.abs(state.run.tx - field.gym.tx);
+        const dy = Math.abs(state.run.ty - field.gym.ty);
+        if (dx > 1 || dy > 1) throw new WorkshopError("先走到地图另一头的道馆门口");
       }
       const gym = nextGym(state.badges);
       if (!gym) throw new WorkshopError("三枚徽章已经集齐，去星陨高地继续探索吧");
@@ -380,6 +471,7 @@ export async function restWorkshopParty(
   const today = cnDateString();
   const { snapshot, result } = await attemptWrite(userId, activityKey, (state) => {
     if (state.encounter) throw new WorkshopError("战斗中不能休息");
+    if (state.run) throw new WorkshopError("野外不安营，先走回营地再休息");
     if (state.restDay === today) throw new WorkshopError("今天已经休息过了");
     if (!state.party.some((pet) => pet.hp < petStats(pet.tier, pet.level).maxHp)) {
       throw new WorkshopError("队伍状态很好，不需要休息");

@@ -28,6 +28,28 @@ export const VIEW_W = 960;
 export const VIEW_H = 540;
 const GROUND_Y = 436;
 
+/**
+ * 绘制视野：宽恒为 960，高按画布实际比例给。
+ *
+ * 大地图是俯视镜头，视野变高就是真的多看一截地图；战斗场景的坐标是按 540 高排好的，
+ * 所以它按 `k = h / 540` 整体纵向缩放（`groundY` 跟着走），人物本身不放大，
+ * 于是竖屏下多出来的高度变成「更多的天与更多的地」，而不是把角色拉成细长条。
+ */
+export interface SagaView {
+  w: number;
+  h: number;
+  k: number;
+  groundY: number;
+}
+
+export const DEFAULT_VIEW: SagaView = { w: VIEW_W, h: VIEW_H, k: 1, groundY: GROUND_Y };
+
+export function makeSagaView(height: number): SagaView {
+  const h = Math.max(420, Math.min(1200, Math.round(Number(height) || VIEW_H)));
+  const k = h / VIEW_H;
+  return { w: VIEW_W, h, k, groundY: GROUND_Y * k };
+}
+
 export type FieldFacilityId = "record" | "forge" | "bank" | "herb" | "supply" | "hall" | "gate";
 
 /** 城里能办的六件事 + 出营：大地图上收进「城中整备」面板的页签。 */
@@ -62,22 +84,23 @@ function roundRect(
   ctx.closePath();
 }
 
-function paintBackdrop(ctx: CanvasRenderingContext2D, time: number): void {
-  const sky = ctx.createLinearGradient(0, 0, 0, VIEW_H);
+function paintBackdrop(ctx: CanvasRenderingContext2D, time: number, view: SagaView): void {
+  const k = view.k;
+  const sky = ctx.createLinearGradient(0, 0, 0, view.h);
   sky.addColorStop(0, "#141d33");
   sky.addColorStop(0.34, "#2d3350");
   sky.addColorStop(0.62, "#7a4a4a");
   sky.addColorStop(0.8, "#d08a58");
   sky.addColorStop(1, "#e8b57a");
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  ctx.fillRect(0, 0, view.w, view.h);
 
-  const sun = ctx.createRadialGradient(760, 300, 10, 760, 300, 220);
+  const sun = ctx.createRadialGradient(760, 300 * k, 10, 760, 300 * k, 220);
   sun.addColorStop(0, "rgba(255,226,170,0.9)");
   sun.addColorStop(0.3, "rgba(255,190,120,0.35)");
   sun.addColorStop(1, "rgba(255,170,90,0)");
   ctx.fillStyle = sun;
-  ctx.fillRect(520, 120, 440, 360);
+  ctx.fillRect(520, 120 * k, 440, 360 * k);
 
   // 远山：三层墨色剪影
   const layers: { base: number; amp: number; color: string; phase: number }[] = [
@@ -88,57 +111,59 @@ function paintBackdrop(ctx: CanvasRenderingContext2D, time: number): void {
   for (const layer of layers) {
     ctx.fillStyle = layer.color;
     ctx.beginPath();
-    ctx.moveTo(-20, VIEW_H);
-    for (let x = -20; x <= VIEW_W + 20; x += 24) {
+    ctx.moveTo(-20, view.h);
+    for (let x = -20; x <= view.w + 20; x += 24) {
       const y =
-        layer.base -
-        Math.abs(Math.sin((x / VIEW_W) * Math.PI * 3 + layer.phase)) * layer.amp -
-        Math.sin(x / 140 + layer.phase) * 8;
+        (layer.base -
+          Math.abs(Math.sin((x / VIEW_W) * Math.PI * 3 + layer.phase)) * layer.amp -
+          Math.sin(x / 140 + layer.phase) * 8) *
+        k;
       ctx.lineTo(x, y);
     }
-    ctx.lineTo(VIEW_W + 20, VIEW_H);
+    ctx.lineTo(view.w + 20, view.h);
     ctx.closePath();
     ctx.fill();
   }
 
   // 薄雾
-  const mist = ctx.createLinearGradient(0, 300, 0, 420);
+  const mist = ctx.createLinearGradient(0, 300 * k, 0, 420 * k);
   mist.addColorStop(0, "rgba(226,196,160,0)");
   mist.addColorStop(1, "rgba(226,196,160,0.16)");
   ctx.fillStyle = mist;
-  ctx.fillRect(0, 300, VIEW_W, 140);
+  ctx.fillRect(0, 300 * k, view.w, 140 * k);
 
   // 飘动的云/尘
   ctx.fillStyle = "rgba(255,220,180,0.09)";
   for (let i = 0; i < 5; i++) {
-    const x = ((time * (8 + i * 3) + i * 240) % (VIEW_W + 240)) - 120;
-    const y = 120 + i * 34 + Math.sin(time + i) * 6;
+    const x = ((time * (8 + i * 3) + i * 240) % (view.w + 240)) - 120;
+    const y = (120 + i * 34 + Math.sin(time + i) * 6) * k;
     ctx.beginPath();
     ctx.ellipse(x, y, 80 + i * 16, 10 + i * 2, 0, 0, Math.PI * 2);
     ctx.fill();
   }
 }
 
-function paintGround(ctx: CanvasRenderingContext2D, camera: number): void {
-  const ground = ctx.createLinearGradient(0, GROUND_Y - 26, 0, VIEW_H);
+function paintGround(ctx: CanvasRenderingContext2D, camera: number, view: SagaView): void {
+  const gy = view.groundY;
+  const ground = ctx.createLinearGradient(0, gy - 26, 0, view.h);
   ground.addColorStop(0, "#4a4433");
   ground.addColorStop(0.4, "#3a3729");
   ground.addColorStop(1, "#23231c");
   ctx.fillStyle = ground;
-  ctx.fillRect(0, GROUND_Y - 26, VIEW_W, VIEW_H - GROUND_Y + 26);
+  ctx.fillRect(0, gy - 26, view.w, view.h - gy + 26);
 
   // 石板路
   ctx.fillStyle = "#5c5341";
-  ctx.fillRect(0, GROUND_Y + 6, VIEW_W, 76);
+  ctx.fillRect(0, gy + 6, view.w, 76);
   ctx.strokeStyle = "rgba(24,22,18,0.5)";
   ctx.lineWidth = 1;
   const offset = camera % 96;
-  for (let x = -offset - 96; x < VIEW_W + 96; x += 96) {
-    ctx.strokeRect(x, GROUND_Y + 6, 96, 38);
-    ctx.strokeRect(x + 48, GROUND_Y + 44, 96, 38);
+  for (let x = -offset - 96; x < view.w + 96; x += 96) {
+    ctx.strokeRect(x, gy + 6, 96, 38);
+    ctx.strokeRect(x + 48, gy + 44, 96, 38);
   }
   ctx.fillStyle = "rgba(255,214,150,0.05)";
-  ctx.fillRect(0, GROUND_Y + 6, VIEW_W, 3);
+  ctx.fillRect(0, gy + 6, view.w, 3);
 }
 
 export type FieldFacing = "up" | "down" | "left" | "right";
@@ -146,6 +171,8 @@ export type FieldFacing = "up" | "down" | "left" | "right";
 export interface FieldPaintOptions {
   field: SagaField;
   time: number;
+  /** 逻辑视野；省略则按 960×540（16:9）画。 */
+  view?: SagaView;
   /** 主角世界坐标（脚底）。 */
   x: number;
   y: number;
@@ -604,8 +631,9 @@ function drawMinimap(
 ): void {
   const w = 156;
   const h = Math.round((w * field.rows) / field.cols);
-  const x = VIEW_W - w - 18;
-  const y = VIEW_H - h - 18;
+  const view = options.view ?? DEFAULT_VIEW;
+  const x = view.w - w - 18;
+  const y = view.h - h - 18;
   ctx.fillStyle = "rgba(12,14,12,0.72)";
   roundRect(ctx, x - 4, y - 4, w + 8, h + 8, 6);
   ctx.fill();
@@ -659,18 +687,19 @@ function drawMinimap(
 
 export function paintField(ctx: CanvasRenderingContext2D, options: FieldPaintOptions): void {
   const { field, time } = options;
+  const view = options.view ?? DEFAULT_VIEW;
   const tile = field.tile;
-  const camX = Math.max(0, Math.min(field.worldW - VIEW_W, options.x - VIEW_W / 2));
-  const camY = Math.max(0, Math.min(field.worldH - VIEW_H, options.y - VIEW_H / 2));
+  const camX = Math.max(0, Math.min(field.worldW - view.w, options.x - view.w / 2));
+  const camY = Math.max(0, Math.min(field.worldH - view.h, options.y - view.h / 2));
   const tint = GRASS_TINT[field.flavor] ?? GRASS_TINT.plain;
 
   ctx.fillStyle = "#2c3a24";
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  ctx.fillRect(0, 0, view.w, view.h);
 
   const fromTx = Math.floor(camX / tile);
-  const toTx = Math.min(field.cols - 1, Math.ceil((camX + VIEW_W) / tile));
+  const toTx = Math.min(field.cols - 1, Math.ceil((camX + view.w) / tile));
   const fromTy = Math.floor(camY / tile);
-  const toTy = Math.min(field.rows - 1, Math.ceil((camY + VIEW_H) / tile));
+  const toTy = Math.min(field.rows - 1, Math.ceil((camY + view.h) / tile));
 
   // 地面层
   for (let ty = fromTy; ty <= toTy; ty++) {
@@ -721,7 +750,7 @@ export function paintField(ctx: CanvasRenderingContext2D, options: FieldPaintOpt
   for (const camp of field.camps) {
     const sx = camp.x - camX;
     const sy = camp.y - camY;
-    if (sx < -80 || sx > VIEW_W + 80 || sy < -120 || sy > VIEW_H + 80) continue;
+    if (sx < -80 || sx > view.w + 80 || sy < -120 || sy > view.h + 80) continue;
     const state = options.cleared.includes(camp.node)
       ? "cleared"
       : options.open.includes(camp.node)
@@ -734,7 +763,7 @@ export function paintField(ctx: CanvasRenderingContext2D, options: FieldPaintOpt
   }
   const gx = field.city.gateTx * tile - camX;
   const gy = field.city.gateTy * tile - camY;
-  if (gx > -120 && gx < VIEW_W + 120 && gy > -160 && gy < VIEW_H + 120) {
+  if (gx > -120 && gx < view.w + 120 && gy > -160 && gy < view.h + 120) {
     sprites.push({
       y: gy + tile,
       draw: () => paintCityGate(ctx, field, time, options.townName),
@@ -772,7 +801,7 @@ export function paintField(ctx: CanvasRenderingContext2D, options: FieldPaintOpt
   banner.addColorStop(0, "rgba(12,14,20,0.78)");
   banner.addColorStop(1, "rgba(12,14,20,0)");
   ctx.fillStyle = banner;
-  ctx.fillRect(0, 0, VIEW_W, 56);
+  ctx.fillRect(0, 0, view.w, 56);
   ctx.textAlign = "left";
   ctx.fillStyle = "#e8d5ab";
   ctx.font = uiFont(18);
@@ -785,15 +814,22 @@ export function paintField(ctx: CanvasRenderingContext2D, options: FieldPaintOpt
     48,
   );
   ctx.textAlign = "right";
-  ctx.fillText("方向键 / WASD 行走 · E 交互", VIEW_W - 24, 30);
+  ctx.fillText("方向键 / WASD 行走 · E 交互", view.w - 24, 30);
   ctx.textAlign = "left";
 
   // 暗角
-  const vignette = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, 240, VIEW_W / 2, VIEW_H / 2, 560);
+  const vignette = ctx.createRadialGradient(
+    view.w / 2,
+    view.h / 2,
+    Math.min(view.w, view.h) * 0.44,
+    view.w / 2,
+    view.h / 2,
+    Math.max(view.w, view.h) * 0.58,
+  );
   vignette.addColorStop(0, "rgba(0,0,0,0)");
   vignette.addColorStop(1, "rgba(0,0,0,0.42)");
   ctx.fillStyle = vignette;
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  ctx.fillRect(0, 0, view.w, view.h);
 }
 
 export interface BattleAnimation {
@@ -808,6 +844,8 @@ export interface BattlePaintOptions {
   time: number;
   target: number;
   animation?: BattleAnimation | null;
+  /** 逻辑视野；省略则按 960×540（16:9）画。 */
+  view?: SagaView;
 }
 
 interface UnitSlot {
@@ -816,15 +854,16 @@ interface UnitSlot {
   scale: number;
 }
 
-function unitSlots(count: number, side: "player" | "enemy"): UnitSlot[] {
+/** 站位落在 540 空间里排好的行军纵队上，只把 y 按视野比例挪，队形本身不拉伸。 */
+function unitSlots(count: number, side: "player" | "enemy", k = 1): UnitSlot[] {
   const slots: UnitSlot[] = [];
   for (let i = 0; i < count; i++) {
     const row = i % 2;
     const col = Math.floor(i / 2);
     if (side === "player") {
-      slots.push({ x: 150 + col * 102 + row * 26, y: 320 + row * 92 + col * 6, scale: 1.05 });
+      slots.push({ x: 150 + col * 102 + row * 26, y: (320 + row * 92 + col * 6) * k, scale: 1.05 });
     } else {
-      slots.push({ x: 790 - col * 96 - row * 22, y: 300 + row * 90 + col * 6, scale: 1.05 });
+      slots.push({ x: 790 - col * 96 - row * 22, y: (300 + row * 90 + col * 6) * k, scale: 1.05 });
     }
   }
   return slots;
@@ -914,9 +953,13 @@ function paintSquad(
   ctx.restore();
 }
 
-function findUnit(battle: SagaBattleState, name: string): { unit: typeof battle.party[number]; slot: UnitSlot; side: "player" | "enemy" } | null {
-  const playerSlots = unitSlots(battle.party.length, "player");
-  const enemySlots = unitSlots(battle.enemies.length, "enemy");
+function findUnit(
+  battle: SagaBattleState,
+  name: string,
+  k: number,
+): { unit: typeof battle.party[number]; slot: UnitSlot; side: "player" | "enemy" } | null {
+  const playerSlots = unitSlots(battle.party.length, "player", k);
+  const enemySlots = unitSlots(battle.enemies.length, "enemy", k);
   const pIndex = battle.party.findIndex((unit) => unit.name === name);
   if (pIndex >= 0) return { unit: battle.party[pIndex], slot: playerSlots[pIndex], side: "player" };
   const eIndex = battle.enemies.findIndex((unit) => unit.name === name);
@@ -926,6 +969,8 @@ function findUnit(battle: SagaBattleState, name: string): { unit: typeof battle.
 
 export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintOptions): void {
   const { battle, time, target } = options;
+  const view = options.view ?? DEFAULT_VIEW;
+  const gy = view.groundY;
   const anim = options.animation;
   const elapsed = anim ? time - anim.startedAt : 0;
   const eventIndex = anim ? Math.floor(elapsed / anim.stepMs) : -1;
@@ -934,15 +979,15 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     ? Math.min(1, Math.max(0, (elapsed - eventIndex * anim.stepMs) / anim.stepMs))
     : 0;
 
-  paintBackdrop(ctx, time + 4);
-  paintGround(ctx, 0);
+  paintBackdrop(ctx, time + 4, view);
+  paintGround(ctx, 0, view);
 
   // 战场土坡与军旗
-  const field = ctx.createLinearGradient(0, GROUND_Y - 40, 0, VIEW_H);
+  const field = ctx.createLinearGradient(0, gy - 40, 0, view.h);
   field.addColorStop(0, "rgba(94,72,46,0.4)");
   field.addColorStop(1, "rgba(30,26,20,0.85)");
   ctx.fillStyle = field;
-  ctx.fillRect(0, GROUND_Y - 40, VIEW_W, VIEW_H - GROUND_Y + 40);
+  ctx.fillRect(0, gy - 40, view.w, view.h - gy + 40);
   for (const [bx, color] of [
     [80, "#7d2f2a"],
     [330, "#7d2f2a"],
@@ -952,15 +997,15 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     ctx.strokeStyle = "#241d15";
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(bx, GROUND_Y + 4);
-    ctx.lineTo(bx, GROUND_Y - 156);
+    ctx.moveTo(bx, gy + 4);
+    ctx.lineTo(bx, gy - 156);
     ctx.stroke();
     const wave = Math.sin(time * 2 + bx) * 5;
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(bx, GROUND_Y - 156);
-    ctx.lineTo(bx + 40, GROUND_Y - 146 + wave);
-    ctx.lineTo(bx, GROUND_Y - 112);
+    ctx.moveTo(bx, gy - 156);
+    ctx.lineTo(bx + 40, gy - 146 + wave);
+    ctx.lineTo(bx, gy - 112);
     ctx.closePath();
     ctx.fill();
   }
@@ -971,13 +1016,13 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
   const bannerText = `第 ${battle.round} 回合`;
   const bannerW = ctx.measureText(bannerText).width + 52;
   ctx.fillStyle = "rgba(16,14,11,0.76)";
-  roundRect(ctx, VIEW_W / 2 - bannerW / 2, 14, bannerW, 36, 6);
+  roundRect(ctx, view.w / 2 - bannerW / 2, 14, bannerW, 36, 6);
   ctx.fill();
   ctx.strokeStyle = "rgba(202,161,90,0.7)";
   ctx.lineWidth = 1;
   ctx.stroke();
   ctx.fillStyle = "#ecd39a";
-  ctx.fillText(bannerText, VIEW_W / 2, 39);
+  ctx.fillText(bannerText, view.w / 2, 39);
 
   ctx.font = uiFont(13);
   ctx.fillStyle = "rgba(236,211,154,0.75)";
@@ -985,11 +1030,11 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
   ctx.fillText(battle.nodeName, 24, 32);
   if (battle.boss) {
     ctx.fillStyle = "#e78b6a";
-    ctx.fillText("BOSS", VIEW_W - 70, 32);
+    ctx.fillText("BOSS", view.w - 70, 32);
   }
 
-  const playerSlots = unitSlots(battle.party.length, "player");
-  const enemySlots = unitSlots(battle.enemies.length, "enemy");
+  const playerSlots = unitSlots(battle.party.length, "player", view.k);
+  const enemySlots = unitSlots(battle.enemies.length, "enemy", view.k);
 
   const drawUnit = (
     unit: typeof battle.party[number],
@@ -1100,8 +1145,8 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
 
   // 战斗特效
   if (currentEvent) {
-    const actor = findUnit(battle, currentEvent.actor);
-    const victim = currentEvent.target ? findUnit(battle, currentEvent.target) : null;
+    const actor = findUnit(battle, currentEvent.actor, view.k);
+    const victim = currentEvent.target ? findUnit(battle, currentEvent.target, view.k) : null;
     if (currentEvent.kind === "attack" && victim) {
       const progress = Math.min(1, eventProgress / 0.6);
       ctx.save();
@@ -1167,11 +1212,18 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
   ctx.textAlign = "left";
   ctx.font = uiFont(12);
   ctx.fillStyle = "rgba(236,213,171,0.6)";
-  ctx.fillText("点击敌将设为目标 · 下方指令栏下令", 26, VIEW_H - 16);
+  ctx.fillText("点击敌将设为目标 · 下方指令栏下令", 26, view.h - 16);
 
-  const vignette = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, 260, VIEW_W / 2, VIEW_H / 2, 580);
+  const vignette = ctx.createRadialGradient(
+    view.w / 2,
+    view.h / 2,
+    Math.min(view.w, view.h) * 0.48,
+    view.w / 2,
+    view.h / 2,
+    Math.max(view.w, view.h) * 0.6,
+  );
   vignette.addColorStop(0, "rgba(0,0,0,0)");
   vignette.addColorStop(1, "rgba(0,0,0,0.46)");
   ctx.fillStyle = vignette;
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  ctx.fillRect(0, 0, view.w, view.h);
 }

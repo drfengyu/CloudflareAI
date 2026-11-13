@@ -69,7 +69,9 @@ import {
   submitTrialAction,
 } from "@/app/(dashboard)/trial/actions";
 import {
+  DEFAULT_VIEW,
   FIELD_FACILITIES,
+  makeSagaView,
   paintBattle,
   paintField,
   VIEW_H,
@@ -77,6 +79,7 @@ import {
   type BattleAnimation,
   type FieldFacilityId,
   type FieldFacing,
+  type SagaView,
 } from "./renderer";
 
 type PanelId = FieldFacilityId | "camp" | "army" | "dex" | null;
@@ -346,6 +349,8 @@ export function TrialGame(props: TrialGameProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   /** 逻辑 960x540 → 实际位图的放大倍率，让画面在大屏和高分屏上都锐利。 */
   const viewScaleRef = useRef(1);
+  /** 逻辑视野：宽恒 960，高跟着画布实际比例走。 */
+  const viewRef = useRef<SagaView>(DEFAULT_VIEW);
   const playerRef = useRef({
     x: 0,
     y: 0,
@@ -443,12 +448,22 @@ export function TrialGame(props: TrialGameProps) {
       const cssWidth = canvas.clientWidth || VIEW_W;
       const dpr = window.devicePixelRatio || 1;
       const scale = Math.max(1, Math.min(2, dpr * (cssWidth / VIEW_W)));
-      const w = Math.round(VIEW_W * scale);
-      const h = Math.round(VIEW_H * scale);
+      // 手机端画面只有半屏高太憋屈：窄屏把画幅拉高到约半屏，宽屏维持 16:9 不动。
+      const wantedHeight =
+        cssWidth < 640
+          ? Math.min((cssWidth * 4) / 3, window.innerHeight * 0.5)
+          : (cssWidth * 9) / 16;
+      const view = makeSagaView((wantedHeight / cssWidth) * VIEW_W);
+      const w = Math.round(view.w * scale);
+      const h = Math.round(view.h * scale);
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
       }
+      // CSS 高度按视野比例给，逻辑像素与屏幕像素才是同一个比例，不会拉伸
+      const cssHeight = `${Math.round((cssWidth * view.h) / view.w)}px`;
+      if (canvas.style.height !== cssHeight) canvas.style.height = cssHeight;
+      viewRef.current = view;
       viewScaleRef.current = scale;
     };
     sync();
@@ -558,6 +573,7 @@ export function TrialGame(props: TrialGameProps) {
           time,
           target: focusTarget,
           animation: modeRef.current.anim,
+          view: viewRef.current,
         });
       } else if (map) {
         const label = spot
@@ -583,6 +599,7 @@ export function TrialGame(props: TrialGameProps) {
           townName: hud.townName,
           gold: hud.gold,
           power: hud.power,
+          view: viewRef.current,
         });
       }
       raf = requestAnimationFrame(frame);
@@ -873,11 +890,12 @@ export function TrialGame(props: TrialGameProps) {
           className="block aspect-video w-full cursor-pointer"
           onClick={(event) => {
             if (battle || settlement) return;
+            const view = viewRef.current;
             const rect = event.currentTarget.getBoundingClientRect();
-            const px = (event.clientX - rect.left) * (VIEW_W / rect.width);
-            const py = (event.clientY - rect.top) * (VIEW_H / rect.height);
-            const camX = Math.max(0, Math.min(field.worldW - VIEW_W, playerRef.current.x - VIEW_W / 2));
-            const camY = Math.max(0, Math.min(field.worldH - VIEW_H, playerRef.current.y - VIEW_H / 2));
+            const px = (event.clientX - rect.left) * (view.w / rect.width);
+            const py = (event.clientY - rect.top) * (view.h / rect.height);
+            const camX = Math.max(0, Math.min(field.worldW - view.w, playerRef.current.x - view.w / 2));
+            const camY = Math.max(0, Math.min(field.worldH - view.h, playerRef.current.y - view.h / 2));
             const wx = px + camX;
             const wy = py + camY;
             const camp = field.camps.find((row) => Math.hypot(row.x - wx, row.y - wy) < 34);

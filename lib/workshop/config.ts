@@ -53,10 +53,14 @@ export interface WorkshopConfig {
   enabled: boolean;
   startAt: string;
   endAt: string;
-  /** 每日最多探索次数（按北京时间自然日）。 */
+  /** 每日最多进图次数（按北京时间自然日）；一次进图能在地图里走到上限为止。 */
   dailyExplores: number;
-  /** 单次探索票价（cr），必须是券单价的整数倍。 */
+  /** 单次进图票价（cr），必须是券单价的整数倍。 */
   exploreCostCredits: number;
+  /** 一趟探险最多走多少步：走位刷遇敌的总闸，到数即收兵。 */
+  runMaxSteps: number;
+  /** 一趟探险最多摇出多少只野生灵宠，到数即收兵。 */
+  runMaxEncounters: number;
   /** 每日最多挑战道馆次数（按北京时间自然日）。 */
   dailyGyms: number;
   /** 单次道馆挑战票价（cr），必须是券单价的整数倍。 */
@@ -73,8 +77,10 @@ export const DEFAULT_WORKSHOP_CONFIG: WorkshopConfig = {
   enabled: false,
   startAt: "",
   endAt: "",
-  dailyExplores: 20,
+  dailyExplores: 5,
   exploreCostCredits: 2,
+  runMaxSteps: 600,
+  runMaxEncounters: 4,
   dailyGyms: 3,
   gymCostCredits: 5,
   couponUnitCredits: 2,
@@ -161,6 +167,8 @@ export function sanitizeWorkshopConfig(raw: unknown): WorkshopConfig {
       unit,
     ),
     dailyGyms: boundedInteger(it.dailyGyms, d.dailyGyms, 1, 50),
+    runMaxSteps: boundedInteger(it.runMaxSteps, d.runMaxSteps, 20, 5_000),
+    runMaxEncounters: boundedInteger(it.runMaxEncounters, d.runMaxEncounters, 1, 50),
     gymCostCredits: snapCostToUnit(
       round2(positiveNumber(it.gymCostCredits, d.gymCostCredits)),
       unit,

@@ -33,6 +33,8 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
   const [endAt, setEndAt] = useState(toField(initialConfig.endAt));
   const [dailyExplores, setDailyExplores] = useState(String(initialConfig.dailyExplores));
   const [exploreCost, setExploreCost] = useState(String(initialConfig.exploreCostCredits));
+  const [runMaxSteps, setRunMaxSteps] = useState(String(initialConfig.runMaxSteps));
+  const [runMaxEncounters, setRunMaxEncounters] = useState(String(initialConfig.runMaxEncounters));
   const [dailyGyms, setDailyGyms] = useState(String(initialConfig.dailyGyms));
   const [gymCost, setGymCost] = useState(String(initialConfig.gymCostCredits));
   const [couponUnit, setCouponUnit] = useState(String(initialConfig.couponUnitCredits));
@@ -53,13 +55,15 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
         endAt: toStored(endAt),
         dailyExplores: Number(dailyExplores),
         exploreCostCredits: Number(exploreCost),
+        runMaxSteps: Number(runMaxSteps),
+        runMaxEncounters: Number(runMaxEncounters),
         dailyGyms: Number(dailyGyms),
         gymCostCredits: Number(gymCost),
         couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
         milestones: milestones.map((row) => ({ tier: Number(row.tier), reward: Number(row.reward) })),
       }),
-    [enabled, startAt, endAt, dailyExplores, exploreCost, dailyGyms, gymCost, couponUnit, validDays, milestones],
+    [enabled, startAt, endAt, dailyExplores, exploreCost, runMaxSteps, runMaxEncounters, dailyGyms, gymCost, couponUnit, validDays, milestones],
   );
 
   async function handleSubmit(e: React.FormEvent) {
@@ -72,6 +76,8 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
         endAt: toStored(endAt),
         dailyExplores: Number(dailyExplores),
         exploreCostCredits: Number(exploreCost),
+        runMaxSteps: Number(runMaxSteps),
+        runMaxEncounters: Number(runMaxEncounters),
         dailyGyms: Number(dailyGyms),
         gymCostCredits: Number(gymCost),
         couponUnitCredits: Number(couponUnit),
@@ -128,7 +134,7 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <label className="mb-1 block text-sm font-medium">每日探索次数</label>
+          <label className="mb-1 block text-sm font-medium">每日进图次数</label>
           <input
             type="number"
             min={1}
@@ -140,7 +146,7 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
           <p className="mt-1 text-xs text-muted-foreground">按北京时间自然日重置</p>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">单次探索票价（cr）</label>
+          <label className="mb-1 block text-sm font-medium">单次进图票价（cr）</label>
           <input
             type="number"
             step="1"
@@ -149,6 +155,30 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
             className={FIELD_CLASS}
           />
           <p className="mt-1 text-xs text-muted-foreground">必须是券单价的整数倍</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">单趟步数上限</label>
+          <input
+            type="number"
+            min={20}
+            step="1"
+            value={runMaxSteps}
+            onChange={(e) => setRunMaxSteps(e.target.value)}
+            className={FIELD_CLASS}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">一次进图最多走多少步，走满自动收兵</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">单趟遇敌上限</label>
+          <input
+            type="number"
+            min={1}
+            step="1"
+            value={runMaxEncounters}
+            onChange={(e) => setRunMaxEncounters(e.target.value)}
+            className={FIELD_CLASS}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">一张图最多摇出多少只野生灵宠</p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">1 张活动券 = cr</label>

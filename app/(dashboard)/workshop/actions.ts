@@ -5,19 +5,23 @@ import { requireUser } from "@/lib/usage/meter";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getWorkshopConfig } from "@/lib/workshop/settings";
 import type { WorkshopBattleAction } from "@/lib/workshop/battle";
+import type { WorkshopWalkPath } from "@/lib/workshop/run";
 import {
   battleWorkshop,
   challengeWorkshopGym,
   chooseWorkshopStarter,
   claimWorkshopMilestones,
-  exploreWorkshop,
+  enterWorkshopField,
+  leaveWorkshopField,
   mergeWorkshop,
   moveWorkshopPet,
   restWorkshopParty,
   setWorkshopActivePet,
   drinkWorkshopPotion,
+  walkWorkshopField,
   type WorkshopActionResult,
   type WorkshopBattleActionResult,
+  type WorkshopWalkActionResult,
 } from "@/lib/workshop/store";
 
 type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
@@ -64,22 +68,57 @@ export async function chooseWorkshopStarterAction(
   }
 }
 
-/** 探索：扣券刷一只野生灵宠。 */
-export async function exploreWorkshopAction(
+/** 进图：扣券生成一张冒险地图，从营地出发。 */
+export async function enterWorkshopFieldAction(
   areaKey: string,
 ): Promise<ActionResult<WorkshopActionResult>> {
   try {
     const userId = await requireUser();
-    if (!(await checkRateLimit(`workshop-explore:${userId}`, { window: 60_000, limit: 60 }))) {
+    if (!(await checkRateLimit(`workshop-enter:${userId}`, { window: 60_000, limit: 30 }))) {
       return { success: false, error: "操作过于频繁，请稍后再试" };
     }
     const config = await getWorkshopConfig();
-    const data = await exploreWorkshop(userId, String(areaKey ?? ""), config);
+    const data = await enterWorkshopField(userId, String(areaKey ?? ""), config);
     revalidatePath("/workshop");
     revalidatePath("/wallet");
     return { success: true, data };
   } catch (error) {
-    return fail(error, "探索失败");
+    return fail(error, "进图失败");
+  }
+}
+
+/** 走位：上传游程路径，服务端重放并回报权威光标。 */
+export async function walkWorkshopFieldAction(
+  path: WorkshopWalkPath,
+): Promise<ActionResult<WorkshopWalkActionResult>> {
+  try {
+    const userId = await requireUser();
+    if (!(await checkRateLimit(`workshop-walk:${userId}`, { window: 60_000, limit: 240 }))) {
+      return { success: false, error: "操作过于频繁，请稍后再试" };
+    }
+    const config = await getWorkshopConfig();
+    const data = await walkWorkshopField(userId, path, config);
+    // 只在真的遇敌或收兵时才让 Next 重跑整页：普通走位每秒都在发
+    if (data.walk.kind !== "ok") revalidatePath("/workshop");
+    return { success: true, data };
+  } catch (error) {
+    return fail(error, "行走失败");
+  }
+}
+
+/** 收兵回营。 */
+export async function leaveWorkshopFieldAction(): Promise<ActionResult<WorkshopActionResult>> {
+  try {
+    const userId = await requireUser();
+    if (!(await checkRateLimit(`workshop-leave:${userId}`, { window: 60_000, limit: 30 }))) {
+      return { success: false, error: "操作过于频繁，请稍后再试" };
+    }
+    const config = await getWorkshopConfig();
+    const data = await leaveWorkshopField(userId, config);
+    revalidatePath("/workshop");
+    return { success: true, data };
+  } catch (error) {
+    return fail(error, "结束探险失败");
   }
 }
 

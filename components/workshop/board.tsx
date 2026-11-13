@@ -50,15 +50,19 @@ import {
   chooseWorkshopStarterAction,
   challengeWorkshopGymAction,
   claimWorkshopMilestonesAction,
-  exploreWorkshopAction,
+  enterWorkshopFieldAction,
+  leaveWorkshopFieldAction,
   mergeWorkshopAction,
   moveWorkshopPetAction,
   restWorkshopPartyAction,
   setWorkshopActivePetAction,
   drinkWorkshopPotionAction,
+  walkWorkshopFieldAction,
   workshopBattleAction,
 } from "@/app/(dashboard)/workshop/actions";
+import type { WorkshopWalkPath } from "@/lib/workshop/run";
 import { PixelPet } from "./pixel-pet";
+import { WorkshopFieldCanvas, type WorkshopWalkResult } from "./field-canvas";
 
 interface BoardLine {
   key: string;
@@ -76,6 +80,8 @@ interface WorkshopBoardProps {
   grantedTiers: number[];
   dailyExplores: number;
   dailyGyms: number;
+  /** 一趟探险的步数 / 遇敌上限。 */
+  runLimits: { maxSteps: number; maxEncounters: number };
   exploreTickets: number;
   gymTickets: number;
   couponTickets: number;
@@ -98,6 +104,10 @@ const LINE_BLURB: Record<string, string> = {
 
 function lineName(lines: BoardLine[], key: string): string {
   return lines.find((line) => line.key === key)?.name ?? key;
+}
+
+function areaName(areas: WorkshopArea[], key: string): string {
+  return areas.find((area) => area.key === key)?.name ?? "野外";
 }
 
 function toneClass(tone?: WorkshopBattleEvent["tone"]): string {
@@ -174,33 +184,76 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
       return;
     }
     acceptData(res.data);
-    toast.success("伙伴已就位，去灰烬原野探索吧");
+    toast.success("伙伴已就位，去灰烬原野进图吧");
     router.refresh();
   }
 
-  async function explore(areaKey: string) {
+  async function enter(areaKey: string) {
     if (busy) return;
-    setBusy(`explore-${areaKey}`);
-    const res = await exploreWorkshopAction(areaKey);
+    setBusy(`enter-${areaKey}`);
+    const res = await enterWorkshopFieldAction(areaKey);
     setBusy(null);
     if (!res.success) {
       toast.error(res.error);
       return;
     }
     acceptData(res.data);
-    const encounter = res.data.state.encounter;
     setLastStatus(null);
-    setLog(
-      encounter
-        ? [
-            {
-              text: `在${props.areas.find((area) => area.key === areaKey)?.name ?? "野外"}遇到 ${petName(encounter)}（Lv.${encounter.level}）`,
-              tone: "info",
-            },
-          ]
-        : [],
-    );
+    setLog([
+      {
+        text: `进入${props.areas.find((area) => area.key === areaKey)?.name ?? "野外"}，从营地出发`,
+        tone: "info",
+      },
+    ]);
     router.refresh();
+  }
+
+  /** 走位：把这段路径交给服务端重放，返回值就是权威光标；失败由 toast 说原因。 */
+  async function walk(path: WorkshopWalkPath): Promise<WorkshopWalkResult | null> {
+    const res = await walkWorkshopFieldAction(path);
+    if (!res.success) {
+      toast.error(res.error);
+      return null;
+    }
+    acceptData(res.data);
+    const walkResult = res.data.walk;
+    if (walkResult.kind === "encounter") {
+      setLastStatus(null);
+      setLog([{ text: "草丛里窜出一只灵宠！", tone: "bad" }]);
+    } else if (walkResult.kind === "capped") {
+      setLog([
+        {
+          text:
+            walkResult.reason === "steps"
+              ? "这趟已经走满了步数，探险结束"
+              : "遇敌次数用尽，这趟到此为止",
+          tone: "info",
+        },
+      ]);
+    }
+    return walkResult;
+  }
+
+  async function leaveField() {
+    if (busy) return;
+    setBusy("leave");
+    const res = await leaveWorkshopFieldAction();
+    setBusy(null);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+    acceptData(res.data);
+    toast.message("已回到营地，这趟探险结束");
+    router.refresh();
+  }
+
+  function fieldInteract(kind: "camp" | "gym") {
+    if (kind === "camp") {
+      void leaveField();
+      return;
+    }
+    void challengeGym();
   }
 
   async function challengeGym() {
@@ -386,7 +439,7 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
           <Heart className="h-4 w-4" /> 药水 {state.items.potion}
         </span>
         <span className="flex items-center gap-1.5 text-muted-foreground">
-          <Map className="h-4 w-4" /> 探索 {state.exploresToday}/{props.dailyExplores}
+          <Map className="h-4 w-4" /> 进图 {state.entersToday}/{props.dailyExplores}
         </span>
         <span className="flex items-center gap-1.5 text-muted-foreground">
           <Swords className="h-4 w-4" /> 道馆 {state.gymsToday}/{props.dailyGyms}
@@ -443,13 +496,18 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
             alive={alive}
             dailyExplores={props.dailyExplores}
             dailyGyms={props.dailyGyms}
+            runLimits={props.runLimits}
             exploreTickets={props.exploreTickets}
             gymTickets={props.gymTickets}
             couponTickets={props.couponTickets}
             nextGym={nextGym ?? undefined}
             log={log}
             lastStatus={lastStatus}
-            onExplore={(areaKey) => void explore(areaKey)}
+            activePet={active}
+            onEnter={(areaKey) => void enter(areaKey)}
+            onWalk={walk}
+            onFieldInteract={fieldInteract}
+            onLeaveField={() => void leaveField()}
             onGym={() => void challengeGym()}
             onClaim={() => void claimMilestones()}
             onDismissLog={() => {
@@ -652,24 +710,37 @@ interface AdventurePanelProps {
   alive: boolean;
   dailyExplores: number;
   dailyGyms: number;
+  runLimits: { maxSteps: number; maxEncounters: number };
   exploreTickets: number;
   gymTickets: number;
   couponTickets: number;
   nextGym: WorkshopGym | undefined;
   log: WorkshopBattleEvent[];
   lastStatus: BattleStatus | null;
-  onExplore: (areaKey: string) => void;
+  activePet: WorkshopPet | null;
+  onEnter: (areaKey: string) => void;
+  onWalk: (path: WorkshopWalkPath) => Promise<WorkshopWalkResult | null>;
+  onFieldInteract: (kind: "camp" | "gym") => void;
+  onLeaveField: () => void;
   onGym: () => void;
   onClaim: () => void;
   onDismissLog: () => void;
 }
 
+const HERO_COLORS: Record<string, { color: string; accent: string }> = {
+  ember: { color: "#b34a1f", accent: "#f0a33c" },
+  tide: { color: "#1f5f8b", accent: "#4fb3d9" },
+  verdant: { color: "#2f7a3e", accent: "#7ac74f" },
+};
+
 function AdventurePanel(props: AdventurePanelProps) {
   const { state, busy } = props;
+  const hero = HERO_COLORS[props.activePet?.lineKey ?? ""] ?? HERO_COLORS.verdant;
   const canExploreBase =
     props.alive &&
     !state.encounter &&
-    state.exploresToday < props.dailyExplores &&
+    !state.run &&
+    state.entersToday < props.dailyExplores &&
     props.couponTickets >= props.exploreTickets;
   const canGym =
     props.alive &&
@@ -708,64 +779,90 @@ function AdventurePanel(props: AdventurePanelProps) {
 
       <div>
         <p className="mb-2 flex items-center gap-1.5 text-sm font-medium">
-          <Map className="h-4 w-4" /> 野外探索
+          <Map className="h-4 w-4" /> {state.run ? "野外探险" : "野外探索"}
           <span className="ml-auto text-xs font-normal text-muted-foreground">
-            今日 {state.exploresToday}/{props.dailyExplores} · 单次{" "}
+            今日 {state.entersToday}/{props.dailyExplores} · 单次{" "}
             <CouponCount kind="workshop" count={props.exploreTickets} />
           </span>
         </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {props.areas.map((area) => {
-            const locked = state.badges < area.unlockBadges;
-            const canGo = !locked && canExploreBase && busy === null;
-            return (
-              <div
-                key={area.key}
-                className={cn(
-                  "flex flex-col gap-2 rounded-lg border p-3",
-                  locked ? "border-border bg-muted/20 opacity-70" : "border-primary/25 bg-primary/5",
-                )}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <p className="flex items-center gap-1.5 text-sm font-semibold">
-                    {locked ? <Lock className="h-3.5 w-3.5" /> : <Map className="h-3.5 w-3.5" />}
-                    {area.name}
-                  </p>
-                  <span className="text-[11px] text-muted-foreground">
-                    {area.tiers[0]}~{area.tiers[1]} 阶 · Lv.{area.levels[0]}~{area.levels[1]}
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground">{area.desc}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  出没：{area.lines.map((key) => lineName(props.lines, key)).join(" / ")}
-                  （{lineName(props.lines, area.lines[0])} 更常见）
-                </p>
-                <Button
-                  type="button"
-                  size="sm"
-                  className="mt-auto w-full"
-                  disabled={!canGo}
-                  onClick={() => props.onExplore(area.key)}
-                >
-                  {busy === `explore-${area.key}` ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : locked ? (
-                    <Lock className="h-3.5 w-3.5" />
-                  ) : (
-                    <Sparkles className="h-3.5 w-3.5" />
+        {state.run ? (
+          <WorkshopFieldCanvas
+            areaKey={state.run.areaKey}
+            seed={state.run.seed}
+            areaName={areaName(props.areas, state.run.areaKey)}
+            run={{
+              tx: state.run.tx,
+              ty: state.run.ty,
+              steps: state.run.steps,
+              encounters: state.run.encounters,
+            }}
+            limits={props.runLimits}
+            badges={state.badges}
+            partyColor={hero.color}
+            partyAccent={hero.accent}
+            locked={Boolean(state.encounter)}
+            busy={busy !== null}
+            onWalk={props.onWalk}
+            onInteract={props.onFieldInteract}
+            onLeave={props.onLeaveField}
+          />
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {props.areas.map((area) => {
+              const locked = state.badges < area.unlockBadges;
+              const canGo = !locked && canExploreBase && busy === null;
+              return (
+                <div
+                  key={area.key}
+                  className={cn(
+                    "flex flex-col gap-2 rounded-lg border p-3",
+                    locked ? "border-border bg-muted/20 opacity-70" : "border-primary/25 bg-primary/5",
                   )}
-                  {locked
-                    ? `需要 ${area.unlockBadges} 枚徽章`
-                    : state.exploresToday >= props.dailyExplores
-                      ? "今日探索次数已用完"
-                      : props.couponTickets < props.exploreTickets
-                        ? "活动券不足"
-                        : "探索一次"}
-                </Button>
-              </div>
-            );
-          })}
-        </div>
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="flex items-center gap-1.5 text-sm font-semibold">
+                      {locked ? <Lock className="h-3.5 w-3.5" /> : <Map className="h-3.5 w-3.5" />}
+                      {area.name}
+                    </p>
+                    <span className="text-[11px] text-muted-foreground">
+                      {area.tiers[0]}~{area.tiers[1]} 阶 · Lv.{area.levels[0]}~{area.levels[1]}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{area.desc}</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    出没：{area.lines.map((key) => lineName(props.lines, key)).join(" / ")}
+                    （{lineName(props.lines, area.lines[0])} 更常见）
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    一次进图能走 {props.runLimits.maxSteps} 步、最多遇 {props.runLimits.maxEncounters} 只野生灵宠
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="mt-auto w-full"
+                    disabled={!canGo}
+                    onClick={() => props.onEnter(area.key)}
+                  >
+                    {busy === `enter-${area.key}` ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : locked ? (
+                      <Lock className="h-3.5 w-3.5" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
+                    {locked
+                      ? `需要 ${area.unlockBadges} 枚徽章`
+                      : state.entersToday >= props.dailyExplores
+                        ? "今日进图次数已用完"
+                        : props.couponTickets < props.exploreTickets
+                          ? "活动券不足"
+                          : "进图探险"}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div>
