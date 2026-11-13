@@ -26,6 +26,7 @@ import {
   type TrialSaveState,
 } from "@/lib/trial/store";
 import { SAGA_CHAPTERS } from "@/lib/trial/saga/data";
+import { SAGA_INN_PRICE_GOLD } from "@/lib/trial/saga/inn";
 import { partyPower } from "@/lib/trial/saga/state";
 
 export const dynamic = "force-dynamic";
@@ -126,7 +127,7 @@ export default async function TrialPage() {
           <li>
             每次出城消耗 <CouponCount kind="trial" count={priceTickets} />（1 张 ={" "}
             {formatCredits(config.couponUnitCredits)} cr 券面），只扣试炼券；军需帐也用试炼券，
-            补给只在这次行军中生效。城镇里的铁匠铺和药铺花金币。
+            补给只在这次行军中生效。城镇里的铁匠铺、药铺和客栈花金币。
           </li>
           <li>
             平定一处地方发通关奖励：
@@ -136,9 +137,9 @@ export default async function TrialPage() {
             ；按达到的最高档发放，奖励 tcr {config.rewardValidDays} 天内有效。未平定不发。
           </li>
           <li>
-            城镇钱庄可双向兑换：<b>100 金 = 1 tcr</b>，每次行军最多存 300 金（3 tcr），收兵时到账；
-            <b>1 tcr = 50 金</b>，即时到账，只扣 tcr 不动永久余额。两边价差 2:1，
-            半途收兵刷金换不回军令钱，来回倒也没有套利空间。
+            城镇钱庄是单向的：<b>100 金 = 1 tcr</b>，每次行军最多存 300 金（3 tcr），收兵时到账；
+            tcr 不能换回行军金币，金币只在游戏里赚、在游戏里花。客栈花{" "}
+            {SAGA_INN_PRICE_GOLD} 金住一次，把上阵武将的兵力补满，残兵也能接着推下一处。
           </li>
           <li>
             不设次数与时限。中途关掉页面不算失败，回来接着走当前剧情；

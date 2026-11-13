@@ -534,8 +534,26 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.51.1（2026-11-13，修灵宠全灭锁死与试炼页券余额不刷新）
-**下一版本**：v0.52.0（旅店：工坊免费 / 付费休息与券价、试炼金币住店与钱庄改单向）
+**当前版本**：v0.52.0（2026-11-13，旅店：工坊付费休息与券价、试炼客栈住店与钱庄改单向）
+**下一版本**：待定
+
+- v0.52.0 两处「旅店」补齐，钱庄收口：
+  - 灵宠工坊：免费休息仍是每日一次（整队倒地照旧放开），用完后按后台新增的
+    `restCostCredits`（默认 2 cr，`snapCostToUnit` 对齐券面）用 `payWithCoupon` 买付费休息；
+    `restWorkshopParty` 先预读判断免费 / 付费，`attemptWrite` 内复核，预读免费而写入时
+    已非免费则整笔失败，CAS 冲突 / 规则失败都 `refundCouponPayment` 原路退券；
+    返回 `paidCredits`，前台按钮区分「今日免费 / 付费休息（N 张券）/ 紧急休整」。
+  - 三国讨逆传：新增 `lib/trial/saga/inn.ts`（`SAGA_INN_PRICE_GOLD = 30`，固定价写死在引擎，
+    收兵重放不读后台配置）与 `{ k: "inn" }` 指令；`restAtInn` 在全队有人缺兵时收费并补满
+    `partyTroops`，满编 / 金币不足不收费。城中整备新增客栈页签（逐将兵力条 + 住店按钮），
+    兵力只在这趟行军有效。
+  - 钱庄改**单向**：删掉 `buyTrialGold` / `buyTrialGoldAction` / `SAGA_GOLD_PACKS` 与
+    tcr → 金币面板，只保留 100 金 = 1 tcr、每趟封顶 3 tcr 的存金；`spendCredits` 的
+    `temporaryOnly` 选项随之删除。tcr 买金等于用充值 / 活动奖励直接买兵力与装备，
+    也会架空 30 金的客栈定价。
+  - 验证：`tests/trial-saga.test.ts` 45 项（新增客栈收费 / 不收钱 / 满编重放用例，
+    指令清洗覆盖 `inn`）；`tests/activity-games.test.ts` 新增付费休息券价对齐用例；
+    `tsc`、ESLint、`npm run build` 通过；本机无 `.env.local`，页面未在浏览器实测。
 
 - v0.51.1 灵宠工坊全灭不再卡死：`resolveWorkshopBattle` 判负时收掉 `run` 并把整队扶到
   `max(1, floor(maxHp / 4))`，`restWorkshopParty` 对整队倒地的存档放开「每天一次」这道闸，
@@ -593,7 +611,8 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   风味（平原 / 山地 / 江河 / 丛林）。
 
 - v0.49.0 三国讨逆传新增城镇钱庄，把游戏金币与 tcr 收支打通（规则集中在
-  `lib/trial/saga/bank.ts`）：金币 → tcr 按 100:1，每次行军封顶 300 金（3 tcr），
+  `lib/trial/saga/bank.ts`；其中 tcr → 金币方向已在 v0.52.0 关闭，现为单向存金）：
+  金币 → tcr 按 100:1，每次行军封顶 300 金（3 tcr），
   以 `{ k: "bank", g }` 指令重放扣金并累计 `bankedGold`，收兵时与平定奖励合并成一条
   type 17 正流水；tcr → 金币按 1:50 即时到账，`buyTrialGold` 用
   `spendCredits(..., { temporaryOnly: true })` 只扣临时余额，再以 CAS 追加金币包购买记录

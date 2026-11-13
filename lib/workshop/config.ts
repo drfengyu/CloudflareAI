@@ -65,6 +65,8 @@ export interface WorkshopConfig {
   dailyGyms: number;
   /** 单次道馆挑战票价（cr），必须是券单价的整数倍。 */
   gymCostCredits: number;
+  /** 免费休息用完后，再休息一次要付的券价（cr），必须是券单价的整数倍。 */
+  restCostCredits: number;
   /** 1 张活动券兑换所需的 cr（券面单价）。 */
   couponUnitCredits: number;
   /** 奖励 tcr 的有效天数。 */
@@ -83,6 +85,7 @@ export const DEFAULT_WORKSHOP_CONFIG: WorkshopConfig = {
   runMaxEncounters: 4,
   dailyGyms: 3,
   gymCostCredits: 5,
+  restCostCredits: 2,
   couponUnitCredits: 2,
   rewardValidDays: 30,
   milestones: [
@@ -171,6 +174,10 @@ export function sanitizeWorkshopConfig(raw: unknown): WorkshopConfig {
     runMaxEncounters: boundedInteger(it.runMaxEncounters, d.runMaxEncounters, 1, 50),
     gymCostCredits: snapCostToUnit(
       round2(positiveNumber(it.gymCostCredits, d.gymCostCredits)),
+      unit,
+    ),
+    restCostCredits: snapCostToUnit(
+      round2(positiveNumber(it.restCostCredits, d.restCostCredits)),
       unit,
     ),
     couponUnitCredits: unit,

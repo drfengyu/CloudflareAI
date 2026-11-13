@@ -73,7 +73,7 @@ export function calculateDisplayBalance(
 }
 
 /**
- * 只看未过期的临时余额（tcr）。钱庄换金只认这笔钱，不拿永久余额兜底。
+ * 只看未过期的临时余额（tcr）。试炼页用它显示钱庄可存的去向与活动券余额。
  */
 export async function getTemporaryBalance(userId: string, now = new Date()): Promise<number> {
   const rows = await db

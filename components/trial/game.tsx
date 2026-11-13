@@ -46,9 +46,9 @@ import { expToNext, generalStats, partyPower } from "@/lib/trial/saga/state";
 import {
   SAGA_BANK_GOLD_PER_TCR,
   SAGA_BANK_MAX_GOLD_PER_RUN,
-  SAGA_GOLD_PACKS,
   bankCreditsForGold,
 } from "@/lib/trial/saga/bank";
+import { SAGA_INN_PRICE_GOLD } from "@/lib/trial/saga/inn";
 import type {
   FormationId,
   SagaBattleState,
@@ -63,7 +63,6 @@ import type {
 } from "@/lib/trial/saga/types";
 import type { ActiveTrialRun, TrialSettlement } from "@/lib/trial/store";
 import {
-  buyTrialGoldAction,
   buyTrialSupplyAction,
   startTrialAction,
   submitTrialAction,
@@ -105,7 +104,7 @@ export interface TrialGameProps {
   initialRun: ActiveTrialRun | null;
   save: TrialSave;
   initialTickets: number;
-  /** 当前可用 tcr（未过期的临时余额），钱庄换金用。 */
+  /** 当前可用 tcr（未过期的临时余额），HUD 与钱庄面板展示用。 */
   initialTcr: number;
   priceTickets: number;
   unitCredits: number;
@@ -176,17 +175,11 @@ export function TrialGame(props: TrialGameProps) {
     props.initialRun ? loadStoredCommands(props.initialRun.runId, props.initialRun.run.seed) : [],
   );
   const [tickets, setTickets] = useState(props.initialTickets);
-  const [tcr, setTcr] = useState(props.initialTcr);
   /** revalidate 后 props 带服务端最新余额（比如刚买完活动券），渲染期对齐一次，不放进 effect。 */
   const [syncedTickets, setSyncedTickets] = useState(props.initialTickets);
   if (props.initialTickets !== syncedTickets) {
     setSyncedTickets(props.initialTickets);
     setTickets(props.initialTickets);
-  }
-  const [syncedTcr, setSyncedTcr] = useState(props.initialTcr);
-  if (props.initialTcr !== syncedTcr) {
-    setSyncedTcr(props.initialTcr);
-    setTcr(props.initialTcr);
   }
   const [panel, setPanel] = useState<PanelId>(null);
   const [hallTab, setHallTab] = useState<"party" | "gear" | "formation">("party");
@@ -214,6 +207,15 @@ export function TrialGame(props: TrialGameProps) {
   const bankedGold = state?.bankedGold ?? 0;
   const bankTcr = bankCreditsForGold(bankedGold);
   const bankRoom = Math.max(0, SAGA_BANK_MAX_GOLD_PER_RUN - bankedGold);
+
+  /** 上阵武将当前兵力：没出城时就是满编；行军中的残兵来自重放状态。 */
+  const troopRows = save.party.map((general) => {
+    const stats = generalStats(general);
+    const max = Math.max(1, Math.round(stats.maxTroops * (1 + (state?.buffs.troopPct ?? 0) / 100)));
+    const current = Math.min(max, state?.partyTroops[general.id] ?? max);
+    return { id: general.id, name: generalName(general.id), current, max };
+  });
+  const innNeedsRest = troopRows.some((row) => row.current < row.max);
 
   // 大地图按「章节 + 节点数 + 种子」纯函数复现：没开局时也画一张同一个地方的图当作预告。
   const field: SagaField = useMemo(
@@ -328,32 +330,6 @@ export function TrialGame(props: TrialGameProps) {
       toast.success(`已存 ${gold} 金，收兵时到账 ${bankCreditsForGold(gold)} tcr`);
     },
     [appendCommand, bankRoom, run, save.gold],
-  );
-
-  const buyGoldPack = useCallback(
-    async (packId: string) => {
-      if (!runId || !run) return;
-      setBusy(`gold:${packId}`);
-      try {
-        const purchaseId = crypto.randomUUID().replace(/-/g, "").slice(0, 32);
-        const result = await buyTrialGoldAction({
-          runId,
-          packId,
-          purchaseId,
-          cmdIndex: commands.length,
-        });
-        if (!result.success) {
-          toast.error(result.error);
-          return;
-        }
-        setRun((prev) => (prev ? { ...prev, purchases: result.data.purchases } : prev));
-        setTcr(result.data.tcr);
-        toast.success("金币已到账");
-      } finally {
-        setBusy(null);
-      }
-    },
-    [commands.length, run, runId],
   );
 
   // ---- 大地图行走与画布 ----
@@ -823,6 +799,16 @@ export function TrialGame(props: TrialGameProps) {
     [appendCommand, save.gold],
   );
 
+  const stayAtInn = useCallback(() => {
+    if (!run || !state || state.scene !== "field") return;
+    if (save.gold < SAGA_INN_PRICE_GOLD) {
+      toast.error(`住店要 ${SAGA_INN_PRICE_GOLD} 金`);
+      return;
+    }
+    appendCommand({ k: "inn" });
+    toast.success(`花 ${SAGA_INN_PRICE_GOLD} 金歇脚，上阵武将兵力补满`);
+  }, [appendCommand, run, save.gold, state]);
+
   const equipItem = useCallback(
     (generalId: string, slot: "weapon" | "armor", itemId: string | null) => {
       appendCommand({ k: "equip", g: generalId, slot, i: itemId });
@@ -874,7 +860,7 @@ export function TrialGame(props: TrialGameProps) {
         </span>
         <span className={HUD_CELL}>
           <Coins className="h-3.5 w-3.5 text-emerald-500" />
-          {formatCredits(tcr)} tcr
+          {formatCredits(props.initialTcr)} tcr
         </span>
         <span className={HUD_CELL}>
           <Users className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1340,13 +1326,13 @@ export function TrialGame(props: TrialGameProps) {
               {panel === "bank" ? (
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>存金在收兵时到账；换金即时入账，只扣 tcr。</span>
+                    <span>钱庄只收金币、不出金币，存下的金收兵时折成 tcr。</span>
                     <span className="flex items-center gap-3 tabular-nums">
                       <span className="flex items-center gap-1">
                         <Coins className="h-3.5 w-3.5 text-amber-500" />
                         {formatCredits(save.gold)} 金
                       </span>
-                      <span>{formatCredits(tcr)} tcr</span>
+                      <span>{formatCredits(props.initialTcr)} tcr</span>
                     </span>
                   </div>
 
@@ -1377,29 +1363,62 @@ export function TrialGame(props: TrialGameProps) {
                     </p>
                   </section>
 
-                  <section className="space-y-2 rounded-lg border border-border p-2.5">
-                    <p className="text-sm font-medium">tcr 换金</p>
-                    <p className="text-xs text-muted-foreground">
-                      1 tcr = 50 金，只扣未过期的 tcr，金币即刻入账。
-                    </p>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      {SAGA_GOLD_PACKS.map((pack) => (
-                        <Button
-                          key={pack.id}
-                          size="sm"
-                          variant="outline"
-                          disabled={tcr < pack.tcr || busy === `gold:${pack.id}`}
-                          onClick={() => void buyGoldPack(pack.id)}
-                        >
-                          {busy === `gold:${pack.id}` ? "兑换中…" : `${pack.tcr} tcr → ${pack.gold} 金`}
-                        </Button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      换来的金币能买装备与伤药；存金是 100 金换 1 tcr、换金是 1 tcr 买 50 金，
-                      两边价差 2:1，来回倒不会多出钱。
-                    </p>
-                  </section>
+                  <p className="text-xs text-muted-foreground">
+                    换不回来的才算钱：tcr 不能买回行军金币，金币只从战斗战利品里来，
+                    花在铁匠铺、药铺和客店里。
+                  </p>
+                </div>
+              ) : null}
+
+              {panel === "inn" ? (
+                <div className="space-y-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span>按次收一笔店钱，住下就把上阵武将的兵力补满。</span>
+                    <span className="flex items-center gap-1 tabular-nums">
+                      <Coins className="h-3.5 w-3.5 text-amber-500" />
+                      每次 {formatCredits(SAGA_INN_PRICE_GOLD)} 金
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {troopRows.map((row) => {
+                      const ratio = row.max > 0 ? row.current / row.max : 1;
+                      return (
+                        <div key={row.id} className="rounded-lg border border-border p-2.5 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{row.name}</span>
+                            <span className="tabular-nums text-muted-foreground">
+                              兵力 {row.current}/{row.max}
+                            </span>
+                          </div>
+                          <div className="mt-1 h-1.5 overflow-hidden rounded bg-muted">
+                            <div
+                              className={cn("h-full", ratio <= 0.35 ? "bg-red-500" : "bg-emerald-500")}
+                              style={{ width: `${Math.round(ratio * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <Button
+                    size="sm"
+                    disabled={
+                      !run || !state || state.scene !== "field" || !innNeedsRest || save.gold < SAGA_INN_PRICE_GOLD
+                    }
+                    onClick={stayAtInn}
+                  >
+                    {!run || !state
+                      ? "行军途中才能住店"
+                      : !innNeedsRest
+                        ? "兵力已满"
+                        : save.gold < SAGA_INN_PRICE_GOLD
+                          ? `金币不足（${SAGA_INN_PRICE_GOLD} 金）`
+                          : `住店（${SAGA_INN_PRICE_GOLD} 金）`}
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    战斗只掉兵力、不会自己回满；住一次店能接着往下一处打。
+                    兵力只在这次行军里有效，收兵后整队休息，下次出城重新满编。
+                  </p>
                 </div>
               ) : null}
 
@@ -1624,7 +1643,7 @@ export function TrialGame(props: TrialGameProps) {
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">
                     <span className={HUD_CELL}>{save.party.length} 将上阵</span>
                     <span className={HUD_CELL}>{formatCredits(save.gold)} 金</span>
-                    <span className={HUD_CELL}>{formatCredits(tcr)} tcr</span>
+                    <span className={HUD_CELL}>{formatCredits(props.initialTcr)} tcr</span>
                     <span className={HUD_CELL}>战力 {partyPower(save)}</span>
                     <span className={HUD_CELL}>{tickets} 张试炼券</span>
                   </div>

@@ -1,14 +1,12 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { d1Run, db } from "@/lib/db/d1-http";
-import { topups, trialRuns } from "@/lib/db/schema";
+import { trialRuns } from "@/lib/db/schema";
 import {
   couponTicketBalance,
   payWithCoupon,
   refundCouponPayment,
 } from "@/lib/activity/coupons";
 import { grantTempCredits } from "@/lib/activity/rewards";
-import { refundPermanentCredits, spendCredits } from "@/lib/billing/spend";
-import { getTemporaryBalance } from "@/lib/billing/display-balance";
 import {
   TOPUP_TYPE_TRIAL,
   trialActivityKey,
@@ -17,10 +15,7 @@ import {
   type TrialConfig,
 } from "./config";
 import { SAGA_CHAPTERS, SAGA_ITEM_BY_ID } from "./saga/data";
-import {
-  SAGA_GOLD_PACK_BY_ID,
-  bankCreditsForGold,
-} from "./saga/bank";
+import { bankCreditsForGold } from "./saga/bank";
 import {
   generateSagaRun,
   parseSagaRun,
@@ -511,96 +506,6 @@ export async function buyTrialSupply(input: {
     purchases: next.purchases,
     tickets: await couponTicketBalance(input.userId, "trial", activityKey, input.config.couponUnitCredits),
   };
-}
-
-export interface GoldPurchaseResult {
-  purchases: SagaPurchase[];
-  /** 换完这一笔后还剩多少 tcr（未过期的临时余额）。 */
-  tcr: number;
-}
-
-/**
- * 钱庄换金：只扣未过期的 tcr，按固定档位把金币追加进行军 JSON。
- *
- * 金币不是服务端余额，不能只扣钱不落账：购买记录本身就是发金凭据，
- * 收兵重放时从 cmdIndex 起加进存档。并发 CAS 失败会把 tcr 按永久 cr 退回
- * （与买券失败的回滚同口径，钱不会凭空消失）。
- */
-export async function buyTrialGold(input: {
-  userId: string;
-  runId: string;
-  packId: string;
-  purchaseId: string;
-  cmdIndex: number;
-  config: TrialConfig;
-}): Promise<GoldPurchaseResult> {
-  const activityKey = assertActiveWindow(input.config);
-  const purchaseId = String(input.purchaseId ?? "");
-  if (!PURCHASE_ID_PATTERN.test(purchaseId)) throw new TrialError("购买凭据无效");
-  const pack = SAGA_GOLD_PACK_BY_ID.get(String(input.packId ?? ""));
-  if (!pack) throw new TrialError("该档金币不在钱庄");
-
-  const rows = await db
-    .select({
-      id: trialRuns.id,
-      status: trialRuns.status,
-      questions: trialRuns.questions,
-      activityKey: trialRuns.activityKey,
-    })
-    .from(trialRuns)
-    .where(and(eq(trialRuns.id, input.runId), eq(trialRuns.userId, input.userId)))
-    .limit(1);
-  const row = rows[0];
-  if (!row) throw new TrialError("行军不存在");
-  if (row.activityKey !== activityKey) throw new TrialError("这次行军不属于当前活动");
-  if (row.status !== "active") throw new TrialError("这次行军已经结束");
-  const run = parseSagaRun(row.questions);
-  if (!run) throw new TrialError("行军数据异常，请重新出发");
-
-  if (run.purchases.some((purchase) => purchase.id === purchaseId)) {
-    return { purchases: run.purchases, tcr: await getTemporaryBalance(input.userId) };
-  }
-  if (run.purchases.length >= SAGA_MAX_PURCHASES) throw new TrialError("这次行军买得够多了");
-
-  const paid = await spendCredits(input.userId, pack.tcr, { temporaryOnly: true });
-  if (!paid.ok) throw new TrialError(`${paid.reason}：换 ${pack.gold} 金需要 ${pack.tcr} tcr`);
-
-  const topupId = crypto.randomUUID();
-  try {
-    await db.insert(topups).values({
-      id: topupId,
-      userId: input.userId,
-      amount: -pack.tcr,
-      type: TOPUP_TYPE_TRIAL,
-      description: `三国讨逆传 钱庄换金（${pack.tcr} tcr → ${pack.gold} 金）`,
-      createdAt: new Date(),
-    });
-  } catch (error) {
-    await refundPermanentCredits(input.userId, pack.tcr, "钱庄换金记账失败回滚");
-    throw error;
-  }
-
-  const cmdIndex = Math.max(0, Math.min(SAGA_MAX_COMMANDS, Math.trunc(Number(input.cmdIndex) || 0)));
-  const next: SagaRun = {
-    ...run,
-    purchases: [
-      ...run.purchases,
-      { id: purchaseId, itemId: pack.id, tickets: 0, at: Date.now(), cmdIndex },
-    ],
-    shopSeq: run.shopSeq + 1,
-  };
-  const updated = await d1Run(
-    `UPDATE trial_run SET questions = ?
-      WHERE id = ? AND userId = ? AND status = 'active' AND questions = ?`,
-    [JSON.stringify(next), input.runId, input.userId, row.questions],
-  );
-  if (updated.changes !== 1) {
-    await d1Run("DELETE FROM topup WHERE id = ?", [topupId]).catch(() => undefined);
-    await refundPermanentCredits(input.userId, pack.tcr, "钱庄换金冲突回滚");
-    throw new TrialError("行军状态已变化，请刷新页面后重试");
-  }
-
-  return { purchases: next.purchases, tcr: await getTemporaryBalance(input.userId) };
 }
 
 export interface TrialHistoryRow {

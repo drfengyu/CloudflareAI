@@ -23,6 +23,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CouponCount } from "@/components/activity/coupon-badge";
 import { formatCredits } from "@/lib/billing/credits";
+import { cnDateString } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import {
   WORKSHOP_TIER_COUNT,
@@ -85,6 +86,8 @@ interface WorkshopBoardProps {
   runLimits: { maxSteps: number; maxEncounters: number };
   exploreTickets: number;
   gymTickets: number;
+  /** 免费休息用完后，再休息一次要花的券数。 */
+  restTickets: number;
   couponTickets: number;
 }
 
@@ -154,6 +157,8 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
   const active = state.party.find((pet) => pet.id === state.activePetId) ?? state.party[0] ?? null;
   const alive = state.party.some((pet) => pet.hp > 0);
   const hurt = state.party.some((pet) => pet.hp < petStats(pet.tier, pet.level).maxHp);
+  /** 全灭紧急休整与当日首次休息免费；用完之后按后台券价付费。 */
+  const freeRest = !alive || state.restDay !== cnDateString();
   const reached = highestTier(state);
   const claimable = props.milestones.filter(
     (item) => item.tier <= reached && item.reward > 0 && !granted.includes(item.tier),
@@ -310,7 +315,11 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
       return;
     }
     acceptData(res.data);
-    toast.success(`休息后回复 ${res.data.healed} 点体力`);
+    toast.success(
+      res.data.paidCredits > 0
+        ? `付费 ${formatCredits(res.data.paidCredits)} cr 休息，回复 ${res.data.healed} 点体力`
+        : `休息后回复 ${res.data.healed} 点体力`,
+    );
     router.refresh();
   }
 
@@ -455,12 +464,17 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
             busy !== null ||
             !!state.encounter ||
             state.party.length === 0 ||
-            (alive && !hurt)
+            (alive && !hurt) ||
+            (!freeRest && props.couponTickets < props.restTickets)
           }
           onClick={() => void rest()}
         >
           {busy === "rest" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-          {alive ? "休息（每日一次）" : "紧急休整"}
+          {alive
+            ? freeRest
+              ? "休息（今日免费）"
+              : `付费休息（${props.restTickets} 张券）`
+            : "紧急休整"}
         </Button>
       </div>
 

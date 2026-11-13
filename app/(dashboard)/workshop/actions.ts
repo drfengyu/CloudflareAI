@@ -21,6 +21,7 @@ import {
   walkWorkshopField,
   type WorkshopActionResult,
   type WorkshopBattleActionResult,
+  type WorkshopRestResult,
   type WorkshopWalkActionResult,
 } from "@/lib/workshop/store";
 
@@ -157,13 +158,14 @@ export async function challengeWorkshopGymAction(): Promise<ActionResult<Worksho
   }
 }
 
-/** 免费休息：每天一次。 */
-export async function restWorkshopPartyAction(): Promise<ActionResult<WorkshopActionResult & { healed: number }>> {
+/** 休息：每天首次免费，之后按券价付费。 */
+export async function restWorkshopPartyAction(): Promise<ActionResult<WorkshopRestResult>> {
   try {
     const userId = await requireUser();
     const config = await getWorkshopConfig();
     const data = await restWorkshopParty(userId, config);
     revalidatePath("/workshop");
+    revalidatePath("/wallet");
     return { success: true, data };
   } catch (error) {
     return fail(error, "休息失败");

@@ -16,10 +16,12 @@ import {
 import {
   autoPlaySagaRun,
   canEngageNode,
+  createReplayState,
   generateSagaRun,
   openNodes,
   parseSagaRun,
   replaySagaRun,
+  restAtInn,
   sanitizeSagaCommands,
   settleSagaRun,
 } from "../lib/trial/saga/run";
@@ -34,7 +36,8 @@ import {
   SAGA_BANK_MAX_GOLD_PER_RUN,
   bankCreditsForGold,
 } from "../lib/trial/saga/bank";
-import { initialTrialSave } from "../lib/trial/saga/state";
+import { SAGA_INN_PRICE_GOLD } from "../lib/trial/saga/inn";
+import { generalStats, initialTrialSave } from "../lib/trial/saga/state";
 
 function trial(overrides: Partial<TrialConfig> = {}): TrialConfig {
   return { ...DEFAULT_TRIAL_CONFIG, ...overrides };
@@ -164,6 +167,7 @@ test("指令清洗：未知字段、军需商店与错槽装备都被丢弃", ()
     { k: "bank", g: 150 },
     { k: "bank", g: 400 },
     { k: "bank", g: -100 },
+    { k: "inn" },
     {
       k: "battle",
       node: 1,
@@ -185,7 +189,7 @@ test("指令清洗：未知字段、军需商店与错槽装备都被丢弃", ()
   ]);
   assert.deepEqual(
     commands.map((command) => command.k),
-    ["formation", "shop", "equip", "party", "bank", "battle", "leave"],
+    ["formation", "shop", "equip", "party", "bank", "inn", "battle", "leave"],
   );
   const battle = commands.find((command) => command.k === "battle");
   assert.ok(battle && battle.k === "battle");
@@ -292,25 +296,32 @@ test("钱庄存金：100 金一档、每趟封顶 300 金，超出的指令不�
   assert.equal(bankCreditsForGold(1000), 3, "再多的金币也只按上限结算");
 });
 
-test("钱庄换金：金币包按档位从 cmdIndex 起入账，未知档位不加钱", () => {
+test("客栈住店：缺兵才收 30 金并补满全队，满编或钱不够不收费", () => {
   const run = freshRun(61, 2);
-  const purchase = (itemId: string, cmdIndex = 0): SagaRun => ({
-    ...run,
-    purchases: [{ id: `p-${itemId}-${cmdIndex}`, itemId, tickets: 0, at: 1, cmdIndex }],
-  });
+  const state = createReplayState(run);
+  state.save.gold = 100;
+  const [first] = state.save.party;
+  const max = generalStats(first).maxTroops;
+  state.partyTroops[first.id] = max - 50;
 
-  const before = replaySagaRun(run, [{ k: "leave" }]).state.save.gold;
-  const pack = replaySagaRun(purchase("gold_200"), [{ k: "leave" }]).state.save.gold;
-  const unknown = replaySagaRun(purchase("gold_999"), [{ k: "leave" }]).state.save.gold;
-  assert.equal(pack, before + 200);
-  assert.equal(unknown, before);
+  assert.equal(restAtInn(state), true);
+  assert.equal(state.partyTroops[first.id], max);
+  assert.equal(state.save.gold, 100 - SAGA_INN_PRICE_GOLD);
 
-  // 购买记录挂在 cmdIndex 上：先执行编队，再在第二条指令前入账。
-  const late = replaySagaRun(purchase("gold_50", 1), [
-    { k: "formation", f: "yulin" },
-    { k: "leave" },
-  ]);
-  assert.equal(late.state.save.gold, before + 50);
+  // 全员满编再住一次只是白跑，分文不收。
+  assert.equal(restAtInn(state), false);
+  assert.equal(state.save.gold, 100 - SAGA_INN_PRICE_GOLD);
+
+  // 缺兵但连店钱都不够：不能住，也不偷偷补兵。
+  state.save.gold = SAGA_INN_PRICE_GOLD - 1;
+  state.partyTroops[first.id] = 1;
+  assert.equal(restAtInn(state), false);
+  assert.equal(state.partyTroops[first.id], 1);
+  assert.equal(state.save.gold, SAGA_INN_PRICE_GOLD - 1);
+
+  // 指令重放走同一口径：满编时插一条住店指令不扣钱。
+  const fresh = replaySagaRun(run, [{ k: "inn" }, { k: "leave" }]).state;
+  assert.equal(fresh.save.gold, run.startSave.gold);
 });
 
 test("收兵战果记录存金与通关金币，两者互不覆盖", () => {

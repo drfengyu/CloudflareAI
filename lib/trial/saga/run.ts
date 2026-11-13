@@ -10,8 +10,8 @@ import { startBattle, resolveBattleRound } from "./battle";
 import {
   SAGA_BANK_GOLD_PER_TCR,
   SAGA_BANK_MAX_GOLD_PER_RUN,
-  SAGA_GOLD_PACK_BY_ID,
 } from "./bank";
+import { SAGA_INN_PRICE_GOLD } from "./inn";
 import {
   applyChapterUnlock,
   buyGoldItem,
@@ -463,6 +463,10 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
         }
         break;
       }
+      case "inn": {
+        out.push({ k: "inn" });
+        break;
+      }
       case "leave": {
         out.push({ k: "leave" });
         break;
@@ -519,13 +523,28 @@ export function bankSagaGold(state: SagaReplayState, gold: number): number {
   return allowed;
 }
 
+/** 客栈住店：全队任一武将缺兵才收一次钱，把上阵武将补满；全员满编或金币不足返回 false。 */
+export function restAtInn(state: SagaReplayState): boolean {
+  if (state.save.gold < SAGA_INN_PRICE_GOLD) return false;
+  let healed = 0;
+  for (const general of state.save.party) {
+    const stats = generalStats(general);
+    const maxTroops = Math.max(
+      1,
+      Math.round(stats.maxTroops * (1 + state.buffs.troopPct / 100)),
+    );
+    const current = Math.min(maxTroops, state.partyTroops[general.id] ?? maxTroops);
+    if (current >= maxTroops) continue;
+    state.partyTroops[general.id] = maxTroops;
+    healed += maxTroops - current;
+  }
+  if (healed <= 0) return false;
+  state.save.gold -= SAGA_INN_PRICE_GOLD;
+  return true;
+}
+
 /** 军需品从购买发生的指令位置起生效，已经打过的仗不会被回溯加强。 */
 function applyPurchase(state: SagaReplayState, purchase: SagaPurchase): void {
-  const goldPack = SAGA_GOLD_PACK_BY_ID.get(purchase.itemId);
-  if (goldPack) {
-    state.save.gold += goldPack.gold;
-    return;
-  }
   const item = SAGA_ITEM_BY_ID.get(purchase.itemId);
   if (!item || item.kind !== "supply") return;
   switch (item.supply) {
@@ -599,6 +618,9 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
         break;
       case "bank":
         bankSagaGold(state, command.g);
+        break;
+      case "inn":
+        restAtInn(state);
         break;
       case "leave":
         index = total;

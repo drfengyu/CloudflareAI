@@ -1,7 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { d1Run, db } from "@/lib/db/d1-http";
 import { workshopStates } from "@/lib/db/schema";
-import { payWithCoupon, refundCouponPayment } from "@/lib/activity/coupons";
+import { payWithCoupon, refundCouponPayment, type CouponPayment } from "@/lib/activity/coupons";
+import { creditsForTickets, ticketsForCost } from "@/lib/activity/ticket-math";
 import {
   grantActivityMilestone,
   listGrantedMilestones,
@@ -462,33 +463,69 @@ export async function battleWorkshop(
   };
 }
 
-/** 免费休息：每天一次，回满整队。 */
+export interface WorkshopRestResult extends WorkshopActionResult {
+  healed: number;
+  /** 这次休息实际花掉的 cr；免费休息为 0。 */
+  paidCredits: number;
+}
+
+/** 休息：每日首次免费（全灭时紧急休整也免费）；用完后按后台券价付费回满整队。 */
 export async function restWorkshopParty(
   userId: string,
   config: WorkshopConfig,
-): Promise<WorkshopActionResult & { healed: number }> {
+): Promise<WorkshopRestResult> {
   const activityKey = assertActiveWindow(config);
   const today = cnDateString();
-  const { snapshot, result } = await attemptWrite(userId, activityKey, (state) => {
+  const checkRestable = (state: WorkshopState): { free: boolean } => {
     if (state.encounter) throw new WorkshopError("战斗中不能休息");
     if (state.run) throw new WorkshopError("野外不安营，先走回营地再休息");
-    // 全灭（含改版前卡死的旧存档）不受每日一次限制，否则没有药水就只能一直躺着
-    const downed = state.party.length > 0 && !state.party.some((pet) => pet.hp > 0);
-    if (!downed && state.restDay === today) throw new WorkshopError("今天已经休息过了");
     if (!state.party.some((pet) => pet.hp < petStats(pet.tier, pet.level).maxHp)) {
       throw new WorkshopError("队伍状态很好，不需要休息");
     }
-    const next: WorkshopState = { ...state, restDay: today };
-    const healed = healAllParty(next);
-    return { next, result: healed };
-  });
+    // 全灭（含改版前卡死的旧存档）不受每日一次限制，否则没有药水就只能一直躺着
+    const downed = state.party.length > 0 && !state.party.some((pet) => pet.hp > 0);
+    return { free: downed || state.restDay !== today };
+  };
+
+  await ensureStateRow(userId, activityKey);
+  const before = await readState(userId, activityKey);
+  const { free } = checkRestable(before.state);
+
+  let payment: CouponPayment | null = null;
+  if (!free) {
+    const paid = await payWithCoupon(
+      userId,
+      "workshop",
+      activityKey,
+      config.restCostCredits,
+      config.couponUnitCredits,
+    );
+    if (!paid.ok) {
+      const tickets = ticketsForCost(config.restCostCredits, config.couponUnitCredits);
+      throw new WorkshopError(`${paid.reason}（付费休息需要 ${tickets} 张工坊券）`);
+    }
+    payment = paid.payment;
+  }
+
+  let outcome: { snapshot: WorkshopSnapshot; result: number };
+  try {
+    outcome = await attemptWrite(userId, activityKey, (state) => {
+      const info = checkRestable(state);
+      // 预读时是免费，写的时候免费次数已经被别的页面用掉了：宁可失败也不偷偷扣券。
+      if (free && !info.free) throw new WorkshopError("今天已经休息过了");
+      const next: WorkshopState = { ...state, restDay: today };
+      const healed = healAllParty(next);
+      return { next, result: healed };
+    });
+  } catch (error) {
+    if (payment) await refundCouponPayment(payment);
+    throw error;
+  }
 
   return {
-    state: snapshot.state,
-    version: snapshot.version,
-    milestoneReward: 0,
-    milestoneTiers: [],
-    healed: result,
+    ...actionResult(outcome.snapshot),
+    healed: outcome.result,
+    paidCredits: payment ? creditsForTickets(payment.tickets, config.couponUnitCredits) : 0,
   };
 }
 

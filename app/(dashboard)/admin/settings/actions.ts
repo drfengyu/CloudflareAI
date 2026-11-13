@@ -1070,6 +1070,8 @@ export async function updateWorkshopSettings(formData: {
   runMaxEncounters: number;
   dailyGyms: number;
   gymCostCredits: number;
+  /** 免费休息用完后，再休息一次的券价（cr）。 */
+  restCostCredits: number;
   /** 1 张活动券兑换所需的 cr。 */
   couponUnitCredits: number;
   rewardValidDays: number;
@@ -1113,6 +1115,7 @@ export async function updateWorkshopSettings(formData: {
     runMaxEncounters: Math.trunc(requireNumber(formData.runMaxEncounters, "单趟遇敌上限", 1, 50)),
     dailyGyms: Math.trunc(requireNumber(formData.dailyGyms, "每日道馆次数", 1, 50)),
     gymCostCredits: requireNumber(formData.gymCostCredits, "单次道馆票价", 0.01, 1_000_000),
+    restCostCredits: requireNumber(formData.restCostCredits, "付费休息券价", 0.01, 1_000_000),
     couponUnitCredits: requireNumber(formData.couponUnitCredits, "活动券单价", 0.01, 1_000_000),
     rewardValidDays: Math.trunc(requireNumber(formData.rewardValidDays, "奖励有效期", 1, 3650)),
     milestones,

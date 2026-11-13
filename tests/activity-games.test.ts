@@ -521,6 +521,13 @@ test("单趟上限进配置并喂给走位闸门", () => {
   assert.deepEqual(workshopWalkLimits(config), { maxSteps: 300, maxEncounters: 6, maxPathSteps: 96 });
 });
 
+test("付费休息券价按券面对齐，脏值退回默认", () => {
+  assert.equal(DEFAULT_WORKSHOP_CONFIG.restCostCredits, 2);
+  assert.equal(sanitizeWorkshopConfig({ restCostCredits: 5, couponUnitCredits: 5 }).restCostCredits, 5);
+  assert.equal(sanitizeWorkshopConfig({ restCostCredits: 7, couponUnitCredits: 2 }).restCostCredits, 8);
+  assert.equal(sanitizeWorkshopConfig({ restCostCredits: -3 }).restCostCredits, 2);
+});
+
 // ---------------------------------------------------------------- 星图共鸣
 
 test("观星颜色等概率、亮度 60 / 30 / 10", () => {

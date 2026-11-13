@@ -261,6 +261,8 @@ export type SagaCommand =
   | { k: "party"; active: string[] }
   /** 钱庄存金：按 100 金一档扣，收兵时统一折成 tcr 发放。 */
   | { k: "bank"; g: number }
+  /** 客栈住店：花固定金币把上阵武将的兵力补满。 */
+  | { k: "inn" }
   | { k: "leave" }
   /** 打的是图上哪座营：大地图上可以自由挑顺序，首领营要先破其余营。 */
   | { k: "battle"; node: number; rounds: SagaRoundCommand[][] };

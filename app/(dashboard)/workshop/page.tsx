@@ -35,6 +35,7 @@ function Notice({ title, hint }: { title: string; hint: string }) {
 }
 
 function rulesCard(config: WorkshopConfig, exploreTickets: number, gymTickets: number) {
+  const restTickets = ticketsForCost(config.restCostCredits, config.couponUnitCredits);
   return (
     <Card>
       <CardHeader>
@@ -75,7 +76,8 @@ function rulesCard(config: WorkshopConfig, exploreTickets: number, gymTickets: n
           </li>
           <li>
             每日最多进图 {config.dailyExplores} 次、挑战道馆 {config.dailyGyms} 次（北京时间自然日）；
-            每天还能免费休息一次，回满整队。
+            每天首次休息免费，回满整队，之后可花 <CouponCount kind="workshop" count={restTickets} />{" "}
+            付费休息（券不足只能等第二天）。
           </li>
         </ul>
       </CardContent>
@@ -221,6 +223,7 @@ export default async function WorkshopPage() {
               runLimits={{ maxSteps: config.runMaxSteps, maxEncounters: config.runMaxEncounters }}
               exploreTickets={exploreTickets}
               gymTickets={gymTickets}
+              restTickets={ticketsForCost(config.restCostCredits, config.couponUnitCredits)}
               couponTickets={ownTickets}
             />
           </CardContent>

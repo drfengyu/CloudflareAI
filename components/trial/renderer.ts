@@ -50,13 +50,14 @@ export function makeSagaView(height: number): SagaView {
   return { w: VIEW_W, h, k, groundY: GROUND_Y * k };
 }
 
-export type FieldFacilityId = "record" | "forge" | "bank" | "herb" | "supply" | "hall" | "gate";
+export type FieldFacilityId = "record" | "forge" | "bank" | "inn" | "herb" | "supply" | "hall" | "gate";
 
-/** 城里能办的六件事 + 出营：大地图上收进「城中整备」面板的页签。 */
+/** 城里能办的几件事 + 出营：大地图上收进「城中整备」面板的页签。 */
 export const FIELD_FACILITIES: { id: FieldFacilityId; label: string; hint: string }[] = [
   { id: "record", label: "桃园碑", hint: "查看存档、武将与图鉴" },
   { id: "forge", label: "铁匠铺", hint: "用金币打造武器与防具" },
-  { id: "bank", label: "钱庄", hint: "金币与 tcr 双向兑换" },
+  { id: "bank", label: "钱庄", hint: "用金币换 tcr，收兵时结算" },
+  { id: "inn", label: "客栈", hint: "花金币歇脚，补满上阵武将兵力" },
   { id: "herb", label: "药铺", hint: "用金币购买伤药与良药" },
   { id: "supply", label: "军需帐", hint: "用试炼券购买此行军需" },
   { id: "hall", label: "编成所", hint: "编队、阵型、装备与图鉴" },

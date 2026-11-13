@@ -5,11 +5,9 @@ import { requireUser } from "@/lib/usage/meter";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getTrialConfig } from "@/lib/trial/settings";
 import {
-  buyTrialGold,
   buyTrialSupply,
   startTrialRun,
   submitTrialRun,
-  type GoldPurchaseResult,
   type StartedTrial,
   type SupplyPurchaseResult,
   type TrialSettlement,
@@ -88,34 +86,5 @@ export async function buyTrialSupplyAction(input: {
     return { success: true, data };
   } catch (error) {
     return fail(error, "购买失败");
-  }
-}
-
-/** 钱庄换金：扣 tcr（只扣临时余额），把金币档位记进这次行军。 */
-export async function buyTrialGoldAction(input: {
-  runId: string;
-  packId: string;
-  purchaseId: string;
-  cmdIndex: number;
-}): Promise<ActionResult<GoldPurchaseResult>> {
-  try {
-    const userId = await requireUser();
-    if (!(await checkRateLimit(`trial-bank:${userId}`, { window: 60_000, limit: 20 }))) {
-      return { success: false, error: "兑换太频繁，请稍后再试" };
-    }
-    const config = await getTrialConfig();
-    const data = await buyTrialGold({
-      userId,
-      runId: String(input.runId ?? ""),
-      packId: String(input.packId ?? ""),
-      purchaseId: String(input.purchaseId ?? ""),
-      cmdIndex: Number(input.cmdIndex) || 0,
-      config,
-    });
-    revalidatePath("/trial");
-    revalidatePath("/wallet");
-    return { success: true, data };
-  } catch (error) {
-    return fail(error, "兑换失败");
   }
 }

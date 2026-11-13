@@ -37,6 +37,7 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
   const [runMaxEncounters, setRunMaxEncounters] = useState(String(initialConfig.runMaxEncounters));
   const [dailyGyms, setDailyGyms] = useState(String(initialConfig.dailyGyms));
   const [gymCost, setGymCost] = useState(String(initialConfig.gymCostCredits));
+  const [restCost, setRestCost] = useState(String(initialConfig.restCostCredits));
   const [couponUnit, setCouponUnit] = useState(String(initialConfig.couponUnitCredits));
   const [validDays, setValidDays] = useState(String(initialConfig.rewardValidDays));
   const [milestones, setMilestones] = useState<MilestoneRow[]>(() =>
@@ -59,11 +60,12 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
         runMaxEncounters: Number(runMaxEncounters),
         dailyGyms: Number(dailyGyms),
         gymCostCredits: Number(gymCost),
+        restCostCredits: Number(restCost),
         couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
         milestones: milestones.map((row) => ({ tier: Number(row.tier), reward: Number(row.reward) })),
       }),
-    [enabled, startAt, endAt, dailyExplores, exploreCost, runMaxSteps, runMaxEncounters, dailyGyms, gymCost, couponUnit, validDays, milestones],
+    [enabled, startAt, endAt, dailyExplores, exploreCost, runMaxSteps, runMaxEncounters, dailyGyms, gymCost, restCost, couponUnit, validDays, milestones],
   );
 
   async function handleSubmit(e: React.FormEvent) {
@@ -80,6 +82,7 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
         runMaxEncounters: Number(runMaxEncounters),
         dailyGyms: Number(dailyGyms),
         gymCostCredits: Number(gymCost),
+        restCostCredits: Number(restCost),
         couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
         milestones: milestones.map((row) => ({ tier: Number(row.tier), reward: Number(row.reward) })),
@@ -216,6 +219,17 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
           <p className="mt-1 text-xs text-muted-foreground">胜利额外掉落 2 球 + 2 药水</p>
         </div>
         <div>
+          <label className="mb-1 block text-sm font-medium">付费休息券价（cr）</label>
+          <input
+            type="number"
+            step="1"
+            value={restCost}
+            onChange={(e) => setRestCost(e.target.value)}
+            className={FIELD_CLASS}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">每天首次免费，之后按这个价回满整队</p>
+        </div>
+        <div>
           <label className="mb-1 block text-sm font-medium">奖励有效期（天）</label>
           <input
             type="number"
@@ -286,7 +300,9 @@ export function WorkshopForm({ initialConfig }: { initialConfig: WorkshopConfig 
           每日探索 {preview.dailyExplores} 次 · 单次 {formatCredits(preview.exploreCostCredits)} cr（
           {ticketCount(preview.exploreCostCredits, preview.couponUnitCredits)} 张券）· 每日道馆{" "}
           {preview.dailyGyms} 次 · 单次 {formatCredits(preview.gymCostCredits)} cr（
-          {ticketCount(preview.gymCostCredits, preview.couponUnitCredits)} 张券）
+          {ticketCount(preview.gymCostCredits, preview.couponUnitCredits)} 张券）· 付费休息{" "}
+          {formatCredits(preview.restCostCredits)} cr（
+          {ticketCount(preview.restCostCredits, preview.couponUnitCredits)} 张券）
         </p>
         <p className="mt-1 text-muted-foreground">
           {preview.milestones
