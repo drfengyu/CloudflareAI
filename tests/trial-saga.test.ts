@@ -44,6 +44,7 @@ import {
   parseSagaRun,
   replaySagaRun,
   restAtInn,
+  sagaRunUntouched,
   sanitizeSagaCommands,
   settleSagaRun,
 } from "../lib/trial/saga/run";
@@ -52,6 +53,7 @@ import {
   fieldHotspotNear,
   fieldHitsSolid,
   fieldReachable,
+  fieldShoreAt,
   fieldTileAt,
   generateSagaField,
   sagaFieldFor,
@@ -885,22 +887,32 @@ test("野外遭遇只在行军途中发生：兵败后不再受理遭遇指令",
   assert.equal(lost.state.clearedNodes.length, 0);
 });
 
-test("野外遇敌概率：官道安全，草地与树林才有概率", () => {
+test("野外遇敌概率：官道安全，草地与树林才有概率，海边滩涂除外", () => {
   const field = generateSagaField({ chapter: 0, nodeCount: 5, seed: 3 });
   let walkable = 0;
+  let shore = 0;
   for (let ty = 0; ty < field.rows; ty++) {
     for (let tx = 0; tx < field.cols; tx++) {
       const kind = fieldTileAt(field, tx, ty);
       const chance = fieldEncounterChanceAt(field, (tx + 0.5) * field.tile, (ty + 0.5) * field.tile);
-      if (kind === SAGA_TILE_GRASS || kind === SAGA_TILE_FOREST) {
-        assert.equal(chance > 0, true, `草地/树林有遇敌概率（tile=${kind}）`);
+      if (kind === SAGA_TILE_FOREST) {
+        assert.equal(chance > 0, true, `树林有遇敌概率（tile=${kind}）`);
         walkable += 1;
+      } else if (kind === SAGA_TILE_GRASS) {
+        if (fieldShoreAt(field, tx, ty)) {
+          assert.equal(chance, 0, "挨着水的滩涂不遇敌");
+          shore += 1;
+        } else {
+          assert.equal(chance > 0, true, `草地有遇敌概率（tile=${kind}）`);
+          walkable += 1;
+        }
       } else {
         assert.equal(chance, 0, `官道与城池不遇敌（tile=${kind}）`);
       }
     }
   }
   assert.equal(walkable > 0, true);
+  assert.equal(shore > 0, true, "地图上要有挨着水的滩涂");
   assert.equal(fieldTileAt(field, field.city.gateTx, field.city.gateTy), SAGA_TILE_ROAD);
   assert.equal(
     fieldEncounterChanceAt(field, (field.city.gateTx + 0.5) * field.tile, (field.city.gateTy + 0.5) * field.tile),
@@ -909,10 +921,11 @@ test("野外遇敌概率：官道安全，草地与树林才有概率", () => {
   );
 });
 
-test("野外遇敌概率：树林 5%、草地 2.4%，官道与城池为 0", () => {
+test("野外遇敌概率：树林 5%、草地 2.4%，滩涂与官道为 0", () => {
   const field = generateSagaField({ chapter: 0, nodeCount: 5, seed: 7 });
   let forest = false;
   let grass = false;
+  let shore = false;
   for (let ty = 0; ty < field.rows; ty++) {
     for (let tx = 0; tx < field.cols; tx++) {
       const kind = fieldTileAt(field, tx, ty);
@@ -921,14 +934,80 @@ test("野外遇敌概率：树林 5%、草地 2.4%，官道与城池为 0", () =
         assert.equal(chance, 0.05);
         forest = true;
       } else if (kind === SAGA_TILE_GRASS) {
-        assert.equal(chance, 0.024);
-        grass = true;
+        if (fieldShoreAt(field, tx, ty)) {
+          assert.equal(chance, 0, "水边沙岸不遇敌");
+          shore = true;
+        } else {
+          assert.equal(chance, 0.024);
+          grass = true;
+        }
       } else {
         assert.equal(chance, 0);
       }
     }
   }
   assert.equal(forest && grass, true, "地图上同时有树林与草地");
+  assert.equal(shore, true, "地图上有水边沙岸");
+});
+
+test("官道贯通：城门口沿官道能走到每座营与每个乡野点位", () => {
+  for (const seed of [1, 3, 7, 2026]) {
+    const field = generateSagaField({ chapter: 0, nodeCount: 5, seed });
+    const { cols, rows } = field;
+    const seen = new Array<boolean>(cols * rows).fill(false);
+    const start = field.city.gateTy * cols + field.city.gateTx;
+    seen[start] = true;
+    const queue = [start];
+    for (let head = 0; head < queue.length; head++) {
+      const cell = queue[head];
+      const tx = cell % cols;
+      const ty = Math.floor(cell / cols);
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ] as [number, number][]) {
+        const nx = tx + dx;
+        const ny = ty + dy;
+        if (nx < 0 || ny < 0 || nx >= cols || ny >= rows) continue;
+        const next = ny * cols + nx;
+        if (seen[next] || fieldTileAt(field, nx, ny) !== SAGA_TILE_ROAD) continue;
+        seen[next] = true;
+        queue.push(next);
+      }
+    }
+    for (const camp of field.camps) {
+      assert.equal(
+        seen[camp.ty * cols + camp.tx],
+        true,
+        `seed ${seed} 的营地 ${camp.node} 必须与城门官道相连`,
+      );
+    }
+    for (const poi of field.pois) {
+      assert.equal(
+        seen[poi.ty * cols + poi.tx],
+        true,
+        `seed ${seed} 的 ${poi.kind} 必须与城门官道相连`,
+      );
+    }
+  }
+});
+
+test("空壳行军：没指令、没购买、没商店进账才算没动过，可以按最新存档重开", () => {
+  const run = freshRun();
+  assert.equal(sagaRunUntouched(run), true);
+  assert.equal(sagaRunUntouched({ ...run, commands: [{ k: "formation", f: "fengshi" }] }), false);
+  assert.equal(
+    sagaRunUntouched({
+      ...run,
+      purchases: [
+        { id: "p1", itemId: "herb", tickets: 2, at: 1, cmdIndex: 0 },
+      ],
+    }),
+    false,
+  );
+  assert.equal(sagaRunUntouched({ ...run, shopSeq: 1 }), false);
 });
 
 // ---------------------------------------------------------------- 特性 / 规则

@@ -844,7 +844,7 @@ export function TrialGame(props: TrialGameProps) {
             Math.abs(vx) >= Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
           if (moving) {
             player.stuck = 0;
-            // 每踏入一格判定一次野外遇敌：官道安全，草地、树林才有概率。
+            // 每踏入一格判定一次野外遇敌：官道与海边滩涂安全，草地、树林才有概率。
             const tileKey = `${Math.floor(player.x / map.tile)}:${Math.floor(player.y / map.tile)}`;
             if (walkTileRef.current !== tileKey) {
               walkTileRef.current = tileKey;
@@ -2296,7 +2296,7 @@ export function TrialGame(props: TrialGameProps) {
                     走过去能听一段本地故事、记一条军令；走到哪座营跟前就打哪座，
                     主帅本阵要先拔尽其余 {props.nodeCount - 1} 座营。营寨全部攻破、剧情才会推进到下一处地方。
                     草地与树林会随机杀出散兵、山贼、盗贼，每趟最多 {SAGA_MAX_ENCOUNTERS} 场，
-                    官道与城内外不会遇敌。每一步都会自动存档：撤退只结束当前这一场仗，
+                    官道、海边滩涂与城内外不会遇敌。每一步都会自动存档：撤退只结束当前这一场仗，
                     兵败也能回城住店重整，等级、金币、装备与招降武将都不会丢。
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">

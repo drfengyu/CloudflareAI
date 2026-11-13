@@ -111,7 +111,7 @@ export default async function TrialPage() {
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
           <li>
             从当前城镇出城后是一张<b>俯视行军大地图</b>：方向键 / WASD 四向自由行走，
-            草地与树林会随机遇敌，点空白处可随时查看队伍、道具与装备。
+            草地与树林会随机遇敌，官道与海边沙岸不会，点空白处可随时查看队伍、道具与装备。
             图上有 {config.questionCount} 座敌营，先打哪座由你走位决定；主帅本阵要先拔尽其余营寨。
             营寨全部攻破，剧情才会推进到下一处地方。每一步都会<b>自动存档</b>，
             撤退只结束当前这场仗，等级、金币、装备、招降武将都不会丢。

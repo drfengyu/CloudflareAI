@@ -5,6 +5,29 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.57.1] - 2026-11-14
+
+### 修复
+
+- 平定后回城存档「回档」：`trial_run.startedAt` 历史上混有早期分支写入的 ISO 文本与
+  正常的毫秒整数，SQLite 排序时 TEXT 恒大于 INTEGER，`ORDER BY startedAt DESC` 会把
+  一条旧的兵败记录当成最新，读存档时取到旧的 `endSave`，等级、装备与城内购买全部清零。
+  `lib/trial/store.ts` 新增 `startedAtDesc`，按 `strftime('%s')` 折算毫秒后统一排序，
+  读存档 / 找进行中行军 / 历史列表共用；旧行替换分支改为直接绑毫秒。
+- 空壳行军卡进度：出城后没有落下任何指令、没有购买、`shopSeq` 仍为 0 的行军
+  （刷新 / 误关页面留下）由 `sagaRunUntouched` 判定为没有进度，
+  `findActiveTrialRun` 不再把它当作进行中；下一次「出发」按修正后的最新存档重开。
+- 官道遇敌：营地与乡野点位扫出的空地会覆盖已铺好的官道，沿路走也会踩进草地。
+  `paintBlob` 增加保留谓词，空地只铺草地、官道保持贯通。
+- 海边遇敌：与水相邻的草地改为滩涂，`fieldEncounterChanceAt` 返回 0；
+  `components/trial/renderer.ts` 在水边画出沙岸与浪线，规则文案同步注明
+  「官道、海边与城内外不会遇敌」。
+
+### 测试
+
+- `tests/trial-saga.test.ts` 新增官道贯通 BFS（城门 ↔ 每座营 / 乡野点位）与
+  `sagaRunUntouched` 用例；遇敌概率用例区分滩涂与非滩涂草地。162 项单测通过。
+
 ## [0.57.0] - 2026-11-14
 
 ### 新增

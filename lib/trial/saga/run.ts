@@ -564,6 +564,11 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
   return out;
 }
 
+/** 出城后还没落过任何指令、购买或商店进账的行军；进度是空的，可以按最新存档安全重开。 */
+export function sagaRunUntouched(run: SagaRun): boolean {
+  return !run.commands?.length && run.purchases.length === 0 && run.shopSeq === 0;
+}
+
 export function createReplayState(run: SagaRun): SagaReplayState {
   return {
     scene: "field",

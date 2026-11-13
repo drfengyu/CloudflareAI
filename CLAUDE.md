@@ -534,8 +534,19 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.57.0（2026-11-14，讨逆传自动存档、武将特性与战斗界面）
+**当前版本**：v0.57.1（2026-11-14，讨逆传存档回档与安全地形修复）
 **下一版本**：待定
+
+- v0.57.1 三国讨逆传存档与地形修复：
+  `lib/trial/store.ts` 新增 `startedAtDesc`：`typeof(startedAt) = 'text'` 时用
+  `CAST(strftime('%s', startedAt) AS INTEGER) * 1000`，与毫秒整数统一比较，
+  读存档、进行中行军与历史列表共用；旧行替换分支不再绑 `Date`，直接绑毫秒。
+  `findActiveTrialRun` 跳过 `sagaRunUntouched`（零 `commands`、零 `purchases`、`shopSeq = 0`）
+  的空壳行军，下一次出发按最新 `endSave` 重开，涿州平定后回城不再回档。
+  `lib/trial/saga/map.ts` 的 `paintBlob` 增加保留谓词，营地 / 乡野空地只铺草地、
+  不再截断官道；新增 `fieldShoreAt`（8 邻水），水边草地遇敌概率为 0；
+  `components/trial/renderer.ts` 在水边画沙岸与浪线。
+  `tests/trial-saga.test.ts` 新增官道贯通 BFS 与空壳行军判定，共 162 项全过。
 
 - v0.57.0 三国讨逆传自动存档、武将特性、战斗界面与训练场：
   规则集升级 `SAGA_RULESET = 2`，旧局 `rules: 1` 重放结果不变。

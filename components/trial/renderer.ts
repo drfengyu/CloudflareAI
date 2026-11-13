@@ -271,6 +271,55 @@ function paintRoad(
   }
 }
 
+/** 相邻水面画沙岸，滩涂不遇敌这件事在画面上看得见。 */
+function paintShore(
+  ctx: CanvasRenderingContext2D,
+  field: SagaField,
+  tx: number,
+  ty: number,
+  sx: number,
+  sy: number,
+  tile: number,
+  r: number,
+): void {
+  const wet = (x: number, y: number): boolean => {
+    if (x < 0 || y < 0 || x >= field.cols || y >= field.rows) return false;
+    return field.terrain[y * field.cols + x] === SAGA_TILE_WATER;
+  };
+  const n = wet(tx, ty - 1);
+  const s = wet(tx, ty + 1);
+  const w = wet(tx - 1, ty);
+  const e = wet(tx + 1, ty);
+  const nw = wet(tx - 1, ty - 1);
+  const ne = wet(tx + 1, ty - 1);
+  const sw = wet(tx - 1, ty + 1);
+  const se = wet(tx + 1, ty + 1);
+  if (!n && !s && !w && !e && !nw && !ne && !sw && !se) return;
+  const band = Math.max(5, Math.round(tile * (0.28 + r * 0.1)));
+  const corner = Math.round(band * 0.85);
+  ctx.fillStyle = "#c8b585";
+  if (n) ctx.fillRect(sx, sy, tile, band);
+  if (s) ctx.fillRect(sx, sy + tile - band, tile, band);
+  if (w) ctx.fillRect(sx, sy, band, tile);
+  if (e) ctx.fillRect(sx + tile - band, sy, band, tile);
+  if (nw) ctx.fillRect(sx, sy, corner, corner);
+  if (ne) ctx.fillRect(sx + tile - corner, sy, corner, corner);
+  if (sw) ctx.fillRect(sx, sy + tile - corner, corner, corner);
+  if (se) ctx.fillRect(sx + tile - corner, sy + tile - corner, corner, corner);
+  ctx.fillStyle = "rgba(244,236,208,0.45)";
+  if (n) ctx.fillRect(sx, sy, tile, 2);
+  if (s) ctx.fillRect(sx, sy + tile - 2, tile, 2);
+  if (w) ctx.fillRect(sx, sy, 2, tile);
+  if (e) ctx.fillRect(sx + tile - 2, sy, 2, tile);
+  if (r > 0.4) {
+    ctx.fillStyle = "rgba(118,100,68,0.35)";
+    const px = sx + 4 + r * (tile - 12);
+    const py = sy + 4 + ((r * 71) % 1) * (tile - 12);
+    ctx.fillRect(px, py, 2, 2);
+    ctx.fillRect(px + 4, py + 5, 1.5, 1.5);
+  }
+}
+
 function paintYard(
   ctx: CanvasRenderingContext2D,
   sx: number,
@@ -898,6 +947,7 @@ export function paintField(ctx: CanvasRenderingContext2D, options: FieldPaintOpt
         continue;
       }
       paintGrass(ctx, sx, sy, tile, r, tint);
+      if (kind === SAGA_TILE_GRASS) paintShore(ctx, field, tx, ty, sx, sy, tile, r);
     }
   }
 

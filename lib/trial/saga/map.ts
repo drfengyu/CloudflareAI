@@ -91,15 +91,29 @@ export function fieldSpeedAt(field: SagaField, x: number, y: number): number {
   return kind === SAGA_TILE_FOREST ? 0.72 : 1;
 }
 
+/** 挨着水面的草地算滩涂（海边）：只供沿岸行走，不会遇敌。 */
+export function fieldShoreAt(field: SagaField, tx: number, ty: number): boolean {
+  if (fieldTileAt(field, tx, ty) !== SAGA_TILE_GRASS) return false;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      if (fieldTileAt(field, tx + dx, ty + dy) === SAGA_TILE_WATER) return true;
+    }
+  }
+  return false;
+}
+
 /**
- * 每走过一格草地 / 树林的遇敌概率；官道、城墙与城内外一律安全。
+ * 每走过一格草地 / 树林的遇敌概率；官道、墙内与海边滩涂一律安全。
  * 概率只决定「什么时候撞上」，编成由种子与第几场遭遇推出，重放不依赖走位。
  */
 export function fieldEncounterChanceAt(field: SagaField, x: number, y: number): number {
   const tile = field.tile;
-  const kind = fieldTileAt(field, Math.floor(x / tile), Math.floor(y / tile));
+  const tx = Math.floor(x / tile);
+  const ty = Math.floor(y / tile);
+  const kind = fieldTileAt(field, tx, ty);
   if (kind === SAGA_TILE_FOREST) return 0.05;
-  if (kind === SAGA_TILE_GRASS) return 0.024;
+  if (kind === SAGA_TILE_GRASS) return fieldShoreAt(field, tx, ty) ? 0 : 0.024;
   return 0;
 }
 
@@ -112,6 +126,7 @@ function paintBlob(
   cy: number,
   rx: number,
   ry: number,
+  keep?: (current: number) => boolean,
 ): void {
   for (let ty = Math.floor(cy - ry); ty <= Math.ceil(cy + ry); ty++) {
     for (let tx = Math.floor(cx - rx); tx <= Math.ceil(cx + rx); tx++) {
@@ -119,7 +134,9 @@ function paintBlob(
       const dx = (tx - cx) / Math.max(0.6, rx);
       const dy = (ty - cy) / Math.max(0.6, ry);
       if (dx * dx + dy * dy > 1) continue;
-      terrain[ty * cols + tx] = kind;
+      const at = ty * cols + tx;
+      if (keep?.(terrain[at] ?? SAGA_TILE_GRASS)) continue;
+      terrain[at] = kind;
     }
   }
 }
@@ -286,9 +303,19 @@ export function generateSagaField(options: {
       terrain[ty * cols + tx] = edge ? (gate ? SAGA_TILE_ROAD : SAGA_TILE_WALL) : SAGA_TILE_YARD;
     }
   }
-  // 营前空地：营地周围扫出一片扎营地
+  // 营前空地：营地周围扫出一片扎营地，已铺好的官道留着，免得走在路上被空地截断
   for (const camp of camps) {
-    paintBlob(terrain, cols, rows, SAGA_TILE_GRASS, camp.tx, camp.ty, 2.4, 2.0);
+    paintBlob(
+      terrain,
+      cols,
+      rows,
+      SAGA_TILE_GRASS,
+      camp.tx,
+      camp.ty,
+      2.4,
+      2.0,
+      (current) => current === SAGA_TILE_ROAD,
+    );
     terrain[camp.ty * cols + camp.tx] = SAGA_TILE_ROAD;
   }
 
@@ -325,7 +352,17 @@ export function generateSagaField(options: {
       }
     }
     if (!best) continue;
-    paintBlob(terrain, cols, rows, SAGA_TILE_GRASS, best.tx, best.ty, 1.8, 1.5);
+    paintBlob(
+      terrain,
+      cols,
+      rows,
+      SAGA_TILE_GRASS,
+      best.tx,
+      best.ty,
+      1.8,
+      1.5,
+      (current) => current === SAGA_TILE_ROAD,
+    );
     terrain[best.ty * cols + best.tx] = SAGA_TILE_ROAD;
     pois.push({
       kind,

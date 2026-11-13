@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { d1Run, db } from "@/lib/db/d1-http";
 import { trialRuns } from "@/lib/db/schema";
 import {
@@ -21,6 +21,7 @@ import {
   generateSagaRun,
   parseSagaRun,
   replaySagaRun,
+  sagaRunUntouched,
   sanitizeSagaCommands,
   settleSagaRun,
   SAGA_MAX_PURCHASES,
@@ -50,6 +51,15 @@ import {
  */
 
 export class TrialError extends Error {}
+
+/**
+ * 历史上有几条行军把 startedAt 写成了 ISO 文本（旧路径直接绑 Date），
+ * SQLite 排序时 TEXT 恒大于 INTEGER，按原列排序会把旧行当成最新。
+ * 统一折算成毫秒再排，文本行与整数行都能按真实时间先后排对。
+ */
+const startedAtDesc = sql`CASE WHEN typeof(${trialRuns.startedAt}) = 'text'
+  THEN CAST(strftime('%s', ${trialRuns.startedAt}) AS INTEGER) * 1000
+  ELSE ${trialRuns.startedAt} END DESC`;
 
 function assertActiveWindow(config: TrialConfig): string {
   const window = trialActivityWindow(config);
@@ -87,7 +97,7 @@ export async function loadTrialSave(
         inArray(trialRuns.status, ["scored", "expired"]),
       ),
     )
-    .orderBy(desc(trialRuns.startedAt))
+    .orderBy(startedAtDesc)
     .limit(8);
   for (const row of rows) {
     const run = parseSagaRun(row.questions);
@@ -119,12 +129,15 @@ export async function findActiveTrialRun(
         eq(trialRuns.status, "active"),
       ),
     )
-    .orderBy(desc(trialRuns.startedAt))
+    .orderBy(startedAtDesc)
     .limit(1);
   const row = rows[0];
   if (!row) return null;
   const run = parseSagaRun(row.questions);
   if (!run) return null;
+  // 出城后没落过指令、没买过东西的空壳行军（刷新 / 误关页面留下）不算进度：
+  // 直接当作没有进行中的行军，让下一次出发按最新存档重开。
+  if (sagaRunUntouched(run)) return null;
   const startedAt = new Date(row.startedAt).getTime();
   return {
     runId: row.id,
@@ -232,7 +245,7 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
         eq(trialRuns.status, "active"),
       ),
     )
-    .orderBy(desc(trialRuns.startedAt))
+    .orderBy(startedAtDesc)
     .limit(1);
 
   const now = Date.now();
@@ -255,7 +268,7 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
     await d1Run(
       `UPDATE trial_run SET questions = ?, questionCount = ?, correct = 0, durationMs = 0, startedAt = ?
         WHERE id = ? AND userId = ? AND status = 'active'`,
-      [JSON.stringify(run), run.nodes.length, new Date(now), stale[0].id, userId],
+      [JSON.stringify(run), run.nodes.length, now, stale[0].id, userId],
     );
     return {
       runId: stale[0].id,
@@ -625,7 +638,7 @@ export async function listTrialRuns(
     })
     .from(trialRuns)
     .where(and(eq(trialRuns.userId, userId), eq(trialRuns.activityKey, activityKey)))
-    .orderBy(desc(trialRuns.startedAt))
+    .orderBy(startedAtDesc)
     .limit(limit);
   return rows.map((row) => ({
     id: row.id,
