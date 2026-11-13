@@ -118,7 +118,7 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <label className="mb-1 block text-sm font-medium">每处地方节点数</label>
+          <label className="mb-1 block text-sm font-medium">每处地方营寨数</label>
           <input
             type="number"
             min={2}
@@ -128,7 +128,9 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
             onChange={(e) => setQuestionCount(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">2 ~ {TRIAL_MAX_FLOORS} 处节点（野战 → 精英 → 首领）</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            2 ~ {TRIAL_MAX_FLOORS} 座营寨（野战 / 精英，末座为首帅本阵），大地图上可自由挑选攻打顺序
+          </p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">每次出城军令（cr）</label>
@@ -180,7 +182,7 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
           </Button>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">
-          只有走完当前地方的全部剧情才发奖；按攻克节点数达到的最高档发放，未平定不发。
+          只有拔尽当前地方的全部营寨才发奖；按攻破的营寨数达到的最高档发放，未平定不发。
         </p>
         <div className="mt-2 space-y-2">
           {tiers.map((row, index) => (

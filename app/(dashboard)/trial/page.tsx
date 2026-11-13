@@ -113,8 +113,9 @@ export default async function TrialPage() {
       <CardContent>
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
           <li>
-            从当前城镇出城行军，沿剧情路线依次攻克 {config.questionCount} 处节点；
-            只有平定此处全部节点，剧情才会推进到下一处地方。等级、金币、装备、招降武将都写进存档，
+            从当前城镇出城后是一张<b>俯视行军大地图</b>：方向键 / WASD 四向自由行走（也可点地图走位），
+            图上有 {config.questionCount} 座敌营，先打哪座由你走位决定；主帅本阵要先拔尽其余营寨。
+            营寨全部攻破，剧情才会推进到下一处地方。等级、金币、装备、招降武将都写进存档，
             兵败也不会丢进度。
           </li>
           <li>
@@ -130,7 +131,7 @@ export default async function TrialPage() {
           <li>
             平定一处地方发通关奖励：
             {config.tiers
-              .map((tier) => ` 攻克 ${tier.correct} 处节点 ${formatCredits(trialRewardFor(config, tier.correct))} tcr`)
+              .map((tier) => ` 攻破 ${tier.correct} 座营寨 ${formatCredits(trialRewardFor(config, tier.correct))} tcr`)
               .join("，")}
             ；按达到的最高档发放，奖励 tcr {config.rewardValidDays} 天内有效。未平定不发。
           </li>
@@ -169,7 +170,7 @@ export default async function TrialPage() {
                 </span>
                 <span className="flex items-center gap-3 tabular-nums">
                   <span>
-                    {row.status === "active" ? "行军中" : `攻克 ${row.correct}/${row.questionCount} 处`}
+                    {row.status === "active" ? "行军中" : `攻破 ${row.correct}/${row.questionCount} 座营寨`}
                   </span>
                   <span className={row.reward > 0 ? "font-medium text-success" : "text-muted-foreground"}>
                     {row.reward > 0 ? `+${formatCredits(row.reward)} tcr` : "无奖励"}

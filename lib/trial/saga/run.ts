@@ -52,6 +52,9 @@ import {
 /** 一次行军最多买多少份军需；防止行军 JSON 被无限撑大。 */
 export const SAGA_MAX_PURCHASES = 100;
 
+/** 指令里允许出现的营地下标上限（与 `TRIAL_MAX_FLOORS` 对齐，这里不引配置以免破坏纯函数复用）。 */
+const SAGA_MAX_NODE_INDEX = 6;
+
 const clampInt = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, Math.trunc(value)));
 
@@ -465,7 +468,9 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
         break;
       }
       case "battle": {
-        if (!Array.isArray(it.rounds)) break;
+        const node = Math.trunc(Number(it.node));
+        if (!Number.isFinite(node) || !Array.isArray(it.rounds)) break;
+        if (node < 0 || node > SAGA_MAX_NODE_INDEX) break;
         const rounds: SagaRoundCommand[][] = [];
         for (const round of it.rounds) {
           if (totalRounds >= SAGA_MAX_TOTAL_ROUNDS) break;
@@ -473,7 +478,7 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
           rounds.push(sanitizeRoundCommands(round));
           totalRounds += 1;
         }
-        out.push({ k: "battle", rounds });
+        out.push({ k: "battle", node, rounds });
         break;
       }
       default:
@@ -485,8 +490,8 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
 
 export function createReplayState(run: SagaRun): SagaReplayState {
   return {
-    scene: "town",
-    nodeIndex: 0,
+    scene: "field",
+    clearedNodes: [],
     completed: 0,
     victory: false,
     save: cloneSave(run.startSave),
@@ -545,6 +550,25 @@ function applyPurchase(state: SagaReplayState, purchase: SagaPurchase): void {
   }
 }
 
+/** 营地下标是否还能打：越界 / 已破 / 首领营未清完其余营地，都算无效指令。 */
+export function canEngageNode(run: SagaRun, state: SagaReplayState, node: number): boolean {
+  const index = Math.trunc(node);
+  if (!Number.isFinite(index) || index < 0 || index >= run.nodes.length) return false;
+  if (state.clearedNodes.includes(index)) return false;
+  if (run.nodes[index]?.kind !== "boss") return true;
+  // 主帅本阵扎在最后，外围营地没拔干净就冲进去，重放时直接忽略。
+  return run.nodes.every((item, itemIndex) => item.kind === "boss" || state.clearedNodes.includes(itemIndex));
+}
+
+/** 还没拔掉的营地（首领营要等其余全清），供地图标记与自动行军使用。 */
+export function openNodes(run: SagaRun, state: SagaReplayState): number[] {
+  const out: number[] = [];
+  for (let index = 0; index < run.nodes.length; index++) {
+    if (canEngageNode(run, state, index)) out.push(index);
+  }
+  return out;
+}
+
 export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplayResult {
   const state = createReplayState(run);
   const purchasesAt = new Map<number, SagaPurchase[]>();
@@ -580,24 +604,20 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
         index = total;
         break;
       case "battle": {
-        if (state.nodeIndex >= run.nodes.length) break;
+        if (!canEngageNode(run, state, command.node)) break;
         // 战斗指令必须一次打完：中途停下就锁在本场，不能靠重开指令反复刷新兵力。
         state.scene = "battle";
-        const battle = startBattle(run, state.nodeIndex, state);
+        const battle = startBattle(run, command.node, state);
         for (const round of command.rounds) {
           resolveBattleRound(battle, round, state);
           if (battle.phase !== "select") break;
         }
         state.battle = battle;
         if (battle.phase === "won") {
-          state.completed += 1;
-          state.nodeIndex += 1;
-          if (state.nodeIndex >= run.nodes.length) {
-            state.scene = "won";
-            state.victory = true;
-          } else {
-            state.scene = "town";
-          }
+          state.clearedNodes.push(command.node);
+          state.completed = state.clearedNodes.length;
+          state.scene = state.completed >= run.nodes.length ? "won" : "field";
+          state.victory = state.completed >= run.nodes.length;
         } else if (battle.phase === "lost") {
           state.scene = "lost";
         }
@@ -662,9 +682,13 @@ export function settleSagaRun(run: SagaRun, commands: SagaCommand[]): SagaSettle
 }
 
 /** 自动战斗的一整场指令：优先计策与回血，没有手段时集中攻击兵力最少的敌将。 */
-export function autoBattleRounds(run: SagaRun, state: SagaReplayState): SagaRoundCommand[][] {
+export function autoBattleRounds(
+  run: SagaRun,
+  node: number,
+  state: SagaReplayState,
+): SagaRoundCommand[][] {
   const scratch = JSON.parse(JSON.stringify(state)) as SagaReplayState;
-  const battle = startBattle(run, state.nodeIndex, scratch);
+  const battle = startBattle(run, node, scratch);
   const rounds: SagaRoundCommand[][] = [];
   let guard = 0;
   const itemCount = (itemId: string): number =>
@@ -760,19 +784,22 @@ function planTownUpgrades(state: SagaReplayState): SagaCommand[] {
   return commands;
 }
 
-/** 全军突击：按当前存档自动打完这条路线的所有节点，用于一键演示与测试。 */
+/** 全军突击：按当前存档自动打完地图上的营地（先清外围再取本阵），用于一键演示与测试。 */
 export function autoPlaySagaRun(run: SagaRun): SagaSettlement {
   const commands: SagaCommand[] = [];
   for (let guard = 0; guard < 30; guard++) {
     let replay = replaySagaRun(run, commands);
-    if (replay.state.scene !== "town" || replay.state.nodeIndex >= run.nodes.length) break;
+    let targets = openNodes(run, replay.state);
+    if (replay.state.scene !== "field" || targets.length === 0) break;
     const upgrades = planTownUpgrades(replay.state);
     if (upgrades.length > 0) {
       commands.push(...upgrades);
       replay = replaySagaRun(run, commands);
-      if (replay.state.scene !== "town") break;
+      if (replay.state.scene !== "field") break;
+      targets = openNodes(run, replay.state);
     }
-    commands.push({ k: "battle", rounds: autoBattleRounds(run, replay.state) });
+    const node = targets[0];
+    commands.push({ k: "battle", node, rounds: autoBattleRounds(run, node, replay.state) });
   }
   return settleSagaRun(run, commands);
 }

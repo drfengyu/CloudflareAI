@@ -1,52 +1,44 @@
-import type { SagaBattleEvent, SagaBattleState } from "@/lib/trial/saga/types";
+import type {
+  SagaBattleEvent,
+  SagaBattleState,
+  SagaField,
+  SagaFieldCamp,
+} from "@/lib/trial/saga/types";
+import {
+  SAGA_TILE_FOREST,
+  SAGA_TILE_GRASS,
+  SAGA_TILE_MOUNTAIN,
+  SAGA_TILE_ROAD,
+  SAGA_TILE_WALL,
+  SAGA_TILE_WATER,
+  SAGA_TILE_YARD,
+} from "@/lib/trial/saga/types";
+import type { FieldHotspot } from "@/lib/trial/saga/map";
 
 /**
- * 三国讨逆传的 Canvas 美术：城镇长街与回合战斗两张场景。
+ * 三国讨逆传的 Canvas 美术：俯视行军大地图与回合战斗两张场景。
  *
- * 内部按 960×540 绘制（对外 16:9 自适应），全部用渐变与几何形状原创绘制，
- * 走吞食天地 2 那种厚重的古战场插画风：暖色天光、墨色山影、金边木牌，
- * 不做硬像素化，靠光影与层次撑住观感。
+ * 内部按 960×540 绘制（对外 16:9 自适应），全部用渐变与几何形状原创绘制：
+ * 大地图走吞食天地那种格网俯视风（镜头跟随主角四向行走，山/水/林/官道/城池
+ * 都是程序化画出来的，没有图片资源）；战斗沿用厚重的古战场插画风。
  */
 
 export const VIEW_W = 960;
 export const VIEW_H = 540;
 const GROUND_Y = 436;
-export const WORLD_W = 2080;
 
-export type TownSpotId = "record" | "forge" | "bank" | "herb" | "supply" | "hall" | "gate";
+export type FieldFacilityId = "record" | "forge" | "bank" | "herb" | "supply" | "hall" | "gate";
 
-export interface TownSpot {
-  id: TownSpotId;
-  label: string;
-  hint: string;
-  x: number;
-  w: number;
-  h: number;
-}
-
-export const TOWN_SPOTS: TownSpot[] = [
-  { id: "record", label: "桃园碑", hint: "查看存档、武将与图鉴", x: 96, w: 132, h: 150 },
-  { id: "forge", label: "铁匠铺", hint: "用金币打造武器与防具", x: 366, w: 214, h: 190 },
-  { id: "bank", label: "钱庄", hint: "金币与 tcr 双向兑换", x: 650, w: 190, h: 182 },
-  { id: "herb", label: "药铺", hint: "用金币购买伤药与良药", x: 920, w: 198, h: 178 },
-  { id: "supply", label: "军需帐", hint: "用试炼券购买此行军需", x: 1190, w: 232, h: 186 },
-  { id: "hall", label: "编成所", hint: "编队、阵型、装备与图鉴", x: 1492, w: 214, h: 192 },
-  { id: "gate", label: "城门", hint: "出征下一处节点", x: 1776, w: 196, h: 236 },
+/** 城里能办的六件事 + 出营：大地图上收进「城中整备」面板的页签。 */
+export const FIELD_FACILITIES: { id: FieldFacilityId; label: string; hint: string }[] = [
+  { id: "record", label: "桃园碑", hint: "查看存档、武将与图鉴" },
+  { id: "forge", label: "铁匠铺", hint: "用金币打造武器与防具" },
+  { id: "bank", label: "钱庄", hint: "金币与 tcr 双向兑换" },
+  { id: "herb", label: "药铺", hint: "用金币购买伤药与良药" },
+  { id: "supply", label: "军需帐", hint: "用试炼券购买此行军需" },
+  { id: "hall", label: "编成所", hint: "编队、阵型、装备与图鉴" },
 ];
 
-export function townSpotNear(playerX: number): TownSpot | null {
-  let best: TownSpot | null = null;
-  let bestDist = 128;
-  for (const spot of TOWN_SPOTS) {
-    const center = spot.x + spot.w / 2;
-    const dist = Math.abs(playerX - center);
-    if (dist < bestDist) {
-      best = spot;
-      bestDist = dist;
-    }
-  }
-  return best;
-}
 
 const uiFont = (size: number): string =>
   `600 ${size}px "Noto Serif SC", "Songti SC", "STSong", serif`;
@@ -148,514 +140,652 @@ function paintGround(ctx: CanvasRenderingContext2D, camera: number): void {
   ctx.fillRect(0, GROUND_Y + 6, VIEW_W, 3);
 }
 
-function paintTree(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number, tint: string): void {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(scale, scale);
-  ctx.fillStyle = "#2c2418";
-  ctx.fillRect(-5, -54, 10, 58);
-  ctx.strokeStyle = "#3a2d1c";
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.moveTo(0, -40);
-  ctx.lineTo(-22, -62);
-  ctx.moveTo(0, -48);
-  ctx.lineTo(20, -66);
-  ctx.stroke();
-  const blobs: [number, number, number, string][] = [
-    [-22, -74, 26, tint],
-    [20, -80, 30, tint],
-    [0, -102, 32, tint],
-    [-6, -66, 22, tint],
-  ];
-  for (const [bx, by, r, color] of blobs) {
-    const grad = ctx.createRadialGradient(bx - r * 0.3, by - r * 0.4, 2, bx, by, r);
-    grad.addColorStop(0, "rgba(126,150,74,0.95)");
-    grad.addColorStop(0.7, color);
-    grad.addColorStop(1, "#25301f");
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(bx, by, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
+export type FieldFacing = "up" | "down" | "left" | "right";
+
+export interface FieldPaintOptions {
+  field: SagaField;
+  time: number;
+  /** 主角世界坐标（脚底）。 */
+  x: number;
+  y: number;
+  facing: FieldFacing;
+  moving: boolean;
+  /** 已攻克的营地节点下标。 */
+  cleared: number[];
+  /** 还能打的营地节点下标（其余按「主帅未出」锁住）。 */
+  open: number[];
+  hotspot: FieldHotspot | null;
+  prompt: string | null;
+  partyColor: string;
+  partyAccent: string;
+  chapterIndex: number;
+  chapterName: string;
+  townName: string;
+  gold: number;
+  power: number;
 }
 
-function paintLantern(ctx: CanvasRenderingContext2D, x: number, y: number, time: number): void {
-  ctx.strokeStyle = "#2a241c";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x, y - 96);
-  ctx.lineTo(x, y - 54);
-  ctx.stroke();
-  const glow = ctx.createRadialGradient(x, y - 46, 2, x, y - 46, 34 + Math.sin(time * 2 + x) * 3);
-  glow.addColorStop(0, "rgba(255,190,110,0.55)");
-  glow.addColorStop(1, "rgba(255,150,70,0)");
-  ctx.fillStyle = glow;
-  ctx.fillRect(x - 40, y - 86, 80, 80);
-  ctx.fillStyle = "#b8452f";
-  roundRect(ctx, x - 9, y - 54, 18, 24, 6);
-  ctx.fill();
-  ctx.fillStyle = "#ffd89a";
-  ctx.fillRect(x - 4, y - 49, 8, 14);
-  ctx.fillStyle = "#e8c07a";
-  ctx.fillRect(x - 10, y - 58, 20, 3);
-  ctx.fillRect(x - 10, y - 31, 20, 3);
+/** 每格一个稳定的伪随机数：同一张图每次画出来都一样。 */
+function tileHash(tx: number, ty: number): number {
+  let h = (tx * 374761393 + ty * 668265263) | 0;
+  h = (h ^ (h >>> 13)) | 0;
+  h = Math.imul(h, 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-function paintBuilding(ctx: CanvasRenderingContext2D, spot: TownSpot, time: number): void {
-  const x = spot.x;
-  const w = spot.w;
-  const baseY = GROUND_Y + 8;
-  const bodyH = spot.h - 54;
-  const topY = baseY - bodyH;
-  const center = x + w / 2;
+const GRASS_TINT: Record<string, [string, string]> = {
+  plain: ["#4e6b39", "#3c5730"],
+  forest: ["#42603a", "#2f4a2c"],
+  mountain: ["#5a6340", "#465134"],
+  river: ["#4a6a41", "#385535"],
+};
 
-  if (spot.id === "record") {
-    // 桃园石碑
-    ctx.fillStyle = "rgba(0,0,0,0.3)";
+function paintGrass(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  tile: number,
+  r: number,
+  tint: [string, string],
+): void {
+  ctx.fillStyle = r < 0.5 ? tint[0] : tint[1];
+  ctx.fillRect(sx, sy, tile, tile);
+  ctx.fillStyle = "rgba(0,0,0,0.07)";
+  ctx.fillRect(sx, sy, tile, 2);
+  if (r > 0.72) {
+    ctx.strokeStyle = "rgba(196,220,150,0.22)";
+    ctx.lineWidth = 1;
+    const bx = sx + 4 + r * (tile - 10);
+    const by = sy + 6 + ((r * 97) % 1) * (tile - 12);
     ctx.beginPath();
-    ctx.ellipse(center, baseY + 4, 54, 10, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#5d5648";
-    roundRect(ctx, center - 34, topY + 44, 68, bodyH - 40, 8);
-    ctx.fill();
-    ctx.fillStyle = "#7a7160";
-    roundRect(ctx, center - 28, topY + 50, 56, bodyH - 52, 6);
-    ctx.fill();
-    ctx.fillStyle = "#2f2a22";
-    ctx.font = uiFont(20);
-    ctx.textAlign = "center";
-    ctx.fillText("桃", center, topY + 92);
-    ctx.fillText("园", center, topY + 118);
-    ctx.fillText("碑", center, topY + 144);
-    ctx.fillStyle = "#3e4d33";
-    ctx.beginPath();
-    ctx.arc(x + 18, topY + 52, 18, 0, Math.PI * 2);
-    ctx.arc(x + w - 18, topY + 58, 15, 0, Math.PI * 2);
-    ctx.fill();
-    return;
-  }
-
-  if (spot.id === "supply") {
-    // 军需帐：三角军帐 + 木箱
-    ctx.fillStyle = "rgba(0,0,0,0.32)";
-    ctx.beginPath();
-    ctx.ellipse(center, baseY + 4, w * 0.46, 12, 0, 0, Math.PI * 2);
-    ctx.fill();
-    const tent = ctx.createLinearGradient(x, topY, x, baseY);
-    tent.addColorStop(0, "#8a7a55");
-    tent.addColorStop(1, "#4d4534");
-    ctx.fillStyle = tent;
-    ctx.beginPath();
-    ctx.moveTo(center, topY + 6);
-    ctx.lineTo(x + w - 8, baseY);
-    ctx.lineTo(x + 8, baseY);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = "rgba(40,34,24,0.7)";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(center, topY + 8);
-    ctx.lineTo(center, baseY);
+    ctx.moveTo(bx, by + 5);
+    ctx.lineTo(bx - 2, by - 2);
+    ctx.moveTo(bx + 3, by + 5);
+    ctx.lineTo(bx + 5, by - 1);
     ctx.stroke();
-    ctx.fillStyle = "#2b2418";
-    ctx.fillRect(center - 26, baseY - 52, 52, 52);
-    ctx.fillStyle = "#a8352c";
-    ctx.beginPath();
-    ctx.moveTo(center + 4, topY + 22);
-    ctx.lineTo(center + 52, topY + 32);
-    ctx.lineTo(center + 52, topY + 92);
-    ctx.lineTo(center + 4, topY + 82);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#f3d9a0";
-    ctx.font = uiFont(30);
-    ctx.textAlign = "center";
-    ctx.fillText("軍", center + 28, topY + 66);
-    ctx.fillStyle = "#6d5a3b";
-    ctx.fillRect(x + 10, baseY - 26, 34, 26);
-    ctx.fillRect(x + w - 44, baseY - 22, 30, 22);
-    return;
   }
+}
 
-  if (spot.id === "gate") {
-    // 城门楼
-    ctx.fillStyle = "#2b2a24";
-    ctx.fillRect(x - 40, baseY - 128, w + 80, 128);
-    ctx.fillStyle = "#3c3a30";
-    for (let row = 0; row < 5; row++) {
-      for (let col = 0; col < 8; col++) {
-        ctx.fillRect(x - 36 + col * 34 + (row % 2) * 12, baseY - 124 + row * 25, 28, 19);
-      }
-    }
-    ctx.fillStyle = "#1a1916";
-    ctx.beginPath();
-    ctx.moveTo(center - 52, baseY);
-    ctx.lineTo(center - 52, baseY - 92);
-    ctx.arc(center, baseY - 92, 52, Math.PI, 0);
-    ctx.lineTo(center + 52, baseY);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#6d2f26";
-    ctx.fillRect(center - 44, baseY - 84, 88, 84);
-    ctx.strokeStyle = "#c9a15a";
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 4; i++) ctx.strokeRect(center - 40 + i * 21, baseY - 78, 18, 78);
-    // 城楼
-    const roofY = baseY - 210;
-    ctx.fillStyle = "#3b2c22";
-    ctx.fillRect(center - 82, roofY + 42, 164, 34);
-    ctx.fillStyle = "#5c3428";
-    ctx.beginPath();
-    ctx.moveTo(center - 100, roofY + 48);
-    ctx.quadraticCurveTo(center, roofY - 8, center + 100, roofY + 48);
-    ctx.quadraticCurveTo(center + 60, roofY + 58, center, roofY + 30);
-    ctx.quadraticCurveTo(center - 60, roofY + 58, center - 100, roofY + 48);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = "#e7c27a";
-    ctx.font = uiFont(20);
-    ctx.textAlign = "center";
-    ctx.fillText("出 征", center, roofY + 50);
-    // 旗
-    for (const dir of [-1, 1]) {
-      const fx = center + dir * 92;
-      ctx.strokeStyle = "#2a231b";
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(fx, roofY + 40);
-      ctx.lineTo(fx, roofY - 34);
-      ctx.stroke();
-      const wave = Math.sin(time * 2 + dir) * 4;
-      ctx.fillStyle = "#a8352c";
-      ctx.beginPath();
-      ctx.moveTo(fx, roofY - 34);
-      ctx.lineTo(fx + dir * 34, roofY - 26 + wave);
-      ctx.lineTo(fx, roofY - 4);
-      ctx.closePath();
-      ctx.fill();
-    }
-    return;
+function paintRoad(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  tile: number,
+  r: number,
+): void {
+  ctx.fillStyle = "#7c6547";
+  ctx.fillRect(sx, sy, tile, tile);
+  ctx.fillStyle = "rgba(255,236,196,0.07)";
+  ctx.fillRect(sx, sy, tile, 3);
+  ctx.fillStyle = "rgba(40,32,22,0.16)";
+  ctx.fillRect(sx, sy + tile * 0.34 + r * 8, tile, 2);
+  if (r > 0.6) {
+    ctx.fillStyle = "rgba(58,46,32,0.5)";
+    ctx.fillRect(sx + r * (tile - 8), sy + ((r * 53) % 1) * (tile - 8), 5, 4);
   }
+}
 
-  // 普通店铺：墙、屋顶、匾额
-  ctx.fillStyle = "rgba(0,0,0,0.34)";
+function paintYard(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  tile: number,
+  r: number,
+): void {
+  ctx.fillStyle = "#6a5a44";
+  ctx.fillRect(sx, sy, tile, tile);
+  ctx.strokeStyle = "rgba(38,30,20,0.4)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(sx + 0.5, sy + 0.5, tile - 1, tile - 1);
+  if (r > 0.5) {
+    ctx.fillStyle = "rgba(226,196,150,0.08)";
+    ctx.fillRect(sx + 4, sy + 4, tile - 8, tile - 8);
+  }
+}
+
+function paintWater(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  tile: number,
+  r: number,
+  time: number,
+): void {
+  const grad = ctx.createLinearGradient(sx, sy, sx, sy + tile);
+  grad.addColorStop(0, "#2a5570");
+  grad.addColorStop(1, "#1d3f58");
+  ctx.fillStyle = grad;
+  ctx.fillRect(sx, sy, tile, tile);
+  ctx.strokeStyle = "rgba(176,222,238,0.26)";
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 2; i++) {
+    const phase = time * 1.1 + r * 6 + i * 2.1;
+    const wy = sy + 8 + i * 12 + Math.sin(phase) * 2;
+    ctx.beginPath();
+    ctx.moveTo(sx + 3, wy);
+    ctx.quadraticCurveTo(sx + tile / 2, wy - 3 - Math.sin(phase) * 2, sx + tile - 3, wy);
+    ctx.stroke();
+  }
+}
+
+function paintWall(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  tile: number,
+  r: number,
+): void {
+  // 俯视城墙：主体 + 顶部走道 + 女墙齿口
+  ctx.fillStyle = "#3a3630";
+  ctx.fillRect(sx, sy, tile, tile);
+  const grad = ctx.createLinearGradient(sx, sy, sx, sy + tile);
+  grad.addColorStop(0, "#726c60");
+  grad.addColorStop(0.55, "#565047");
+  grad.addColorStop(1, "#403a33");
+  ctx.fillStyle = grad;
+  ctx.fillRect(sx, sy, tile, tile - 4);
+  ctx.fillStyle = "rgba(20,18,14,0.5)";
+  for (let i = 0; i < 3; i++) {
+    if ((i + Math.floor(r * 3)) % 2 === 0) continue;
+    ctx.fillRect(sx + i * (tile / 3), sy, tile / 3, 3);
+  }
+  ctx.strokeStyle = "rgba(26,22,18,0.55)";
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.ellipse(center, baseY + 4, w * 0.5, 12, 0, 0, Math.PI * 2);
-  ctx.fill();
-
-  const wall = ctx.createLinearGradient(x, topY, x, baseY);
-  if (spot.id === "forge") {
-    wall.addColorStop(0, "#6b4a33");
-    wall.addColorStop(1, "#3f2c20");
-  } else if (spot.id === "herb") {
-    wall.addColorStop(0, "#8a7a5f");
-    wall.addColorStop(1, "#5a4d3a");
-  } else if (spot.id === "bank") {
-    wall.addColorStop(0, "#665a3f");
-    wall.addColorStop(1, "#3a3325");
-  } else {
-    wall.addColorStop(0, "#6f4a3c");
-    wall.addColorStop(1, "#432c25");
-  }
-  ctx.fillStyle = wall;
-  ctx.fillRect(x + 12, topY + 40, w - 24, bodyH - 40);
-
-  // 木梁
-  ctx.strokeStyle = "rgba(38,28,20,0.8)";
-  ctx.lineWidth = 6;
-  ctx.strokeRect(x + 16, topY + 44, w - 32, bodyH - 48);
-  ctx.beginPath();
-  ctx.moveTo(center, topY + 44);
-  ctx.lineTo(center, baseY);
+  ctx.moveTo(sx, sy + tile * 0.5);
+  ctx.lineTo(sx + tile, sy + tile * 0.5);
   ctx.stroke();
+}
 
-  // 屋顶（飞檐）
-  ctx.fillStyle = spot.id === "herb" ? "#324236" : spot.id === "bank" ? "#37301f" : "#3a2820";
+function paintMountain(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  tile: number,
+  r: number,
+): void {
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
   ctx.beginPath();
-  ctx.moveTo(x - 18, topY + 50);
-  ctx.quadraticCurveTo(center, topY - 26, x + w + 18, topY + 50);
-  ctx.quadraticCurveTo(center + w * 0.28, topY + 30, center, topY + 62);
-  ctx.quadraticCurveTo(center - w * 0.28, topY + 30, x - 18, topY + 50);
+  ctx.ellipse(sx + tile / 2, sy + tile - 4, tile * 0.42, tile * 0.16, 0, 0, Math.PI * 2);
+  ctx.fill();
+  const peak = sy + 2 + r * 4;
+  const grad = ctx.createLinearGradient(sx, peak, sx + tile, sy + tile);
+  grad.addColorStop(0, "#6e6a5c");
+  grad.addColorStop(0.5, "#4b4a41");
+  grad.addColorStop(1, "#2c2c26");
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(sx + tile * 0.5, peak);
+  ctx.lineTo(sx + tile - 1, sy + tile - 3);
+  ctx.lineTo(sx + 1, sy + tile - 3);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = "rgba(180,140,80,0.5)";
-  ctx.lineWidth = 2;
+  ctx.fillStyle = "rgba(236,232,220,0.5)";
   ctx.beginPath();
-  ctx.moveTo(x - 6, topY + 46);
-  ctx.quadraticCurveTo(center, topY - 14, x + w + 6, topY + 46);
-  ctx.stroke();
-
-  // 匾额
-  ctx.fillStyle = "#2a1f16";
-  roundRect(ctx, center - 52, topY + 58, 104, 30, 4);
+  ctx.moveTo(sx + tile * 0.5, peak);
+  ctx.lineTo(sx + tile * 0.63, peak + tile * 0.3);
+  ctx.lineTo(sx + tile * 0.4, peak + tile * 0.26);
+  ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = "#c9a15a";
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-  ctx.fillStyle = "#ecd39a";
-  ctx.font = uiFont(17);
-  ctx.textAlign = "center";
-  ctx.fillText(spot.label, center, topY + 79);
+}
 
-  // 门与窗
-  ctx.fillStyle = "#241a13";
-  ctx.fillRect(center - 30, baseY - 62, 60, 62);
-  ctx.fillStyle = "rgba(255,190,110,0.18)";
-  ctx.fillRect(center - 26, baseY - 58, 52, 44);
-  ctx.fillStyle = "#201710";
-  for (let i = 0; i < 4; i++) ctx.fillRect(center - 26 + i * 13, baseY - 58, 2, 44);
-
-  if (spot.id === "forge") {
-    const glow = ctx.createRadialGradient(center + 52, baseY - 34, 2, center + 52, baseY - 34, 46);
-    glow.addColorStop(0, "rgba(255,150,60,0.85)");
-    glow.addColorStop(1, "rgba(255,110,40,0)");
-    ctx.fillStyle = glow;
-    ctx.fillRect(center + 8, baseY - 78, 88, 78);
-    ctx.fillStyle = "#1d1610";
-    ctx.fillRect(center + 36, baseY - 44, 34, 44);
-    ctx.fillStyle = "#ffb15c";
-    ctx.fillRect(center + 42, baseY - 36, 22, 20);
-    ctx.fillStyle = "#2a231b";
-    ctx.fillRect(center - w / 2 + 30, baseY - 22, 28, 8);
-    ctx.fillRect(center - w / 2 + 40, baseY - 22, 8, 22);
-  }
-  if (spot.id === "herb") {
-    for (let i = 0; i < 3; i++) {
-      ctx.strokeStyle = "#54432c";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(x + 34 + i * 12, topY + 50);
-      ctx.lineTo(x + 34 + i * 12, topY + 74);
-      ctx.stroke();
-      ctx.fillStyle = "#8a5a2d";
-      ctx.beginPath();
-      ctx.ellipse(x + 34 + i * 12, topY + 80, 6, 9, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  if (spot.id === "bank") {
-    // 钱庄：门边挂一串铜钱，柜台上摆算盘
-    for (let i = 0; i < 3; i++) {
-      const cy = baseY - 88 + i * 24;
-      ctx.fillStyle = "#c9a15a";
-      ctx.beginPath();
-      ctx.arc(center + 62, cy, 9, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = "#2a1f16";
-      ctx.fillRect(center + 58, cy - 4, 8, 8);
-      ctx.strokeStyle = "#8a5a2d";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(center + 62, cy - 9);
-      ctx.lineTo(center + 62, cy - (i === 0 ? 26 : 15));
-      ctx.stroke();
-    }
-    ctx.fillStyle = "#4a3520";
-    ctx.fillRect(center - 74, baseY - 30, 42, 8);
-    ctx.fillStyle = "#e7c27a";
-    for (let i = 0; i < 5; i++) ctx.fillRect(center - 71 + i * 8, baseY - 36, 4, 6);
-  }
-  if (spot.id === "hall") {
-    for (const dir of [-1, 1]) {
-      const fx = center + dir * (w / 2 + 2);
-      ctx.strokeStyle = "#2a231b";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(fx, topY + 40);
-      ctx.lineTo(fx, topY - 10);
-      ctx.stroke();
-      ctx.fillStyle = "#7d2f2a";
-      ctx.beginPath();
-      ctx.moveTo(fx, topY - 10);
-      ctx.lineTo(fx + dir * 18, topY - 4 + Math.sin(time * 2 + dir) * 2);
-      ctx.lineTo(fx, topY + 14);
-      ctx.closePath();
-      ctx.fill();
-    }
+function paintFieldTree(
+  ctx: CanvasRenderingContext2D,
+  sx: number,
+  sy: number,
+  tile: number,
+  r: number,
+  time: number,
+): void {
+  const cx = sx + tile / 2;
+  const cy = sy + tile * 0.55;
+  ctx.fillStyle = "rgba(0,0,0,0.26)";
+  ctx.beginPath();
+  ctx.ellipse(cx, sy + tile - 3, tile * 0.34, tile * 0.13, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#3a2c1b";
+  ctx.fillRect(cx - 2, cy - 2, 4, tile * 0.4);
+  const sway = Math.sin(time * 0.9 + r * 9) * 1.4;
+  const blobs: [number, number, number][] = [
+    [-6 + sway, -4, 10],
+    [7 + sway, -2, 9],
+    [sway, -12, 11],
+  ];
+  for (const [dx, dy, radius] of blobs) {
+    const grad = ctx.createRadialGradient(cx + dx - 3, cy + dy - 3, 1, cx + dx, cy + dy, radius);
+    grad.addColorStop(0, r > 0.5 ? "#7ea24f" : "#6f9648");
+    grad.addColorStop(1, "#243b21");
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(cx + dx, cy + dy, radius, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 
-function paintPlayer(
+/** 营寨：木栅 + 帐篷 + 帅旗；已破的塌成灰堆，未开的锁着红印。 */
+function paintCamp(
   ctx: CanvasRenderingContext2D,
-  x: number,
+  camp: SagaFieldCamp,
   time: number,
-  moving: boolean,
-  facing: 1 | -1,
-  color: string,
-  accent: string,
+  state: "cleared" | "open" | "locked",
 ): void {
-  const bob = moving ? Math.abs(Math.sin(time * 9)) * 3 : Math.sin(time * 2) * 1.2;
-  const step = moving ? Math.sin(time * 9) * 5 : 0;
-  const baseY = GROUND_Y + 12;
+  const cx = camp.x;
+  const cy = camp.y;
+  ctx.fillStyle = "rgba(0,0,0,0.34)";
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 12, 26, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  const cleared = state === "cleared";
+  const locked = state === "locked";
+
+  // 木栅
+  ctx.strokeStyle = cleared ? "#4a4640" : "#6b5636";
+  ctx.lineWidth = 3;
+  for (let i = -2; i <= 2; i++) {
+    const px = cx + i * 11;
+    const h = cleared ? 10 : 18;
+    ctx.beginPath();
+    ctx.moveTo(px, cy + 12);
+    ctx.lineTo(px, cy + 12 - h);
+    ctx.stroke();
+  }
+  ctx.beginPath();
+  ctx.moveTo(cx - 24, cy + 2 - (cleared ? 6 : 0));
+  ctx.lineTo(cx + 24, cy + 2 - (cleared ? 6 : 0));
+  ctx.stroke();
+
+  if (cleared) {
+    ctx.fillStyle = "#3b3732";
+    ctx.beginPath();
+    ctx.ellipse(cx, cy - 4, 15, 7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "rgba(210,120,60,0.35)";
+    ctx.beginPath();
+    ctx.ellipse(cx - 4, cy - 6, 4, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    return;
+  }
+
+  // 帐篷
+  const tent = ctx.createLinearGradient(cx, cy - 34, cx, cy + 6);
+  tent.addColorStop(0, locked ? "#6a5b6b" : "#94805a");
+  tent.addColorStop(1, locked ? "#3a3340" : "#4f4634");
+  ctx.fillStyle = tent;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 34);
+  ctx.lineTo(cx + 22, cy + 4);
+  ctx.lineTo(cx - 22, cy + 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#241f18";
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - 18);
+  ctx.lineTo(cx + 8, cy + 4);
+  ctx.lineTo(cx - 8, cy + 4);
+  ctx.closePath();
+  ctx.fill();
+
+  // 帅旗
+  ctx.strokeStyle = "#2b241b";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx + 26, cy + 6);
+  ctx.lineTo(cx + 26, cy - 30);
+  ctx.stroke();
+  const wave = Math.sin(time * 2.4 + camp.tx) * 2.5;
+  ctx.fillStyle = locked ? "#7b3b4b" : "#a8352c";
+  ctx.beginPath();
+  ctx.moveTo(cx + 26, cy - 30);
+  ctx.lineTo(cx + 46, cy - 25 + wave);
+  ctx.lineTo(cx + 26, cy - 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#f3d9a0";
+  ctx.font = uiFont(13);
+  ctx.textAlign = "center";
+  ctx.fillText(locked ? "帅" : "敌", cx + 34, cy - 17);
+
+  if (!locked) {
+    const pulse = 0.5 + Math.sin(time * 3 + camp.node) * 0.5;
+    ctx.strokeStyle = `rgba(255,206,120,${0.3 + pulse * 0.4})`;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 12, 30, 11, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    ctx.strokeStyle = "rgba(220,120,140,0.55)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy - 4, 30, 0, Math.PI * 2);
+    ctx.setLineDash([6, 6]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+}
+
+function paintCityGate(
+  ctx: CanvasRenderingContext2D,
+  field: SagaField,
+  time: number,
+  townName: string,
+): void {
+  const tile = field.tile;
+  const gx = (field.city.gateTx + 0.5) * tile;
+  const gy = (field.city.gateTy + 0.5) * tile;
+  // 门楼压在城门格上方
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.fillRect(gx - 20, gy - 6, 40, 30);
+  const wallTop = (field.city.ty) * tile;
+  ctx.fillStyle = "#4a443b";
+  ctx.fillRect(gx - 26, wallTop - 34, 52, 40);
+  ctx.fillStyle = "#6b4a34";
+  ctx.beginPath();
+  ctx.moveTo(gx - 34, wallTop - 30);
+  ctx.quadraticCurveTo(gx, wallTop - 56, gx + 34, wallTop - 30);
+  ctx.quadraticCurveTo(gx, wallTop - 18, gx - 34, wallTop - 30);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#ecd39a";
+  ctx.font = uiFont(12);
+  ctx.textAlign = "center";
+  ctx.fillText(townName.slice(0, 4), gx, wallTop - 22);
+  const glow = ctx.createRadialGradient(gx, gy + 6, 2, gx, gy + 6, 40 + Math.sin(time * 2) * 3);
+  glow.addColorStop(0, "rgba(255,214,140,0.3)");
+  glow.addColorStop(1, "rgba(255,180,90,0)");
+  ctx.fillStyle = glow;
+  ctx.fillRect(gx - 44, gy - 34, 88, 80);
+}
+
+function paintFieldHero(
+  ctx: CanvasRenderingContext2D,
+  options: FieldPaintOptions,
+  camX: number,
+  camY: number,
+): void {
+  const { time, facing, moving, partyColor, partyAccent } = options;
+  const x = options.x - camX;
+  const y = options.y - camY;
+  const bob = moving ? Math.abs(Math.sin(time * 10)) * 2 : Math.sin(time * 2) * 0.8;
+  const step = moving ? Math.sin(time * 10) * 3 : 0;
   ctx.save();
-  ctx.translate(x, baseY - bob);
-  ctx.scale(facing, 1);
+  ctx.translate(x, y - bob);
 
   ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.beginPath();
-  ctx.ellipse(0, 4 + bob, 22, 6, 0, 0, Math.PI * 2);
+  ctx.ellipse(0, 6 + bob, 11, 4.5, 0, 0, Math.PI * 2);
   ctx.fill();
 
   // 腿
-  ctx.fillStyle = "#2c2a26";
-  ctx.fillRect(-9 + step * 0.4, -20, 8, 22);
-  ctx.fillRect(2 - step * 0.4, -20, 8, 22);
+  ctx.fillStyle = "#2b2822";
+  ctx.fillRect(-6 + step, -8, 5, 9);
+  ctx.fillRect(2 - step, -8, 5, 9);
 
-  // 战袍
-  const robe = ctx.createLinearGradient(0, -62, 0, -16);
-  robe.addColorStop(0, color);
-  robe.addColorStop(1, "rgba(20,24,20,0.95)");
+  // 战袍（俯视略宽的肩背）
+  const robe = ctx.createLinearGradient(0, -30, 0, -6);
+  robe.addColorStop(0, partyColor);
+  robe.addColorStop(1, "#1f2119");
   ctx.fillStyle = robe;
   ctx.beginPath();
-  ctx.moveTo(-16, -20);
-  ctx.lineTo(-13, -56);
-  ctx.quadraticCurveTo(0, -66, 13, -56);
-  ctx.lineTo(16, -20);
+  ctx.moveTo(-10, -6);
+  ctx.lineTo(-9, -24);
+  ctx.quadraticCurveTo(0, -30, 9, -24);
+  ctx.lineTo(10, -6);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = accent;
-  ctx.lineWidth = 2;
+  ctx.strokeStyle = partyAccent;
+  ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.moveTo(-13, -52);
-  ctx.lineTo(13, -52);
+  ctx.moveTo(-9, -20);
+  ctx.lineTo(9, -20);
   ctx.stroke();
 
-  // 护肩
-  ctx.fillStyle = "#3a3630";
+  // 肩甲
+  ctx.fillStyle = "#3b372f";
   ctx.beginPath();
-  ctx.ellipse(-16, -52, 9, 6, -0.4, 0, Math.PI * 2);
-  ctx.ellipse(16, -52, 9, 6, 0.4, 0, Math.PI * 2);
+  ctx.ellipse(-10, -21, 5, 3.5, -0.3, 0, Math.PI * 2);
+  ctx.ellipse(10, -21, 5, 3.5, 0.3, 0, Math.PI * 2);
   ctx.fill();
 
   // 头与兜鍪
   ctx.fillStyle = "#d8b48c";
   ctx.beginPath();
-  ctx.arc(0, -72, 10, 0, Math.PI * 2);
+  ctx.arc(0, -34, 7, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = "#4a443a";
   ctx.beginPath();
-  ctx.arc(0, -76, 11, Math.PI, 0);
+  ctx.arc(0, -36, 8, Math.PI, 0);
   ctx.fill();
-  ctx.fillRect(-11, -77, 22, 5);
-  ctx.fillStyle = accent;
-  ctx.fillRect(-2, -92, 4, 10);
+  ctx.fillRect(-8, -37, 16, 3);
+  ctx.fillStyle = partyAccent;
+  ctx.fillRect(-1.5, -46, 3, 8);
   ctx.beginPath();
-  ctx.arc(0, -94, 4, 0, Math.PI * 2);
+  ctx.arc(0, -47, 3, 0, Math.PI * 2);
   ctx.fill();
 
-  // 佩剑
-  ctx.strokeStyle = "#d9d2c2";
-  ctx.lineWidth = 3;
+  if (facing === "down") {
+    ctx.fillStyle = "#2a231c";
+    ctx.fillRect(-3, -34, 2, 2);
+    ctx.fillRect(2, -34, 2, 2);
+  } else if (facing === "up") {
+    ctx.fillStyle = "#3a352c";
+    ctx.beginPath();
+    ctx.arc(0, -33, 5, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    const dir = facing === "left" ? -1 : 1;
+    ctx.fillStyle = "#2a231c";
+    ctx.fillRect(dir * 2 - 1, -34, 2, 2);
+  }
+
+  // 长枪
+  const dir = facing === "left" ? -1 : facing === "right" ? 1 : 1;
+  ctx.strokeStyle = "#cfc6ae";
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(18, -48);
-  ctx.lineTo(30, -18);
+  ctx.moveTo(dir * 9, -26);
+  ctx.lineTo(dir * 16, 2);
   ctx.stroke();
-  ctx.strokeStyle = "#7a5b32";
-  ctx.lineWidth = 4;
+  ctx.fillStyle = "#e6ddc6";
   ctx.beginPath();
-  ctx.moveTo(16, -54);
-  ctx.lineTo(20, -44);
-  ctx.stroke();
+  ctx.moveTo(dir * 9, -26);
+  ctx.lineTo(dir * 6, -32);
+  ctx.lineTo(dir * 12, -30);
+  ctx.closePath();
+  ctx.fill();
   ctx.restore();
 }
 
-export interface TownPaintOptions {
-  time: number;
-  playerX: number;
-  facing: 1 | -1;
-  moving: boolean;
-  near: TownSpot | null;
-  partyColor: string;
-  partyAccent: string;
-  chapter: number;
+function drawMinimap(
+  ctx: CanvasRenderingContext2D,
+  field: SagaField,
+  options: FieldPaintOptions,
+): void {
+  const w = 156;
+  const h = Math.round((w * field.rows) / field.cols);
+  const x = VIEW_W - w - 18;
+  const y = VIEW_H - h - 18;
+  ctx.fillStyle = "rgba(12,14,12,0.72)";
+  roundRect(ctx, x - 4, y - 4, w + 8, h + 8, 6);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(202,161,90,0.5)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  const sx = w / field.cols;
+  const sy = h / field.rows;
+  for (let ty = 0; ty < field.rows; ty++) {
+    for (let tx = 0; tx < field.cols; tx++) {
+      const kind = field.terrain[ty * field.cols + tx] ?? SAGA_TILE_GRASS;
+      ctx.fillStyle =
+        kind === SAGA_TILE_WATER
+          ? "#2b5570"
+          : kind === SAGA_TILE_MOUNTAIN
+            ? "#4a4a44"
+            : kind === SAGA_TILE_WALL
+              ? "#8a8478"
+              : kind === SAGA_TILE_YARD
+                ? "#6a5a44"
+                : kind === SAGA_TILE_FOREST
+                  ? "#2f4a2c"
+                  : kind === SAGA_TILE_ROAD
+                    ? "#7c6547"
+                    : "#465f34";
+      ctx.fillRect(x + tx * sx, y + ty * sy, sx + 0.6, sy + 0.6);
+    }
+  }
+  ctx.fillStyle = "#e8d5ab";
+  ctx.fillRect(x + field.city.gateTx * sx - 1, y + field.city.gateTy * sy - 1, 4, 4);
+  for (const camp of field.camps) {
+    const state = options.cleared.includes(camp.node)
+      ? "#8a8578"
+      : options.open.includes(camp.node)
+        ? "#f0c27a"
+        : "#c65a6a";
+    ctx.fillStyle = state;
+    ctx.fillRect(x + camp.tx * sx - 1.5, y + camp.ty * sy - 1.5, 4, 4);
+  }
+  ctx.fillStyle = "#7fe0a0";
+  ctx.beginPath();
+  ctx.arc(
+    x + (options.x / field.worldW) * w,
+    y + (options.y / field.worldH) * h,
+    2.4,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fill();
 }
 
-export function paintTown(ctx: CanvasRenderingContext2D, options: TownPaintOptions): void {
-  const camera = Math.max(0, Math.min(WORLD_W - VIEW_W, options.playerX - VIEW_W / 2));
-  paintBackdrop(ctx, options.time);
-  paintGround(ctx, camera);
+export function paintField(ctx: CanvasRenderingContext2D, options: FieldPaintOptions): void {
+  const { field, time } = options;
+  const tile = field.tile;
+  const camX = Math.max(0, Math.min(field.worldW - VIEW_W, options.x - VIEW_W / 2));
+  const camY = Math.max(0, Math.min(field.worldH - VIEW_H, options.y - VIEW_H / 2));
+  const tint = GRASS_TINT[field.flavor] ?? GRASS_TINT.plain;
 
-  ctx.save();
-  ctx.translate(-camera, 0);
+  ctx.fillStyle = "#2c3a24";
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 
-  paintTree(ctx, 40, GROUND_Y + 16, 1.15, "#31452a");
-  paintTree(ctx, 608, GROUND_Y + 12, 0.9, "#34482b");
-  paintTree(ctx, 1135, GROUND_Y + 16, 1.0, "#2f4227");
-  paintTree(ctx, 2010, GROUND_Y + 10, 1.2, "#303f26");
+  const fromTx = Math.floor(camX / tile);
+  const toTx = Math.min(field.cols - 1, Math.ceil((camX + VIEW_W) / tile));
+  const fromTy = Math.floor(camY / tile);
+  const toTy = Math.min(field.rows - 1, Math.ceil((camY + VIEW_H) / tile));
 
-  for (const spot of TOWN_SPOTS) paintBuilding(ctx, spot, options.time);
-  paintLantern(ctx, 850, GROUND_Y + 25, options.time);
-  paintLantern(ctx, 1445, GROUND_Y + 25, options.time + 1.3);
-  paintLantern(ctx, 1718, GROUND_Y + 25, options.time + 2.6);
-
-  // 闹市摊位
-  ctx.fillStyle = "#3c2c1e";
-  ctx.fillRect(270, GROUND_Y - 24, 66, 30);
-  ctx.fillStyle = "#8a4b33";
-  ctx.beginPath();
-  ctx.moveTo(262, GROUND_Y - 24);
-  ctx.lineTo(344, GROUND_Y - 24);
-  ctx.lineTo(334, GROUND_Y - 48);
-  ctx.lineTo(272, GROUND_Y - 48);
-  ctx.closePath();
-  ctx.fill();
-
-  const nearby = options.near;
-  if (nearby) {
-    const cx = nearby.x + nearby.w / 2;
-    const pulse = 0.5 + Math.sin(options.time * 3) * 0.5;
-    const glow = ctx.createRadialGradient(cx, GROUND_Y + 22, 4, cx, GROUND_Y + 22, 60);
-    glow.addColorStop(0, `rgba(255,214,140,${0.28 + pulse * 0.18})`);
-    glow.addColorStop(1, "rgba(255,200,110,0)");
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.ellipse(cx, GROUND_Y + 22, 68, 20, 0, 0, Math.PI * 2);
-    ctx.fill();
+  // 地面层
+  for (let ty = fromTy; ty <= toTy; ty++) {
+    for (let tx = fromTx; tx <= toTx; tx++) {
+      const kind = field.terrain[ty * field.cols + tx] ?? SAGA_TILE_GRASS;
+      const sx = Math.round(tx * tile - camX);
+      const sy = Math.round(ty * tile - camY);
+      const r = tileHash(tx, ty);
+      if (kind === SAGA_TILE_WATER) {
+        paintWater(ctx, sx, sy, tile, r, time);
+        continue;
+      }
+      if (kind === SAGA_TILE_WALL) {
+        paintWall(ctx, sx, sy, tile, r);
+        continue;
+      }
+      if (kind === SAGA_TILE_YARD) {
+        paintYard(ctx, sx, sy, tile, r);
+        continue;
+      }
+      if (kind === SAGA_TILE_ROAD) {
+        paintRoad(ctx, sx, sy, tile, r);
+        continue;
+      }
+      paintGrass(ctx, sx, sy, tile, r, tint);
+    }
   }
 
-  paintPlayer(
-    ctx,
-    options.playerX,
-    options.time,
-    options.moving,
-    options.facing,
-    options.partyColor,
-    options.partyAccent,
-  );
+  // 地物层（按 y 排序，遮挡关系看起来对味）
+  type Sprite = { y: number; draw: () => void };
+  const sprites: Sprite[] = [];
+  for (let ty = fromTy; ty <= toTy; ty++) {
+    for (let tx = fromTx; tx <= toTx; tx++) {
+      const kind = field.terrain[ty * field.cols + tx] ?? SAGA_TILE_GRASS;
+      if (kind !== SAGA_TILE_FOREST && kind !== SAGA_TILE_MOUNTAIN) continue;
+      const r = tileHash(tx, ty);
+      const sx = Math.round(tx * tile - camX);
+      const sy = Math.round(ty * tile - camY);
+      sprites.push({
+        y: sy + tile,
+        draw: () =>
+          kind === SAGA_TILE_MOUNTAIN
+            ? paintMountain(ctx, sx, sy, tile, r)
+            : paintFieldTree(ctx, sx, sy, tile, r, time),
+      });
+    }
+  }
+  for (const camp of field.camps) {
+    const sx = camp.x - camX;
+    const sy = camp.y - camY;
+    if (sx < -80 || sx > VIEW_W + 80 || sy < -120 || sy > VIEW_H + 80) continue;
+    const state = options.cleared.includes(camp.node)
+      ? "cleared"
+      : options.open.includes(camp.node)
+        ? "open"
+        : "locked";
+    sprites.push({
+      y: sy + 14,
+      draw: () => paintCamp(ctx, { ...camp, x: sx, y: sy }, time, state),
+    });
+  }
+  const gx = field.city.gateTx * tile - camX;
+  const gy = field.city.gateTy * tile - camY;
+  if (gx > -120 && gx < VIEW_W + 120 && gy > -160 && gy < VIEW_H + 120) {
+    sprites.push({
+      y: gy + tile,
+      draw: () => paintCityGate(ctx, field, time, options.townName),
+    });
+  }
+  sprites.push({
+    y: options.y - camY + 8,
+    draw: () => paintFieldHero(ctx, options, camX, camY),
+  });
+  sprites.sort((a, b) => a.y - b.y);
+  for (const sprite of sprites) sprite.draw();
 
-  if (nearby) {
+  // 交互气泡
+  if (options.prompt) {
+    const px = options.x - camX;
+    const py = options.y - camY - 62;
     ctx.textAlign = "center";
     ctx.font = uiFont(14);
-    const label = `按 E / 回车进入${nearby.label}`;
-    const width = ctx.measureText(label).width + 30;
-    const bubbleY = GROUND_Y - 132;
-    ctx.fillStyle = "rgba(18,16,13,0.82)";
-    roundRect(ctx, options.playerX - width / 2, bubbleY, width, 28, 14);
+    const label = `${options.prompt} ｜ E`;
+    const width = ctx.measureText(label).width + 26;
+    ctx.fillStyle = "rgba(18,16,13,0.84)";
+    roundRect(ctx, px - width / 2, py - 14, width, 26, 13);
     ctx.fill();
-    ctx.strokeStyle = "rgba(214,178,116,0.7)";
+    ctx.strokeStyle = "rgba(214,178,116,0.75)";
     ctx.lineWidth = 1;
     ctx.stroke();
     ctx.fillStyle = "#ecd39a";
-    ctx.fillText(label, options.playerX, bubbleY + 19);
+    ctx.fillText(label, px, py + 4);
   }
 
-  ctx.restore();
+  drawMinimap(ctx, field, options);
 
-  // 顶部活动标题
-  const banner = ctx.createLinearGradient(0, 0, 0, 52);
-  banner.addColorStop(0, "rgba(12,14,20,0.72)");
+  // 顶部信息条
+  const banner = ctx.createLinearGradient(0, 0, 0, 56);
+  banner.addColorStop(0, "rgba(12,14,20,0.78)");
   banner.addColorStop(1, "rgba(12,14,20,0)");
   ctx.fillStyle = banner;
-  ctx.fillRect(0, 0, VIEW_W, 52);
+  ctx.fillRect(0, 0, VIEW_W, 56);
   ctx.textAlign = "left";
   ctx.fillStyle = "#e8d5ab";
   ctx.font = uiFont(18);
-  ctx.fillText("三国讨逆传", 26, 32);
-  ctx.fillStyle = "rgba(232,213,171,0.62)";
+  ctx.fillText(`${options.townName} · ${options.chapterName}`, 24, 30);
+  ctx.fillStyle = "rgba(232,213,171,0.66)";
   ctx.font = uiFont(12);
-  ctx.fillText(`第 ${options.chapter + 1} 处 · A/D 行走，靠近门口交互`, 140, 31);
+  ctx.fillText(
+    `第 ${options.chapterIndex + 1} 处 · 营地 ${options.cleared.length}/${field.camps.length} · 金币 ${options.gold} · 战力 ${options.power}`,
+    24,
+    48,
+  );
+  ctx.textAlign = "right";
+  ctx.fillText("方向键 / WASD 行走 · E 交互", VIEW_W - 24, 30);
+  ctx.textAlign = "left";
 
   // 暗角
   const vignette = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, 240, VIEW_W / 2, VIEW_H / 2, 560);
@@ -1036,7 +1166,7 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
   ctx.textAlign = "left";
   ctx.font = uiFont(12);
   ctx.fillStyle = "rgba(236,213,171,0.6)";
-  ctx.fillText("A/D 走位 · 点击城门或店门交互", 26, VIEW_H - 16);
+  ctx.fillText("点击敌将设为目标 · 下方指令栏下令", 26, VIEW_H - 16);
 
   const vignette = ctx.createRadialGradient(VIEW_W / 2, VIEW_H / 2, 260, VIEW_W / 2, VIEW_H / 2, 580);
   vignette.addColorStop(0, "rgba(0,0,0,0)");

@@ -5,6 +5,48 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.50.0] - 2026-11-13
+
+### 变更
+
+- 每日试炼·三国讨逆传的行军从「线性 5 段节点」改为**类吞食天地的俯视大地图自由行军**：
+  出城后是 52×34 格、每格 32 px 的格网地图，镜头跟随主角四向行走（方向键 / WASD /
+  触屏摇杆，也可直接点击地图上的城池、敌营或任意地面自动走位），树林减速、山 / 水 /
+  城墙阻挡（脚底碰撞盒四角检测），左下角小地图按地貌着色并标出城池、各营与主角位置。
+- 城池与敌营变成地图上的交互点：走到城门口按 E / 回车开「城中整备」面板
+  （桃园碑 / 铁匠铺 / 钱庄 / 药铺 / 军需帐 / 议事堂），走到敌营跟前开营地面板选择
+  「出战 / 自动战斗」，切入原有那套回合制兵团战。招降、编成、买卖、钱庄、
+  奖励档位全部保留，只把「下一段节点」换成「走到哪座营」。
+- 攻打顺序由玩家走位决定：`SAGA_RUN_VERSION` 6 → 7，`SagaReplayState.nodeIndex` 改为
+  `clearedNodes: number[]` + `completed`，战斗指令带 `node`（`{ k: "battle"; node; rounds }`）。
+  主帅本阵要先拔尽其余营寨才允许开战（`canEngageNode` / `openNodes`），非法指令整条丢弃
+  且不会被补打；兵败即 `scene = "lost"`，收兵结束这次行军。
+- 城内场景并入大地图覆盖面板，`SagaScene` 去掉 `"town"`，场景只剩 `field / battle / won / lost`；
+  `formation / shop / equip / party / bank` 指令在 `field` 场景照常有效，`leave` 仍是收兵。
+
+### 新增
+
+- `lib/trial/saga/map.ts`：大地图生成的纯函数模块（地貌 blob + 河流 + 官道连接各营 +
+  城池与营前空地），按 `章节 + 营寨数 + 种子` 完全复现，带缓存、碰撞查询
+  （`fieldHitsSolid` / `fieldSpeedAt`）、可达性 BFS（`fieldReachable`）与交互点查询
+  （`fieldHotspotNear`）。**地图不入库、也不采信客户端**：客户端只上传「打的是哪座营」，
+  服务端重放时按节点下标校验，走位本身不影响任何数值。
+- 章节新增 `terrain` 风味（平原 / 山地 / 江河 / 丛林），八处地方的山水林密度各不相同。
+- `components/trial/renderer.ts` 新增 `paintField`（ tile 着色、树 / 山 / 水 / 城墙 / 官道、
+  城池与城门、营寨 palisade 与帅旗、可按状态区分已破 / 可攻 / 未可、主角四向行走动画、
+  小地图、交互气泡与顶部 HUD）。
+- `components/trial/game.tsx` 新增行走循环（`requestAnimationFrame` + 分轴碰撞）、
+  点击寻路、摇杆与键盘输入、营地面板 `CampPanel` 与军情面板 `ArmyPanel`。
+
+### 验证
+
+- `tsc --noEmit` 全项目 0 诊断；`eslint` 对改动文件 0 error / 0 warning；
+  `tests/trial-saga.test.ts` 17 项全过（含新增的攻打顺序与地图复现 / 可达性用例）。
+- 地图生成另做穷举：8 处地方 × 2~7 座营 × 60 个种子共 2880 张，同种子逐字节复现，
+  每座营与城门都在四连通可行走区域内。
+- 本机未安装 Node / npm，`npm run build` 与 Playwright 未跑；类型与测试用 Qoder 内置
+  Node 运行时（node-repl）执行同一套 `tsconfig.json` 与测试文件完成。
+
 ## [0.49.0] - 2026-11-13
 
 ### 新增

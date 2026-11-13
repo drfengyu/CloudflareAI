@@ -1,23 +1,70 @@
 /**
- * 每日试炼·三国讨逆传：城镇行走 + 回合制五将战斗的共享类型。
+ * 每日试炼·三国讨逆传：大地图自由行军 + 回合制五将战斗的共享类型。
  *
- * 存档与战果都由服务端按指令重放得出：客户端只上传「编制 / 购物 / 战斗指令」，
+ * 存档与战果都由服务端按指令重放得出：客户端只上传「编制 / 购物 / 打的是哪座营」，
  * 不直接上报金币、等级或胜负。剧情地点与敌将配置随出城落库，随机数由种子推进。
  */
 
-export const SAGA_RUN_VERSION = 6;
+export const SAGA_RUN_VERSION = 7;
 export const SAGA_SAVE_VERSION = 1;
 
 export const SAGA_PARTY_SIZE = 5;
 export const SAGA_RESERVE_SIZE = 12;
 export const SAGA_MAX_LEVEL = 30;
 
-export const SAGA_VIEW_W = 480;
-export const SAGA_VIEW_H = 270;
-export const SAGA_TILE = 16;
-export const SAGA_TOWN_COLS = 30;
-export const SAGA_TOWN_ROWS = 17;
-export const SAGA_INTERACT_RADIUS = 26;
+/** 行军大地图：俯视格网，镜头跟随主角在图上自由行走。 */
+export const SAGA_FIELD_COLS = 52;
+export const SAGA_FIELD_ROWS = 34;
+export const SAGA_FIELD_TILE = 32;
+
+export const SAGA_TILE_GRASS = 0;
+export const SAGA_TILE_ROAD = 1;
+export const SAGA_TILE_FOREST = 2;
+export const SAGA_TILE_MOUNTAIN = 3;
+export const SAGA_TILE_WATER = 4;
+export const SAGA_TILE_WALL = 5;
+export const SAGA_TILE_YARD = 6;
+
+/** 主角脚底碰撞盒（世界像素，半宽 / 半高）。 */
+export const SAGA_HIT_HALF_W = 9;
+export const SAGA_HIT_HALF_H = 6;
+
+export type SagaTerrainFlavor = "plain" | "mountain" | "river" | "forest";
+
+export interface SagaFieldCamp {
+  /** 对应 `run.nodes` 的下标。 */
+  node: number;
+  tx: number;
+  ty: number;
+  /** 营地中心世界坐标（像素）。 */
+  x: number;
+  y: number;
+}
+
+export interface SagaField {
+  cols: number;
+  rows: number;
+  tile: number;
+  worldW: number;
+  worldH: number;
+  /** 每格地形，取 `SAGA_TILE_*`。 */
+  terrain: number[];
+  flavor: SagaTerrainFlavor;
+  city: {
+    /** 城墙外框左上角与尺寸（格）。 */
+    tx: number;
+    ty: number;
+    w: number;
+    h: number;
+    gateTx: number;
+    gateTy: number;
+    /** 城门外的交互点（像素）。 */
+    x: number;
+    y: number;
+  };
+  spawn: { x: number; y: number };
+  camps: SagaFieldCamp[];
+}
 
 export const SAGA_MAX_COMMANDS = 4000;
 export const SAGA_MAX_ROUNDS_PER_BLOCK = 200;
@@ -112,6 +159,8 @@ export interface SagaChapterDef {
   story: string[];
   /** 节点地名，按行军顺序取用。 */
   stages: string[];
+  /** 行军大地图的地貌风味：决定山、水、林的疏密。 */
+  terrain: SagaTerrainFlavor;
   field: string[];
   elite: string[];
   boss: string;
@@ -213,7 +262,8 @@ export type SagaCommand =
   /** 钱庄存金：按 100 金一档扣，收兵时统一折成 tcr 发放。 */
   | { k: "bank"; g: number }
   | { k: "leave" }
-  | { k: "battle"; rounds: SagaRoundCommand[][] };
+  /** 打的是图上哪座营：大地图上可以自由挑顺序，首领营要先破其余营。 */
+  | { k: "battle"; node: number; rounds: SagaRoundCommand[][] };
 
 export interface SagaBattleGeneral {
   id: string;
@@ -295,8 +345,9 @@ export interface SagaRunBuffs {
 }
 
 export interface SagaReplayState {
-  scene: "town" | "battle" | "won" | "lost";
-  nodeIndex: number;
+  scene: "field" | "battle" | "won" | "lost";
+  /** 已攻克的营地节点下标，攻打的先后由玩家在地图上自由决定。 */
+  clearedNodes: number[];
   completed: number;
   victory: boolean;
   save: TrialSave;

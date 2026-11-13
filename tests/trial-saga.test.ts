@@ -15,12 +15,21 @@ import {
 } from "../lib/trial/saga/types";
 import {
   autoPlaySagaRun,
+  canEngageNode,
   generateSagaRun,
+  openNodes,
   parseSagaRun,
   replaySagaRun,
   sanitizeSagaCommands,
   settleSagaRun,
 } from "../lib/trial/saga/run";
+import {
+  fieldHotspotNear,
+  fieldHitsSolid,
+  fieldReachable,
+  generateSagaField,
+  sagaFieldFor,
+} from "../lib/trial/saga/map";
 import {
   SAGA_BANK_MAX_GOLD_PER_RUN,
   bankCreditsForGold,
@@ -87,6 +96,7 @@ function easyRun(startSave = initialTrialSave()): SagaRun {
 const winCommands: SagaCommand[] = [
   {
     k: "battle",
+    node: 0,
     rounds: Array.from({ length: 5 }, () => [
       { g: "liubei", a: "attack", target: 0 },
       { g: "guanyu", a: "attack", target: 0 },
@@ -156,6 +166,7 @@ test("指令清洗：未知字段、军需商店与错槽装备都被丢弃", ()
     { k: "bank", g: -100 },
     {
       k: "battle",
+      node: 1,
       rounds: [
         [
           { g: "liubei", a: "attack", target: 0 },
@@ -165,6 +176,10 @@ test("指令清洗：未知字段、军需商店与错槽装备都被丢弃", ()
       ],
     },
     { k: "leave" },
+    // 营地下标越界、缺失或不是数字：整条战斗指令丢弃。
+    { k: "battle", node: 7, rounds: [[]] },
+    { k: "battle", node: -1, rounds: [[]] },
+    { k: "battle", rounds: [[]] },
     "junk",
     null,
   ]);
@@ -175,6 +190,7 @@ test("指令清洗：未知字段、军需商店与错槽装备都被丢弃", ()
   const battle = commands.find((command) => command.k === "battle");
   assert.ok(battle && battle.k === "battle");
   if (battle.k === "battle") {
+    assert.equal(battle.node, 1);
     assert.equal(battle.rounds.length, 1);
     assert.deepEqual(
       battle.rounds[0].map((round) => round.a),
@@ -184,22 +200,51 @@ test("指令清洗：未知字段、军需商店与错槽装备都被丢弃", ()
   assert.deepEqual(sanitizeSagaCommands("nope"), []);
 });
 
-test("指令重放是纯函数；战斗没打完会锁住本局，不能反复重开", () => {
+test("指令重放是纯函数；战斗没打完会锁住本场，不能反复重开", () => {
   const run = freshRun(21, 3);
-  assert.equal(replaySagaRun(run, []).state.nodeIndex, 0);
+  const idle = replaySagaRun(run, []);
+  assert.equal(idle.state.scene, "field");
+  assert.deepEqual(idle.state.clearedNodes, []);
+  assert.equal(idle.cleared, 0);
 
   const commands: SagaCommand[] = [
     { k: "formation", f: "fengshi" },
     { k: "shop", i: "herb" },
-    { k: "battle", rounds: [] },
+    { k: "battle", node: 0, rounds: [] },
   ];
   const first = replaySagaRun(run, commands);
   assert.equal(first.state.scene, "battle");
+  assert.equal(first.state.battle?.nodeName, run.nodes[0].name);
   assert.deepEqual(replaySagaRun(run, commands), first);
 
   const withLeave = replaySagaRun(run, [...commands, { k: "leave" }]);
   assert.equal(withLeave.state.scene, "battle");
   assert.equal(withLeave.cleared, 0);
+});
+
+test("攻打顺序由大地图走位决定：首领本阵要先拔尽其余营寨", () => {
+  const run = freshRun(71, 3);
+  assert.deepEqual(
+    run.nodes.map((node) => node.kind),
+    ["battle", "elite", "boss"],
+  );
+  const state = replaySagaRun(run, []).state;
+  assert.deepEqual(openNodes(run, state), [0, 1]);
+  assert.equal(canEngageNode(run, state, 2), false, "其余营寨未破，打不了主帅本阵");
+  assert.equal(canEngageNode(run, state, run.nodes.length), false);
+  assert.equal(canEngageNode(run, state, -1), false);
+
+  // 非法的攻打指令被丢弃：一个营也没破，人还留在大地图上，之后也不会被补打。
+  const illegal = replaySagaRun(run, [{ k: "battle", node: 2, rounds: [] }]);
+  assert.deepEqual(illegal.state.clearedNodes, []);
+  assert.equal(illegal.state.scene, "field");
+  assert.equal(illegal.cleared, 0);
+
+  // 拔掉前锋两营后，本阵成为唯一可攻的目标；已破的营不能反复打。
+  const nearEnd = replaySagaRun(run, []).state;
+  nearEnd.clearedNodes = [0, 1];
+  assert.deepEqual(openNodes(run, nearEnd), [2]);
+  assert.equal(canEngageNode(run, nearEnd, 0), false);
 });
 
 test("军需购买从 cmdIndex 起生效，不会回溯加强已经开打的战斗", () => {
@@ -208,7 +253,7 @@ test("军需购买从 cmdIndex 起生效，不会回溯加强已经开打的战�
     ...run,
     purchases: [{ id: "buy1", itemId: "tiger_tally", tickets: 2, at: 1, cmdIndex }],
   });
-  const battle: SagaCommand = { k: "battle", rounds: [] };
+  const battle: SagaCommand = { k: "battle", node: 0, rounds: [] };
   const troops = (state: ReturnType<typeof replaySagaRun>): number => {
     const current = state.state.battle;
     assert.ok(current);
@@ -309,8 +354,10 @@ test("自动战斗完整跑一局：重复调用结果一致，战绩按局累�
   assert.deepEqual(second, first);
   assert.equal(first.result.total, 3);
   assert.equal(first.endSave.stats.runs, 1);
-  assert.ok(first.state.nodeIndex >= 0 && first.state.nodeIndex <= 3);
+  assert.equal(first.state.clearedNodes.length, first.cleared);
   assert.ok(first.cleared >= 0 && first.cleared <= 3);
+  assert.equal(new Set(first.state.clearedNodes).size, first.state.clearedNodes.length, "同一座营不会被重复攻克");
+  assert.ok(first.state.clearedNodes.every((node) => node >= 0 && node < 3));
 });
 
 test("讨逆配置：节点数与档位互相约束，脏值退回可用默认", () => {
@@ -341,7 +388,7 @@ test("讨逆配置：节点数与档位互相约束，脏值退回可用默认",
   assert.equal(sanitizeTrialConfig({ questionCount: 1 }).questionCount, 2);
 });
 
-test("平定奖励取攻克节点数的最高一档", () => {
+test("平定奖励取攻破营寨数的最高一档", () => {
   const config = trial();
   assert.equal(trialRewardFor(config, 0), 0);
   assert.equal(trialRewardFor(config, 1), 0);
@@ -360,4 +407,57 @@ test("平定最后一处地方：剧情停在终点，不越界到不存在的�
   assert.equal(settled.result.chapterAfter, SAGA_CHAPTERS.length - 1);
   assert.equal(settled.endSave.chapter, SAGA_CHAPTERS.length - 1);
   assert.equal(settled.endSave.stats.wins, 1);
+});
+
+// ---------------------------------------------------------------- 行军大地图
+
+test("大地图生成：同种子同一张图，营寨数量与节点一一对应", () => {
+  for (let chapter = 0; chapter < SAGA_CHAPTERS.length; chapter++) {
+    for (let nodeCount = 2; nodeCount <= 7; nodeCount++) {
+      const seed = chapter * 97 + nodeCount;
+      const field = generateSagaField({ chapter, nodeCount, seed });
+      assert.deepEqual(generateSagaField({ chapter, nodeCount, seed }), field, "按种子复现");
+      assert.deepEqual(
+        field.camps.map((camp) => camp.node),
+        Array.from({ length: nodeCount }, (_, index) => index),
+      );
+      assert.equal(field.camps.every((camp) => camp.x === (camp.tx + 0.5) * field.tile), true);
+      assert.equal(
+        field.camps[nodeCount - 1].x >= field.camps[nodeCount - 2].x,
+        true,
+        "主帅本阵扎在最远处",
+      );
+    }
+  }
+});
+
+test("大地图可行走：城门与每座营都在四连通可达区内", () => {
+  for (let chapter = 0; chapter < SAGA_CHAPTERS.length; chapter++) {
+    for (let nodeCount = 2; nodeCount <= 7; nodeCount++) {
+      const label = `第 ${chapter} 章 ${nodeCount} 营`;
+      const field = generateSagaField({ chapter, nodeCount, seed: chapter * 31 + nodeCount * 7 });
+      const seen = fieldReachable(field);
+      assert.equal(fieldHitsSolid(field, field.spawn.x, field.spawn.y), false, `${label}：出生点不在墙上`);
+      for (const camp of field.camps) {
+        const cell = Math.floor(camp.y / field.tile) * field.cols + Math.floor(camp.x / field.tile);
+        assert.equal(seen[cell], true, `${label}：营地 ${camp.node} 可达`);
+        const hotspot = fieldHotspotNear(field, camp.x, camp.y - 6);
+        assert.equal(hotspot?.kind, "camp", `${label}：走到营前能触发交互`);
+        assert.equal(hotspot?.camp?.node, camp.node);
+      }
+      const atGate = fieldHotspotNear(field, field.city.x, field.city.y - 6);
+      assert.equal(atGate?.kind, "city", `${label}：城门口可回城`);
+      assert.equal(fieldHotspotNear(field, field.spawn.x, field.spawn.y - 6)?.kind, "city");
+    }
+  }
+});
+
+test("大地图不入库存档：只由种子复现，与对局 JSON 里的节点数一致", () => {
+  const run = freshRun(81, 4);
+  const field = sagaFieldFor(run);
+  assert.equal(field.camps.length, run.nodes.length);
+  assert.deepEqual(sagaFieldFor(run), generateSagaField({ chapter: 0, nodeCount: 4, seed: run.seed }));
+  // 只有种子/节点数参与地图，行军进度不会改变地形。
+  const replayed = { ...run, nodes: run.nodes.slice(0, 3) };
+  assert.equal(sagaFieldFor(replayed).camps.length, 3);
 });

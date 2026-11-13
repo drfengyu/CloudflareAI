@@ -534,8 +534,22 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.49.0（2026-11-13，三国讨逆传新增钱庄双向兑换）
-**下一版本**：v0.50.0（尚未选型）
+**当前版本**：v0.50.0（2026-11-13，三国讨逆传改为大地图自由行军）
+**下一版本**：v0.51.0（尚未选型）
+
+- v0.50.0 三国讨逆传的行军从线性节点改为**类吞食天地的俯视大地图**：新增
+  `lib/trial/saga/map.ts`（纯函数：`generateSagaField({ 章节, 营寨数, 种子 })` 生成
+  52×34 格网，地貌 blob + 河流 + 官道串起城门与各营，另有碰撞 / 减速 / 可达性 BFS /
+  交互点查询与按种子缓存）；`components/trial/renderer.ts` 的 `paintField` 画 tile、
+  城池城门、营寨（已破 / 可攻 / 未可三态）、四向行走动画、小地图与 HUD；
+  `components/trial/game.tsx` 用 `requestAnimationFrame` 逐帧移动（分轴碰撞可贴墙滑动）、
+  支持键盘 / 摇杆 / 点击寻路，城与营改为覆盖面板（`CampPanel` / `ArmyPanel`）。
+  数据模型：`SAGA_RUN_VERSION` 6 → 7，`SagaReplayState` 用 `clearedNodes: number[]` +
+  `completed` 取代 `nodeIndex`，战斗指令带 `node`，场景去掉 `"town"` 只剩
+  `field / battle / won / lost`；`canEngageNode` 规定主帅本阵要先拔尽其余营寨，非法指令
+  整条丢弃且不补打。**地图不入库也不采信客户端**：地图只由种子在客户端复现，服务端重放
+  只看「打了哪座营、这一仗怎么打」，因此走位本身没有可作弊的收益。章节新增 `terrain`
+  风味（平原 / 山地 / 江河 / 丛林）。
 
 - v0.49.0 三国讨逆传新增城镇钱庄，把游戏金币与 tcr 收支打通（规则集中在
   `lib/trial/saga/bank.ts`）：金币 → tcr 按 100:1，每次行军封顶 300 金（3 tcr），
