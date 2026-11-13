@@ -275,12 +275,30 @@ export interface WorkshopBattleEvent {
 export interface WorkshopBattleResult {
   state: WorkshopState;
   events: WorkshopBattleEvent[];
-  status: "ongoing" | "won" | "lost" | "captured" | "fled";
+  status: "ongoing" | "won" | "lost" | "captured" | "fled" | "ended";
   expGained: number;
   levelUps: { petId: string; name: string; level: number }[];
   evolved: { petId: string; name: string }[];
   captured?: { name: string; tier: number; to: "party" | "box" };
   drops: { ball: number; potion: number; gold: number };
+}
+
+/**
+ * 客户端还停在战斗页、服务端却没有这场遭遇了（别的标签页已结算、写回执丢了、存档被重置）。
+ *
+ * 这里不能再抛「没有进行中的战斗」——前端收到错误只会弹条 toast，战斗页永远退不出去。
+ * 回一份 ended 结算，让页面拿服务端的权威存档把战斗界面收掉。
+ */
+export function endedWorkshopBattle(state: WorkshopState): WorkshopBattleResult {
+  return {
+    state,
+    events: [{ text: "战斗已经结束", tone: "info" }],
+    status: "ended",
+    expGained: 0,
+    levelUps: [],
+    evolved: [],
+    drops: { ball: 0, potion: 0, gold: 0 },
+  };
 }
 
 /** 胜利掉金：野生按阶数与等级给，道馆按关卡给一大笔，用来在工坊商店买补给。 */

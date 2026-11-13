@@ -534,8 +534,21 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.54.0（2026-11-13，三国讨逆传野外随机遇敌）
+**当前版本**：v0.54.1（2026-11-13，灵宠工坊战斗卡死修复）
 **下一版本**：待定
+
+- v0.54.1 工坊战斗不再卡死：`battleWorkshop` 先 `ensureStateRow`，遇到「客户端还在战斗页、
+  服务端已经没有这场遭遇」（写回执丢失 / 别处先结算 / 存档被重置）时不再抛
+  「当前没有进行中的战斗」，改回 `endedWorkshopBattle(state)`——`status = "ended"`、
+  事件「战斗已经结束」，把服务端权威存档带回前端，`BattlePanel` 随之卸载。
+  客户端 `act()` 失败一律 `router.refresh()` 对齐一次，`ended` 弹「这场战斗已经结束」，
+  战报卡显示「战斗已结束」。
+  战斗/合成落库后的里程碑改走 `safeGrantReachedMilestones`：发奖抛错只记日志，
+  不把已结算的回合报成失败（漏发的奖励由页面「补领」兜底）。
+  `mergeWorkshop` 补上 `state.encounter` 闸门，队伍页合成按钮在战斗中一并禁用。
+  `tests/activity-games.test.ts` 新增 2 项（三只灵宠倒地两只后第三只接管、读档后遭遇仍在
+  且能出手；无遭遇时 `ended` 结算），共 149 项全过；`tsc`、ESLint、`npm run build` 通过；
+  本机无 `.env.local`，战斗页未实测。
 
 - v0.54.0 野外随机遇敌：新增 `lib/trial/saga/encounter.ts`——`sagaEncounterFor(run, ordinal)`
   只读 `run.seed` 与「本趟第几场」，决定兵种（兵士 / 山贼 / 盗贼）、1~3 队杂兵与

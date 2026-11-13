@@ -1,4 +1,4 @@
-# 限时活动·灵宠工坊（v0.53.0，v0.51.0 改为冒险地图）
+# 限时活动·灵宠工坊（v0.54.1，v0.51.0 改为冒险地图）
 
 红白机式养成：开局三选一初始灵宠，花活动券进图，在俯视角的冒险地图里一格一步地走，
 草丛里摇出野生灵宠后用招式打倒或精灵球捕捉，升级到门槛自动进化，走到地图另一头的道馆
@@ -77,6 +77,13 @@ box / dex / items{ball,potion} / gold / badges / activePetId / run / encounter /
   `refundCouponPayment` 把券退回原处。收兵离开（`leaveWorkshopField`）不退券，战斗中也拒绝离开。
 - 写入用 `WHERE version = ?` 乐观锁；并发战斗 / 捕捉 / 走位只有一个能推进，另一个收到「操作冲突，请刷新后重试」。
 - 里程碑先 `INSERT OR IGNORE` 占住 `activity_milestone` 唯一键再发 tcr；发奖失败删掉占位行。
+  战斗 / 合成把存档推进落库之后才发里程碑，这一步失败只记服务端日志（`safeGrantReachedMilestones`），
+  不再把已经成功的动作报成失败——漏发的 tcr 留在页面「补领」里，下次进页面还能领。
+- **战斗结束兜底**（v0.54.1）：客户端还停在战斗页、服务端却没有这场遭遇了（别的标签页已结算、
+  写回执丢了、存档被重置），`battleWorkshop` 不再抛「当前没有进行中的战斗」，而是回一份
+  `status = "ended"` 的结算（`endedWorkshopBattle`）带着权威存档，前端据此收起战斗界面。
+  客户端 `act()` 在任意战斗动作失败时都会 `router.refresh()` 重拉存档，任何形式的失步都会收敛，
+  不会永远卡在战斗页。战斗进行中合成在服务端与按钮上都已禁用（`战斗中不能合成，打完再合`）。
 - Server Action 限流：`workshop-enter` 30 次/60s、`workshop-walk` 240 次/60s（走位是逐格高频上报）、
   `workshop-shop` 60 次/60s。
 - **走位并发收敛**（v0.53.0）：`field-canvas.tsx` 同一时间只允许一段路径在路上
@@ -132,6 +139,11 @@ box / dex / items{ball,potion} / gold / badges / activePetId / run / encounter /
 工坊金币掉落、商店补给与价格、旧档 `gold` 缺省 / 封顶另有单测覆盖
 （`tests/activity-games.test.ts`）；走位并发修复与 `BattleFx` 音效 / 动画属于客户端行为，
 做了类型检查与构建验证，未在真实浏览器里试听试玩。
+
+战斗卡死修复（v0.54.1）的回归用例：三只灵宠（前排两只 1 血）连吃两回合防御后前排倒地、
+中间与后排依次接管，每一步都过一遍 JSON + `normalizeWorkshopState` 读档往返，断言遭遇仍在；
+以及服务端无遭遇时 `endedWorkshopBattle` 返回 `status = "ended"`、遭遇清空、无经验无掉落。
+客户端 `router.refresh()` 收敛属于页面行为，同样只做了类型 / 构建验证，本机没有 `.env.local` 起不了登录态页面。
 
 画家层另用无 DOM 的桩 `CanvasRenderingContext2D`（只认标准成员、坐标一律查 `NaN`）跑过
 7000+ 帧：5 个区域 × 4 种种子 × 全部视野高度 × 4 个朝向 × 三档徽章，无异常、无非法颜色与

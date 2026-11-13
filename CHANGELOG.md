@@ -5,6 +5,28 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.54.1] - 2026-11-13
+
+### 修复
+
+- 灵宠工坊战斗卡死：客户端还停在战斗页、服务端这场遭遇却已经结算（写请求回执丢失、
+  别的标签页先打完、存档被重置）时，战斗回合不再抛「当前没有进行中的战斗」。
+  `battleWorkshop` 先补齐状态行，发现没有遭遇就回一份 `ended` 结算，页面拿服务端的
+  权威存档退出战斗面板，不再出现「三只灵宠倒地两只、第三只一接手就报没有战斗、
+  页面永远退不出去」；战斗动作任何失败也会 `router.refresh()` 对齐一次。
+- 战斗结果落库之后才发的里程碑不再反过来把回合报成失败：`safeGrantReachedMilestones`
+  只记日志，漏发的奖励留给页面「补领」，避免已结算的战斗与前端状态分叉。
+- 合成补上战斗闸门：`mergeWorkshop` 与队伍页的合成按钮在遭遇进行中一律拒绝，
+  防止战斗里改队伍造成前后端状态分叉。
+
+### 验证
+
+- `tests/activity-games.test.ts` 新增 2 个用例：三只灵宠（前两只 1 血）连续两回合倒地，
+  每次存读档后第三只都接管且遭遇仍在，第三只可正常出手；没有遭遇时
+  `endedWorkshopBattle` 回 `ended` 与权威存档。`npx tsx --test tests/*.test.ts`
+  共 149 项全过；`npm run typecheck`、触碰文件 ESLint、`npm run build` 通过。
+  本机没有可用的 `.env.local`，战斗页未在真实浏览器里复现点过。
+
 ## [0.54.0] - 2026-11-13
 
 ### 新增

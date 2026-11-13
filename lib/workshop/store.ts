@@ -34,6 +34,7 @@ import {
 import {
   areaByKey,
   createGymEncounter,
+  endedWorkshopBattle,
   nextGym,
   resolveWorkshopBattle,
   type WorkshopBattleAction,
@@ -190,6 +191,24 @@ async function grantReachedMilestones(input: {
     }
   }
   return { reward, tiers };
+}
+
+/**
+ * 战斗/合成已经落库之后才发里程碑：发奖失败只能记日志，不能把已经推进的存档报成失败。
+ * 漏发的奖励留在页面的「补领」里，下一次进页面还能领。
+ */
+async function safeGrantReachedMilestones(input: {
+  userId: string;
+  activityKey: string;
+  config: WorkshopConfig;
+  state: WorkshopState;
+}): Promise<{ reward: number; tiers: number[] }> {
+  try {
+    return await grantReachedMilestones(input);
+  } catch (error) {
+    console.error("[workshop] milestone grant failed:", error);
+    return { reward: 0, tiers: [] };
+  }
 }
 
 function withDex(state: WorkshopState, pets: { lineKey: string; tier: number }[]): string[] {
@@ -439,12 +458,17 @@ export async function battleWorkshop(
   config: WorkshopConfig,
 ): Promise<WorkshopBattleActionResult> {
   const activityKey = assertActiveWindow(config);
+  await ensureStateRow(userId, activityKey);
   const { snapshot, result } = await attemptWrite(userId, activityKey, (state) => {
+    // 前端还停在战斗页，服务端却已经没有这场遭遇了：回 ended 让它退出，别把玩家锁在战斗界面
+    if (!state.encounter) {
+      return { next: state, result: endedWorkshopBattle(state) };
+    }
     const resolved = resolveWorkshopBattle(state, action);
     return { next: resolved.state, result: resolved };
   });
 
-  const milestone = await grantReachedMilestones({
+  const milestone = await safeGrantReachedMilestones({
     userId,
     activityKey,
     config,
@@ -697,6 +721,7 @@ export async function mergeWorkshop(
   }
 
   const { snapshot, result } = await attemptWrite(userId, activityKey, (state) => {
+    if (state.encounter) throw new WorkshopError("战斗中不能合成，打完再合");
     const candidates = [...state.party, ...state.box]
       .filter((pet) => pet.lineKey === line.key && pet.tier === sourceTier)
       .sort((a, b) => a.level - b.level || a.exp - b.exp || petScore(a) - petScore(b));
@@ -727,7 +752,7 @@ export async function mergeWorkshop(
     };
   });
 
-  const milestone = await grantReachedMilestones({
+  const milestone = await safeGrantReachedMilestones({
     userId,
     activityKey,
     config,

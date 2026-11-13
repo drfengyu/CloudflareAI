@@ -96,7 +96,7 @@ interface WorkshopBoardProps {
 }
 
 type TabKey = "adventure" | "team" | "dex";
-type BattleStatus = "ongoing" | "won" | "lost" | "captured" | "fled";
+type BattleStatus = "ongoing" | "won" | "lost" | "captured" | "fled" | "ended";
 
 interface BattleFx {
   /** 每次命中换一个值，靠 key 重挂载让受击动画重播。 */
@@ -349,6 +349,8 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
     setBusy(null);
     if (!res.success) {
       toast.error(res.error);
+      // 服务端可能已经在别处结算完这场战斗：拉一次权威存档，别让战斗页永远卡住
+      router.refresh();
       return;
     }
     acceptData(res.data);
@@ -371,6 +373,9 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
     if (battle.status === "lost") {
       gameAudio.play("lose");
       toast.error("队伍全灭，被伙伴扶回营地休整");
+    }
+    if (battle.status === "ended") {
+      toast.message("这场战斗已经结束");
     }
     if (battle.status !== "ongoing") router.refresh();
   }
@@ -925,7 +930,9 @@ function AdventurePanel(props: AdventurePanelProps) {
                   ? "捕捉成功"
                   : props.lastStatus === "lost"
                     ? "队伍全灭"
-                    : "撤离战斗"}
+                    : props.lastStatus === "ended"
+                      ? "战斗已结束"
+                      : "撤离战斗"}
             </p>
             <Button type="button" size="sm" variant="ghost" onClick={props.onDismissLog}>
               收起
@@ -1334,7 +1341,9 @@ function TeamPanel(props: TeamPanelProps) {
       <div className="rounded-lg border border-border p-3">
         <p className="text-sm font-medium">同阶合成（不花券）</p>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          两只同阶合成一只高一阶，优先消耗等级最低的两只；第 9 阶是终点。
+          {state.encounter
+            ? "战斗中不能合成，打完再合。"
+            : "两只同阶合成一只高一阶，优先消耗等级最低的两只；第 9 阶是终点。"}
         </p>
         <div className="mt-2 space-y-3">
           {props.lines.map((line) => (
@@ -1343,7 +1352,7 @@ function TeamPanel(props: TeamPanelProps) {
               <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
                 {Array.from({ length: WORKSHOP_TIER_COUNT - 1 }, (_, index) => index + 1).map((tier) => {
                   const count = counts[line.key]?.[tier - 1] ?? 0;
-                  const can = count >= 2 && busy === null;
+                  const can = count >= 2 && busy === null && !state.encounter;
                   return (
                     <button
                       key={tier}

@@ -11,6 +11,7 @@ import {
   captureChance,
   createGymEncounter,
   createWildEncounter,
+  endedWorkshopBattle,
   resolveWorkshopBattle,
   typeMultiplier,
 } from "../lib/workshop/battle";
@@ -319,6 +320,50 @@ test("防御回合倒地自动换下一只，无人可换判负", () => {
   assert.equal(lost.state.party[0].hp, Math.floor(maxHp / 4));
   assert.equal(lost.state.activePetId, lost.state.party[0].id);
   assert.equal(lost.events.some((event) => event.text.includes("扶回营地")), true);
+});
+
+test("三只灵宠战败两只后第三只接管，读档后遭遇还在", () => {
+  const front = createPet({ lineKey: "ember", tier: 1, level: 1, hp: 1 });
+  const middle = createPet({ lineKey: "tide", tier: 1, level: 1, hp: 1 });
+  const back = createPet({ lineKey: "verdant", tier: 8, level: 40 });
+  const strong = createGymEncounter(3);
+  assert.ok(strong);
+
+  let state = workshopState({
+    starter: "ember",
+    party: [front, middle, back],
+    activePetId: front.id,
+    encounter: strong,
+  });
+
+  // 前两只先后倒下，服务端自动顶上一只；每次回合都要过一遍存读档，模拟服务端真实读写
+  state = resolveWorkshopBattle(state, { kind: "guard" }, sequence([0])).state;
+  state = normalizeWorkshopState(JSON.parse(JSON.stringify(state)), WORKSHOP_DAY);
+  assert.equal(state.activePetId, middle.id);
+  assert.notEqual(state.encounter, null);
+
+  state = resolveWorkshopBattle(state, { kind: "guard" }, sequence([0])).state;
+  state = normalizeWorkshopState(JSON.parse(JSON.stringify(state)), WORKSHOP_DAY);
+  assert.equal(state.activePetId, back.id);
+  assert.equal(state.party.filter((pet) => pet.hp <= 0).length, 2);
+  assert.notEqual(state.encounter, null);
+
+  // 第三只正常出手，不再抛「当前没有进行中的战斗」
+  const third = resolveWorkshopBattle(state, { kind: "move", moveId: "tackle" }, sequence([0.5]));
+  assert.notEqual(third.status, "lost");
+  assert.equal(third.state.activePetId, back.id);
+  assert.notEqual(third.state.encounter, null);
+});
+
+test("服务端没有遭遇时回 ended 结算，前端据此退出战斗页", () => {
+  const pet = createPet({ lineKey: "ember", tier: 1, level: 5 });
+  const state = workshopState({ starter: "ember", party: [pet], activePetId: pet.id });
+  const result = endedWorkshopBattle(state);
+  assert.equal(result.status, "ended");
+  assert.equal(result.state.encounter, null);
+  assert.equal(result.expGained, 0);
+  assert.deepEqual(result.drops, { ball: 0, potion: 0, gold: 0 });
+  assert.equal(result.events.length > 0, true);
 });
 
 // ---------------------------------------------------------------- 灵宠冒险地图
