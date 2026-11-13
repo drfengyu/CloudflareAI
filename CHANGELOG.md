@@ -5,6 +5,28 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.51.1] - 2026-11-13
+
+### 修复
+
+- 灵宠工坊全灭不再把人锁在地图上：`resolveWorkshopBattle` 判负时收掉这趟探险（`run = null`）
+  并把整队扶到四分之一血（`max(1, floor(maxHp / 4))`），事件文案改为「队伍全灭，被伙伴扶回
+  营地休整」。改版后野外不能扎营、免费休息又只有每日一次，一旦全灭就只剩「站着」——券白烧、
+  页面什么都干不了。`restWorkshopParty` 对整队倒地的存档（含改版前卡住的旧档）跳过
+  「今天已经休息过了」这道闸；前台休息按钮在队伍还有血没满时才可点、全灭时改显示「紧急休整」。
+- 道馆按钮按服务端光标邻格灰掉：`AdventurePanel` 用 `workshopFieldFor(areaKey, seed)` 复算
+  道馆格，离门口超过一格就显示「先走到道馆门口」，省掉一次必然退券的空请求。
+- 试炼页的活动券余额跟着服务端刷新：`components/trial/game.tsx` 采用与
+  `lottery-wheel.tsx` 同样的渲染期对齐，把 `props.initialTickets` / `props.initialTcr`
+  同步进本地 state，在页内兑换或买完礼包后「出城」弹窗立刻变成可用。
+
+### 验证
+
+- `tests/activity-games.test.ts` 的全灭用例改为带 `run` 的存档，断言判负后 `run === null`、
+  `hp === floor(maxHp / 4)`、`activePetId` 指向首位活着的灵宠。27 个用例全过；
+  全项目 `tsc` 392 文件 0 错误；ESLint 触碰的 6 个文件 0 error / 0 warning。
+  仍未在真实浏览器里跑过 —— 这台机器没有可用的 npm 运行时，画面改动只做过无头绘制扫描。
+
 ## [0.51.0] - 2026-11-13
 
 ### 新增

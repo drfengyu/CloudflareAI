@@ -177,6 +177,17 @@ export function TrialGame(props: TrialGameProps) {
   );
   const [tickets, setTickets] = useState(props.initialTickets);
   const [tcr, setTcr] = useState(props.initialTcr);
+  /** revalidate 后 props 带服务端最新余额（比如刚买完活动券），渲染期对齐一次，不放进 effect。 */
+  const [syncedTickets, setSyncedTickets] = useState(props.initialTickets);
+  if (props.initialTickets !== syncedTickets) {
+    setSyncedTickets(props.initialTickets);
+    setTickets(props.initialTickets);
+  }
+  const [syncedTcr, setSyncedTcr] = useState(props.initialTcr);
+  if (props.initialTcr !== syncedTcr) {
+    setSyncedTcr(props.initialTcr);
+    setTcr(props.initialTcr);
+  }
   const [panel, setPanel] = useState<PanelId>(null);
   const [hallTab, setHallTab] = useState<"party" | "gear" | "formation">("party");
   const [dexTab, setDexTab] = useState<"save" | "dex">("save");

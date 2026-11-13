@@ -472,7 +472,9 @@ export async function restWorkshopParty(
   const { snapshot, result } = await attemptWrite(userId, activityKey, (state) => {
     if (state.encounter) throw new WorkshopError("战斗中不能休息");
     if (state.run) throw new WorkshopError("野外不安营，先走回营地再休息");
-    if (state.restDay === today) throw new WorkshopError("今天已经休息过了");
+    // 全灭（含改版前卡死的旧存档）不受每日一次限制，否则没有药水就只能一直躺着
+    const downed = state.party.length > 0 && !state.party.some((pet) => pet.hp > 0);
+    if (!downed && state.restDay === today) throw new WorkshopError("今天已经休息过了");
     if (!state.party.some((pet) => pet.hp < petStats(pet.tier, pet.level).maxHp)) {
       throw new WorkshopError("队伍状态很好，不需要休息");
     }

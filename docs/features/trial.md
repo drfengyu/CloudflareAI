@@ -103,6 +103,9 @@
   走哪条路不影响任何数值，能改变结果的只有「打哪座营」和「这一仗怎么打」。
 - **局内购买**：服务端单独扣券并写入 `purchases`（带 `cmdIndex`），重放时从该步起生效，
   不会回溯加强已经开打的战斗；同一 `purchaseId` 幂等，CAS 失败自动退款。
+- **券余额即时可见**：页内的活动券兑换与礼包付完就 `router.refresh()`，
+  `components/trial/game.tsx` 在渲染期把 `initialTickets` / `initialTcr` 对齐进本地 state
+  （与 `lottery-wheel.tsx` 同一写法），出城弹窗不会因为本地旧余额一直卡在「券不足」。
 - **只发一次**：收兵用 `UPDATE trial_run ... WHERE status = 'active'` 抢占；断网重试命中
   `already`，返回首次结果，不重复发奖。发奖失败把状态改回 `active` 让用户能重交。
 - **旧局兼容**：答题 / 浮游城 / 横版动作（JSON 版本不是 6）的 `active` 局在开局时

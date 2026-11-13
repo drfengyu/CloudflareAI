@@ -363,7 +363,14 @@ export function resolveWorkshopBattle(
     }
     finish();
     result.status = "lost";
-    events.push({ text: "队伍全灭，只能先返回营地休整", tone: "bad" });
+    // 就地扶起四分之一血并结束这趟探险：野外不能扎营，而每日一次的免费休息可能已经用掉，
+    // 不收兵也不回血就会把玩家锁死在地图上（券白花、页面什么都干不了）。
+    state.run = null;
+    for (const item of state.party) {
+      item.hp = Math.max(1, Math.floor(petStats(item.tier, item.level).maxHp / 4));
+    }
+    state.activePetId = state.party[0]?.id ?? state.activePetId;
+    events.push({ text: "队伍全灭，被伙伴扶回营地休整", tone: "bad" });
   };
 
   const victory = () => {

@@ -46,6 +46,7 @@ import {
   type WorkshopGym,
 } from "@/lib/workshop/battle";
 import { highestTier, type WorkshopState } from "@/lib/workshop/state";
+import { workshopFieldFor } from "@/lib/workshop/field";
 import {
   chooseWorkshopStarterAction,
   challengeWorkshopGymAction,
@@ -152,6 +153,7 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
 
   const active = state.party.find((pet) => pet.id === state.activePetId) ?? state.party[0] ?? null;
   const alive = state.party.some((pet) => pet.hp > 0);
+  const hurt = state.party.some((pet) => pet.hp < petStats(pet.tier, pet.level).maxHp);
   const reached = highestTier(state);
   const claimable = props.milestones.filter(
     (item) => item.tier <= reached && item.reward > 0 && !granted.includes(item.tier),
@@ -294,7 +296,7 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
       );
     }
     if (res.data.battle.status === "won") toast.success("战斗胜利");
-    if (res.data.battle.status === "lost") toast.error("队伍全灭，先回营地休整");
+    if (res.data.battle.status === "lost") toast.error("队伍全灭，被伙伴扶回营地休整");
     if (res.data.battle.status !== "ongoing") router.refresh();
   }
 
@@ -449,11 +451,16 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
           size="sm"
           variant="outline"
           className="ml-auto"
-          disabled={busy !== null || !!state.encounter || !alive}
+          disabled={
+            busy !== null ||
+            !!state.encounter ||
+            state.party.length === 0 ||
+            (alive && !hurt)
+          }
           onClick={() => void rest()}
         >
           {busy === "rest" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
-          休息（每日一次）
+          {alive ? "休息（每日一次）" : "紧急休整"}
         </Button>
       </div>
 
@@ -742,12 +749,20 @@ function AdventurePanel(props: AdventurePanelProps) {
     !state.run &&
     state.entersToday < props.dailyExplores &&
     props.couponTickets >= props.exploreTickets;
+  // 在地图里就得真走到道馆门口，服务端也是这么判的；按钮先灰掉，省一次必退券的空请求
+  const run = state.run;
+  const field = run ? workshopFieldFor(run.areaKey, run.seed) : null;
+  const nearGym =
+    !field ||
+    !run ||
+    (Math.abs(run.tx - field.gym.tx) <= 1 && Math.abs(run.ty - field.gym.ty) <= 1);
   const canGym =
     props.alive &&
     !state.encounter &&
     state.gymsToday < props.dailyGyms &&
     props.couponTickets >= props.gymTickets &&
-    !!props.nextGym;
+    !!props.nextGym &&
+    nearGym;
 
   return (
     <div className="space-y-4">
@@ -924,7 +939,9 @@ function AdventurePanel(props: AdventurePanelProps) {
                     : current
                       ? state.gymsToday >= props.dailyGyms
                         ? "今日挑战次数已用完"
-                        : "挑战道馆"
+                        : nearGym
+                          ? "挑战道馆"
+                          : "先走到道馆门口"
                       : `先取得 ${gym.stage - 1} 枚徽章`}
                 </Button>
               </div>

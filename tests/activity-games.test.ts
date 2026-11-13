@@ -269,11 +269,18 @@ test("防御回合倒地自动换下一只，无人可换判负", () => {
     party: [front],
     activePetId: front.id,
     encounter: strong,
+    run: newWorkshopRun({ areaKey: "ash", seed: 20261113 }),
   });
+  assert.ok(alone.run);
   const lost = resolveWorkshopBattle(alone, { kind: "guard" }, sequence([0, 0]));
   assert.equal(lost.status, "lost");
   assert.equal(lost.state.encounter, null);
-  assert.equal(lost.state.party[0].hp, 0);
+  // 全灭不能把玩家锁死在地图上：收兵回营地，就地扶起四分之一血
+  assert.equal(lost.state.run, null);
+  const maxHp = petStats(front.tier, front.level).maxHp;
+  assert.equal(lost.state.party[0].hp, Math.floor(maxHp / 4));
+  assert.equal(lost.state.activePetId, lost.state.party[0].id);
+  assert.equal(lost.events.some((event) => event.text.includes("扶回营地")), true);
 });
 
 // ---------------------------------------------------------------- 灵宠冒险地图
