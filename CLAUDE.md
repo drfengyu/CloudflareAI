@@ -534,8 +534,26 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.54.1（2026-11-13，灵宠工坊战斗卡死修复）
+**当前版本**：v0.55.0（2026-11-13，讨逆传改券经济）
 **下一版本**：待定
+
+- v0.55.0 三国讨逆传取消出城券费，活动券成为城内唯一流通货币：
+  `startTrialRun` 不再 `payWithCoupon`，`TrialConfig` / 后台表单 / 页面删去
+  `runPriceCredits`；`SagaItemDef` 只保留必填 `priceTickets`（武器 / 护甲 1/2/3/5 张，
+  伤药 1、良药 2，军需 1~2），`buyTrialSupply` 泛化为 `buyTrialItem`——客栈虚拟商品
+  `inn_rest`（`SAGA_INN_PRICE_TICKETS = 1`）与普通商品都按 `priceTickets ×
+  couponUnitCredits` 实时扣券，购买记录带 `cmdIndex`，CAS 冲突退券；重放侧
+  `parsePurchases` 以商品表校正券价、客栈可重复买、被动军需去重，`applyPurchase`
+  对 `inn_rest` 调 `restAtInn` 并在 `lost` 时切回 `field`。
+  旧金币指令 `{ k: "shop" }` / `{ k: "inn" }` 从 `SagaCommand`、`sanitizeSagaCommands`
+  与重放循环移除（改版客户端伪造也无效）；历史 `bank_gold` / `gold_*` 购买记录仍读回。
+  钱庄只保留金币 → tcr 单向：删 `buyTrialGold` / `GoldPurchaseResult` /
+  `bankGoldForTcr` / `SAGA_BANK_MAX_TCR_BUY` / `SAGA_INN_PRICE_GOLD` / `buyGoldItem`，
+  后台删「换金价」输入，`SagaBankPolicy.goldPerTcrBuy` 仅用于校验历史记录。
+  前台 HUD 去掉 tcr 与出城券数，开始 / 结算弹窗直接出发；钱庄面板只留存金，
+  铁匠铺 / 药铺 / 军需 / 客栈全部显示券价。`tests/trial-saga.test.ts` 重写经济用例
+  （券价清洗、住店券补兵 / 兵败重整、购买记录校正、被动去重、旧记录兼容），
+  共 150 项全过；`tsc`、ESLint、`npm run build` 通过；本机无 `.env.local`，页面未实测。
 
 - v0.54.1 工坊战斗不再卡死：`battleWorkshop` 先 `ensureStateRow`，遇到「客户端还在战斗页、
   服务端已经没有这场遭遇」（写回执丢失 / 别处先结算 / 存档被重置）时不再抛

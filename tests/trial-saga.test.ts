@@ -44,10 +44,9 @@ import {
 import {
   DEFAULT_SAGA_BANK,
   bankCreditsForGold,
-  bankGoldForTcr,
   sanitizeSagaBank,
 } from "../lib/trial/saga/bank";
-import { SAGA_INN_PRICE_GOLD } from "../lib/trial/saga/inn";
+import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "../lib/trial/saga/inn";
 import { generalStats, initialTrialSave } from "../lib/trial/saga/state";
 
 function trial(overrides: Partial<TrialConfig> = {}): TrialConfig {
@@ -215,12 +214,14 @@ test("对局 JSON：版本校验严格，旧玩法与损坏数据一律当没有
   assert.equal(parseSagaRun(JSON.stringify({ version: 5, seed: 1, heroHp: 100, floors: [] })), null);
 });
 
-test("指令清洗：未知字段、军需商店与错槽装备都被丢弃", () => {
+test("指令清洗：未知字段、旧金币商店与错槽装备都被丢弃", () => {
   const commands = sanitizeSagaCommands([
     { k: "formation", f: "fengshi" },
     { k: "formation", f: "bogus" },
+    // v0.55 起城内买卖只走试炼券，旧的金币商店 / 住店指令不再采信。
     { k: "shop", i: "herb" },
     { k: "shop", i: "secret_medicine" },
+    { k: "inn" },
     { k: "equip", g: "liubei", slot: "weapon", i: "guandao" },
     { k: "equip", g: "liubei", slot: "weapon", i: "cloth" },
     { k: "party", active: ["liubei", "guanyu", "zhangfei"] },
@@ -228,7 +229,6 @@ test("指令清洗：未知字段、军需商店与错槽装备都被丢弃", ()
     { k: "bank", g: 150 },
     { k: "bank", g: 400 },
     { k: "bank", g: -100 },
-    { k: "inn" },
     {
       k: "battle",
       node: 1,
@@ -251,7 +251,7 @@ test("指令清洗：未知字段、军需商店与错槽装备都被丢弃", ()
   assert.deepEqual(
     commands.map((command) => command.k),
     // 存金档位随每次行军的钱庄规则走，清洗阶段只挡住负数，整档校验留给重放。
-    ["formation", "shop", "equip", "party", "bank", "bank", "bank", "inn", "battle", "leave"],
+    ["formation", "equip", "party", "bank", "bank", "bank", "battle", "leave"],
   );
   const battle = commands.find((command) => command.k === "battle");
   assert.ok(battle && battle.k === "battle");
@@ -275,7 +275,6 @@ test("指令重放是纯函数；战斗没打完会锁住本场，不能反复�
 
   const commands: SagaCommand[] = [
     { k: "formation", f: "fengshi" },
-    { k: "shop", i: "herb" },
     { k: "battle", node: 0, rounds: [] },
   ];
   const first = replaySagaRun(run, commands);
@@ -361,45 +360,28 @@ test("钱庄存金：按存金价整档收，每趟封顶 600 金，超出的指
   assert.equal(bankCreditsForGold(100), 1);
   assert.equal(bankCreditsForGold(600), 6);
   assert.equal(bankCreditsForGold(1000), 6, "再多的金币也只按上限结算");
-  assert.equal(bankGoldForTcr(3), 120);
 });
 
-test("钱庄规则：换金价必须低于存金价，上限对齐整档", () => {
+test("钱庄规则：上限对齐整档，旧换金价只影响历史记录", () => {
   const bank = sanitizeSagaBank({ goldPerTcr: 100, maxGoldPerRun: 650, goldPerTcrBuy: 100 });
   assert.equal(bank.goldPerTcrBuy, 99);
   assert.equal(bank.maxGoldPerRun, 600);
   assert.deepEqual(sanitizeSagaBank(null), DEFAULT_SAGA_BANK);
 });
 
-test("客栈住店：缺兵才收 30 金并补满全队，满编或钱不够不收费", () => {
+test("客栈重整：缺兵才补满全队，满编返回 false", () => {
   const run = freshRun(61, 2);
   const state = createReplayState(run);
-  state.save.gold = 100;
   const [first] = state.save.party;
   const max = generalStats(first).maxTroops;
   state.partyTroops[first.id] = max - 50;
 
   assert.equal(restAtInn(state), true);
   assert.equal(state.partyTroops[first.id], max);
-  assert.equal(state.save.gold, 100 - SAGA_INN_PRICE_GOLD);
-
-  // 全员满编再住一次只是白跑，分文不收。
-  assert.equal(restAtInn(state), false);
-  assert.equal(state.save.gold, 100 - SAGA_INN_PRICE_GOLD);
-
-  // 缺兵但连店钱都不够：不能住，也不偷偷补兵。
-  state.save.gold = SAGA_INN_PRICE_GOLD - 1;
-  state.partyTroops[first.id] = 1;
-  assert.equal(restAtInn(state), false);
-  assert.equal(state.partyTroops[first.id], 1);
-  assert.equal(state.save.gold, SAGA_INN_PRICE_GOLD - 1);
-
-  // 指令重放走同一口径：满编时插一条住店指令不扣钱。
-  const fresh = replaySagaRun(run, [{ k: "inn" }, { k: "leave" }]).state;
-  assert.equal(fresh.save.gold, run.startSave.gold);
+  assert.equal(restAtInn(state), false, "全员满编再住一次什么也不做");
 });
 
-test("客栈：兵败后住店能重整旗鼓，接着行军", () => {
+test("客栈：住店券记录按指令位置补兵，兵败后能重整旗鼓接着行军", () => {
   const run = wreckedRun();
   const lose: SagaCommand[] = [
     { k: "battle", node: 0, rounds: [[{ g: "liubei", a: "attack", target: 0 }]] },
@@ -417,33 +399,69 @@ test("客栈：兵败后住店能重整旗鼓，接着行军", () => {
   assert.equal(again.scene, "lost");
   assert.equal(again.clearedNodes.length, 0);
 
-  // 住店：收一笔店钱、全队补满、行军回到 field，后续城镇指令重新生效。
-  const rested = replaySagaRun(run, [
-    ...lose,
-    { k: "inn" },
-    { k: "formation", f: "fengshi" },
-  ]).state;
+  // 住店券在购买时已扣，重放只认购买记录：补满全队、行军回到 field，金币不动。
+  const innRun: SagaRun = {
+    ...run,
+    purchases: [
+      {
+        id: "inn1",
+        itemId: SAGA_INN_ITEM_ID,
+        tickets: SAGA_INN_PRICE_TICKETS,
+        at: 1,
+        cmdIndex: lose.length,
+      },
+    ],
+  };
+  const rested = replaySagaRun(innRun, [...lose, { k: "formation", f: "fengshi" }]).state;
   assert.equal(rested.scene, "field");
-  assert.equal(rested.save.gold, 100 - SAGA_INN_PRICE_GOLD);
+  assert.equal(rested.save.gold, 100, "店钱不走金币");
   assert.equal(rested.partyTroops.liubei, generalStats(run.startSave.party[0]).maxTroops);
   assert.equal(rested.save.formation, "fengshi");
 
   // 重整后能接着打下另一座营，行军不会被兵败锁死。
-  const won = replaySagaRun(run, [
+  const won = replaySagaRun(innRun, [
     ...lose,
-    { k: "inn" },
     { k: "battle", node: 1, rounds: [[{ g: "liubei", a: "attack", target: 0 }]] },
   ]).state;
   assert.equal(won.clearedNodes.includes(1), true);
   assert.equal(won.scene, "field");
 
-  // 店钱不够就救不回来，不给零成本复活留口子。
-  const broke = wreckedRun();
-  broke.startSave.gold = SAGA_INN_PRICE_GOLD - 1;
-  const stuck = replaySagaRun(broke, [...lose, { k: "inn" }]).state;
+  // 没有住店券记录就救不回来，不给零成本复活留口子。
+  const stuck = replaySagaRun(run, lose).state;
   assert.equal(stuck.scene, "lost");
   assert.equal(stuck.partyTroops.liubei, 0);
-  assert.equal(stuck.save.gold, SAGA_INN_PRICE_GOLD - 1);
+  assert.equal(stuck.save.gold, 100);
+});
+
+test("购买记录：券价按商品表校正，客栈可重复买、被动军需只认一份", () => {
+  const run = freshRun(63, 2);
+  const parsed = parseSagaRun(
+    JSON.stringify({
+      ...run,
+      purchases: [
+        { id: "p1", itemId: "guandao", tickets: 99, at: 1, cmdIndex: 0 },
+        { id: "p2", itemId: SAGA_INN_ITEM_ID, tickets: 99, at: 1, cmdIndex: 0 },
+        { id: "p3", itemId: SAGA_INN_ITEM_ID, tickets: 1, at: 1, cmdIndex: 0 },
+        { id: "p4", itemId: "tiger_tally", tickets: 1, at: 1, cmdIndex: 0 },
+        { id: "p5", itemId: "tiger_tally", tickets: 1, at: 1, cmdIndex: 0 },
+        { id: "p6", itemId: "not_an_item", tickets: 1, at: 1, cmdIndex: 0 },
+      ],
+    }),
+  );
+  assert.ok(parsed);
+  assert.deepEqual(
+    parsed.purchases.map((purchase) => [purchase.itemId, purchase.tickets]),
+    [
+      ["guandao", 5],
+      [SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS],
+      [SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS],
+      ["tiger_tally", 2],
+    ],
+  );
+
+  // 装备按购买指令位置入库，券价张数不采信客户端写回的 99。
+  const state = replaySagaRun(parsed, [{ k: "leave" }]).state;
+  assert.equal(state.save.gear.guandao, 1);
 });
 
 test("收兵战果记录存金与通关金币，两者互不覆盖", () => {
@@ -459,7 +477,7 @@ test("收兵战果记录存金与通关金币，两者互不覆盖", () => {
   assert.equal(settled.endSave.gold, 230, "500 − 300 存金 + 30 战利品");
 });
 
-test("钱庄换金：兑换记录在对应指令位置加金，并写进收兵存档", () => {
+test("钱庄换金（旧记录）：历史兑换仍在对应指令位置加金，并写进收兵存档", () => {
   const run = easyRun();
   const purchased: SagaRun = {
     ...run,
@@ -522,9 +540,10 @@ test("自动战斗完整跑一局：重复调用结果一致，战绩按局累�
 test("讨逆配置：节点数与档位互相约束，脏值退回可用默认", () => {
   const config = sanitizeTrialConfig({
     questionCount: 99,
-    runPriceCredits: 7,
     couponUnitCredits: 5,
     rewardValidDays: 0,
+    bankGoldPerTcr: 250,
+    bankMaxGoldPerRun: 700,
     tiers: [
       { correct: 3, reward: 2 },
       { correct: 3, reward: 9 },
@@ -535,8 +554,8 @@ test("讨逆配置：节点数与档位互相约束，脏值退回可用默认",
 
   assert.equal(config.questionCount, TRIAL_MAX_FLOORS);
   assert.equal(config.rewardValidDays, 1);
-  // 票价按券单价对齐整张：7 → 5。
-  assert.equal(config.runPriceCredits, 5);
+  // 存金上限按存金价向下对齐整档：700 → 500。
+  assert.equal(config.bankMaxGoldPerRun, 500);
   // 重复档位保留第一条，超出节点数的被丢弃，奖励不为负。
   assert.deepEqual(config.tiers, [
     { correct: 1, reward: 0 },

@@ -5,13 +5,11 @@ import { requireUser } from "@/lib/usage/meter";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getTrialConfig } from "@/lib/trial/settings";
 import {
-  buyTrialGold,
-  buyTrialSupply,
+  buyTrialItem,
   startTrialRun,
   submitTrialRun,
-  type GoldPurchaseResult,
+  type ItemPurchaseResult,
   type StartedTrial,
-  type SupplyPurchaseResult,
   type TrialSettlement,
 } from "@/lib/trial/store";
 
@@ -22,7 +20,7 @@ function fail(error: unknown, fallback: string): { success: false; error: string
   return { success: false, error: error instanceof Error ? error.message : fallback };
 }
 
-/** 出城：还没收兵的行军直接复用，不会重复扣券。 */
+/** 出城：还没收兵的行军直接复用；出城不花券。 */
 export async function startTrialAction(): Promise<ActionResult<StartedTrial>> {
   try {
     const userId = await requireUser();
@@ -63,20 +61,20 @@ export async function submitTrialAction(input: {
   }
 }
 
-/** 行军军需：扣活动券，把购买记进这次行军。 */
-export async function buyTrialSupplyAction(input: {
+/** 城内买卖：铁匠铺 / 药铺 / 军需帐 / 客栈都用活动券，购买时实时扣券。 */
+export async function buyTrialItemAction(input: {
   runId: string;
   itemId: string;
   purchaseId: string;
   cmdIndex: number;
-}): Promise<ActionResult<SupplyPurchaseResult>> {
+}): Promise<ActionResult<ItemPurchaseResult>> {
   try {
     const userId = await requireUser();
     if (!(await checkRateLimit(`trial-shop:${userId}`, { window: 60_000, limit: 40 }))) {
       return { success: false, error: "购买太频繁，请稍后再试" };
     }
     const config = await getTrialConfig();
-    const data = await buyTrialSupply({
+    const data = await buyTrialItem({
       userId,
       runId: String(input.runId ?? ""),
       itemId: String(input.itemId ?? ""),
@@ -88,34 +86,5 @@ export async function buyTrialSupplyAction(input: {
     return { success: true, data };
   } catch (error) {
     return fail(error, "购买失败");
-  }
-}
-
-/** 钱庄换金：按出城时冻结的汇率扣 tcr，金币记进这次行军。 */
-export async function buyTrialGoldAction(input: {
-  runId: string;
-  tcr: number;
-  purchaseId: string;
-  cmdIndex: number;
-}): Promise<ActionResult<GoldPurchaseResult>> {
-  try {
-    const userId = await requireUser();
-    if (!(await checkRateLimit(`trial-gold:${userId}`, { window: 60_000, limit: 20 }))) {
-      return { success: false, error: "换金太频繁，请稍后再试" };
-    }
-    const config = await getTrialConfig();
-    const data = await buyTrialGold({
-      userId,
-      runId: String(input.runId ?? ""),
-      tcr: Number(input.tcr) || 0,
-      purchaseId: String(input.purchaseId ?? ""),
-      cmdIndex: Number(input.cmdIndex) || 0,
-      config,
-    });
-    revalidatePath("/trial");
-    revalidatePath("/wallet");
-    return { success: true, data };
-  } catch (error) {
-    return fail(error, "换金失败");
   }
 }

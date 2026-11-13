@@ -28,12 +28,10 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
   const [startAt, setStartAt] = useState(toField(initialConfig.startAt));
   const [endAt, setEndAt] = useState(toField(initialConfig.endAt));
   const [questionCount, setQuestionCount] = useState(String(initialConfig.questionCount));
-  const [price, setPrice] = useState(String(initialConfig.runPriceCredits));
   const [couponUnit, setCouponUnit] = useState(String(initialConfig.couponUnitCredits));
   const [validDays, setValidDays] = useState(String(initialConfig.rewardValidDays));
   const [bankGoldPerTcr, setBankGoldPerTcr] = useState(String(initialConfig.bankGoldPerTcr));
   const [bankMaxGold, setBankMaxGold] = useState(String(initialConfig.bankMaxGoldPerRun));
-  const [bankBuy, setBankBuy] = useState(String(initialConfig.bankGoldPerTcrBuy));
   const [tiers, setTiers] = useState<TierRow[]>(() =>
     initialConfig.tiers.map((tier) => ({ correct: String(tier.correct), reward: String(tier.reward) })),
   );
@@ -49,15 +47,13 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
         startAt: toStored(startAt),
         endAt: toStored(endAt),
         questionCount: Number(questionCount),
-        runPriceCredits: Number(price),
         couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
         bankGoldPerTcr: Number(bankGoldPerTcr),
         bankMaxGoldPerRun: Number(bankMaxGold),
-        bankGoldPerTcrBuy: Number(bankBuy),
         tiers: tiers.map((row) => ({ correct: Number(row.correct), reward: Number(row.reward) })),
       }),
-    [enabled, startAt, endAt, questionCount, price, couponUnit, validDays, bankGoldPerTcr, bankMaxGold, bankBuy, tiers],
+    [enabled, startAt, endAt, questionCount, couponUnit, validDays, bankGoldPerTcr, bankMaxGold, tiers],
   );
 
   async function handleSubmit(e: React.FormEvent) {
@@ -69,12 +65,10 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
         startAt: toStored(startAt),
         endAt: toStored(endAt),
         questionCount: Number(questionCount),
-        runPriceCredits: Number(price),
         couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
         bankGoldPerTcr: Number(bankGoldPerTcr),
         bankMaxGoldPerRun: Number(bankMaxGold),
-        bankGoldPerTcrBuy: Number(bankBuy),
         tiers: tiers.map((row) => ({ correct: Number(row.correct), reward: Number(row.reward) })),
       });
       toast.success("每日试炼配置已保存");
@@ -101,7 +95,8 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
       </div>
       <p className="text-xs text-muted-foreground">
         三国讨逆传（剧情地点、敌将、随机种子）在出城时由服务端生成并落库；等级、金币、装备、武将、图鉴随剧情一直保留，
-        收兵只上传编制/购物/战斗指令，由服务端按种子重放判定战果。修改开始时间等于开启新一轮活动，存档与战报按新轮次重计。
+        收兵只上传编制/战斗指令，由服务端按种子重放判定战果。出城免费，城内的铁匠铺、药铺、客栈与军需帐都用活动券；
+        修改开始时间等于开启新一轮活动，存档与战报按新轮次重计。
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -125,7 +120,7 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <div>
           <label className="mb-1 block text-sm font-medium">每处地方营寨数</label>
           <input
@@ -142,17 +137,6 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
           </p>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">每次出城军令（cr）</label>
-          <input
-            type="number"
-            step="1"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-            className={FIELD_CLASS}
-          />
-          <p className="mt-1 text-xs text-muted-foreground">必须是券单价的整数倍</p>
-        </div>
-        <div>
           <label className="mb-1 block text-sm font-medium">1 张活动券 = cr</label>
           <input
             type="number"
@@ -162,7 +146,9 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
             onChange={(e) => setCouponUnit(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">兑换试炼券的单价</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            兑换试炼券的单价，城内买卖与客栈都按券计价
+          </p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium">奖励有效期（天）</label>
@@ -177,7 +163,7 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-sm font-medium">存金价：金 / tcr</label>
           <input
@@ -188,10 +174,10 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
             onChange={(e) => setBankGoldPerTcr(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">玩家存金时，多少行军金币折 1 tcr</p>
+          <p className="mt-1 text-xs text-muted-foreground">战斗缴获的金币，多少金折 1 tcr</p>
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">每趟存 / 换金上限（金）</label>
+          <label className="mb-1 block text-sm font-medium">每趟存金上限（金）</label>
           <input
             type="number"
             min={0}
@@ -200,19 +186,7 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
             onChange={(e) => setBankMaxGold(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">会按存金价向下取整，两个方向共用</p>
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium">换金价：金 / tcr</label>
-          <input
-            type="number"
-            min={1}
-            step="1"
-            value={bankBuy}
-            onChange={(e) => setBankBuy(e.target.value)}
-            className={FIELD_CLASS}
-          />
-          <p className="mt-1 text-xs text-muted-foreground">必须低于存金价，两向价差就是钱庄抽成</p>
+          <p className="mt-1 text-xs text-muted-foreground">会按存金价向下取整；金币只在钱庄存，不再换回金币</p>
         </div>
       </div>
 
@@ -272,8 +246,8 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
 
       <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
         <p className="font-medium">
-          每处地方 {preview.questionCount} 处节点 · 每次出城 {preview.runPriceCredits} cr 军令（
-          {Math.max(1, Math.round(preview.runPriceCredits / Math.max(1, preview.couponUnitCredits)))} 张券）
+          每处地方 {preview.questionCount} 处节点 · 出城免费 · 城内买卖 1 张券 ={" "}
+          {formatCredits(preview.couponUnitCredits)} cr
         </p>
         <p className="mt-1 text-muted-foreground">
           {preview.tiers
@@ -282,9 +256,8 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
           ；平定一处地方的奖励 {formatCredits(preview.tiers[preview.tiers.length - 1]?.reward ?? 0)} tcr。
         </p>
         <p className="mt-1 text-muted-foreground">
-          钱庄：{preview.bankGoldPerTcr} 金 = 1 tcr，1 tcr = {preview.bankGoldPerTcrBuy} 金；
-          每趟最多 {preview.bankMaxGoldPerRun} 金，单趟存满可得{" "}
-          {Math.floor(preview.bankMaxGoldPerRun / preview.bankGoldPerTcr)} tcr。
+          钱庄：{preview.bankGoldPerTcr} 金 = 1 tcr，每趟最多存 {preview.bankMaxGoldPerRun} 金；
+          单趟存满可得 {Math.floor(preview.bankMaxGoldPerRun / preview.bankGoldPerTcr)} tcr。
         </p>
       </div>
 

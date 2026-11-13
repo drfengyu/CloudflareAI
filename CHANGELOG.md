@@ -5,6 +5,43 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.55.0] - 2026-11-13
+
+### 变更
+
+- 三国讨逆传取消出城券费：`startTrialRun` 不再按票价扣试炼券，开局与结算后的
+  「前往下一处 / 再走一遍」都直接出城；`runPriceCredits` 从 `TrialConfig`、后台表单、
+  页面文案与预演里移除。
+- 活动券（试炼券）成为城内唯一流通货币：`SagaItemDef` 只剩 `priceTickets`，
+  铁匠铺武器 1/2/3/5 张、护甲 1/2/3/5 张、伤药 1 张、良药 2 张、军需 1~2 张；
+  购买时 `buyTrialItem` 按 `priceTickets × couponUnitCredits` 实时扣券，
+  购买记录带 `cmdIndex`，重放时券价以商品表为准，客户端写回的张数不采信。
+- 客栈改为 1 张券住一次：新增 `SAGA_INN_PRICE_TICKETS` 与虚拟商品 `inn_rest`，
+  购买时扣券、重放时 `restAtInn` 补满上阵武将；兵败后住店仍会把场面切回 `field`，
+  没有住店记录则继续停留在败退，不能零成本复活。
+- 钱庄只保留金币 → tcr：`bankGoldPerTcr` / `bankMaxGoldPerRun` 冻结进出城时的行军，
+  存金收兵时与平定奖励合并到账；后台去掉「换金价」输入与 `bankGoldPerTcrBuy`
+  配置校验，`goldPerTcrBuy` 仅保留在 `SagaBankPolicy` 里读回历史 `bank_gold` 记录。
+- 页面与面板同步：开车说明改为出城免费、城内买卖用券；HUD 去掉 tcr 余额与出城券数，
+  开始 / 结算弹窗不再检查或扣券；钱庄面板只留存金输入与「全部」，客栈价格显示券。
+
+### 移除
+
+- 旧金币商店指令 `{ k: "shop" }` 与住店指令 `{ k: "inn" }` 从 `SagaCommand`、
+  `sanitizeSagaCommands` 与重放循环中移除，改版后的客户端伪造也不会绕过券扣费；
+  历史行军里已落库的 `bank_gold` / `gold_*` 购买记录仍按旧价读回，不会丢账。
+- `buyTrialGold` / `buyTrialGoldAction`、`GoldPurchaseResult`、`bankGoldForTcr`、
+  `SAGA_BANK_MAX_TCR_BUY`、`SAGA_INN_PRICE_GOLD`、`buyGoldItem` 与
+  `SAGA_GOLD_SHOP_IDS` / `SAGA_SUPPLY_SHOP_IDS` 一并删除。
+
+### 验证
+
+- `tests/trial-saga.test.ts` 重写经济用例：券价清洗、客栈住店券记录补兵 / 兵败重整、
+  购买记录按商品表校正券价、被动军需去重、钱庄单向存金与上限、旧 `bank_gold`
+  记录兼容；旧金币商店与住店指令被清洗丢弃。
+  `npx tsx --test tests/*.test.ts` 共 150 项全过；`npm run typecheck`、触碰文件的
+  ESLint、`npm run build` 通过。本机没有可用的 `.env.local`，页面未在真实浏览器里点过。
+
 ## [0.54.1] - 2026-11-13
 
 ### 修复

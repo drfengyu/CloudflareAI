@@ -129,8 +129,8 @@ export interface SagaItemDef {
   id: string;
   name: string;
   kind: SagaItemKind;
-  priceGold?: number;
-  priceTickets?: number;
+  /** 活动券价：城内所有买卖都只收活动券，服务端购买时实时扣。 */
+  priceTickets: number;
   atk?: number;
   def?: number;
   heal?: number;
@@ -214,10 +214,10 @@ export interface SagaPurchase {
   id: string;
   itemId: string;
   tickets: number;
-  /** tcr 换金币的购买记录：这一笔换进游戏的金币数（`itemId` 为 `bank_gold`）。 */
+  /** 旧版 tcr 换金币的购买记录：这一笔换进游戏的金币数（`itemId` 为 `bank_gold`）。 */
   gold?: number;
   at: number;
-  /** 购买时已经执行过的指令数：军需从下一条指令起生效。 */
+  /** 购买时已经执行过的指令数：装备 / 军需 / 住店从下一步行动起生效。 */
   cmdIndex: number;
 }
 
@@ -264,13 +264,10 @@ export interface SagaRoundCommand {
 
 export type SagaCommand =
   | { k: "formation"; f: FormationId }
-  | { k: "shop"; i: string }
   | { k: "equip"; g: string; slot: "weapon" | "armor"; i: string | null }
   | { k: "party"; active: string[] }
   /** 钱庄存金：按本次行军的存金价整档扣，收兵时统一折成 tcr 发放。 */
   | { k: "bank"; g: number }
-  /** 客栈住店：花固定金币把上阵武将的兵力补满。 */
-  | { k: "inn" }
   | { k: "leave" }
   /** 打的是图上哪座营：大地图上可以自由挑顺序，首领营要先破其余营。 */
   | { k: "battle"; node: number; rounds: SagaRoundCommand[][] }

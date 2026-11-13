@@ -4,7 +4,6 @@ import {
   SAGA_FORMATIONS,
   SAGA_GENERAL_BY_ID,
   SAGA_ITEM_BY_ID,
-  SAGA_ITEMS,
 } from "./data";
 import { startBattle, resolveBattleRound, startEncounterBattle } from "./battle";
 import { SAGA_MAX_ENCOUNTERS } from "./encounter";
@@ -13,13 +12,13 @@ import {
   sanitizeSagaBank,
   type SagaBankPolicy,
 } from "./bank";
-import { SAGA_INN_PRICE_GOLD } from "./inn";
+import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "./inn";
 import {
   applyChapterUnlock,
-  buyGoldItem,
   cloneSave,
   equipGeneral,
   generalStats,
+  grantItem,
   normalizeTrialSave,
   setActiveParty,
   setFormation,
@@ -284,13 +283,10 @@ function parseNode(raw: unknown): SagaNode | null {
   };
 }
 
-const SUPPLY_IDS = new Set(
-  [...SAGA_ITEM_BY_ID.values()].filter((item) => item.kind === "supply").map((item) => item.id),
-);
 const PASSIVE_SUPPLIES = new Set(["troops", "attack", "speed", "tactic"]);
 
-/** tcr 换金币的购买记录用这个虚拟商品 ID，不参与军需同类限购。 */
-export const SAGA_BANK_GOLD_ITEM_ID = "bank_gold";
+/** 旧版 tcr 换金币的购买记录用这个虚拟商品 ID，只用于读回历史数据。 */
+const SAGA_BANK_GOLD_ITEM_ID = "bank_gold";
 
 /** v0.51 时代的固定金币档（`gold_50` 等）；旧行军里的记录仍按当时买到的金币补发。 */
 const LEGACY_GOLD_PACK_ID = /^gold_(\d{1,6})$/;
@@ -327,19 +323,21 @@ function parsePurchases(raw: unknown, bank: SagaBankPolicy): SagaPurchase[] {
       out.push({ id, itemId: SAGA_BANK_GOLD_ITEM_ID, tickets: 0, gold, at, cmdIndex });
       continue;
     }
-    if (!SUPPLY_IDS.has(itemId)) continue;
+    // 客栈住店是一张券一次的购买记录：允许同一趟重复住，重放时按记录补兵。
+    if (itemId === SAGA_INN_ITEM_ID) {
+      ids.add(id);
+      out.push({ id, itemId, tickets: SAGA_INN_PRICE_TICKETS, at, cmdIndex });
+      continue;
+    }
+    const def = SAGA_ITEM_BY_ID.get(itemId);
+    if (!def || !def.priceTickets) continue;
     if (isPassiveSupply(itemId)) {
       if (passives.has(itemId)) continue;
       passives.add(itemId);
     }
     ids.add(id);
-    out.push({
-      id,
-      itemId,
-      tickets: clampInt(Number(it.tickets) || 0, 0, 1000),
-      at,
-      cmdIndex,
-    });
+    // 券价以商品表为准，旧记录里写的张数不采信。
+    out.push({ id, itemId, tickets: def.priceTickets, at, cmdIndex });
   }
   return out;
 }
@@ -454,12 +452,6 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
         if (formation) out.push({ k: "formation", f: formation.id });
         break;
       }
-      case "shop": {
-        const itemId = String(it.i ?? "");
-        const item = SAGA_ITEM_BY_ID.get(itemId);
-        if (item && item.kind !== "supply") out.push({ k: "shop", i: itemId });
-        break;
-      }
       case "equip": {
         const slot = it.slot;
         if (slot !== "weapon" && slot !== "armor") break;
@@ -489,10 +481,6 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
         if (Number.isFinite(gold) && gold > 0 && gold <= 100_000_000) {
           out.push({ k: "bank", g: gold });
         }
-        break;
-      }
-      case "inn": {
-        out.push({ k: "inn" });
         break;
       }
       case "leave": {
@@ -568,11 +556,10 @@ export function bankSagaGold(state: SagaReplayState, gold: number, bank: SagaBan
 }
 
 /**
- * 客栈住店：全队任一武将缺兵才收一次钱，把上阵武将补满；全员满编或金币不足返回 false。
- * `revive` 用于兵败后的重整：哪怕队伍已经换人换到满编，也照收一笔店钱放行。
+ * 客栈重整：把上阵武将的兵力补满；全员满编返回 false。
+ * 住店券在购买时已经扣过，重放只负责补兵；兵败后的 `lost` 场景由购买记录切回。
  */
-export function restAtInn(state: SagaReplayState, revive = false): boolean {
-  if (state.save.gold < SAGA_INN_PRICE_GOLD) return false;
+export function restAtInn(state: SagaReplayState): boolean {
   let healed = 0;
   for (const general of state.save.party) {
     const stats = generalStats(general);
@@ -585,18 +572,30 @@ export function restAtInn(state: SagaReplayState, revive = false): boolean {
     state.partyTroops[general.id] = maxTroops;
     healed += maxTroops - current;
   }
-  if (healed <= 0 && !revive) return false;
-  state.save.gold -= SAGA_INN_PRICE_GOLD;
-  return true;
+  return healed > 0;
 }
 
-/** 军需品从购买发生的指令位置起生效，已经打过的仗不会被回溯加强；换金则当场加金币。 */
+/** 购买记录从购买发生的指令位置起生效，已经打过的仗不会被回溯加强。 */
 function applyPurchase(state: SagaReplayState, purchase: SagaPurchase): void {
   if (typeof purchase.gold === "number" && purchase.gold > 0) {
     state.save.gold = Math.min(9_999_999, state.save.gold + Math.trunc(purchase.gold));
   }
+  if (purchase.itemId === SAGA_INN_ITEM_ID) {
+    // 兵败后住店是重整旗鼓：全队拉回满编，行军从下一步继续。
+    const revive = state.scene === "lost";
+    restAtInn(state);
+    if (revive) {
+      state.scene = "field";
+      state.battle = null;
+    }
+    return;
+  }
   const item = SAGA_ITEM_BY_ID.get(purchase.itemId);
-  if (!item || item.kind !== "supply") return;
+  if (!item) return;
+  if (item.kind !== "supply") {
+    grantItem(state.save, item.id);
+    return;
+  }
   switch (item.supply) {
     case "troops":
       state.buffs.troopPct = Math.min(30, state.buffs.troopPct + 10);
@@ -657,9 +656,6 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
       case "formation":
         setFormation(state.save, command.f);
         break;
-      case "shop":
-        buyGoldItem(state.save, command.i);
-        break;
       case "equip":
         equipGeneral(state.save, command.g, command.slot, command.i);
         break;
@@ -669,15 +665,6 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
       case "bank":
         bankSagaGold(state, command.g, run.bank);
         break;
-      case "inn": {
-        // 兵败后住店是重整旗鼓：店钱照收，全队拉回满编，行军从下一步继续。
-        const revive = state.scene === "lost";
-        if (restAtInn(state, revive) && revive) {
-          state.scene = "field";
-          state.battle = null;
-        }
-        break;
-      }
       case "leave":
         index = total;
         break;
@@ -849,55 +836,13 @@ export function autoBattleRounds(
   return rounds;
 }
 
-/** 自动行军：先花金币补装备与伤药，再全军突击；每次进城都会尝试升级。 */
-function planTownUpgrades(state: SagaReplayState): SagaCommand[] {
-  const save = cloneSave(state.save);
-  const commands: SagaCommand[] = [];
-  for (const slot of ["weapon", "armor"] as const) {
-    const stat = slot === "weapon" ? "atk" : "def";
-    const ordered = [...save.party].sort((a, b) => {
-      const sa = generalStats(a);
-      const sb = generalStats(b);
-      return slot === "weapon" ? sb.force - sa.force : sb.defense - sa.defense;
-    });
-    for (const general of ordered) {
-      const worn = slot === "weapon" ? general.weapon : general.armor;
-      const wornPower = worn ? (SAGA_ITEM_BY_ID.get(worn)?.[stat] ?? 0) : 0;
-      const candidate = SAGA_ITEMS.filter(
-        (item) =>
-          item.kind === slot &&
-          (item.priceGold ?? 0) > 0 &&
-          (item.priceGold ?? 0) <= save.gold &&
-          (item[stat] ?? 0) > wornPower + 2,
-      ).sort((a, b) => (b[stat] ?? 0) - (a[stat] ?? 0))[0];
-      if (!candidate || !buyGoldItem(save, candidate.id)) continue;
-      if (!equipGeneral(save, general.id, slot, candidate.id)) continue;
-      commands.push({ k: "shop", i: candidate.id });
-      commands.push({ k: "equip", g: general.id, slot, i: candidate.id });
-    }
-  }
-  const herbs = (save.bag.herb ?? 0) + (save.bag.medicine ?? 0);
-  for (let count = herbs; count < 4 && save.gold >= 45; count++) {
-    if (!buyGoldItem(save, "herb")) break;
-    commands.push({ k: "shop", i: "herb" });
-  }
-  return commands;
-}
-
 /** 全军突击：按当前存档自动打完地图上的营地（先清外围再取本阵），用于一键演示与测试。 */
 export function autoPlaySagaRun(run: SagaRun): SagaSettlement {
   const commands: SagaCommand[] = [];
   for (let guard = 0; guard < 30; guard++) {
-    let replay = replaySagaRun(run, commands);
-    let targets = openNodes(run, replay.state);
+    const replay = replaySagaRun(run, commands);
+    const targets = openNodes(run, replay.state);
     if (replay.state.scene !== "field" || targets.length === 0) break;
-    const upgrades = planTownUpgrades(replay.state);
-    if (upgrades.length > 0) {
-      commands.push(...upgrades);
-      replay = replaySagaRun(run, commands);
-      if (replay.state.scene !== "field") break;
-      targets = openNodes(run, replay.state);
-    }
     const node = targets[0];
     commands.push({ k: "battle", node, rounds: autoBattleRounds(run, node, replay.state) });
   }

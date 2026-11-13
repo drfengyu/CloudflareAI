@@ -1,4 +1,3 @@
-import { snapCostToUnit } from "@/lib/activity/ticket-math";
 import { parseCnWallClock } from "@/lib/date";
 
 /**
@@ -33,8 +32,6 @@ export interface TrialConfig {
   endAt: string;
   /** 每处地方的节点数（沿用 `questionCount` 字段名，避免动表结构）。 */
   questionCount: number;
-  /** 每次出城的军令价（cr），必须是券单价的整数倍。 */
-  runPriceCredits: number;
   /** 1 张活动券兑换所需的 cr（券面单价）。 */
   couponUnitCredits: number;
   /** 剧情通关奖励 tcr 的有效天数。 */
@@ -43,8 +40,6 @@ export interface TrialConfig {
   bankGoldPerTcr: number;
   /** 每次行军最多存多少金币（按存金价向下取整）。 */
   bankMaxGoldPerRun: number;
-  /** 钱庄换金：1 tcr 能换回多少行军金币，必须低于存金价。 */
-  bankGoldPerTcrBuy: number;
   /** 攻克节点数 → tcr 档位（只有走完当前剧情才发）。 */
   tiers: TrialTier[];
 }
@@ -54,12 +49,10 @@ export const DEFAULT_TRIAL_CONFIG: TrialConfig = {
   startAt: "",
   endAt: "",
   questionCount: 5,
-  runPriceCredits: 5,
   couponUnitCredits: 5,
   rewardValidDays: 30,
   bankGoldPerTcr: 100,
   bankMaxGoldPerRun: 600,
-  bankGoldPerTcrBuy: 40,
   tiers: [
     { correct: 2, reward: 1 },
     { correct: 3, reward: 2 },
@@ -119,25 +112,15 @@ export function sanitizeTrialConfig(raw: unknown): TrialConfig {
       boundedInteger(it.bankMaxGoldPerRun, d.bankMaxGoldPerRun, 0, 100_000_000) / bankGoldPerTcr,
     ) * bankGoldPerTcr,
   );
-  // 换回价必须低于存金价：否则「存 100 金换 1 tcr，再用 1 tcr 换回 100+ 金」就是无限刷金。
-  const bankGoldPerTcrBuy = Math.min(
-    bankGoldPerTcr - 1,
-    boundedInteger(it.bankGoldPerTcrBuy, d.bankGoldPerTcrBuy, 1, 1_000_000),
-  );
   return {
     enabled: it.enabled === true,
     startAt: typeof it.startAt === "string" ? it.startAt.trim() : "",
     endAt: typeof it.endAt === "string" ? it.endAt.trim() : "",
     questionCount,
-    runPriceCredits: snapCostToUnit(
-      round2(positiveNumber(it.runPriceCredits, d.runPriceCredits)),
-      unit,
-    ),
     couponUnitCredits: unit,
     rewardValidDays: boundedInteger(it.rewardValidDays, d.rewardValidDays, 1, 3650),
     bankGoldPerTcr,
     bankMaxGoldPerRun,
-    bankGoldPerTcrBuy,
     tiers: tiers.length > 0 ? tiers : sanitizeTrialTiers(d.tiers, questionCount),
   };
 }

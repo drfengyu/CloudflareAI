@@ -1,4 +1,4 @@
-import { Flag, ScrollText, Swords, Ticket, Trophy, Users } from "lucide-react";
+import { Coins, Flag, ScrollText, Swords, Trophy, Users } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PageBody } from "@/components/dashboard/section";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,9 +7,7 @@ import { CouponCount } from "@/components/activity/coupon-badge";
 import { CouponShop } from "@/components/activity/coupon-shop";
 import { formatCredits } from "@/lib/billing/credits";
 import { getActivityCouponView } from "@/lib/activity/coupons";
-import { ticketsForCost } from "@/lib/activity/ticket-math";
 import { requireUser } from "@/lib/usage/meter";
-import { getTemporaryBalance } from "@/lib/billing/display-balance";
 import {
   trialActivityKey,
   trialActivityWindow,
@@ -26,7 +24,7 @@ import {
   type TrialSaveState,
 } from "@/lib/trial/store";
 import { SAGA_CHAPTERS } from "@/lib/trial/saga/data";
-import { SAGA_INN_PRICE_GOLD } from "@/lib/trial/saga/inn";
+import { SAGA_INN_PRICE_TICKETS } from "@/lib/trial/saga/inn";
 import { partyPower } from "@/lib/trial/saga/state";
 
 export const dynamic = "force-dynamic";
@@ -69,14 +67,12 @@ function Stat({
 
 export default async function TrialPage() {
   const userId = await requireUser();
-  const [config, coupon, tempCredits] = await Promise.all([
+  const [config, coupon] = await Promise.all([
     getTrialConfig(),
     getActivityCouponView(userId, "trial"),
-    getTemporaryBalance(userId),
   ]);
   const windowInfo = trialActivityWindow(config);
   const activityKey = trialActivityKey(config);
-  const priceTickets = ticketsForCost(config.runPriceCredits, config.couponUnitCredits);
 
   const track = windowInfo.status === "active" || windowInfo.status === "ended";
   const [saveState, activeRun, history]: [
@@ -125,9 +121,9 @@ export default async function TrialPage() {
             计策消耗计策点，敌将兵力低于三成时可以招降。
           </li>
           <li>
-            每次出城消耗 <CouponCount kind="trial" count={priceTickets} />（1 张 ={" "}
-            {formatCredits(config.couponUnitCredits)} cr 券面），只扣试炼券；军需帐也用试炼券，
-            补给只在这次行军中生效。城镇里的铁匠铺、药铺和客栈花金币。
+            出城<b>不花券</b>。铁匠铺、药铺、客栈与军需帐全部用<b>活动券</b>标价（1 张 ={" "}
+            {formatCredits(config.couponUnitCredits)} cr 券面），买装备、伤药、军需与住店都在购买时实时扣券；
+            战斗缴获的金币只在钱庄存成 tcr，不能反过来换金币。
           </li>
           <li>
             平定一处地方发通关奖励：
@@ -137,10 +133,9 @@ export default async function TrialPage() {
             ；按达到的最高档发放，奖励 tcr {config.rewardValidDays} 天内有效。未平定不发。
           </li>
           <li>
-            城镇钱庄<b>双向兑换、数量自选</b>：每 {config.bankGoldPerTcr} 金存成 1 tcr（每趟最多存{" "}
-            {config.bankMaxGoldPerRun} 金，收兵时到账），也能按 1 tcr = {config.bankGoldPerTcrBuy} 金换回金币、
-            当场花；两向价差就是钱庄的抽成。客栈花 {SAGA_INN_PRICE_GOLD} 金住一次，
-            把上阵武将的兵力补满，残兵也能接着推下一处。
+            城镇钱庄<b>只收金币、只发 tcr</b>：每 {config.bankGoldPerTcr} 金存成 1 tcr（每趟最多存{" "}
+            {config.bankMaxGoldPerRun} 金，收兵时到账）。客栈每次住店花{" "}
+            {SAGA_INN_PRICE_TICKETS} 张券，把上阵武将的兵力补满，残兵也能接着推下一处。
           </li>
           <li>
             不设次数与时限。中途关掉页面不算失败，回来接着走当前剧情；
@@ -266,10 +261,10 @@ export default async function TrialPage() {
             hint={save.stats.wins > 0 ? "已走完的剧情地点" : "尚未平定第一处"}
           />
           <Stat
-            icon={Ticket}
-            label="出城军令"
-            value={<CouponCount kind="trial" count={priceTickets} iconClassName="h-4 w-4" />}
-            hint={`1 张 = ${formatCredits(config.couponUnitCredits)} cr 券面`}
+            icon={Coins}
+            label="钱庄存金"
+            value={`${config.bankGoldPerTcr} 金 = 1 tcr`}
+            hint={`每趟最多存 ${config.bankMaxGoldPerRun} 金`}
           />
           <Stat
             icon={Trophy}
@@ -292,14 +287,10 @@ export default async function TrialPage() {
               initialRun={activeRun}
               save={save}
               initialTickets={coupon.tickets}
-              initialTcr={tempCredits}
               bank={{
                 goldPerTcr: config.bankGoldPerTcr,
                 maxGoldPerRun: config.bankMaxGoldPerRun,
-                goldPerTcrBuy: config.bankGoldPerTcrBuy,
               }}
-              priceTickets={priceTickets}
-              unitCredits={config.couponUnitCredits}
               nodeCount={config.questionCount}
               maxReward={trialRewardFor(config, config.questionCount)}
               rewardValidDays={config.rewardValidDays}

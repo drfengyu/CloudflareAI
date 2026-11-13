@@ -88,16 +88,16 @@ export const SAGA_FORMATIONS: SagaFormationDef[] = [
 export const SAGA_FORMATION_BY_ID = new Map(SAGA_FORMATIONS.map((f) => [f.id, f]));
 
 export const SAGA_ITEMS: SagaItemDef[] = [
-  { id: "iron_sword", name: "铁剑", kind: "weapon", priceGold: 30, atk: 8, desc: "攻击 +8" },
-  { id: "spear", name: "长枪", kind: "weapon", priceGold: 60, atk: 14, desc: "攻击 +14" },
-  { id: "blade", name: "大刀", kind: "weapon", priceGold: 100, atk: 20, desc: "攻击 +20" },
-  { id: "guandao", name: "偃月刀", kind: "weapon", priceGold: 160, atk: 27, desc: "攻击 +27" },
-  { id: "cloth", name: "布甲", kind: "armor", priceGold: 25, def: 6, desc: "防御 +6" },
-  { id: "leather", name: "皮甲", kind: "armor", priceGold: 55, def: 11, desc: "防御 +11" },
-  { id: "iron_armor", name: "铁甲", kind: "armor", priceGold: 100, def: 17, desc: "防御 +17" },
-  { id: "heavy_armor", name: "重铠", kind: "armor", priceGold: 160, def: 23, desc: "防御 +23" },
-  { id: "herb", name: "伤药", kind: "consumable", priceGold: 15, heal: 60, desc: "回复 60 兵力", stack: true },
-  { id: "medicine", name: "良药", kind: "consumable", priceGold: 35, heal: 150, desc: "回复 150 兵力", stack: true },
+  { id: "iron_sword", name: "铁剑", kind: "weapon", priceTickets: 1, atk: 8, desc: "攻击 +8" },
+  { id: "spear", name: "长枪", kind: "weapon", priceTickets: 2, atk: 14, desc: "攻击 +14" },
+  { id: "blade", name: "大刀", kind: "weapon", priceTickets: 3, atk: 20, desc: "攻击 +20" },
+  { id: "guandao", name: "偃月刀", kind: "weapon", priceTickets: 5, atk: 27, desc: "攻击 +27" },
+  { id: "cloth", name: "布甲", kind: "armor", priceTickets: 1, def: 6, desc: "防御 +6" },
+  { id: "leather", name: "皮甲", kind: "armor", priceTickets: 2, def: 11, desc: "防御 +11" },
+  { id: "iron_armor", name: "铁甲", kind: "armor", priceTickets: 3, def: 17, desc: "防御 +17" },
+  { id: "heavy_armor", name: "重铠", kind: "armor", priceTickets: 5, def: 23, desc: "防御 +23" },
+  { id: "herb", name: "伤药", kind: "consumable", priceTickets: 1, heal: 60, desc: "回复 60 兵力", stack: true },
+  { id: "medicine", name: "良药", kind: "consumable", priceTickets: 2, heal: 150, desc: "回复 150 兵力", stack: true },
   { id: "secret_medicine", name: "秘药", kind: "supply", priceTickets: 1, supply: "heal", desc: "此行：一名武将兵力回满", stack: true },
   { id: "revive_token", name: "兵符", kind: "supply", priceTickets: 2, supply: "revive", desc: "此行：复活一名败将（四成兵力）", stack: true },
   { id: "tiger_tally", name: "虎符", kind: "supply", priceTickets: 2, supply: "troops", desc: "此行：全队兵力上限 +10%" },
@@ -107,9 +107,6 @@ export const SAGA_ITEMS: SagaItemDef[] = [
 ];
 
 export const SAGA_ITEM_BY_ID = new Map(SAGA_ITEMS.map((i) => [i.id, i]));
-
-export const SAGA_GOLD_SHOP_IDS = SAGA_ITEMS.filter((i) => i.kind !== "supply").map((i) => i.id);
-export const SAGA_SUPPLY_SHOP_IDS = SAGA_ITEMS.filter((i) => i.kind === "supply").map((i) => i.id);
 
 export const SAGA_CHAPTERS: SagaChapterDef[] = [
   {

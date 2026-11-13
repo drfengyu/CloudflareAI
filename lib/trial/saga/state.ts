@@ -251,11 +251,10 @@ export function applyChapterUnlock(save: TrialSave, unlock: string | null): stri
   return result.ok ? unlock : null;
 }
 
-export function buyGoldItem(save: TrialSave, itemId: string): boolean {
+/** 用活动券买下的装备 / 药品：券已在服务端扣过，重放只负责入库。 */
+export function grantItem(save: TrialSave, itemId: string): boolean {
   const item = SAGA_ITEM_BY_ID.get(itemId);
-  if (!item || item.kind === "supply" || !item.priceGold) return false;
-  if (save.gold < item.priceGold) return false;
-  save.gold -= item.priceGold;
+  if (!item || item.kind === "supply") return false;
   if (item.kind === "consumable") {
     save.bag[item.id] = (save.bag[item.id] ?? 0) + 1;
   } else {
