@@ -54,6 +54,21 @@ import {
 import { expToNext, generalStats, partyPower } from "@/lib/trial/saga/state";
 import { bankCreditsForGold, type SagaBankPolicy } from "@/lib/trial/saga/bank";
 import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "@/lib/trial/saga/inn";
+import {
+  campScene,
+  chapterIntroScene,
+  chapterVictoryScene,
+  councilScene,
+  poiScene,
+  tavernScene,
+  type SagaScene,
+} from "@/lib/trial/saga/story";
+import {
+  sagaNextQuest,
+  sagaQuestContext,
+  sagaQuestsFor,
+  type SagaQuest,
+} from "@/lib/trial/saga/quests";
 import type {
   FormationId,
   SagaBattleEvent,
@@ -86,6 +101,16 @@ import {
   type FieldFacing,
   type SagaView,
 } from "./renderer";
+import {
+  CampBanner,
+  DialogueOverlay,
+  NpcIntro,
+  PartyStrip,
+  QuestBoard,
+  SagaPortrait,
+  SceneCanvas,
+  TownScene,
+} from "./scenes";
 
 type PanelId = FieldFacilityId | "camp" | "army" | "dex" | null;
 type BattleAction = "attack" | "guard" | "tactic" | "item" | "recruit";
@@ -236,6 +261,13 @@ export function TrialGame(props: TrialGameProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [settlement, setSettlement] = useState<TrialSettlement | null>(null);
   const [banner, setBanner] = useState<{ kind: "won" | "lost"; name: string; gold: number; exp: number } | null>(null);
+  /** 城中街道场景：进城后把大地图盖住，铺子从街景里进。 */
+  const [inTown, setInTown] = useState(false);
+  /** 剧情对话浮层：开场、阵前、平定、乡野、酒馆与营帐议事都走这里。 */
+  const [dialogue, setDialogue] = useState<SagaScene | null>(null);
+  /** 纯前端见闻：走访过的乡野点位与看过的剧情，只存本机，不参与结算。 */
+  const [visitedPois, setVisitedPois] = useState<string[]>([]);
+  const [seenScenes, setSeenScenes] = useState<string[]>([]);
   const submitLock = useRef(false);
 
   const replay = useMemo(
@@ -245,6 +277,7 @@ export function TrialGame(props: TrialGameProps) {
   const state = replay?.state ?? null;
   const save = state?.save ?? props.save;
   const storageKey = run && runId ? `trial-saga:${runId}:${run.seed}` : null;
+  const townKey = run && runId ? `trial-saga-town:${runId}:${run.seed}` : null;
 
   const heroDef = SAGA_GENERAL_BY_ID.get(save.party[0]?.id ?? "liubei");
   const chapter = SAGA_CHAPTERS[Math.min(SAGA_CHAPTERS.length - 1, save.chapter)];
@@ -318,6 +351,63 @@ export function TrialGame(props: TrialGameProps) {
     }
   }, [storageKey, commands]);
 
+  // 走访与剧情的本机记录：换一趟行军就重读，没记录就当作全新的。
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (!townKey) {
+        setVisitedPois([]);
+        setSeenScenes([]);
+        return;
+      }
+      try {
+        const raw = window.localStorage.getItem(townKey);
+        const data = raw ? (JSON.parse(raw) as { pois?: unknown; scenes?: unknown }) : null;
+        setVisitedPois(Array.isArray(data?.pois) ? (data.pois as string[]) : []);
+        setSeenScenes(Array.isArray(data?.scenes) ? (data.scenes as string[]) : []);
+      } catch {
+        setVisitedPois([]);
+        setSeenScenes([]);
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [townKey]);
+
+  const townSaveReady = useRef<string | null>(null);
+  useEffect(() => {
+    if (!townKey) return;
+    // 读完存档后的第一轮不要用空状态覆盖本机记录。
+    if (townSaveReady.current !== townKey) {
+      townSaveReady.current = townKey;
+      return;
+    }
+    try {
+      window.localStorage.setItem(townKey, JSON.stringify({ pois: visitedPois, scenes: seenScenes }));
+    } catch {
+      // 存不下就算了，顶多下次要重新走一遍乡野。
+    }
+  }, [townKey, visitedPois, seenScenes]);
+
+  const quests = useMemo(
+    () =>
+      run && state
+        ? sagaQuestsFor(
+            sagaQuestContext(run, state, {
+              visitedPois: visitedPois.length,
+              totalPois: field.pois.length,
+            }),
+          )
+        : [],
+    [run, state, visitedPois.length, field.pois.length],
+  );
+  const nextQuest = useMemo(() => sagaNextQuest(quests), [quests]);
+  const gearById = useMemo(() => {
+    const rows: Record<string, { weapon: string | null; armor: string | null }> = {};
+    for (const member of [...save.party, ...save.reserve]) {
+      rows[member.id] = { weapon: member.weapon, armor: member.armor };
+    }
+    return rows;
+  }, [save.party, save.reserve]);
+
   const submit = useCallback(async () => {
     if (!runId || submitLock.current) return;
     submitLock.current = true;
@@ -331,13 +421,18 @@ export function TrialGame(props: TrialGameProps) {
       setSettlement(result.data);
       setBattle(null);
       setPanel(null);
+      setInTown(false);
+      setDialogue(null);
+      setVisitedPois([]);
+      setSeenScenes([]);
       if (storageKey) window.localStorage.removeItem(storageKey);
+      if (townKey) window.localStorage.removeItem(townKey);
       setRunId(null);
     } finally {
       setBusy(null);
       submitLock.current = false;
     }
-  }, [commands, runId, storageKey]);
+  }, [commands, runId, storageKey, townKey]);
 
   const appendCommand = useCallback((command: SagaCommand) => {
     setCommands((prev) => [...prev, command]);
@@ -357,6 +452,11 @@ export function TrialGame(props: TrialGameProps) {
       setCommands([]);
       setSettlement(null);
       setPanel(null);
+      setCampNode(null);
+      setInTown(false);
+      setVisitedPois([]);
+      setSeenScenes([]);
+      setDialogue(chapterIntroScene(data.run.startSave.chapter));
       gameAudio.play("encounter");
       toast.success(`前往 ${SAGA_CHAPTERS[Math.min(SAGA_CHAPTERS.length - 1, data.run.startSave.chapter)].town}`);
     } finally {
@@ -448,6 +548,8 @@ export function TrialGame(props: TrialGameProps) {
   /** 走过多少格才允许下一次判定，避免刚打完又立刻撞上。 */
   const encounterCooldownRef = useRef(12);
   const walkTileRef = useRef<string | null>(null);
+  const inTownRef = useRef(false);
+  const dialogueRef = useRef(false);
   const heroColorRef = useRef({ color: "#3f6212", accent: "#bef264" });
   const hudRef = useRef({
     active: false,
@@ -470,6 +572,19 @@ export function TrialGame(props: TrialGameProps) {
     settlementRef.current = Boolean(settlement);
   }, [settlement]);
 
+  useEffect(() => {
+    inTownRef.current = inTown;
+    if (!inTown) return;
+    // 进城的瞬间把走位松开，免得回到大地图后角色自己往前冲。
+    playerRef.current.walkTo = null;
+    arriveRef.current = null;
+    keysRef.current = { up: false, down: false, left: false, right: false };
+  }, [inTown]);
+
+  useEffect(() => {
+    dialogueRef.current = Boolean(dialogue);
+  }, [dialogue]);
+
   // 换地方或开局：把主角放回城门外，走过的路不做记录（进度只看指令）。
   useEffect(() => {
     fieldRef.current = field;
@@ -489,7 +604,14 @@ export function TrialGame(props: TrialGameProps) {
     interactRef.current = (hotspot) => {
       if (settlementRef.current) return;
       if (hotspot.kind === "city") {
-        setPanel("hall");
+        setInTown(true);
+        return;
+      }
+      if (hotspot.kind === "poi" && hotspot.poi) {
+        const poi = hotspot.poi;
+        const key = `${poi.kind}:${poi.name}`;
+        setVisitedPois((prev) => (prev.includes(key) ? prev : [...prev, key]));
+        setDialogue(poiScene(run?.startSave.chapter ?? props.save.chapter, poi));
         return;
       }
       if (hotspot.camp) {
@@ -497,7 +619,14 @@ export function TrialGame(props: TrialGameProps) {
         setPanel("camp");
       }
     };
-  }, []);
+  }, [props.save.chapter, run]);
+
+  /** 同一趟行军里，每个营的阵前喊话只自动播一次；之后可从营前画面重看。 */
+  const markSceneSeen = useCallback((key: string): boolean => {
+    if (seenScenes.includes(key)) return false;
+    setSeenScenes((prev) => (prev.includes(key) ? prev : [...prev, key]));
+    return true;
+  }, [seenScenes]);
 
   useEffect(() => {
     focusIdRef.current = focusId;
@@ -592,8 +721,9 @@ export function TrialGame(props: TrialGameProps) {
       const map = fieldRef.current;
       const hud = hudRef.current;
       const inBattle = Boolean(modeRef.current.battle);
+      const townOpen = inTownRef.current;
       let moving = false;
-      if (map && !inBattle && !settlementRef.current && !encounterLockRef.current) {
+      if (map && !inBattle && !townOpen && !settlementRef.current && !encounterLockRef.current) {
         const keys = keysRef.current;
         let vx = 0;
         let vy = 0;
@@ -655,7 +785,7 @@ export function TrialGame(props: TrialGameProps) {
       }
       player.moving = moving;
       const spot =
-        map && hud.active && !inBattle && !settlementRef.current
+        map && hud.active && !inBattle && !townOpen && !settlementRef.current
           ? fieldHotspotNear(map, player.x, player.y)
           : null;
       hotspotRef.current = spot;
@@ -720,12 +850,15 @@ export function TrialGame(props: TrialGameProps) {
   useEffect(() => {
     const down = (event: KeyboardEvent) => {
       if (settlement || busy === "submit") return;
+      // 对话浮层自己处理空格 / 回车 / Esc，这里别再抢键。
+      if (dialogue) return;
       const key = event.key.toLowerCase();
       if (key === "escape") {
-        setPanel(null);
+        if (panel) setPanel(null);
+        else if (inTown) setInTown(false);
         return;
       }
-      if (panel || battle) return;
+      if (panel || battle || inTown) return;
       if (setMoveKey(key, true)) {
         event.preventDefault();
         return;
@@ -755,7 +888,7 @@ export function TrialGame(props: TrialGameProps) {
       window.removeEventListener("keyup", up);
       window.removeEventListener("blur", reset);
     };
-  }, [battle, busy, panel, settlement, setMoveKey]);
+  }, [battle, busy, dialogue, inTown, panel, settlement, setMoveKey]);
 
   /** 走到一个点位再打开面板：地图上的点、下方按钮和点击画布都走这条路径。 */
   const walkTo = useCallback((x: number, y: number, onArrive?: () => void) => {
@@ -769,15 +902,31 @@ export function TrialGame(props: TrialGameProps) {
     arriveRef.current = onArrive ?? null;
   }, []);
 
-  const openCamp = useCallback((node: number) => {
-    setCampNode(node);
-    setPanel("camp");
+  const openCamp = useCallback(
+    (node: number) => {
+      setCampNode(node);
+      setPanel("camp");
+      if (!run) return;
+      const target = run.nodes[node];
+      if (!target) return;
+      if (markSceneSeen(`camp:${node}`)) {
+        setDialogue(campScene(run.startSave.chapter, target, target.enemies[0]?.id));
+      }
+    },
+    [markSceneSeen, run],
+  );
+
+  /** 进城：大地图换成城中街景，铺子从街景点进去。 */
+  const enterTown = useCallback((spot: FieldFacilityId | null = null) => {
+    setInTown(true);
+    setPanel(spot);
+    setCampNode(null);
   }, []);
 
-  /** 兵败面板直接回城住店，省得先开城中整备再找客栈页签。 */
+  /** 兵败面板直接回城住店，省得先找城中整备再点客栈。 */
   const goInn = useCallback(() => {
-    walkTo(field.city.x, field.city.y, () => setPanel("inn"));
-  }, [field.city.x, field.city.y, walkTo]);
+    enterTown("inn");
+  }, [enterTown]);
 
 
   // ---- 战斗 ----
@@ -861,18 +1010,23 @@ export function TrialGame(props: TrialGameProps) {
           ? { k: "skirmish", rounds: session.rounds }
           : { k: "battle", node: session.node, rounds: session.rounds },
       );
-      gameAudio.play(session.battle.phase === "won" ? "win" : "lose");
+      const won = session.battle.phase === "won";
+      gameAudio.play(won ? "win" : "lose");
       setBanner({
-        kind: session.battle.phase === "won" ? "won" : "lost",
+        kind: won ? "won" : "lost",
         name: session.battle.nodeName,
         gold: session.battle.rewardGold,
         exp: session.battle.rewardExp,
       });
+      if (won && run && session.node >= 0 && run.nodes[session.node]?.kind === "boss") {
+        const key = `victory:${run.startSave.chapter}`;
+        if (markSceneSeen(key)) setDialogue(chapterVictoryScene(run.startSave.chapter));
+      }
       setBattle(null);
       setAnim(null);
       setFocusId(null);
     },
-    [appendCommand],
+    [appendCommand, markSceneSeen, run],
   );
 
   const runRound = useCallback(
@@ -940,15 +1094,20 @@ export function TrialGame(props: TrialGameProps) {
         if (battleState.phase !== "select") break;
       }
       appendCommand({ k: "battle", node, rounds });
+      const won = battleState.phase === "won";
       setBanner({
-        kind: battleState.phase === "won" ? "won" : "lost",
+        kind: won ? "won" : "lost",
         name: battleState.nodeName,
         gold: battleState.rewardGold,
         exp: battleState.rewardExp,
       });
+      if (won && run.nodes[node]?.kind === "boss") {
+        const key = `victory:${run.startSave.chapter}`;
+        if (markSceneSeen(key)) setDialogue(chapterVictoryScene(run.startSave.chapter));
+      }
       setPanel(null);
     },
-    [appendCommand, run, state],
+    [appendCommand, markSceneSeen, run, state],
   );
 
   const retreatBattle = useCallback(() => {
@@ -1003,6 +1162,7 @@ export function TrialGame(props: TrialGameProps) {
   const battleLocked = Boolean(anim) || busy === "submit";
   const pressKey = useCallback(
     (dir: "up" | "down" | "left" | "right", pressed: boolean) => {
+      if (inTownRef.current) return;
       keysRef.current[dir] = pressed;
     },
     [],
@@ -1015,7 +1175,11 @@ export function TrialGame(props: TrialGameProps) {
         ? `敌营 · ${run?.nodes[campNode ?? 0]?.name ?? ""}`
         : panel === "army"
           ? "军情与收兵"
-          : `${chapter.town}城 · 城中整备`;
+          : panel === "tavern"
+            ? `${chapter.town} · 酒馆`
+            : panel === "tent"
+              ? "营帐议事"
+              : `${chapter.town}城 · 城中整备`;
 
   return (
     <div className="space-y-3">
@@ -1036,6 +1200,15 @@ export function TrialGame(props: TrialGameProps) {
           <Ticket className="h-3.5 w-3.5 text-violet-400" />
           {tickets} 张试炼券
         </span>
+        {run && nextQuest ? (
+          <span className={HUD_CELL} title={nextQuest.desc}>
+            <ScrollText className="h-3.5 w-3.5 text-amber-500" />
+            军令 · {nextQuest.title}
+            <span className="tabular-nums text-muted-foreground">
+              {nextQuest.progress}/{nextQuest.target}
+            </span>
+          </span>
+        ) : null}
         <span className={cn(HUD_CELL, "ml-auto")}>
           {finished
             ? "全剧终"
@@ -1051,7 +1224,7 @@ export function TrialGame(props: TrialGameProps) {
           ref={canvasRef}
           width={VIEW_W}
           height={VIEW_H}
-          className="block aspect-video w-full cursor-pointer"
+          className={cn("block aspect-video w-full cursor-pointer", inTown && "hidden")}
           onClick={(event) => {
             if (battle || settlement) return;
             const view = viewRef.current;
@@ -1067,13 +1240,35 @@ export function TrialGame(props: TrialGameProps) {
               walkTo(camp.x, camp.y + 32, () => openCamp(camp.node));
               return;
             }
+            const poi = field.pois.find((row) => Math.hypot(row.x - wx, row.y - wy) < 30);
+            if (poi) {
+              walkTo(poi.x, poi.y + 26, () =>
+                interactRef.current({ kind: "poi", poi, x: poi.x, y: poi.y, radius: 28 }),
+              );
+              return;
+            }
             if (Math.hypot(field.city.x - wx, field.city.y - wy) < 44) {
-              walkTo(field.city.x, field.city.y, () => setPanel("hall"));
+              enterTown();
               return;
             }
             walkTo(wx, wy);
           }}
         />
+
+        {inTown && run ? (
+          <TownScene
+            chapterIndex={run.startSave.chapter}
+            tickets={tickets}
+            onPick={(spot) => {
+              if (spot === "gate") {
+                setPanel(null);
+                setInTown(false);
+                return;
+              }
+              setPanel(spot);
+            }}
+          />
+        ) : null}
 
         {battle ? (
           <div className="border-t border-border/70 bg-card p-3">
@@ -1114,7 +1309,13 @@ export function TrialGame(props: TrialGameProps) {
                       onClick={() => alive && setFocusId(unit.id)}
                     >
                       <div className="flex items-center justify-between gap-2 text-xs">
-                        <span className="font-medium">
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <SagaPortrait
+                            generalId={unit.id}
+                            gear={{ weapon: unit.weapon ?? null, armor: unit.armor ?? null }}
+                            width={30}
+                            height={38}
+                          />
                           {unit.name} <span className="text-muted-foreground">Lv{unit.level}</span>
                         </span>
                         <span className="tabular-nums text-muted-foreground">
@@ -1286,18 +1487,23 @@ export function TrialGame(props: TrialGameProps) {
                       enemy.downed ? "border-border/40 opacity-40" : "border-border hover:border-primary/50",
                     )}
                   >
-                    <span className="flex items-center justify-between">
-                      <span className="font-medium">
-                        {enemy.name}
-                        {enemy.boss ? <span className="ml-1 text-[10px] text-destructive">首领</span> : null}
+                    <span className="flex items-start gap-2">
+                      <SagaPortrait generalId={enemy.id} width={32} height={40} />
+                      <span className="min-w-0 flex-1">
+                        <span className="flex items-center justify-between">
+                          <span className="font-medium">
+                            {enemy.name}
+                            {enemy.boss ? <span className="ml-1 text-[10px] text-destructive">首领</span> : null}
+                          </span>
+                          <span className="tabular-nums text-muted-foreground">
+                            兵力 {Math.max(0, enemy.troops)}/{enemy.maxTroops}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 block text-[11px] text-muted-foreground">
+                          Lv{enemy.level} · {enemy.title}
+                          {enemy.recruitable && enemy.troops <= enemy.maxTroops * 0.35 ? " · 可招降" : ""}
+                        </span>
                       </span>
-                      <span className="tabular-nums text-muted-foreground">
-                        兵力 {Math.max(0, enemy.troops)}/{enemy.maxTroops}
-                      </span>
-                    </span>
-                    <span className="mt-0.5 block text-[11px] text-muted-foreground">
-                      Lv{enemy.level} · {enemy.title}
-                      {enemy.recruitable && enemy.troops <= enemy.maxTroops * 0.35 ? " · 可招降" : ""}
                     </span>
                   </button>
                 ))}
@@ -1347,6 +1553,7 @@ export function TrialGame(props: TrialGameProps) {
             <div className={PANEL_BODY}>
               {panel === "record" ? (
                 <div className="space-y-3">
+                  <NpcIntro npcId="recordkeeper" />
                   <div className="flex gap-2">
                     <Button size="sm" variant={dexTab === "save" ? "primary" : "outline"} onClick={() => setDexTab("save")}>
                       存档
@@ -1403,13 +1610,14 @@ export function TrialGame(props: TrialGameProps) {
                       <PartyList save={save} />
                     </div>
                   ) : (
-                    <DexGrid save={save} />
+                    <DexGrid save={save} gearById={gearById} />
                   )}
                 </div>
               ) : null}
 
               {panel === "forge" || panel === "herb" ? (
                 <div className="space-y-3">
+                  <NpcIntro npcId={panel === "forge" ? "blacksmith" : "herbalist"} />
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>城内买卖一律用试炼券，金币只在钱庄存成 tcr。</span>
                     <span className="flex items-center gap-1">
@@ -1455,6 +1663,7 @@ export function TrialGame(props: TrialGameProps) {
 
               {panel === "supply" ? (
                 <div className="space-y-3">
+                  <NpcIntro npcId="quartermaster" />
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
                     <span>用试炼券购买，只在这次行军中生效；被动军需每次限一份。</span>
                     <span className="flex items-center gap-1">
@@ -1500,6 +1709,7 @@ export function TrialGame(props: TrialGameProps) {
 
               {panel === "bank" ? (
                 <div className="space-y-3">
+                  <NpcIntro npcId="banker" />
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>钱庄只存不换：把这次行军打来的金币存成 tcr，收兵时到账，数量自己填。</span>
                     <span className="flex items-center gap-1 tabular-nums">
@@ -1566,6 +1776,7 @@ export function TrialGame(props: TrialGameProps) {
 
               {panel === "inn" ? (
                 <div className="space-y-3">
+                  <NpcIntro npcId="innkeeper" />
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>住一次收 {SAGA_INN_PRICE_TICKETS} 张试炼券，住下就把上阵武将的兵力补满。</span>
                     <span className="flex items-center gap-1 tabular-nums">
@@ -1611,6 +1822,7 @@ export function TrialGame(props: TrialGameProps) {
 
               {panel === "hall" ? (
                 <div className="space-y-3">
+                  <NpcIntro npcId="drillmaster" />
                   <div className="flex gap-2">
                     <Button size="sm" variant={hallTab === "party" ? "primary" : "outline"} onClick={() => setHallTab("party")}>
                       编队
@@ -1635,35 +1847,45 @@ export function TrialGame(props: TrialGameProps) {
                           const active = save.party.some((row) => row.id === member.id);
                           return (
                             <div key={member.id} className="rounded-lg border border-border p-2.5 text-sm">
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium">
-                                  {def?.name ?? member.id}
-                                  <span className="ml-1.5 text-xs text-muted-foreground">Lv{member.level}</span>
-                                </span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={active ? save.party.length <= 1 : save.party.length >= 5}
-                                  onClick={() =>
-                                    setActiveParty(
-                                      active
-                                        ? save.party.filter((row) => row.id !== member.id).map((row) => row.id)
-                                        : [...save.party.map((row) => row.id), member.id],
-                                    )
-                                  }
-                                >
-                                  {active ? "移出" : "上阵"}
-                                </Button>
+                              <div className="flex gap-2.5">
+                                <SagaPortrait
+                                  generalId={member.id}
+                                  gear={{ weapon: member.weapon, armor: member.armor }}
+                                  width={44}
+                                  height={55}
+                                />
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-medium">
+                                      {def?.name ?? member.id}
+                                      <span className="ml-1.5 text-xs text-muted-foreground">Lv{member.level}</span>
+                                    </span>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={active ? save.party.length <= 1 : save.party.length >= 5}
+                                      onClick={() =>
+                                        setActiveParty(
+                                          active
+                                            ? save.party.filter((row) => row.id !== member.id).map((row) => row.id)
+                                            : [...save.party.map((row) => row.id), member.id],
+                                        )
+                                      }
+                                    >
+                                      {active ? "移出" : "上阵"}
+                                    </Button>
+                                  </div>
+                                  <p className="mt-0.5 text-xs text-muted-foreground">
+                                    武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 兵力 {stats.maxTroops}
+                                  </p>
+                                  <p className="mt-0.5 text-xs text-muted-foreground">
+                                    {def?.title} · {def?.tactics.map((tactic) => SAGA_TACTIC_BY_ID.get(tactic)?.name).join(" / ") || "无计策"}
+                                  </p>
+                                  <p className="mt-0.5 text-xs text-muted-foreground">
+                                    武器 {member.weapon ? itemName(member.weapon) : "无"} · 防具 {member.armor ? itemName(member.armor) : "无"}
+                                  </p>
+                                </div>
                               </div>
-                              <p className="mt-0.5 text-xs text-muted-foreground">
-                                武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 兵力 {stats.maxTroops}
-                              </p>
-                              <p className="mt-0.5 text-xs text-muted-foreground">
-                                {def?.title} · {def?.tactics.map((tactic) => SAGA_TACTIC_BY_ID.get(tactic)?.name).join(" / ") || "无计策"}
-                              </p>
-                              <p className="mt-0.5 text-xs text-muted-foreground">
-                                武器 {member.weapon ? itemName(member.weapon) : "无"} · 防具 {member.armor ? itemName(member.armor) : "无"}
-                              </p>
                             </div>
                           );
                         })}
@@ -1751,6 +1973,56 @@ export function TrialGame(props: TrialGameProps) {
                 </div>
               ) : null}
 
+              {panel === "tavern" ? (
+                <div className="space-y-3">
+                  <SceneCanvas backdrop="tavern" height={230} className="rounded-lg border border-border" />
+                  <NpcIntro npcId="tavernkeeper" />
+                  <div className="flex flex-wrap gap-2">
+                    <Button size="sm" onClick={() => setDialogue(tavernScene(chapter.index))}>
+                      <ScrollText className="h-3.5 w-3.5" />
+                      听一段旧事
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setInTown(false)}>
+                      <Swords className="h-3.5 w-3.5" />
+                      出城行军
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    说书人讲的是本地的旧事，听一段不花券，也不影响行军。
+                  </p>
+                </div>
+              ) : null}
+
+              {panel === "tent" ? (
+                <div className="space-y-3">
+                  <SceneCanvas backdrop="tent" height={230} className="rounded-lg border border-border" />
+                  <NpcIntro npcId="tentkeeper" />
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        setDialogue(councilScene(chapter.index, save.party.map((member) => member.id)))
+                      }
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                      召集众将议事
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => setPanel("army")}>
+                      <Flag className="h-3.5 w-3.5" />
+                      军情与收兵
+                    </Button>
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-sm font-medium">军令</p>
+                    <QuestBoard quests={quests} />
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-sm font-medium">上阵武将</p>
+                    <PartyStrip members={save.party} />
+                  </div>
+                </div>
+              ) : null}
+
               {panel === "camp" ? (
                 <CampPanel
                   run={run}
@@ -1762,8 +2034,14 @@ export function TrialGame(props: TrialGameProps) {
                   onAuto={autoBattle}
                   onSubmit={() => void submit()}
                   onClose={() => setPanel(null)}
-                  onCity={() => walkTo(field.city.x, field.city.y, () => setPanel("hall"))}
+                  onCity={() => enterTown()}
                   onInn={goInn}
+                  onTalk={() => {
+                    const node = campNode === null ? null : run?.nodes[campNode] ?? null;
+                    if (run && node) {
+                      setDialogue(campScene(run.startSave.chapter, node, node.enemies[0]?.id));
+                    }
+                  }}
                 />
               ) : null}
 
@@ -1776,13 +2054,14 @@ export function TrialGame(props: TrialGameProps) {
                   maxReward={props.maxReward}
                   cleared={clearedNodes}
                   open={openNodeList}
+                  quests={quests}
                   onSubmit={() => void submit()}
                   onClose={() => setPanel(null)}
                   onVisit={(node) => {
                     const camp = field.camps.find((row) => row.node === node);
                     if (camp) walkTo(camp.x, camp.y + 32, () => openCamp(node));
                   }}
-                  onCity={() => walkTo(field.city.x, field.city.y, () => setPanel("hall"))}
+                  onCity={() => enterTown()}
                   onInn={goInn}
                 />
               ) : null}
@@ -1836,10 +2115,12 @@ export function TrialGame(props: TrialGameProps) {
                     <span className={HUD_CELL}>{tickets} 张试炼券</span>
                   </div>
                   <p className="mt-3 text-xs text-muted-foreground">
-                    从{chapter.town}出城免费，城里的装备、伤药、军需和客栈才用试炼券。出城后是张俯视大地图，
-                    方向键/WASD 自由行走，走到哪座营跟前就打哪座，主帅本阵要先拔尽其余 {props.nodeCount - 1} 座营；
-                    营寨全部攻破、剧情才会推进到下一处地方。草地与树林会随机杀出散兵、山贼、盗贼，
-                    每趟最多 {SAGA_MAX_ENCOUNTERS} 场，官道与城内外不会遇敌。兵败可回城住店重整、接着再战，
+                    从{chapter.town}出城免费。出城前可在城中街景里逛铁匠铺、药铺、军需帐、客栈、钱庄、
+                    酒馆、营帐与桃园碑，铺子里都有掌柜招呼，买卖仍用试炼券。出城后是张俯视大地图，
+                    方向键/WASD 自由行走，沿官道会路过村庄、祠堂与渡口，走过去能听一段本地故事、记一条军令；
+                    走到哪座营跟前就打哪座，主帅本阵要先拔尽其余 {props.nodeCount - 1} 座营。营寨全部攻破、
+                    剧情才会推进到下一处地方。草地与树林会随机杀出散兵、山贼、盗贼，每趟最多{" "}
+                    {SAGA_MAX_ENCOUNTERS} 场，官道与城内外不会遇敌。兵败可回城住店重整、接着再战，
                     也能收兵后重新出城；等级、金币、装备与招降武将都会保留。
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -1872,8 +2153,20 @@ export function TrialGame(props: TrialGameProps) {
               setSettlement(null);
               setRun(null);
               setCommands([]);
+              setInTown(false);
+              setVisitedPois([]);
+              setSeenScenes([]);
               router.refresh();
             }}
+          />
+        ) : null}
+
+        {dialogue ? (
+          <DialogueOverlay
+            key={dialogue.id}
+            scene={dialogue}
+            onClose={() => setDialogue(null)}
+            gearById={gearById}
           />
         ) : null}
       </div>
@@ -1883,16 +2176,26 @@ export function TrialGame(props: TrialGameProps) {
           variant="outline"
           size="sm"
           disabled={Boolean(battle) || Boolean(settlement) || !run}
-          onClick={() => walkTo(field.city.x, field.city.y, () => setPanel("hall"))}
+          onClick={() => {
+            if (inTown) {
+              setPanel(null);
+              setInTown(false);
+              return;
+            }
+            enterTown();
+          }}
         >
-          <Home className="h-3.5 w-3.5" />
-          回城整备
+          {inTown ? <Swords className="h-3.5 w-3.5" /> : <Home className="h-3.5 w-3.5" />}
+          {inTown ? "出城行军" : "回城整备"}
         </Button>
         <Button
           variant="outline"
           size="sm"
           disabled={Boolean(battle) || Boolean(settlement) || !run}
-          onClick={() => setPanel("army")}
+          onClick={() => {
+            setInTown(false);
+            setPanel("army");
+          }}
         >
           <Flag className="h-3.5 w-3.5" />
           军情·收兵
@@ -1906,7 +2209,7 @@ export function TrialGame(props: TrialGameProps) {
               key={camp.node}
               variant="outline"
               size="sm"
-              disabled={Boolean(battle) || Boolean(settlement) || !run}
+              disabled={Boolean(battle) || Boolean(settlement) || !run || inTown}
               onClick={() => walkTo(camp.x, camp.y + 32, () => openCamp(camp.node))}
             >
               <Swords className="h-3.5 w-3.5" />
@@ -1918,7 +2221,10 @@ export function TrialGame(props: TrialGameProps) {
           variant="outline"
           size="sm"
           disabled={Boolean(battle) || Boolean(settlement) || !run}
-          onClick={() => setPanel("dex")}
+          onClick={() => {
+            setInTown(false);
+            setPanel("dex");
+          }}
         >
           <ScrollText className="h-3.5 w-3.5" />
           图鉴
@@ -1938,7 +2244,7 @@ export function TrialGame(props: TrialGameProps) {
           <Button
             variant="outline"
             size="sm"
-            disabled={!run || Boolean(battle) || Boolean(settlement)}
+            disabled={!run || Boolean(battle) || Boolean(settlement) || inTown}
             onClick={() => {
               const spot = hotspotRef.current;
               if (spot) interactRef.current(spot);
@@ -1947,12 +2253,13 @@ export function TrialGame(props: TrialGameProps) {
             交互
           </Button>
           <p className="max-w-md text-xs text-muted-foreground">
-            操作：方向键 / WASD 或左侧摇杆四向行走，走到城门口、敌营旁按 E / 回车（或点「交互」）；
-            也可以直接点击地图上的城池、营寨，或用上方按钮行军。战斗为回合制：逐将选择
-            攻击 / 计策 / 防守 / 道具 / 招降，或按「总攻击」「自动战斗」速战。
+            操作：方向键 / WASD 或左侧摇杆四向行走，走到城门口、敌营、乡野点位旁按 E / 回车（或点「交互」）；
+            也可以直接点击地图上的城池、营寨、村庄与渡口。点城池进城中街景，从街景点铺子办事、
+            从城门出城。战斗为回合制：逐将选择攻击 / 计策 / 防守 / 道具 / 招降，或按「总攻击」「自动战斗」速战。
             野外草地、树林会随机遇敌，敌军编成由种子与第几场遭遇推出。
             走位本身不影响任何数值：战报只上传编制、购物与「打哪座营、打不打这场遭遇、怎么打」的指令，
-            服务端按种子重放判定；战斗指令存在本机，刷新页面可以接着打。
+            服务端按种子重放判定；战斗指令存在本机，刷新页面可以接着打。剧情对话、军令与走访记录只在本机，
+            不参与结算。
           </p>
         </div>
       </div>
@@ -1996,21 +2303,31 @@ function PartyList({ save }: { save: TrialSave }) {
         const active = save.party.some((row) => row.id === member.id);
         return (
           <div key={member.id} className="rounded-lg border border-border p-2 text-xs">
-            <p className="flex items-center justify-between text-sm font-medium">
-              <span>
-                {def?.name ?? member.id} <span className="text-muted-foreground">Lv{member.level}</span>
-              </span>
-              <span className="text-[11px] text-muted-foreground">{active ? "上阵" : "后备"}</span>
-            </p>
-            <p className="mt-0.5 text-muted-foreground">
-              武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 兵力 {stats.maxTroops}
-            </p>
-            <p className="mt-0.5 text-muted-foreground">
-              经验 {member.exp}/{expToNext(member.level)} · {def?.title}
-            </p>
-            <p className="mt-0.5 text-muted-foreground">
-              武器 {member.weapon ? itemName(member.weapon) : "无"} · 防具 {member.armor ? itemName(member.armor) : "无"}
-            </p>
+            <div className="flex gap-2">
+              <SagaPortrait
+                generalId={member.id}
+                gear={{ weapon: member.weapon, armor: member.armor }}
+                width={38}
+                height={48}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="flex items-center justify-between text-sm font-medium">
+                  <span>
+                    {def?.name ?? member.id} <span className="text-muted-foreground">Lv{member.level}</span>
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">{active ? "上阵" : "后备"}</span>
+                </p>
+                <p className="mt-0.5 text-muted-foreground">
+                  武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 兵力 {stats.maxTroops}
+                </p>
+                <p className="mt-0.5 text-muted-foreground">
+                  经验 {member.exp}/{expToNext(member.level)} · {def?.title}
+                </p>
+                <p className="mt-0.5 text-muted-foreground">
+                  武器 {member.weapon ? itemName(member.weapon) : "无"} · 防具 {member.armor ? itemName(member.armor) : "无"}
+                </p>
+              </div>
+            </div>
           </div>
         );
       })}
@@ -2018,7 +2335,13 @@ function PartyList({ save }: { save: TrialSave }) {
   );
 }
 
-function DexGrid({ save }: { save: TrialSave }) {
+function DexGrid({
+  save,
+  gearById,
+}: {
+  save: TrialSave;
+  gearById: Record<string, { weapon: string | null; armor: string | null }>;
+}) {
   const owned = new Set([...save.party, ...save.reserve].map((member) => member.id));
   const met = new Set(save.met);
   const rows = [...SAGA_GENERAL_BY_ID.values()].filter((def) => !def.enemyOnly || met.has(def.id));
@@ -2035,27 +2358,43 @@ function DexGrid({ save }: { save: TrialSave }) {
               key={def.id}
               className={cn("rounded-lg border p-2 text-xs", known ? "border-border" : "border-border/40 opacity-50")}
             >
-              <p className="flex items-center justify-between text-sm font-medium">
-                <span>
-                  {known ? def.name : "？？"}
-                  {owned.has(def.id) ? <span className="ml-1 text-[10px] text-primary">麾下</span> : null}
-                </span>
-                <span className="text-[11px] text-muted-foreground">{known ? def.title : "未遇见"}</span>
-              </p>
-              {known ? (
-                <>
-                  <p className="mt-0.5 text-muted-foreground">
-                    武 {def.force} · 智 {def.intellect} · 防 {def.defense} · 速 {def.speed}
+              <div className="flex gap-2">
+                {known ? (
+                  <SagaPortrait
+                    generalId={def.id}
+                    gear={gearById[def.id]}
+                    width={42}
+                    height={52}
+                  />
+                ) : (
+                  <span className="flex h-[52px] w-[42px] shrink-0 items-center justify-center rounded-md border border-border/40 bg-muted/20 text-lg text-muted-foreground">
+                    ？
+                  </span>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center justify-between text-sm font-medium">
+                    <span>
+                      {known ? def.name : "？？"}
+                      {owned.has(def.id) ? <span className="ml-1 text-[10px] text-primary">麾下</span> : null}
+                    </span>
+                    <span className="text-[11px] text-muted-foreground">{known ? def.title : "未遇见"}</span>
                   </p>
-                  <p className="mt-0.5 text-muted-foreground">
-                    {def.tactics.length > 0
-                      ? def.tactics.map((tactic) => SAGA_TACTIC_BY_ID.get(tactic)?.name).join(" / ")
-                      : "无计策"}
-                  </p>
-                </>
-              ) : (
-                <p className="mt-0.5 text-muted-foreground">在战场或招降中遇见后解锁。</p>
-              )}
+                  {known ? (
+                    <>
+                      <p className="mt-0.5 text-muted-foreground">
+                        武 {def.force} · 智 {def.intellect} · 防 {def.defense} · 速 {def.speed}
+                      </p>
+                      <p className="mt-0.5 text-muted-foreground">
+                        {def.tactics.length > 0
+                          ? def.tactics.map((tactic) => SAGA_TACTIC_BY_ID.get(tactic)?.name).join(" / ")
+                          : "无计策"}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-0.5 text-muted-foreground">在战场或招降中遇见后解锁。</p>
+                  )}
+                </div>
+              </div>
             </div>
           );
         })}
@@ -2076,6 +2415,7 @@ function CampPanel({
   onClose,
   onCity,
   onInn,
+  onTalk,
 }: {
   run: SagaRun | null;
   state: SagaReplayState | null;
@@ -2088,6 +2428,7 @@ function CampPanel({
   onClose: () => void;
   onCity: () => void;
   onInn: () => void;
+  onTalk: () => void;
 }) {
   if (!run || !state || node === null) {
     return <p className="text-sm text-muted-foreground">走到敌营跟前才能开战。</p>;
@@ -2103,6 +2444,7 @@ function CampPanel({
   const lost = state.scene === "lost";
   return (
     <div className="space-y-3 text-sm">
+      <CampBanner node={target} onTalk={onTalk} />
       <div className="rounded-lg border border-border p-3">
         <p className="font-medium">
           {target.name}
@@ -2211,6 +2553,7 @@ function ArmyPanel({
   maxReward,
   cleared,
   open,
+  quests,
   onSubmit,
   onClose,
   onVisit,
@@ -2224,6 +2567,7 @@ function ArmyPanel({
   maxReward: number;
   cleared: number[];
   open: number[];
+  quests: SagaQuest[];
   onSubmit: () => void;
   onClose: () => void;
   onVisit: (node: number) => void;
@@ -2248,6 +2592,13 @@ function ArmyPanel({
           行军大地图上可自由走位，先打哪座营由你决定 · 已破 {cleared.length}/{total} 座，
           当前可攻 {open.length} 座 · 平定此地最高 {formatCredits(maxReward)} tcr
         </p>
+      </div>
+
+      <div className="rounded-lg border border-border p-3">
+        <p className="font-medium">这一趟的军令</p>
+        <div className="mt-2">
+          <QuestBoard quests={quests} />
+        </div>
       </div>
 
       <div className="space-y-1">

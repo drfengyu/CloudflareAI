@@ -534,8 +534,24 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.55.0（2026-11-13，讨逆传改券经济）
+**当前版本**：v0.56.0（2026-11-13，讨逆传剧情、场景与立绘）
 **下一版本**：待定
+
+- v0.56.0 三国讨逆传补全剧情与场景，纯前端表现层，不动经济 / 服务端 / 表结构：
+  大地图 `SAGA_FIELD_COLS / ROWS` 由 52×34 扩到 76×48，每张图在官道格上新增
+  村落 / 祠堂 / 渡口三处 `SagaFieldPoi`（地名取章节 `landmarks`，四连通可达），
+  走到跟前按 E 弹 `poiScene`；新增 `lib/trial/saga/story.ts`（intro / camp / victory /
+  poi / tavern / council 六类 `SagaScene` 与 `SAGA_NPCS` 台词）与
+  `lib/trial/saga/quests.ts`（2 主线 + 6 支线，进度由 `SagaReplayState` 与本地
+  走访数推出，不入存档）；`components/trial/portraits.ts` 用 FNV 哈希生成武将立绘，
+  武器 / 护甲分四档换甲色、盔饰与兵器剪影；`components/trial/scenes.tsx` 新增
+  街景 `TownScene`、`NpcIntro`、`QuestBoard`、`PartyStrip`、`CampBanner`、
+  打字机 `DialogueOverlay`；`components/trial/game.tsx` 进城改为街景 + 铺子面板，
+  补酒馆 / 营帐页签、军令 HUD、回城 / 出城切换，看过的场景与走访点记在
+  `localStorage` 的 `trial-saga-town:${runId}:${seed}`；刷新不重播、走访只影响支线。
+  `tests/trial-saga.test.ts` 新增 3 项（地图扩容与三处地标可达、剧情 / NPC 数据完整、
+  军令进度与主线优先），共 153 项全过；`tsc`、ESLint、`npm run build` 通过；
+  本机无 `.env.local`，页面未实测。
 
 - v0.55.0 三国讨逆传取消出城券费，活动券成为城内唯一流通货币：
   `startTrialRun` 不再 `payWithCoupon`，`TrialConfig` / 后台表单 / 页面删去

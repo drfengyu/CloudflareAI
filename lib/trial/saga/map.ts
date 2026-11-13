@@ -14,6 +14,8 @@ import {
   SAGA_TILE_YARD,
   type SagaField,
   type SagaFieldCamp,
+  type SagaFieldPoi,
+  type SagaFieldPoiKind,
   type SagaRun,
   type SagaTerrainFlavor,
 } from "./types";
@@ -214,9 +216,12 @@ export function generateSagaField(options: {
   }
 
   const flavor = FLAVOR[chapter.terrain];
+  /** 地图从 52×34 扩到 76×48，地貌 blob 按面积同步加密，免得大图显得空。 */
+  const density = Math.max(1, (cols * rows) / (52 * 34));
   const scatter = (kind: number, blobs: number, minR: number, maxR: number): void => {
-    for (let i = 0; i < blobs; i++) {
-      const rx = minR + rng() * (maxR - minR);
+    const total = Math.round(blobs * density);
+    for (let i = 0; i < total; i++) {
+      const rx = (minR + rng() * (maxR - minR)) * 1.12;
       const ry = rx * (0.6 + rng() * 0.5);
       paintBlob(
         terrain,
@@ -233,7 +238,8 @@ export function generateSagaField(options: {
   scatter(SAGA_TILE_FOREST, flavor.forest, 1.6, 4.2);
   scatter(SAGA_TILE_MOUNTAIN, flavor.mountain, 2.2, 5.4);
   scatter(SAGA_TILE_WATER, flavor.water, 1.4, 3.2);
-  for (let i = 0; i < flavor.rivers; i++) {
+  const rivers = Math.round(flavor.rivers * 1.6);
+  for (let i = 0; i < rivers; i++) {
     const bandY = 4 + Math.floor(rng() * (rows - 8));
     const amp = 2 + rng() * 3;
     const phase = rng() * Math.PI * 2;
@@ -286,6 +292,51 @@ export function generateSagaField(options: {
     terrain[camp.ty * cols + camp.tx] = SAGA_TILE_ROAD;
   }
 
+  // 乡野点位：沿着官道挑三处落脚地，走过去能听一段本地故事。
+  const poiKinds: SagaFieldPoiKind[] = ["village", "shrine", "ferry"];
+  const pois: SagaFieldPoi[] = [];
+  for (let i = 0; i < poiKinds.length; i++) {
+    const kind = poiKinds[i];
+    const targetTx = clamp(
+      Math.round(cols * (0.32 + i * 0.23) + (rng() * 4 - 2)),
+      4,
+      cols - 5,
+    );
+    const targetTy = clamp(
+      Math.round(cityTy + (i - 1) * rows * 0.24 + (rng() * 6 - 3)),
+      4,
+      rows - 5,
+    );
+    let best: { tx: number; ty: number } | null = null;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (let ty = 2; ty < rows - 2; ty++) {
+      for (let tx = 2; tx < cols - 2; tx++) {
+        if (terrain[ty * cols + tx] !== SAGA_TILE_ROAD) continue;
+        if (tx >= cityTx - 2 && tx <= cityTx + cityW + 2 && ty >= cityTy - 2 && ty <= cityTy + cityH + 2) {
+          continue;
+        }
+        if (camps.some((camp) => Math.hypot(camp.tx - tx, camp.ty - ty) < 5)) continue;
+        if (pois.some((poi) => Math.hypot(poi.tx - tx, poi.ty - ty) < 9)) continue;
+        const score = Math.hypot(tx - targetTx, ty - targetTy);
+        if (score < bestScore) {
+          bestScore = score;
+          best = { tx, ty };
+        }
+      }
+    }
+    if (!best) continue;
+    paintBlob(terrain, cols, rows, SAGA_TILE_GRASS, best.tx, best.ty, 1.8, 1.5);
+    terrain[best.ty * cols + best.tx] = SAGA_TILE_ROAD;
+    pois.push({
+      kind,
+      name: chapter.landmarks[i] ?? chapter.stages[i] ?? "乡野",
+      tx: best.tx,
+      ty: best.ty,
+      x: (best.tx + 0.5) * tile,
+      y: (best.ty + 0.5) * tile,
+    });
+  }
+
   const field: SagaField = {
     cols,
     rows,
@@ -306,6 +357,7 @@ export function generateSagaField(options: {
     },
     spawn,
     camps,
+    pois,
   };
   return field;
 }
@@ -331,15 +383,16 @@ export function sagaFieldFor(run: SagaRun): SagaField {
 }
 
 export interface FieldHotspot {
-  kind: "city" | "camp";
+  kind: "city" | "camp" | "poi";
   camp?: SagaFieldCamp;
+  poi?: SagaFieldPoi;
   x: number;
   y: number;
   /** 交互半径（世界像素）。 */
   radius: number;
 }
 
-/** 找出脚边可交互的城或营：营地优先，其次城门。 */
+/** 找出脚边可交互的城、营或乡野点位：营地优先，其次点位，最后城门。 */
 export function fieldHotspotNear(field: SagaField, x: number, y: number): FieldHotspot | null {
   let best: FieldHotspot | null = null;
   let bestDist = Number.POSITIVE_INFINITY;
@@ -347,6 +400,14 @@ export function fieldHotspotNear(field: SagaField, x: number, y: number): FieldH
     const dist = Math.hypot(camp.x - x, camp.y - (y - 6));
     if (dist < 30 && dist < bestDist) {
       best = { kind: "camp", camp, x: camp.x, y: camp.y, radius: 30 };
+      bestDist = dist;
+    }
+  }
+  if (best) return best;
+  for (const poi of field.pois) {
+    const dist = Math.hypot(poi.x - x, poi.y - (y - 6));
+    if (dist < 28 && dist < bestDist) {
+      best = { kind: "poi", poi, x: poi.x, y: poi.y, radius: 28 };
       bestDist = dist;
     }
   }

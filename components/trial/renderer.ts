@@ -3,6 +3,7 @@ import type {
   SagaBattleState,
   SagaField,
   SagaFieldCamp,
+  SagaFieldPoi,
 } from "@/lib/trial/saga/types";
 import {
   SAGA_TILE_FOREST,
@@ -50,17 +51,29 @@ export function makeSagaView(height: number): SagaView {
   return { w: VIEW_W, h, k, groundY: GROUND_Y * k };
 }
 
-export type FieldFacilityId = "record" | "forge" | "bank" | "inn" | "herb" | "supply" | "hall" | "gate";
+export type FieldFacilityId =
+  | "record"
+  | "forge"
+  | "bank"
+  | "inn"
+  | "herb"
+  | "supply"
+  | "hall"
+  | "tavern"
+  | "tent"
+  | "gate";
 
 /** 城里能办的几件事 + 出营：大地图上收进「城中整备」面板的页签。 */
 export const FIELD_FACILITIES: { id: FieldFacilityId; label: string; hint: string }[] = [
   { id: "record", label: "桃园碑", hint: "查看存档、武将与图鉴" },
-  { id: "forge", label: "铁匠铺", hint: "用金币打造武器与防具" },
-  { id: "bank", label: "钱庄", hint: "用金币换 tcr，收兵时结算" },
-  { id: "inn", label: "客栈", hint: "花金币歇脚，补满上阵武将兵力" },
-  { id: "herb", label: "药铺", hint: "用金币购买伤药与良药" },
-  { id: "supply", label: "军需帐", hint: "用试炼券购买此行军需" },
   { id: "hall", label: "编成所", hint: "编队、阵型、装备与图鉴" },
+  { id: "forge", label: "铁匠铺", hint: "用试炼券打造武器与防具" },
+  { id: "herb", label: "药铺", hint: "用试炼券购买伤药与良药" },
+  { id: "supply", label: "军需帐", hint: "用试炼券购买此行军需" },
+  { id: "inn", label: "客栈", hint: "花试炼券歇脚，补满上阵武将兵力" },
+  { id: "bank", label: "钱庄", hint: "用金币存 tcr，收兵时结算" },
+  { id: "tavern", label: "酒馆", hint: "听一段本地旧事" },
+  { id: "tent", label: "营帐", hint: "看军令、召集众将议事" },
 ];
 
 
@@ -493,6 +506,155 @@ function paintCamp(
   }
 }
 
+/** 乡野点位：村庄的茅屋、祠堂的牌坊、渡口的木船。 */
+function paintPoi(
+  ctx: CanvasRenderingContext2D,
+  poi: SagaFieldPoi,
+  time: number,
+): void {
+  const cx = poi.x;
+  const cy = poi.y;
+  const sway = Math.sin(time * 1.6 + poi.tx) * 1.5;
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
+  ctx.beginPath();
+  ctx.ellipse(cx, cy + 12, 30, 8, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (poi.kind === "village") {
+    // 两间茅屋 + 篱笆
+    for (const [dx, scale] of [
+      [-13, 1],
+      [12, 0.82],
+    ] as [number, number][]) {
+      const hx = cx + dx;
+      const base = cy + 10;
+      ctx.fillStyle = "#6b563c";
+      ctx.fillRect(hx - 9 * scale, base - 12 * scale, 18 * scale, 12 * scale);
+      ctx.fillStyle = "#4a3a28";
+      ctx.fillRect(hx - 3 * scale, base - 7 * scale, 6 * scale, 7 * scale);
+      ctx.fillStyle = "#8a7448";
+      ctx.beginPath();
+      ctx.moveTo(hx - 13 * scale, base - 12 * scale);
+      ctx.quadraticCurveTo(hx, base - 27 * scale, hx + 13 * scale, base - 12 * scale);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "rgba(30,24,16,0.4)";
+      ctx.fillRect(hx - 12 * scale, base - 12 * scale, 24 * scale, 2);
+    }
+    // 炊烟
+    ctx.strokeStyle = "rgba(220,216,204,0.28)";
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(cx - 9, cy - 12);
+    ctx.quadraticCurveTo(cx - 13 + sway, cy - 24, cx - 7 + sway, cy - 34);
+    ctx.stroke();
+    // 篱笆
+    ctx.strokeStyle = "#5a4a34";
+    ctx.lineWidth = 2;
+    for (let i = -2; i <= 2; i++) {
+      const px = cx + 24 + i * 5;
+      ctx.beginPath();
+      ctx.moveTo(px, cy + 12);
+      ctx.lineTo(px, cy + 2);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#e8d5ab";
+    ctx.font = uiFont(11);
+    ctx.textAlign = "center";
+    ctx.fillText(poi.name, cx, cy - 40);
+    return;
+  }
+
+  if (poi.kind === "shrine") {
+    // 牌坊
+    ctx.strokeStyle = "#6d3a2c";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(cx - 22, cy + 12);
+    ctx.lineTo(cx - 22, cy - 20);
+    ctx.moveTo(cx + 22, cy + 12);
+    ctx.lineTo(cx + 22, cy - 20);
+    ctx.stroke();
+    ctx.fillStyle = "#7b4232";
+    ctx.fillRect(cx - 30, cy - 26, 60, 6);
+    ctx.fillStyle = "#5d3226";
+    ctx.beginPath();
+    ctx.moveTo(cx - 34, cy - 26);
+    ctx.quadraticCurveTo(cx, cy - 40, cx + 34, cy - 26);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#e3c98f";
+    ctx.fillRect(cx - 10, cy - 20, 20, 10);
+    // 香炉与香烟
+    ctx.fillStyle = "#3c3630";
+    ctx.beginPath();
+    ctx.ellipse(cx, cy + 4, 8, 5, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(226,220,205,0.4)";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 1);
+    ctx.quadraticCurveTo(cx + sway * 2, cy - 14, cx + sway, cy - 24);
+    ctx.stroke();
+    // 灯笼
+    for (const dx of [-26, 26] as const) {
+      const glow = 0.5 + Math.sin(time * 2.4 + dx) * 0.2;
+      ctx.fillStyle = `rgba(240,170,90,${glow})`;
+      ctx.beginPath();
+      ctx.arc(cx + dx, cy - 12, 3.2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.fillStyle = "#e8d5ab";
+    ctx.font = uiFont(11);
+    ctx.textAlign = "center";
+    ctx.fillText(poi.name, cx, cy - 46);
+    return;
+  }
+
+  // 渡口：木栈桥 + 小船
+  ctx.fillStyle = "#6a563c";
+  ctx.fillRect(cx - 34, cy + 2, 34, 7);
+  ctx.fillStyle = "rgba(30,24,16,0.35)";
+  for (let i = 0; i < 4; i++) ctx.fillRect(cx - 32 + i * 8, cy + 2, 1.4, 7);
+  const bob = Math.sin(time * 2.1) * 1.4;
+  ctx.fillStyle = "#3a2e20";
+  ctx.beginPath();
+  ctx.ellipse(cx + 14, cy + 12 + bob, 18, 6, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#7a5c38";
+  ctx.beginPath();
+  ctx.moveTo(cx - 2, cy + 10 + bob);
+  ctx.quadraticCurveTo(cx + 14, cy + 20 + bob, cx + 30, cy + 10 + bob);
+  ctx.quadraticCurveTo(cx + 14, cy + 14 + bob, cx - 2, cy + 10 + bob);
+  ctx.fill();
+  ctx.strokeStyle = "#4a3a24";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(cx + 12, cy + 10 + bob);
+  ctx.lineTo(cx + 12, cy - 12 + bob);
+  ctx.stroke();
+  ctx.fillStyle = "rgba(226,214,184,0.85)";
+  ctx.beginPath();
+  ctx.moveTo(cx + 12, cy - 12 + bob);
+  ctx.quadraticCurveTo(cx + 22, cy - 6 + bob, cx + 12, cy - 1 + bob);
+  ctx.closePath();
+  ctx.fill();
+  // 水波
+  ctx.strokeStyle = "rgba(176,222,238,0.35)";
+  ctx.lineWidth = 1.2;
+  for (let i = 0; i < 2; i++) {
+    const wy = cy + 16 + i * 5 + Math.sin(time * 1.4 + i) * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(cx - 20, wy);
+    ctx.quadraticCurveTo(cx + 2, wy - 3, cx + 26, wy);
+    ctx.stroke();
+  }
+  ctx.fillStyle = "#e8d5ab";
+  ctx.font = uiFont(11);
+  ctx.textAlign = "center";
+  ctx.fillText(poi.name, cx, cy - 30);
+}
+
 function paintCityGate(
   ctx: CanvasRenderingContext2D,
   field: SagaField,
@@ -674,6 +836,12 @@ function drawMinimap(
     ctx.fillStyle = state;
     ctx.fillRect(x + camp.tx * sx - 1.5, y + camp.ty * sy - 1.5, 4, 4);
   }
+  for (const poi of field.pois) {
+    ctx.fillStyle = "#9ad7c0";
+    ctx.beginPath();
+    ctx.arc(x + poi.tx * sx, y + poi.ty * sy, 1.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.fillStyle = "#7fe0a0";
   ctx.beginPath();
   ctx.arc(
@@ -760,6 +928,15 @@ export function paintField(ctx: CanvasRenderingContext2D, options: FieldPaintOpt
     sprites.push({
       y: sy + 14,
       draw: () => paintCamp(ctx, { ...camp, x: sx, y: sy }, time, state),
+    });
+  }
+  for (const poi of field.pois) {
+    const sx = poi.x - camX;
+    const sy = poi.y - camY;
+    if (sx < -80 || sx > view.w + 80 || sy < -80 || sy > view.h + 80) continue;
+    sprites.push({
+      y: sy + 14,
+      draw: () => paintPoi(ctx, { ...poi, x: sx, y: sy }, time),
     });
   }
   const gx = field.city.gateTx * tile - camX;
@@ -870,6 +1047,181 @@ function unitSlots(count: number, side: "player" | "enemy", k = 1): UnitSlot[] {
   return slots;
 }
 
+const SQUAD_ARMOR_TIER: Record<string, 1 | 2 | 3> = {
+  cloth: 1,
+  leather: 1,
+  iron_armor: 2,
+  heavy_armor: 3,
+};
+
+function squadArmorTier(armor: string | null | undefined): 0 | 1 | 2 | 3 {
+  if (!armor) return 0;
+  if (armor === "leather") return 1;
+  return SQUAD_ARMOR_TIER[armor] ?? 0;
+}
+
+/** 战阵里的武将按穿戴画出甲片与兵器：换装之后队形里的造型也跟着变。 */
+function drawSquadArmor(
+  ctx: CanvasRenderingContext2D,
+  tier: 0 | 1 | 2 | 3,
+  accent: string,
+): void {
+  if (tier === 0) return;
+  const steel = tier >= 2;
+  const grad = ctx.createLinearGradient(0, -74, 0, -34);
+  if (steel) {
+    grad.addColorStop(0, tier === 3 ? "#6c7076" : "#8b9097");
+    grad.addColorStop(1, tier === 3 ? "#23262b" : "#3a3f45");
+  } else {
+    grad.addColorStop(0, "#8a5a36");
+    grad.addColorStop(1, "#4a2f1b");
+  }
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(-17, -60);
+  ctx.quadraticCurveTo(0, -72, 17, -60);
+  ctx.lineTo(19, -34);
+  ctx.quadraticCurveTo(0, -42, -19, -34);
+  ctx.closePath();
+  ctx.fill();
+  // 肩吞
+  for (const dir of [-1, 1] as const) {
+    ctx.fillStyle = steel ? (tier === 3 ? "#2a2d31" : "#4b5056") : "#5a3a22";
+    ctx.beginPath();
+    ctx.ellipse(dir * 18, -63, 8, 5, dir * 0.35, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.arc(dir * 18, -64, 2.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (steel) {
+    ctx.strokeStyle = "rgba(232,238,244,0.3)";
+    ctx.lineWidth = 1;
+    for (let i = -1; i <= 1; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * 8, -64);
+      ctx.lineTo(i * 9, -40);
+      ctx.stroke();
+    }
+  }
+  if (tier === 3) {
+    ctx.strokeStyle = "#c9a15a";
+    ctx.lineWidth = 1.4;
+    ctx.beginPath();
+    ctx.moveTo(-15, -62);
+    ctx.quadraticCurveTo(0, -70, 15, -62);
+    ctx.stroke();
+  }
+}
+
+function drawSquadWeapon(
+  ctx: CanvasRenderingContext2D,
+  weapon: string | null | undefined,
+  accent: string,
+): void {
+  const kind = weapon ?? "spear";
+  if (kind === "fan") {
+    ctx.save();
+    ctx.translate(22, -52);
+    ctx.rotate(-0.3);
+    ctx.fillStyle = "rgba(238,232,214,0.95)";
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, 16, -1.9, -0.4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = "rgba(120,110,90,0.7)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(6, -15);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+  const shaft = "#4d3a24";
+  const steel = "#d8d2c0";
+  if (kind === "guandao") {
+    ctx.strokeStyle = shaft;
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(28, -24);
+    ctx.lineTo(42, -96);
+    ctx.stroke();
+    ctx.fillStyle = steel;
+    ctx.beginPath();
+    ctx.moveTo(42, -96);
+    ctx.quadraticCurveTo(58, -104, 60, -86);
+    ctx.quadraticCurveTo(50, -92, 43, -88);
+    ctx.closePath();
+    ctx.fill();
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(41, -88);
+    ctx.lineTo(45, -97);
+    ctx.stroke();
+    return;
+  }
+  if (kind === "blade") {
+    ctx.strokeStyle = shaft;
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(27, -22);
+    ctx.lineTo(41, -82);
+    ctx.stroke();
+    ctx.fillStyle = steel;
+    ctx.beginPath();
+    ctx.moveTo(38, -80);
+    ctx.lineTo(51, -99);
+    ctx.lineTo(56, -92);
+    ctx.lineTo(43, -75);
+    ctx.closePath();
+    ctx.fill();
+    return;
+  }
+  if (kind === "iron_sword") {
+    ctx.strokeStyle = "#3a2c1a";
+    ctx.lineWidth = 3;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(27, -30);
+    ctx.lineTo(36, -52);
+    ctx.stroke();
+    ctx.fillStyle = steel;
+    ctx.beginPath();
+    ctx.moveTo(34, -52);
+    ctx.lineTo(44, -74);
+    ctx.lineTo(48, -70);
+    ctx.lineTo(38, -47);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#9aa0a6";
+    ctx.fillRect(31, -51, 11, 3);
+    return;
+  }
+  // 长枪
+  ctx.strokeStyle = shaft;
+  ctx.lineWidth = 2.6;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(26, -22);
+  ctx.lineTo(42, -92);
+  ctx.stroke();
+  ctx.fillStyle = steel;
+  ctx.beginPath();
+  ctx.moveTo(42, -92);
+  ctx.lineTo(46, -107);
+  ctx.lineTo(50, -92);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = accent;
+  ctx.fillRect(39, -92, 14, 3);
+}
+
 function paintSquad(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -880,6 +1232,8 @@ function paintSquad(
   scale: number,
   facing: 1 | -1,
   downed: boolean,
+  weapon: string | null = null,
+  armor: string | null = null,
 ): void {
   ctx.save();
   ctx.translate(x, y);
@@ -934,6 +1288,7 @@ function paintSquad(
   ctx.ellipse(-18, -66, 9, 6, -0.4, 0, Math.PI * 2);
   ctx.ellipse(18, -66, 9, 6, 0.4, 0, Math.PI * 2);
   ctx.fill();
+  drawSquadArmor(ctx, squadArmorTier(armor), accent);
   ctx.fillStyle = "#d9b58c";
   ctx.beginPath();
   ctx.arc(0, -86, 10, 0, Math.PI * 2);
@@ -945,12 +1300,7 @@ function paintSquad(
   ctx.fillRect(-11, -91, 22, 4);
   ctx.fillStyle = accent;
   ctx.fillRect(-2, -104, 4, 10);
-  ctx.strokeStyle = "#e2d8c4";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(20, -60);
-  ctx.lineTo(36, -14);
-  ctx.stroke();
+  drawSquadWeapon(ctx, weapon, accent);
   ctx.restore();
 }
 
@@ -1073,6 +1423,8 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
       unit.boss ? slot.scale * 1.2 : slot.scale,
       side === "player" ? 1 : -1,
       unit.downed,
+      unit.weapon,
+      unit.armor,
     );
     ctx.filter = "none";
     ctx.restore();

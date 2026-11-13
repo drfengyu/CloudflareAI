@@ -7,8 +7,10 @@ import {
   trialRewardFor,
   type TrialConfig,
 } from "../lib/trial/config";
-import { SAGA_CHAPTERS } from "../lib/trial/saga/data";
+import { SAGA_CHAPTERS, SAGA_GENERAL_BY_ID } from "../lib/trial/saga/data";
 import {
+  SAGA_FIELD_COLS,
+  SAGA_FIELD_ROWS,
   SAGA_RUN_VERSION,
   SAGA_TILE_FOREST,
   SAGA_TILE_GRASS,
@@ -16,6 +18,20 @@ import {
   type SagaCommand,
   type SagaRun,
 } from "../lib/trial/saga/types";
+import {
+  SAGA_NPCS,
+  campScene,
+  chapterIntroScene,
+  chapterVictoryScene,
+  councilScene,
+  poiScene,
+  tavernScene,
+} from "../lib/trial/saga/story";
+import {
+  sagaNextQuest,
+  sagaQuestContext,
+  sagaQuestsFor,
+} from "../lib/trial/saga/quests";
 import {
   autoPlaySagaRun,
   canEngageNode,
@@ -638,6 +654,125 @@ test("大地图不入库存档：只由种子复现，与对局 JSON 里的节�
   // 只有种子/节点数参与地图，行军进度不会改变地形。
   const replayed = { ...run, nodes: run.nodes.slice(0, 3) };
   assert.equal(sagaFieldFor(replayed).camps.length, 3);
+});
+
+test("大地图扩容：76×48 的图上有村落、祠堂与渡口，都铺在官道上走得到", () => {
+  for (let chapter = 0; chapter < SAGA_CHAPTERS.length; chapter++) {
+    for (let nodeCount = 2; nodeCount <= 7; nodeCount++) {
+      const field = generateSagaField({ chapter, nodeCount, seed: chapter * 53 + nodeCount * 11 });
+      const label = `第 ${chapter} 处 ${nodeCount} 营`;
+      assert.equal(field.cols, SAGA_FIELD_COLS, `${label}：列数`);
+      assert.equal(field.rows, SAGA_FIELD_ROWS, `${label}：行数`);
+      assert.equal(field.worldW, SAGA_FIELD_COLS * field.tile);
+      assert.deepEqual(field.pois.map((poi) => poi.kind), ["village", "shrine", "ferry"], label);
+      const seen = fieldReachable(field);
+      for (const poi of field.pois) {
+        assert.equal(fieldTileAt(field, poi.tx, poi.ty), SAGA_TILE_ROAD, `${poi.name} 铺在官道上`);
+        assert.equal(seen[poi.ty * field.cols + poi.tx], true, `${poi.name} 可达`);
+        const hotspot = fieldHotspotNear(field, poi.x, poi.y - 6);
+        assert.equal(hotspot?.kind, "poi", `${poi.name} 走到跟前能交互`);
+        assert.equal(hotspot?.poi?.name, poi.name);
+      }
+      const names = field.pois.map((poi) => poi.name);
+      assert.equal(new Set(names).size, names.length, "三处点位不重名");
+      assert.equal(SAGA_CHAPTERS[chapter].landmarks.every((name) => names.includes(name)), true);
+      assert.equal(new Set(field.pois.map((poi) => `${poi.tx}:${poi.ty}`)).size, 3);
+    }
+  }
+});
+
+test("剧情场景：开场、阵前、平定、乡野、酒馆与议事都有台词与立绘", () => {
+  for (let chapter = 0; chapter < SAGA_CHAPTERS.length; chapter++) {
+    const intro = chapterIntroScene(chapter);
+    assert.equal(intro.lines.length >= 4, true);
+    assert.equal(intro.lines[0].side, "narrator");
+    const victory = chapterVictoryScene(chapter);
+    assert.equal(victory.lines.length >= 3, true);
+    const tavern = tavernScene(chapter);
+    assert.equal(tavern.lines.length >= 3, true);
+    const council = councilScene(chapter, ["liubei", "guanyu", "zhangfei"]);
+    assert.equal(council.lines.length, 5);
+    for (const scene of [intro, victory, tavern, council]) {
+      assert.equal(scene.lines.every((line) => line.text.length > 0), true, scene.id);
+      for (const line of scene.lines) {
+        if (line.generalId) {
+          assert.equal(SAGA_GENERAL_BY_ID.has(line.generalId), true, `${line.speaker} 的立绘 id 有效`);
+        }
+      }
+    }
+  }
+
+  const run = freshRun(11, 5);
+  for (const node of run.nodes) {
+    const scene = campScene(0, node, node.enemies[0]?.id);
+    assert.equal(scene.lines.length >= 3, true);
+    assert.equal(scene.lines[0].side, "narrator");
+    assert.equal(scene.lines[1].side, "enemy");
+    assert.equal(scene.lines.some((line) => line.side === "hero"), true);
+  }
+
+  const field = sagaFieldFor(run);
+  for (const poi of field.pois) {
+    const scene = poiScene(0, poi);
+    assert.equal(scene.lines.length >= 3, true);
+    assert.equal(scene.lines.some((line) => line.side === "npc"), true);
+    assert.equal(
+      scene.lines.some(
+        (line) => line.generalId === "liubei" || line.generalId === "guanyu" || line.generalId === "zhangfei",
+      ),
+      true,
+    );
+  }
+
+  for (const id of [
+    "blacksmith",
+    "herbalist",
+    "innkeeper",
+    "banker",
+    "quartermaster",
+    "drillmaster",
+    "tavernkeeper",
+    "tentkeeper",
+    "recordkeeper",
+  ]) {
+    const npc = SAGA_NPCS[id];
+    assert.equal(Boolean(npc?.name && npc.title && npc.greeting), true, `${id} 有掌柜招呼语`);
+    assert.equal(npc.lines.length >= 3, true, `${id} 至少有三句闲谈`);
+  }
+});
+
+test("军令：进度从重放状态与乡野见闻推出，主线优先", () => {
+  const run = easyRun();
+  const state = replaySagaRun(run, winCommands).state;
+  const ctx = sagaQuestContext(run, state, { visitedPois: 1, totalPois: 3 });
+  assert.equal(ctx.total, 1);
+  assert.equal(ctx.cleared, 1);
+  assert.equal(ctx.bossCleared, true);
+  assert.equal(ctx.partySize, state.save.party.length);
+  assert.equal(ctx.equipped <= ctx.partySize, true);
+
+  const quests = sagaQuestsFor(ctx);
+  assert.equal(quests.length, 8);
+  assert.equal(quests.filter((quest) => quest.scope === "main").length, 2);
+  assert.equal(quests.every((quest) => quest.progress <= quest.target), true);
+  const byId = new Map(quests.map((quest) => [quest.id, quest]));
+  assert.equal(byId.get("clear-camps")?.done, true);
+  assert.equal(byId.get("take-boss")?.done, true);
+  assert.equal(byId.get("poi")?.progress, 1);
+  assert.equal(byId.get("poi")?.done, false);
+  assert.equal(byId.get("bank")?.progress, 0);
+  assert.equal(byId.get("wins")?.progress, 1);
+  assert.equal(sagaNextQuest(quests)?.scope, "side");
+
+  const fieldState = replaySagaRun(run, []).state;
+  const early = sagaQuestsFor(sagaQuestContext(run, fieldState, { visitedPois: 0, totalPois: 3 }));
+  assert.equal(sagaNextQuest(early)?.id, "clear-camps");
+  assert.equal(sagaNextQuest([]), null);
+
+  const walked = sagaQuestsFor(
+    sagaQuestContext(run, fieldState, { visitedPois: 99, totalPois: 3 }),
+  );
+  assert.equal(walked.find((quest) => quest.id === "poi")?.done, true);
 });
 
 // ---------------------------------------------------------------- 野外遇敌

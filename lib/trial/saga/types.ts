@@ -15,8 +15,8 @@ export const SAGA_RESERVE_SIZE = 12;
 export const SAGA_MAX_LEVEL = 30;
 
 /** 行军大地图：俯视格网，镜头跟随主角在图上自由行走。 */
-export const SAGA_FIELD_COLS = 52;
-export const SAGA_FIELD_ROWS = 34;
+export const SAGA_FIELD_COLS = 76;
+export const SAGA_FIELD_ROWS = 48;
 export const SAGA_FIELD_TILE = 32;
 
 export const SAGA_TILE_GRASS = 0;
@@ -39,6 +39,18 @@ export interface SagaFieldCamp {
   tx: number;
   ty: number;
   /** 营地中心世界坐标（像素）。 */
+  x: number;
+  y: number;
+}
+
+/** 行军途中的乡野点位：可走近交谈，只讲剧情，不参与结算。 */
+export type SagaFieldPoiKind = "village" | "shrine" | "ferry";
+
+export interface SagaFieldPoi {
+  kind: SagaFieldPoiKind;
+  name: string;
+  tx: number;
+  ty: number;
   x: number;
   y: number;
 }
@@ -66,6 +78,7 @@ export interface SagaField {
   };
   spawn: { x: number; y: number };
   camps: SagaFieldCamp[];
+  pois: SagaFieldPoi[];
 }
 
 export const SAGA_MAX_COMMANDS = 4000;
@@ -161,6 +174,8 @@ export interface SagaChapterDef {
   story: string[];
   /** 节点地名，按行军顺序取用。 */
   stages: string[];
+  /** 行军大地图上的三处乡野点位：村落 / 古庙 / 渡口。 */
+  landmarks: [string, string, string];
   /** 行军大地图的地貌风味：决定山、水、林的疏密。 */
   terrain: SagaTerrainFlavor;
   field: string[];
@@ -290,6 +305,9 @@ export interface SagaBattleGeneral {
   tacticPoints: number;
   weaponAtk: number;
   armorDef: number;
+  /** 装备外观：立绘与战阵造型按穿戴的兵器 / 甲胄改变。 */
+  weapon: string | null;
+  armor: string | null;
   color: string;
   accent: string;
   guard: boolean;
