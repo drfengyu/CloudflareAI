@@ -2,6 +2,9 @@ import {
   SAGA_FORMATION_BY_ID,
   SAGA_GENERAL_BY_ID,
   SAGA_ITEM_BY_ID,
+  SAGA_TACTIC_BY_ID,
+  SAGA_TRAIT_BY_ID,
+  tacticsFor,
 } from "./data";
 import { sagaEncounterFor } from "./encounter";
 import { generalStats, grantGeneralExp, recruitToSave } from "./state";
@@ -14,6 +17,7 @@ import {
   type SagaReplayState,
   type SagaRoundCommand,
   type SagaRun,
+  type SagaTraitId,
   type TacticId,
 } from "./types";
 
@@ -57,6 +61,31 @@ function counterMod(attacker: SagaBattleState["playerFormation"], defender: Saga
 
 const living = (list: SagaBattleGeneral[]): SagaBattleGeneral[] => list.filter((g) => !g.downed);
 
+/** 汇总一组特性上的某项数值，没有特性时为 0。 */
+function traitTotalOf(
+  ids: readonly SagaTraitId[] | undefined,
+  key: "crit" | "extraAttack" | "attackPct" | "damageCut" | "tacticPoints" | "tacticPct",
+): number {
+  let total = 0;
+  for (const id of ids ?? []) {
+    const trait = SAGA_TRAIT_BY_ID.get(id);
+    const value = trait?.[key];
+    if (typeof value === "number") total += value;
+  }
+  return total;
+}
+
+function traitTotal(
+  unit: SagaBattleGeneral,
+  key: "crit" | "extraAttack" | "attackPct" | "damageCut" | "tacticPoints" | "tacticPct",
+): number {
+  return traitTotalOf(unit.traits, key);
+}
+
+function tacticName(id: TacticId): string {
+  return SAGA_TACTIC_BY_ID.get(id)?.name ?? id;
+}
+
 export function startBattle(run: SagaRun, nodeIndex: number, state: SagaReplayState): SagaBattleState {
   return buildBattle(
     run.nodes[nodeIndex],
@@ -87,6 +116,7 @@ function buildBattle(
   state: SagaReplayState,
 ): SagaBattleState {
   const buffs = state.buffs;
+  const rules = state.rules ?? 1;
   const party: SagaBattleGeneral[] = state.save.party.map((saved) => {
     const def = SAGA_GENERAL_BY_ID.get(saved.id);
     const stats = generalStats(saved);
@@ -108,8 +138,20 @@ function buildBattle(
       intellect: stats.intellect,
       defense: stats.defense,
       speed: stats.speed + buffs.speed,
-      tactics: def?.tactics ?? [],
-      tacticPoints: Math.min(9, 2 + Math.floor(stats.intellect / 30) + buffs.tacticPoints),
+      tactics: rules >= 2 ? tacticsFor(def, saved.level) : def?.tactics ?? [],
+      traits: rules >= 2 ? def?.traits ?? [] : [],
+      // v2 起策略点随等级增长：每 3 级 +1，智将再按智力多吃几点，上限 12。
+      tacticPoints:
+        rules >= 2
+          ? Math.min(
+              12,
+              2 +
+                Math.floor(stats.intellect / 30) +
+                Math.floor((saved.level - 1) / 3) +
+                buffs.tacticPoints +
+                traitTotalOf(def?.traits, "tacticPoints"),
+            )
+          : Math.min(9, 2 + Math.floor(stats.intellect / 30) + buffs.tacticPoints),
       weaponAtk: stats.weaponAtk,
       armorDef: stats.armorDef,
       weapon: saved.weapon,
@@ -138,7 +180,11 @@ function buildBattle(
     defense: enemy.defense,
     speed: enemy.speed,
     tactics: enemy.tactics,
-    tacticPoints: Math.max(2, 2 + Math.floor(enemy.intellect / 30)),
+    traits: enemy.traits ?? [],
+    tacticPoints:
+      rules >= 2
+        ? Math.max(2, 2 + Math.floor(enemy.intellect / 30) + Math.floor(enemy.level / 6))
+        : Math.max(2, 2 + Math.floor(enemy.intellect / 30)),
     weaponAtk: 0,
     armorDef: 0,
     weapon: null,
@@ -213,7 +259,9 @@ function dealDamage(
   const variance = 0.85 + roll(battle) * 0.3;
   const buffed = actor.buff > 0 ? 1.2 : 1;
   const guarded = target.guard ? 0.5 : 1;
-  const damage = Math.max(
+  const attackPct = 1 + traitTotal(actor, "attackPct");
+  const cut = 1 - Math.min(0.5, traitTotal(target, "damageCut"));
+  let damage = Math.max(
     4,
     Math.round(
       base *
@@ -222,11 +270,16 @@ function dealDamage(
         counterMod(attackerFormation, defenderFormation) *
         buffed *
         guarded *
+        attackPct *
+        cut *
         variance,
     ),
   );
+  const critChance = traitTotal(actor, "crit");
+  const crit = critChance > 0 && roll(battle) < critChance;
+  if (crit) damage = Math.round(damage * 1.7);
   target.troops = Math.max(0, target.troops - damage);
-  const suffix = target.guard ? "（格挡）" : "";
+  const suffix = `${crit ? "（暴击）" : ""}${target.guard ? "（格挡）" : ""}`;
   events.push({
     kind: "attack",
     side: actor.side,
@@ -235,6 +288,20 @@ function dealDamage(
     amount: damage,
     text: `${actor.name} 攻击 ${target.name}，-${damage} 兵力${suffix}`,
   });
+  // 会心之外的第二段：无双 / 神速可按概率追击，追击按七成伤害结算。
+  const extra = traitTotal(actor, "extraAttack");
+  if (!target.downed && extra > 0 && roll(battle) < extra) {
+    const extraDamage = Math.max(2, Math.round(damage * 0.7));
+    target.troops = Math.max(0, target.troops - extraDamage);
+    events.push({
+      kind: "attack",
+      side: actor.side,
+      actor: actor.name,
+      target: target.name,
+      amount: extraDamage,
+      text: `${actor.name} 乘势追击 ${target.name}，-${extraDamage} 兵力`,
+    });
+  }
   if (target.troops <= 0 && !target.downed) {
     target.downed = true;
     events.push({
@@ -258,6 +325,7 @@ function executeTactic(
   const foes = actor.side === "player" ? battle.enemies : battle.party;
   const foeFormation = actor.side === "player" ? battle.enemyFormation : battle.playerFormation;
   const allyFormation = actor.side === "player" ? battle.playerFormation : battle.enemyFormation;
+  const tacticPct = 1 + traitTotal(actor, "tacticPct");
   switch (tactic) {
     case "huoji": {
       const power = actor.intellect * 0.6 + actor.level * 2;
@@ -265,7 +333,7 @@ function executeTactic(
         const resist = foe.intellect * 0.4;
         const variance = 0.85 + roll(battle) * 0.3;
         const countered = counterMod(allyFormation, foeFormation);
-        let damage = Math.max(6, Math.round((power - resist) * variance * countered));
+        let damage = Math.max(6, Math.round((power - resist) * variance * countered * tacticPct));
         if (roll(battle) < 0.22) damage = Math.round(damage * 0.5);
         foe.troops = Math.max(0, foe.troops - damage);
         events.push({
@@ -293,7 +361,10 @@ function executeTactic(
       const candidates = living(allies).sort((a, b) => a.troops / a.maxTroops - b.troops / b.maxTroops);
       const target = candidates[0];
       if (target) {
-        const heal = Math.max(20, Math.round(actor.intellect * 0.8 + actor.level * 2 + 30));
+        const heal = Math.max(
+          20,
+          Math.round((actor.intellect * 0.8 + actor.level * 2 + 30) * tacticPct),
+        );
         const before = target.troops;
         target.troops = Math.min(target.maxTroops, target.troops + heal);
         events.push({
@@ -522,14 +593,29 @@ function finishBattle(
       text: `战斗胜利，获得 ${battle.rewardGold} 金、${battle.rewardExp} 经验`,
     });
     for (const saved of state.save.party) {
+      const def = SAGA_GENERAL_BY_ID.get(saved.id);
+      const name = def?.name ?? saved.id;
+      const before = tacticsFor(def, saved.level);
       const levels = grantGeneralExp(saved, battle.rewardExp);
       if (levels > 0) {
         events.push({
           kind: "level",
           side: "player",
-          actor: SAGA_GENERAL_BY_ID.get(saved.id)?.name ?? saved.id,
-          text: `${SAGA_GENERAL_BY_ID.get(saved.id)?.name ?? saved.id} 升至 ${saved.level} 级`,
+          actor: name,
+          text: `${name} 升至 ${saved.level} 级`,
         });
+        const learned =
+          state.rules >= 2
+            ? tacticsFor(def, saved.level).filter((id) => !before.includes(id))
+            : [];
+        if (learned.length > 0) {
+          events.push({
+            kind: "buff",
+            side: "player",
+            actor: name,
+            text: `${name} 领悟「${learned.map(tacticName).join("」「")}」`,
+          });
+        }
       }
     }
     for (const enemy of battle.enemies) {

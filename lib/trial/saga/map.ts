@@ -98,8 +98,8 @@ export function fieldSpeedAt(field: SagaField, x: number, y: number): number {
 export function fieldEncounterChanceAt(field: SagaField, x: number, y: number): number {
   const tile = field.tile;
   const kind = fieldTileAt(field, Math.floor(x / tile), Math.floor(y / tile));
-  if (kind === SAGA_TILE_FOREST) return 0.024;
-  if (kind === SAGA_TILE_GRASS) return 0.011;
+  if (kind === SAGA_TILE_FOREST) return 0.05;
+  if (kind === SAGA_TILE_GRASS) return 0.024;
   return 0;
 }
 

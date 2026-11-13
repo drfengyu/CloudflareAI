@@ -59,21 +59,25 @@ export type FieldFacilityId =
   | "herb"
   | "supply"
   | "hall"
+  | "train"
   | "tavern"
   | "tent"
+  | "coupon"
   | "gate";
 
 /** 城里能办的几件事 + 出营：大地图上收进「城中整备」面板的页签。 */
 export const FIELD_FACILITIES: { id: FieldFacilityId; label: string; hint: string }[] = [
   { id: "record", label: "桃园碑", hint: "查看存档、武将与图鉴" },
   { id: "hall", label: "编成所", hint: "编队、阵型、装备与图鉴" },
+  { id: "train", label: "训练场", hint: "花试炼券逐级提升武将等级" },
   { id: "forge", label: "铁匠铺", hint: "用试炼券打造武器与防具" },
   { id: "herb", label: "药铺", hint: "用试炼券购买伤药与良药" },
   { id: "supply", label: "军需帐", hint: "用试炼券购买此行军需" },
   { id: "inn", label: "客栈", hint: "花试炼券歇脚，补满上阵武将兵力" },
-  { id: "bank", label: "钱庄", hint: "用金币存 tcr，收兵时结算" },
+  { id: "bank", label: "钱庄", hint: "用金币存 tcr，自动结算时到账" },
   { id: "tavern", label: "酒馆", hint: "听一段本地旧事" },
   { id: "tent", label: "营帐", hint: "看军令、召集众将议事" },
+  { id: "coupon", label: "活动券", hint: "兑换活动券或买珍宝礼包" },
 ];
 
 
@@ -1032,17 +1036,23 @@ interface UnitSlot {
   scale: number;
 }
 
-/** 站位落在 540 空间里排好的行军纵队上，只把 y 按视野比例挪，队形本身不拉伸。 */
+/** 两军各排成一列，从上往下就位；人多时整体缩小，避免队列挤出屏幕。 */
 function unitSlots(count: number, side: "player" | "enemy", k = 1): UnitSlot[] {
   const slots: UnitSlot[] = [];
+  const scale =
+    count >= 5 ? 0.52 : count === 4 ? 0.58 : count === 3 ? 0.66 : count === 2 ? 0.76 : 0.86;
+  // 队伍从上往下排，给顶部两军血条面板和底部战报浮层都留出空档。
+  const top = 210;
+  const bottom = 326;
+  const step = count > 1 ? Math.min(56, (bottom - top) / (count - 1)) : 0;
+  const start = top + ((bottom - top) - step * (count - 1)) / 2;
   for (let i = 0; i < count; i++) {
-    const row = i % 2;
-    const col = Math.floor(i / 2);
-    if (side === "player") {
-      slots.push({ x: 150 + col * 102 + row * 26, y: (320 + row * 92 + col * 6) * k, scale: 1.05 });
-    } else {
-      slots.push({ x: 790 - col * 96 - row * 22, y: (300 + row * 90 + col * 6) * k, scale: 1.05 });
-    }
+    const stagger = count >= 4 ? (i % 2 === 0 ? -20 : 20) : 0;
+    slots.push({
+      x: side === "player" ? 258 + stagger : 702 - stagger,
+      y: (start + i * step) * k,
+      scale,
+    });
   }
   return slots;
 }
@@ -1318,6 +1328,123 @@ function findUnit(
   return null;
 }
 
+/**
+ * 顶部两军兵力面板：左右各占半边，名字、兵力条与残兵数逐行排开，
+ * 像吞食天地那样一眼看清两军还剩多少兵。
+ */
+function paintBattleTeams(
+  ctx: CanvasRenderingContext2D,
+  battle: SagaBattleState,
+  target: number,
+  view: SagaView,
+): void {
+  const panelW = view.w / 2 - 64;
+  const leftX = 12;
+  const rightX = view.w / 2 + 52;
+  const top = 12;
+  const rows = Math.max(battle.party.length, battle.enemies.length);
+  const panelH = 32 + rows * 22;
+  const paintSide = (
+    units: typeof battle.party,
+    side: "player" | "enemy",
+    x: number,
+  ): void => {
+    ctx.fillStyle = "rgba(14,13,11,0.8)";
+    roundRect(ctx, x, top, panelW, panelH, 6);
+    ctx.fill();
+    ctx.strokeStyle = side === "player" ? "rgba(202,161,90,0.65)" : "rgba(190,110,90,0.65)";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    const total = units.reduce((sum, unit) => sum + Math.max(0, unit.troops), 0);
+    ctx.textAlign = "left";
+    ctx.font = uiFont(13);
+    ctx.fillStyle = side === "player" ? "#ecd39a" : "#f0c9b4";
+    const title =
+      side === "player"
+        ? `我军 · ${battle.nodeName}`
+        : `敌军${battle.boss ? " · 主将" : ""}`;
+    ctx.fillText(title.slice(0, 22), x + 12, top + 20);
+    ctx.textAlign = "right";
+    ctx.font = uiFont(11);
+    ctx.fillStyle = "rgba(236,213,171,0.62)";
+    ctx.fillText(`总兵力 ${Math.round(total)}`, x + panelW - 12, top + 20);
+
+    units.forEach((unit, index) => {
+      const rowY = top + 30 + index * 22;
+      if (side === "enemy" && index === target && !unit.downed) {
+        ctx.fillStyle = "rgba(240,190,110,0.16)";
+        roundRect(ctx, x + 6, rowY, panelW - 12, 19, 3);
+        ctx.fill();
+      }
+      ctx.textAlign = "left";
+      ctx.font = uiFont(11);
+      ctx.fillStyle = unit.downed ? "rgba(180,170,155,0.55)" : "#f0e2c4";
+      const marks = `${unit.downed ? "败 " : ""}${unit.guard ? "守" : ""}${unit.buff > 0 ? "鼓" : ""}${unit.confused > 0 ? "乱" : ""}`;
+      const name = `${unit.name} Lv${unit.level}${unit.boss ? "（主将）" : ""}`;
+      ctx.fillText(name.slice(0, 16), x + 12, rowY + 13);
+      if (marks) {
+        ctx.fillStyle = unit.downed ? "#8a8378" : unit.confused > 0 ? "#c9b2ff" : unit.guard ? "#78b4e6" : "#e7a15a";
+        ctx.fillText(marks, x + 130, rowY + 13);
+      }
+      if (side === "player") {
+        ctx.fillStyle = "rgba(150,200,240,0.85)";
+        ctx.fillText(`策 ${unit.tacticPoints}`, x + 164, rowY + 13);
+      }
+      const barX = x + (side === "player" ? 200 : 180);
+      const barW = Math.max(60, panelW - (side === "player" ? 200 : 180) - 92);
+      const ratio = Math.max(0, Math.min(1, unit.troops / unit.maxTroops));
+      ctx.fillStyle = "rgba(0,0,0,0.55)";
+      roundRect(ctx, barX, rowY + 6, barW, 7, 3);
+      ctx.fill();
+      if (ratio > 0) {
+        ctx.fillStyle = side === "player" ? "#c9a15a" : "#b5533d";
+        roundRect(ctx, barX, rowY + 6, barW * ratio, 7, 3);
+        ctx.fill();
+      }
+      ctx.textAlign = "right";
+      ctx.fillStyle = "rgba(240,226,196,0.82)";
+      ctx.font = uiFont(10);
+      ctx.fillText(
+        `${Math.max(0, Math.round(unit.troops))}/${unit.maxTroops}`,
+        x + panelW - 12,
+        rowY + 13,
+      );
+    });
+  };
+  paintSide(battle.party, "player", leftX);
+  paintSide(battle.enemies, "enemy", rightX);
+
+  // 中间窄条：回合数与目标提示
+  const chipW = 92;
+  ctx.fillStyle = "rgba(16,14,11,0.82)";
+  roundRect(ctx, view.w / 2 - chipW / 2, top, chipW, 34, 6);
+  ctx.fill();
+  ctx.strokeStyle = "rgba(202,161,90,0.7)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.textAlign = "center";
+  ctx.font = uiFont(15);
+  ctx.fillStyle = "#ecd39a";
+  ctx.fillText(`第 ${battle.round} 回合`, view.w / 2, top + 22);
+}
+
+/** 画布点击：点在哪个敌将身上就返回哪个下标，没点中返回 -1。 */
+export function battleEnemyAtPoint(
+  view: SagaView,
+  battle: SagaBattleState,
+  x: number,
+  y: number,
+): number {
+  const slots = unitSlots(battle.enemies.length, "enemy", view.k);
+  for (let index = 0; index < slots.length; index++) {
+    const slot = slots[index];
+    if (Math.abs(x - slot.x) <= 58 && y > slot.y - 120 * slot.scale && y < slot.y + 24) {
+      return index;
+    }
+  }
+  return -1;
+}
+
 export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintOptions): void {
   const { battle, time, target } = options;
   const view = options.view ?? DEFAULT_VIEW;
@@ -1361,28 +1488,8 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     ctx.fill();
   }
 
-  // 回合横幅
-  ctx.textAlign = "center";
-  ctx.font = uiFont(20);
-  const bannerText = `第 ${battle.round} 回合`;
-  const bannerW = ctx.measureText(bannerText).width + 52;
-  ctx.fillStyle = "rgba(16,14,11,0.76)";
-  roundRect(ctx, view.w / 2 - bannerW / 2, 14, bannerW, 36, 6);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(202,161,90,0.7)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.fillStyle = "#ecd39a";
-  ctx.fillText(bannerText, view.w / 2, 39);
-
-  ctx.font = uiFont(13);
-  ctx.fillStyle = "rgba(236,211,154,0.75)";
-  ctx.textAlign = "left";
-  ctx.fillText(battle.nodeName, 24, 32);
-  if (battle.boss) {
-    ctx.fillStyle = "#e78b6a";
-    ctx.fillText("BOSS", view.w - 70, 32);
-  }
+  // 顶部两军兵力面板（左右各半边）
+  paintBattleTeams(ctx, battle, target, view);
 
   const playerSlots = unitSlots(battle.party.length, "player", view.k);
   const enemySlots = unitSlots(battle.enemies.length, "enemy", view.k);
@@ -1429,47 +1536,11 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     ctx.filter = "none";
     ctx.restore();
 
-    // 名称牌与兵力条
-    const plateW = 106;
-    const plateX = slot.x - plateW / 2;
-    const plateY = slot.y - (unit.boss ? 152 : 132);
-    ctx.fillStyle = "rgba(14,13,11,0.74)";
-    roundRect(ctx, plateX, plateY, plateW, 34, 4);
-    ctx.fill();
-    ctx.strokeStyle = side === "player" ? "rgba(210,180,120,0.55)" : "rgba(190,110,90,0.55)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    ctx.textAlign = "center";
-    ctx.fillStyle = unit.downed ? "#8a8378" : "#f0e2c4";
-    ctx.font = uiFont(13);
-    ctx.fillText(`${unit.name} Lv${unit.level}`, slot.x, plateY + 15);
-    const barW = plateW - 16;
-    const ratio = Math.max(0, Math.min(1, unit.troops / unit.maxTroops));
-    ctx.fillStyle = "rgba(0,0,0,0.55)";
-    ctx.fillRect(slot.x - barW / 2, plateY + 21, barW, 5);
-    ctx.fillStyle = side === "player" ? "#c9a15a" : "#b5533d";
-    ctx.fillRect(slot.x - barW / 2, plateY + 21, barW * ratio, 5);
-    ctx.fillStyle = "rgba(240,226,196,0.85)";
-    ctx.font = uiFont(10);
-    ctx.fillText(`${Math.max(0, Math.round(unit.troops))}/${unit.maxTroops}`, slot.x, plateY + 33);
-
-    if (unit.guard) {
-      ctx.fillStyle = "rgba(120,180,230,0.9)";
-      ctx.font = uiFont(12);
-      ctx.fillText("守", slot.x + 52, plateY + 14);
-    }
-    if (unit.buff > 0) {
-      ctx.fillStyle = "#e7a15a";
-      ctx.fillText("鼓", slot.x + 52, plateY + 30);
-    }
-    if (unit.confused > 0) {
-      ctx.fillStyle = "#c9b2ff";
-      ctx.fillText("乱", slot.x - 52, plateY + 14);
-    }
     if (unit.downed) {
       ctx.fillStyle = "rgba(230,200,180,0.7)";
       ctx.font = uiFont(12);
-      ctx.fillText("败", slot.x, slot.y - 44);
+      ctx.textAlign = "center";
+      ctx.fillText("败", slot.x, slot.y - 112 * slot.scale);
     }
 
     if (side === "enemy" && index === target && !unit.downed) {
@@ -1560,12 +1631,6 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     }
     void actor;
   }
-
-  // 顶部信息条
-  ctx.textAlign = "left";
-  ctx.font = uiFont(12);
-  ctx.fillStyle = "rgba(236,213,171,0.6)";
-  ctx.fillText("点击敌将设为目标 · 下方指令栏下令", 26, view.h - 16);
 
   const vignette = ctx.createRadialGradient(
     view.w / 2,

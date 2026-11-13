@@ -6,7 +6,13 @@
  * 免得有人站在草地里原地刷金币；官道与城内外不遇敌，草地、树林才有概率。
  */
 
-import { SAGA_CHAPTERS, SAGA_FORMATIONS, SAGA_GENERAL_BY_ID } from "./data";
+import {
+  SAGA_CHAPTERS,
+  SAGA_FORMATIONS,
+  SAGA_GENERAL_BY_ID,
+  tacticsFor,
+  traitStats,
+} from "./data";
 import type { SagaEnemy, SagaNode, SagaRun } from "./types";
 
 export const SAGA_MAX_ENCOUNTERS = 10;
@@ -103,6 +109,7 @@ function leaderEnemy(leaderId: string, chapterIndex: number, ordinal: number): S
     50,
     Math.round((def.baseTroops + level * def.growth) * (1 + chapterIndex * 0.05) * 0.8),
   );
+  const bonus = traitStats(def);
   return {
     id: def.id,
     name: def.name,
@@ -110,11 +117,12 @@ function leaderEnemy(leaderId: string, chapterIndex: number, ordinal: number): S
     level,
     troops,
     maxTroops: troops,
-    force: def.force + Math.floor(level * 1.3),
-    intellect: def.intellect + Math.floor(level * 0.9),
-    defense: def.defense + Math.floor(level * 1.1),
-    speed: def.speed + Math.floor(level * 0.6),
-    tactics: [...def.tactics],
+    force: def.force + bonus.force + Math.floor(level * 1.3),
+    intellect: def.intellect + bonus.intellect + Math.floor(level * 0.9),
+    defense: def.defense + bonus.defense + Math.floor(level * 1.1),
+    speed: def.speed + bonus.speed + Math.floor(level * 0.6),
+    tactics: tacticsFor(def, level),
+    traits: def.traits,
     color: def.color,
     accent: def.accent,
     // 野外头目只是拦路的，不开放招降，免得刷遭遇把名将成批带走。

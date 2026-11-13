@@ -7,10 +7,12 @@ import {
   trialRewardFor,
   type TrialConfig,
 } from "../lib/trial/config";
-import { SAGA_CHAPTERS, SAGA_GENERAL_BY_ID } from "../lib/trial/saga/data";
+import { SAGA_CHAPTERS, SAGA_GENERAL_BY_ID, SAGA_TRAITS, SAGA_TRAIT_BY_ID, tacticsFor, traitStats } from "../lib/trial/saga/data";
 import {
   SAGA_FIELD_COLS,
   SAGA_FIELD_ROWS,
+  SAGA_MAX_LEVEL,
+  SAGA_RULESET,
   SAGA_RUN_VERSION,
   SAGA_TILE_FOREST,
   SAGA_TILE_GRASS,
@@ -33,6 +35,7 @@ import {
   sagaQuestsFor,
 } from "../lib/trial/saga/quests";
 import {
+  autoBattleRounds,
   autoPlaySagaRun,
   canEngageNode,
   createReplayState,
@@ -63,7 +66,20 @@ import {
   sanitizeSagaBank,
 } from "../lib/trial/saga/bank";
 import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "../lib/trial/saga/inn";
-import { generalStats, initialTrialSave } from "../lib/trial/saga/state";
+import {
+  createGeneralState,
+  findGeneral,
+  generalStats,
+  initialTrialSave,
+} from "../lib/trial/saga/state";
+import { startBattle } from "../lib/trial/saga/battle";
+import {
+  SAGA_TRAINING_ITEM_ID,
+  SAGA_TRAINING_TICKETS_PER_LEVEL,
+  trainGeneral,
+  trainingCost,
+  trainingLevelCap,
+} from "../lib/trial/saga/training";
 
 function trial(overrides: Partial<TrialConfig> = {}): TrialConfig {
   return { ...DEFAULT_TRIAL_CONFIG, ...overrides };
@@ -891,4 +907,179 @@ test("野外遇敌概率：官道安全，草地与树林才有概率", () => {
     0,
     "城门口必定安全",
   );
+});
+
+test("野外遇敌概率：树林 5%、草地 2.4%，官道与城池为 0", () => {
+  const field = generateSagaField({ chapter: 0, nodeCount: 5, seed: 7 });
+  let forest = false;
+  let grass = false;
+  for (let ty = 0; ty < field.rows; ty++) {
+    for (let tx = 0; tx < field.cols; tx++) {
+      const kind = fieldTileAt(field, tx, ty);
+      const chance = fieldEncounterChanceAt(field, (tx + 0.5) * field.tile, (ty + 0.5) * field.tile);
+      if (kind === SAGA_TILE_FOREST) {
+        assert.equal(chance, 0.05);
+        forest = true;
+      } else if (kind === SAGA_TILE_GRASS) {
+        assert.equal(chance, 0.024);
+        grass = true;
+      } else {
+        assert.equal(chance, 0);
+      }
+    }
+  }
+  assert.equal(forest && grass, true, "地图上同时有树林与草地");
+});
+
+// ---------------------------------------------------------------- 特性 / 规则
+
+test("武将特性：无双 / 智圣 / 会心 / 猛将等固有特性挂在指定武将身上", () => {
+  const ids = new Set(SAGA_TRAITS.map((trait) => trait.id));
+  for (const id of ["wushuang", "zhisheng", "huixin", "mengjiang"]) {
+    assert.equal(ids.has(id as (typeof SAGA_TRAITS)[number]["id"]), true, `特性表包含 ${id}`);
+  }
+  for (const general of SAGA_GENERAL_BY_ID.values()) {
+    for (const id of general.traits ?? []) {
+      assert.equal(SAGA_TRAIT_BY_ID.has(id), true, `${general.name} 的特性 ${String(id)} 必须有定义`);
+    }
+  }
+  assert.equal(SAGA_GENERAL_BY_ID.get("lvbu")?.traits?.includes("wushuang"), true);
+  assert.equal(SAGA_GENERAL_BY_ID.get("zhugeliang")?.traits?.includes("zhisheng"), true);
+  assert.equal(SAGA_GENERAL_BY_ID.get("zhaoyun")?.traits?.includes("huixin"), true);
+  assert.equal(SAGA_GENERAL_BY_ID.get("guanyu")?.traits?.includes("mengjiang"), true);
+
+  assert.equal(traitStats(SAGA_GENERAL_BY_ID.get("lvbu")).force, 6, "无双 +6 武力");
+  assert.equal(traitStats(SAGA_GENERAL_BY_ID.get("zhugeliang")).intellect, 8, "智圣 +8 智力");
+  const meng = traitStats(SAGA_GENERAL_BY_ID.get("guanyu"));
+  assert.equal(meng.force, 6, "猛将 +6 武力");
+  assert.equal(traitStats(SAGA_GENERAL_BY_ID.get("zhaoyun")).force, 0, "会心不加四维");
+});
+
+test("战斗规则：新行军启用特性与成长计策，旧行军 rules=1 按老规则重放", () => {
+  const run = freshRun();
+  assert.equal(run.rules, SAGA_RULESET);
+  const old = parseSagaRun(JSON.stringify({ ...run, rules: undefined }));
+  assert.ok(old);
+  assert.equal(old.rules, 1, "旧行军缺省 rules=1");
+
+  const newBattle = replaySagaRun(run, [{ k: "battle", node: 0, rounds: [] }]).state.battle;
+  const oldBattle = replaySagaRun(old, [{ k: "battle", node: 0, rounds: [] }]).state.battle;
+  assert.ok(newBattle && oldBattle);
+  assert.equal(newBattle.party[0].traits?.includes("rende"), true, "新规则带特性");
+  assert.deepEqual(oldBattle.party[0].traits, [], "旧规则不启用特性");
+
+  const save = initialTrialSave();
+  save.party = [createGeneralState("zhaoyun", 9)];
+  const lv9Run = { ...easyRun(save), rules: SAGA_RULESET };
+  const lv9 = startBattle(lv9Run, 0, createReplayState(lv9Run)).party[0];
+  assert.deepEqual(lv9.tactics, ["huoji"], "9 级赵云还没领悟鼓舞");
+  save.party[0].level = 10;
+  const lv10 = startBattle(lv9Run, 0, createReplayState(lv9Run)).party[0];
+  assert.deepEqual(lv10.tactics, ["huoji", "guwu"], "10 级领悟鼓舞");
+});
+
+test("策略点：升级增长，智将额外吃智力，封顶 12 点", () => {
+  assert.deepEqual(tacticsFor(SAGA_GENERAL_BY_ID.get("pangtong"), 7), ["huoji", "hunluan"]);
+  assert.deepEqual(tacticsFor(SAGA_GENERAL_BY_ID.get("pangtong"), 8), ["huoji", "hunluan", "guwu"]);
+
+  const save = initialTrialSave();
+  const run = { ...easyRun(save), rules: SAGA_RULESET };
+  const atLv1 = startBattle(run, 0, createReplayState(run)).party[0];
+  save.party[0].level = 10;
+  const atLv10 = startBattle(run, 0, createReplayState(run)).party[0];
+  save.party[0].level = 30;
+  const atLv30 = startBattle(run, 0, createReplayState(run)).party[0];
+  assert.equal(atLv10.tacticPoints > atLv1.tacticPoints, true, "升级增加策略点");
+  assert.equal(atLv1.tacticPoints, 5, "刘备 1 级：基础 2 + 智力 2 + 仁德 1");
+  assert.equal(atLv30.tacticPoints, 12, "策略点封顶 12");
+  assert.equal(atLv1.tactics.includes("huifu"), true, "仁德之主自带回复");
+});
+
+// ---------------------------------------------------------------- 撤退 / 训练
+
+test("撤退：只结束当前这一场仗，编制与已走指令都保留，之后还能接着打", () => {
+  const run = freshRun();
+  const formation: SagaCommand = { k: "formation", f: "fengshi" };
+  const prelude = replaySagaRun(run, [formation]).state;
+  const rounds = autoBattleRounds(run, 0, prelude);
+  assert.equal(rounds.length > 0, true, "自动行军能打出可复现的回合");
+
+  const fought = replaySagaRun(run, [
+    formation,
+    { k: "battle", node: 0, rounds: [] },
+    { k: "retreat" },
+  ]);
+  assert.equal(fought.state.scene, "field", "撤退后回到大地图");
+  assert.equal(fought.state.battle, null);
+  assert.equal(fought.state.save.formation, "fengshi", "战前变更的阵型没有丢");
+  assert.equal(fought.state.clearedNodes.length, 0);
+
+  const carried = replaySagaRun(run, [
+    formation,
+    { k: "battle", node: 0, rounds: [] },
+    { k: "retreat" },
+    { k: "battle", node: 0, rounds },
+  ]);
+  assert.equal(carried.state.scene === "won" || carried.state.scene === "field", true);
+  assert.deepEqual(carried.state.clearedNodes, [0], "撤退之后下一次进攻照常结算");
+  assert.equal(carried.state.save.formation, "fengshi");
+
+  assert.deepEqual(sanitizeSagaCommands([{ k: "retreat" }, { junk: true }]), [{ k: "retreat" }]);
+});
+
+test("训练场：逐级计价，上限随平定数增长并封顶 30", () => {
+  assert.equal(SAGA_TRAINING_ITEM_ID, "training");
+  assert.equal(SAGA_TRAINING_TICKETS_PER_LEVEL, 2);
+  const save = initialTrialSave();
+  assert.equal(trainingLevelCap(save), 9, "初到涿郡可练到 9 级");
+  assert.equal(trainingCost(1, 10), 18);
+  assert.equal(trainingCost(7, 7), 0);
+  assert.equal(trainingCost(9, 4), 0);
+
+  save.stats.wins = 3;
+  assert.equal(trainingLevelCap(save), 18, "每平定一处 +3 级");
+  save.stats.wins = 20;
+  assert.equal(trainingLevelCap(save), SAGA_MAX_LEVEL, "封顶 30 级");
+
+  save.stats.wins = 0;
+  const guanyu = findGeneral(save, "guanyu");
+  assert.ok(guanyu);
+  assert.equal(trainGeneral(save, "guanyu", 30), 8, "不超过上限时逐级练到 9 级");
+  assert.equal(guanyu.level, 9);
+  assert.equal(trainGeneral(save, "guanyu", 5), 0, "已在目标等级以上不重复收费");
+  assert.equal(trainGeneral(save, "nobody", 10), 0);
+});
+
+test("训练购买记录：解析留档，重放按购买位置抬到目标等级", () => {
+  const run = easyRun();
+  run.purchases = [
+    {
+      id: "train-1",
+      itemId: SAGA_TRAINING_ITEM_ID,
+      tickets: 10,
+      generalId: "guanyu",
+      targetLevel: 6,
+      at: 1,
+      cmdIndex: 0,
+    },
+  ];
+  const parsed = parseSagaRun(JSON.stringify(run));
+  assert.ok(parsed);
+  assert.equal(parsed.purchases.length, 1);
+  assert.equal(parsed.purchases[0].generalId, "guanyu");
+  assert.equal(parsed.purchases[0].targetLevel, 6);
+
+  const replay = replaySagaRun(run, []);
+  assert.equal(findGeneral(replay.state.save, "guanyu")?.level, 6);
+
+  const dropped = parseSagaRun(
+    JSON.stringify({
+      ...run,
+      purchases: [
+        { id: "train-2", itemId: SAGA_TRAINING_ITEM_ID, tickets: 2, generalId: "nobody", targetLevel: 5, at: 1, cmdIndex: 0 },
+      ],
+    }),
+  );
+  assert.ok(dropped);
+  assert.equal(dropped.purchases.length, 0, "查无此人的训练记录被丢弃");
 });

@@ -6,7 +6,9 @@ import {
   BedDouble,
   Beer,
   BookOpen,
+  Dumbbell,
   FlaskConical,
+  Gift,
   Landmark,
   LogOut,
   MessageCircle,
@@ -763,8 +765,10 @@ export type TownSpotId =
   | "herb"
   | "supply"
   | "hall"
+  | "train"
   | "tent"
   | "tavern"
+  | "coupon"
   | "gate";
 
 interface TownSpot {
@@ -787,6 +791,8 @@ const TOWN_SPOTS: TownSpot[] = [
   { id: "inn", label: "客栈", npcId: "innkeeper", x: 70, y: 71, icon: BedDouble },
   { id: "bank", label: "钱庄", npcId: "banker", x: 26, y: 90, icon: Landmark },
   { id: "tent", label: "营帐", npcId: "tentkeeper", x: 47, y: 91, icon: Tent },
+  { id: "train", label: "训练场", npcId: "trainer", x: 64, y: 91, icon: Dumbbell },
+  { id: "coupon", label: "活动券", npcId: "couponkeeper", x: 82, y: 88, icon: Gift },
 ];
 
 function paintTownBackdrop(

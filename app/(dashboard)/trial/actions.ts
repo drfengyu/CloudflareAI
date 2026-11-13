@@ -6,10 +6,12 @@ import { checkRateLimit } from "@/lib/rate-limit";
 import { getTrialConfig } from "@/lib/trial/settings";
 import {
   buyTrialItem,
+  saveTrialRunProgress,
   startTrialRun,
   submitTrialRun,
   type ItemPurchaseResult,
   type StartedTrial,
+  type TrialProgressResult,
   type TrialSettlement,
 } from "@/lib/trial/store";
 
@@ -61,12 +63,40 @@ export async function submitTrialAction(input: {
   }
 }
 
-/** 城内买卖：铁匠铺 / 药铺 / 军需帐 / 客栈都用活动券，购买时实时扣券。 */
+/** 自动存档：客户端每推进一步就整段回传指令；打完全图会在这一步自动收兵结算。 */
+export async function autoSaveTrialAction(input: {
+  runId: string;
+  commands: unknown[];
+}): Promise<ActionResult<TrialProgressResult>> {
+  try {
+    const userId = await requireUser();
+    if (!(await checkRateLimit(`trial-save:${userId}`, { window: 60_000, limit: 80 }))) {
+      return { success: false, error: "存档过于频繁，请稍后再试" };
+    }
+    const config = await getTrialConfig();
+    const data = await saveTrialRunProgress({
+      userId,
+      runId: String(input.runId ?? ""),
+      commands: Array.isArray(input.commands) ? input.commands : [],
+      config,
+    });
+    revalidatePath("/trial");
+    if (data.settled) revalidatePath("/wallet");
+    return { success: true, data };
+  } catch (error) {
+    return fail(error, "自动存档失败");
+  }
+}
+
+/** 城内买卖：铁匠铺 / 药铺 / 军需帐 / 客栈 / 训练场都用活动券，购买时实时扣券。 */
 export async function buyTrialItemAction(input: {
   runId: string;
   itemId: string;
   purchaseId: string;
   cmdIndex: number;
+  generalId?: string;
+  targetLevel?: number;
+  commands?: unknown[];
 }): Promise<ActionResult<ItemPurchaseResult>> {
   try {
     const userId = await requireUser();
@@ -80,6 +110,9 @@ export async function buyTrialItemAction(input: {
       itemId: String(input.itemId ?? ""),
       purchaseId: String(input.purchaseId ?? ""),
       cmdIndex: Number(input.cmdIndex) || 0,
+      generalId: typeof input.generalId === "string" ? input.generalId : undefined,
+      targetLevel: Number(input.targetLevel) || undefined,
+      commands: Array.isArray(input.commands) ? input.commands : [],
       config,
     });
     revalidatePath("/trial");

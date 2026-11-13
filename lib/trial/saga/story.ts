@@ -103,6 +103,28 @@ export const SAGA_NPCS: Record<string, SagaNpcDef> = {
       "兵器甲胄都在库里，换装之后立绘也会跟着变。",
     ],
   },
+  trainer: {
+    id: "trainer",
+    name: "周教头",
+    title: "训练场教头",
+    greeting: "刀要天天磨，将也要天天练。想让谁长进，报个名字。",
+    lines: [
+      "练一级有一级的用处，兵法熟了，计策点也跟着涨。",
+      "智将到了火候，自己就悟出新计策来，急不得。",
+      "每平定一处地方，我这儿的上限就松三分。",
+    ],
+  },
+  couponkeeper: {
+    id: "couponkeeper",
+    name: "阿绫",
+    title: "活动券礼包掌柜",
+    greeting: "活动券能当钱使，礼包也都摆在这儿。将军要兑几张？",
+    lines: [
+      "礼包里的券和赠送的券一并到账，够用一阵子。",
+      "铁匠铺、药铺、军需帐、客栈与训练场，全都收活动券。",
+      "券当面点清，出了这道门概不赊账。",
+    ],
+  },
   tavernkeeper: {
     id: "tavernkeeper",
     name: "田叟",

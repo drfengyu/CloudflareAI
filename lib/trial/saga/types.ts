@@ -10,6 +10,12 @@ import type { SagaBankPolicy } from "./bank";
 export const SAGA_RUN_VERSION = 7;
 export const SAGA_SAVE_VERSION = 1;
 
+/**
+ * 战斗规则版本：v2 起武将固有特性、按等级成长策略点与领悟计策生效。
+ * 旧行军没有这个字段，重放时按 v1 走，避免改版把还没收兵的对局打乱。
+ */
+export const SAGA_RULESET = 2;
+
 export const SAGA_PARTY_SIZE = 5;
 export const SAGA_RESERVE_SIZE = 12;
 export const SAGA_MAX_LEVEL = 30;
@@ -89,6 +95,38 @@ export type FormationId = "yulin" | "heyi" | "fengshi" | "fangyuan" | "changshe"
 export type TacticId = "huoji" | "huifu" | "hunluan" | "guwu";
 export type SagaItemKind = "weapon" | "armor" | "consumable" | "supply";
 
+/** 武将固有特性：数值、暴击与连击上的个人长板。 */
+export type SagaTraitId =
+  | "wushuang"
+  | "zhisheng"
+  | "huixin"
+  | "mengjiang"
+  | "tiebi"
+  | "shensu"
+  | "rende";
+
+export interface SagaTraitDef {
+  id: SagaTraitId;
+  name: string;
+  desc: string;
+  force?: number;
+  intellect?: number;
+  defense?: number;
+  speed?: number;
+  /** 普攻暴击率（0~1），暴击伤害 ×1.7。 */
+  crit?: number;
+  /** 普攻追加一击的概率（0~1），追击按七成伤害结算。 */
+  extraAttack?: number;
+  /** 普攻伤害加成（0~1）。 */
+  attackPct?: number;
+  /** 受到伤害的减免（0~1）。 */
+  damageCut?: number;
+  /** 战斗开始时额外的计策点。 */
+  tacticPoints?: number;
+  /** 计策伤害与回复加成（0~1）。 */
+  tacticPct?: number;
+}
+
 export interface SagaGeneralDef {
   id: string;
   name: string;
@@ -98,6 +136,9 @@ export interface SagaGeneralDef {
   defense: number;
   speed: number;
   tactics: TacticId[];
+  /** 智将随等级领悟的计策：达到等级后并入可用计策表。 */
+  learn?: { level: number; tactic: TacticId }[];
+  traits?: SagaTraitId[];
   baseTroops: number;
   growth: number;
   color: string;
@@ -204,6 +245,8 @@ export interface SagaEnemy {
   defense: number;
   speed: number;
   tactics: TacticId[];
+  /** 敌将若在武将表里有固有特性，出阵时一并带上。 */
+  traits?: SagaTraitId[];
   color: string;
   accent: string;
   recruitable: boolean;
@@ -231,6 +274,9 @@ export interface SagaPurchase {
   tickets: number;
   /** 旧版 tcr 换金币的购买记录：这一笔换进游戏的金币数（`itemId` 为 `bank_gold`）。 */
   gold?: number;
+  /** 训练场：受训武将与该次训练的目标等级。 */
+  generalId?: string;
+  targetLevel?: number;
   at: number;
   /** 购买时已经执行过的指令数：装备 / 军需 / 住店从下一步行动起生效。 */
   cmdIndex: number;
@@ -265,6 +311,13 @@ export interface SagaRun {
   shopSeq: number;
   /** 出城时冻结的钱庄汇率：改后台设置不影响已经开出的行军。 */
   bank: SagaBankPolicy;
+  /** 战斗规则版本，见 `SAGA_RULESET`；旧行军缺省按 1。 */
+  rules?: number;
+  /**
+   * 自动存档的指令进度：客户端每次生成指令就整段回传，服务端只保留与重放等价的副本，
+   * 断线后从最近一次存档接着走，不再从头再来。
+   */
+  commands?: SagaCommand[];
   endSave?: TrialSave;
   result?: SagaRunResult;
 }
@@ -284,6 +337,8 @@ export type SagaCommand =
   /** 钱庄存金：按本次行军的存金价整档扣，收兵时统一折成 tcr 发放。 */
   | { k: "bank"; g: number }
   | { k: "leave" }
+  /** 撤退：打完已排的回合就收兵回城，战果与折损照算，行军进度不丢。 */
+  | { k: "retreat" }
   /** 打的是图上哪座营：大地图上可以自由挑顺序，首领营要先破其余营。 */
   | { k: "battle"; node: number; rounds: SagaRoundCommand[][] }
   /** 野外遭遇战：不占营地进度，编成由种子与这是第几场遭遇推出。 */
@@ -302,6 +357,8 @@ export interface SagaBattleGeneral {
   defense: number;
   speed: number;
   tactics: TacticId[];
+  /** 武将固有特性，参与伤害、暴击与开场策略点结算。 */
+  traits: SagaTraitId[];
   tacticPoints: number;
   weaponAtk: number;
   armorDef: number;
@@ -373,6 +430,8 @@ export interface SagaRunBuffs {
 
 export interface SagaReplayState {
   scene: "field" | "battle" | "won" | "lost";
+  /** 本次行军适用的战斗规则版本（见 `SAGA_RULESET`）。 */
+  rules: number;
   /** 已攻克的营地节点下标，攻打的先后由玩家在地图上自由决定。 */
   clearedNodes: number[];
   completed: number;

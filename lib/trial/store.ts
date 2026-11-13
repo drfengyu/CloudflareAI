@@ -20,13 +20,20 @@ import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "./saga/inn";
 import {
   generateSagaRun,
   parseSagaRun,
+  replaySagaRun,
   sanitizeSagaCommands,
   settleSagaRun,
   SAGA_MAX_PURCHASES,
 } from "./saga/run";
-import { initialTrialSave, normalizeTrialSave } from "./saga/state";
+import { initialTrialSave, findGeneral, normalizeTrialSave } from "./saga/state";
+import {
+  SAGA_TRAINING_ITEM_ID,
+  trainingCost,
+  trainingLevelCap,
+} from "./saga/training";
 import {
   SAGA_MAX_COMMANDS,
+  type SagaCommand,
   type SagaPurchase,
   type SagaRun,
   type SagaRunResult,
@@ -128,6 +135,69 @@ export async function findActiveTrialRun(
 }
 
 export type StartedTrial = ActiveTrialRun;
+
+export interface TrialProgressResult {
+  /** 服务端最终保存的指令（客户端据此清掉本地缓存）。 */
+  commands: SagaCommand[];
+  /** 这次自动存档同时把全图打完，已经自动收兵结算。 */
+  settled: boolean;
+  settlement: TrialSettlement | null;
+}
+
+/**
+ * 自动存档：客户端每次生成指令就整段回传，服务端用同一份重放校验后写回行军 JSON。
+ * 行军一旦打完全图立即自动收兵结算，不再需要玩家点「收兵」。
+ *
+ * 用整段 JSON 做乐观锁；并发的商店购买优先，冲突时把最新指令回给客户端重试。
+ */
+export async function saveTrialRunProgress(input: {
+  userId: string;
+  runId: string;
+  commands: unknown[];
+  config: TrialConfig;
+}): Promise<TrialProgressResult> {
+  const rows = await db
+    .select({ status: trialRuns.status, questions: trialRuns.questions })
+    .from(trialRuns)
+    .where(and(eq(trialRuns.id, input.runId), eq(trialRuns.userId, input.userId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new TrialError("行军不存在");
+  const run = parseSagaRun(row.questions);
+  if (!run) throw new TrialError("行军数据异常，请重新出发");
+  if (row.status !== "active") {
+    return { commands: run.commands ?? [], settled: true, settlement: null };
+  }
+
+  const commands = sanitizeSagaCommands(input.commands.slice(0, SAGA_MAX_COMMANDS));
+  const replay = replaySagaRun(run, commands);
+  const next: SagaRun = { ...run, commands };
+  const updated = await d1Run(
+    `UPDATE trial_run SET questions = ?
+      WHERE id = ? AND userId = ? AND status = 'active' AND questions = ?`,
+    [JSON.stringify(next), input.runId, input.userId, row.questions],
+  );
+  if (updated.changes !== 1) {
+    const latest = await db
+      .select({ questions: trialRuns.questions })
+      .from(trialRuns)
+      .where(eq(trialRuns.id, input.runId))
+      .limit(1);
+    const latestRun = parseSagaRun(latest[0]?.questions);
+    return { commands: latestRun?.commands ?? [], settled: false, settlement: null };
+  }
+
+  if (replay.state.scene === "won") {
+    const settlement = await submitTrialRun({
+      userId: input.userId,
+      runId: input.runId,
+      commands,
+      config: input.config,
+    });
+    return { commands, settled: true, settlement };
+  }
+  return { commands, settled: false, settlement: null };
+}
 
 function newSeed(): number {
   const buffer = new Uint32Array(1);
@@ -299,7 +369,12 @@ export async function submitTrialRun(input: {
   const bankTcr = bankCreditsForGold(bankGold, run.bank);
   const reward = Math.round((clearReward + bankTcr) * 100) / 100;
   const status = "scored";
-  const storedRun: SagaRun = { ...run, endSave: settled.endSave, result: settled.result };
+  const storedRun: SagaRun = {
+    ...run,
+    commands: undefined,
+    endSave: settled.endSave,
+    result: settled.result,
+  };
 
   const claimed = await d1Run(
     `UPDATE trial_run SET status = ?, correct = ?, durationMs = ?, rewardCredits = ?, questions = ?, submittedAt = ?
@@ -414,6 +489,10 @@ export async function buyTrialItem(input: {
   itemId: string;
   purchaseId: string;
   cmdIndex: number;
+  /** 训练场：受训武将、目标等级，以及训练前的指令进度（服务端据此算当前等级）。 */
+  generalId?: string;
+  targetLevel?: number;
+  commands?: unknown[];
   config: TrialConfig;
 }): Promise<ItemPurchaseResult> {
   const activityKey = assertActiveWindow(input.config);
@@ -421,9 +500,12 @@ export async function buyTrialItem(input: {
   if (!PURCHASE_ID_PATTERN.test(purchaseId)) throw new TrialError("购买凭据无效");
   const itemId = String(input.itemId ?? "");
   const isInn = itemId === SAGA_INN_ITEM_ID;
+  const isTraining = itemId === SAGA_TRAINING_ITEM_ID;
   const item = SAGA_ITEM_BY_ID.get(itemId);
   const priceTickets = isInn ? SAGA_INN_PRICE_TICKETS : item?.priceTickets ?? 0;
-  if (!isInn && (!item || priceTickets <= 0)) throw new TrialError("该商品不在城内商店");
+  if (!isInn && !isTraining && (!item || priceTickets <= 0)) {
+    throw new TrialError("该商品不在城内商店");
+  }
 
   const rows = await db
     .select({
@@ -456,7 +538,23 @@ export async function buyTrialItem(input: {
   }
 
   const cmdIndex = Math.max(0, Math.min(SAGA_MAX_COMMANDS, Math.trunc(Number(input.cmdIndex) || 0)));
-  const cost = priceTickets * input.config.couponUnitCredits;
+  const commands = sanitizeSagaCommands((input.commands ?? []).slice(0, SAGA_MAX_COMMANDS));
+  let tickets = priceTickets;
+  let training: { generalId: string; targetLevel: number } | null = null;
+  if (isTraining) {
+    const generalId = String(input.generalId ?? "");
+    const progress = replaySagaRun({ ...run, commands }, commands).state;
+    const general = findGeneral(progress.save, generalId);
+    if (!general) throw new TrialError("查无此将");
+    const cap = trainingLevelCap(progress.save);
+    const targetLevel = Math.trunc(Number(input.targetLevel) || 0);
+    if (targetLevel <= general.level) throw new TrialError("目标等级需高于当前等级");
+    if (targetLevel > cap) throw new TrialError(`训练场上限为 ${cap} 级，先平定更多地方`);
+    tickets = trainingCost(general.level, targetLevel);
+    if (tickets <= 0) throw new TrialError("目标等级无效");
+    training = { generalId, targetLevel };
+  }
+  const cost = tickets * input.config.couponUnitCredits;
   const paid = await payWithCoupon(
     input.userId,
     "trial",
@@ -472,13 +570,15 @@ export async function buyTrialItem(input: {
       ...run.purchases,
       {
         id: purchaseId,
-        itemId: isInn ? SAGA_INN_ITEM_ID : item!.id,
-        tickets: priceTickets,
+        itemId: isInn ? SAGA_INN_ITEM_ID : isTraining ? SAGA_TRAINING_ITEM_ID : item!.id,
+        tickets,
+        ...(training ?? {}),
         at: Date.now(),
         cmdIndex,
       },
     ],
     shopSeq: run.shopSeq + 1,
+    ...(commands.length > 0 ? { commands } : {}),
   };
   const updated = await d1Run(
     `UPDATE trial_run SET questions = ?

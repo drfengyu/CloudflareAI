@@ -4,6 +4,9 @@ import {
   SAGA_FORMATIONS,
   SAGA_GENERAL_BY_ID,
   SAGA_ITEM_BY_ID,
+  SAGA_TRAIT_BY_ID,
+  tacticsFor,
+  traitStats,
 } from "./data";
 import { startBattle, resolveBattleRound, startEncounterBattle } from "./battle";
 import { SAGA_MAX_ENCOUNTERS } from "./encounter";
@@ -13,6 +16,7 @@ import {
   type SagaBankPolicy,
 } from "./bank";
 import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "./inn";
+import { SAGA_TRAINING_ITEM_ID, trainGeneral } from "./training";
 import {
   applyChapterUnlock,
   cloneSave,
@@ -25,9 +29,11 @@ import {
 } from "./state";
 import {
   SAGA_MAX_COMMANDS,
+  SAGA_MAX_LEVEL,
   SAGA_MAX_ROUNDS_PER_BLOCK,
   SAGA_MAX_TOTAL_ROUNDS,
   SAGA_PARTY_SIZE,
+  SAGA_RULESET,
   SAGA_RUN_VERSION,
   type FormationId,
   type SagaCommand,
@@ -40,6 +46,7 @@ import {
   type SagaRoundCommand,
   type SagaRun,
   type SagaRunResult,
+  type SagaTraitId,
   type TrialSave,
 } from "./types";
 
@@ -100,6 +107,7 @@ function makeEnemy(
     60,
     Math.round((raw.baseTroops + level * raw.growth) * (1 + chapterIndex * 0.06) * scale),
   );
+  const bonus = traitStats(raw);
   return {
     id: raw.id,
     name: raw.name,
@@ -107,11 +115,12 @@ function makeEnemy(
     level,
     troops,
     maxTroops: troops,
-    force: raw.force + Math.floor(level * 1.4),
-    intellect: raw.intellect + Math.floor(level * 1.1),
-    defense: raw.defense + Math.floor(level * 1.2),
-    speed: raw.speed + Math.floor(level * 0.7),
-    tactics: [...raw.tactics],
+    force: raw.force + bonus.force + Math.floor(level * 1.4),
+    intellect: raw.intellect + bonus.intellect + Math.floor(level * 1.1),
+    defense: raw.defense + bonus.defense + Math.floor(level * 1.2),
+    speed: raw.speed + bonus.speed + Math.floor(level * 0.7),
+    tactics: tacticsFor(raw, level),
+    traits: raw.traits ?? [],
     color: raw.color,
     accent: raw.accent,
     recruitable: Boolean(raw.recruitable) && !boss,
@@ -211,6 +220,7 @@ export function generateSagaRun(options: {
     purchases: [],
     shopSeq: 0,
     bank: sanitizeSagaBank(options.bank ?? DEFAULT_SAGA_BANK),
+    rules: SAGA_RULESET,
   };
 }
 
@@ -230,6 +240,11 @@ function parseEnemy(raw: unknown): SagaEnemy | null {
         ["huoji", "huifu", "hunluan", "guwu"].includes(String(t)),
       )
     : [];
+  const traits = Array.isArray(it.traits)
+    ? it.traits
+        .filter((t): t is SagaTraitId => typeof t === "string" && SAGA_TRAIT_BY_ID.has(t as SagaTraitId))
+        .slice(0, 4)
+    : [];
   return {
     id,
     name: String(it.name ?? "").slice(0, 24) || id,
@@ -242,6 +257,7 @@ function parseEnemy(raw: unknown): SagaEnemy | null {
     defense: num(it.defense, 1, 999, 50),
     speed: num(it.speed, 1, 999, 50),
     tactics,
+    traits,
     color: String(it.color ?? "#475569").slice(0, 32),
     accent: String(it.accent ?? "#e2e8f0").slice(0, 32),
     recruitable: it.recruitable === true,
@@ -329,6 +345,24 @@ function parsePurchases(raw: unknown, bank: SagaBankPolicy): SagaPurchase[] {
       out.push({ id, itemId, tickets: SAGA_INN_PRICE_TICKETS, at, cmdIndex });
       continue;
     }
+    // 训练场：记录受训武将与目标等级，重放时按购买位置直接抬等级。
+    if (itemId === SAGA_TRAINING_ITEM_ID) {
+      const generalId = String(it.generalId ?? "").slice(0, 32);
+      if (!SAGA_GENERAL_BY_ID.get(generalId)) continue;
+      const targetLevel = clampInt(Number(it.targetLevel) || 0, 2, SAGA_MAX_LEVEL);
+      if (targetLevel < 2) continue;
+      ids.add(id);
+      out.push({
+        id,
+        itemId,
+        tickets: clampInt(Number(it.tickets) || 0, 0, 999),
+        generalId,
+        targetLevel,
+        at,
+        cmdIndex,
+      });
+      continue;
+    }
     const def = SAGA_ITEM_BY_ID.get(itemId);
     if (!def || !def.priceTickets) continue;
     if (isPassiveSupply(itemId)) {
@@ -366,6 +400,7 @@ export function parseSagaRun(raw: string | null | undefined): SagaRun | null {
   const endSave = it.endSave ? normalizeTrialSave(it.endSave) : undefined;
   const bank = sanitizeSagaBank(it.bank);
   const result = it.result;
+  const commands = sanitizeSagaCommands(it.commands);
   return {
     version: SAGA_RUN_VERSION,
     kind: "saga",
@@ -376,6 +411,8 @@ export function parseSagaRun(raw: string | null | undefined): SagaRun | null {
     purchases: parsePurchases(it.purchases, bank),
     shopSeq: clampInt(Number(it.shopSeq) || 0, 0, 1_000_000),
     bank,
+    rules: clampInt(Number(it.rules) || 1, 1, 99),
+    commands: commands.length > 0 ? commands : undefined,
     endSave,
     result:
       result && typeof result === "object"
@@ -483,6 +520,10 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
         }
         break;
       }
+      case "retreat": {
+        out.push({ k: "retreat" });
+        break;
+      }
       case "leave": {
         out.push({ k: "leave" });
         break;
@@ -526,6 +567,7 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
 export function createReplayState(run: SagaRun): SagaReplayState {
   return {
     scene: "field",
+    rules: run.rules ?? 1,
     clearedNodes: [],
     completed: 0,
     victory: false,
@@ -590,6 +632,12 @@ function applyPurchase(state: SagaReplayState, purchase: SagaPurchase): void {
     }
     return;
   }
+  if (purchase.itemId === SAGA_TRAINING_ITEM_ID) {
+    if (purchase.generalId && typeof purchase.targetLevel === "number") {
+      trainGeneral(state.save, purchase.generalId, purchase.targetLevel);
+    }
+    return;
+  }
   const item = SAGA_ITEM_BY_ID.get(purchase.itemId);
   if (!item) return;
   if (item.kind !== "supply") {
@@ -637,6 +685,21 @@ export function openNodes(run: SagaRun, state: SagaReplayState): number[] {
   return out;
 }
 
+/** 从战斗中撤退：当前兵力记回队伍，还有人站着就回大地图，全灭才落到住店重整。 */
+export function retreatFromBattle(state: SagaReplayState): boolean {
+  const battle = state.battle;
+  if (!battle || battle.phase !== "select") return false;
+  let alive = false;
+  for (const general of battle.party) {
+    const troops = general.downed ? 0 : general.troops;
+    state.partyTroops[general.id] = troops;
+    if (troops > 0) alive = true;
+  }
+  state.battle = null;
+  state.scene = alive ? "field" : "lost";
+  return true;
+}
+
 export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplayResult {
   const state = createReplayState(run);
   const purchasesAt = new Map<number, SagaPurchase[]>();
@@ -650,8 +713,12 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
     for (const purchase of purchasesAt.get(index) ?? []) applyPurchase(state, purchase);
     if (index === total) break;
     if (state.scene === "won") break;
-    if (state.scene === "battle") continue;
     const command = commands[index];
+    if (state.scene === "battle") {
+      // 战斗没打完时只有撤退能生效：把当前兵力记回队伍，接着行军，进度不会丢。
+      if (command.k === "retreat") retreatFromBattle(state);
+      continue;
+    }
     switch (command.k) {
       case "formation":
         setFormation(state.save, command.f);

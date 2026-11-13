@@ -110,23 +110,25 @@ export default async function TrialPage() {
       <CardContent>
         <ul className="list-disc space-y-1 pl-5 text-sm text-muted-foreground">
           <li>
-            从当前城镇出城后是一张<b>俯视行军大地图</b>：方向键 / WASD 四向自由行走（也可点地图走位），
+            从当前城镇出城后是一张<b>俯视行军大地图</b>：方向键 / WASD 四向自由行走，
+            草地与树林会随机遇敌，点空白处可随时查看队伍、道具与装备。
             图上有 {config.questionCount} 座敌营，先打哪座由你走位决定；主帅本阵要先拔尽其余营寨。
-            营寨全部攻破，剧情才会推进到下一处地方。等级、金币、装备、招降武将都写进存档，
-            兵败也不会丢进度。
+            营寨全部攻破，剧情才会推进到下一处地方。每一步都会<b>自动存档</b>，
+            撤退只结束当前这场仗，等级、金币、装备、招降武将都不会丢。
           </li>
           <li>
-            战斗为<b>兵力制回合制</b>：每回合给每名武将下「攻击 / 计策 / 防御 / 道具 / 招降」指令；
+            战斗为<b>兵力制回合制</b>：每回合在战斗画面下方给每名武将下「攻击 / 计策 / 防御 / 道具 / 招降」指令；
             五将上阵、十二人待命，阵型（鱼鳞 / 鹤翼 / 锋矢 / 方圆 / 长蛇）互相克制，
-            计策消耗计策点，敌将兵力低于三成时可以招降。
+            计策消耗计策点，敌将兵力低于三成时可以招降。武将各有<b>无双 / 智圣 / 会心 / 猛将</b>
+            等固有特性，升级还会增长计策点、智将在特定等级学会新计策。
           </li>
           <li>
-            出城<b>不花券</b>。铁匠铺、药铺、客栈与军需帐全部用<b>活动券</b>标价（1 张 ={" "}
-            {formatCredits(config.couponUnitCredits)} cr 券面），买装备、伤药、军需与住店都在购买时实时扣券；
-            战斗缴获的金币只在钱庄存成 tcr，不能反过来换金币。
+            出城<b>不花券</b>。铁匠铺、药铺、客栈、军需帐与<b>训练场</b>全部用<b>活动券</b>标价（1 张 ={" "}
+            {formatCredits(config.couponUnitCredits)} cr 券面），买装备、伤药、军需、住店与逐级训练都在购买时实时扣券；
+            城中还有<b>活动券礼包</b>入口，可当场兑换或购买。战斗缴获的金币只能在钱庄存成 tcr，不能反过来换金币。
           </li>
           <li>
-            平定一处地方发通关奖励：
+            平定一处地方就<b>自动结算</b>并发通关奖励（不用再手动收兵）：
             {config.tiers
               .map((tier) => ` 攻破 ${tier.correct} 座营寨 ${formatCredits(trialRewardFor(config, tier.correct))} tcr`)
               .join("，")}
@@ -134,7 +136,7 @@ export default async function TrialPage() {
           </li>
           <li>
             城镇钱庄<b>只收金币、只发 tcr</b>：每 {config.bankGoldPerTcr} 金存成 1 tcr（每趟最多存{" "}
-            {config.bankMaxGoldPerRun} 金，收兵时到账）。客栈每次住店花{" "}
+            {config.bankMaxGoldPerRun} 金，平定此地时自动到账）。客栈每次住店花{" "}
             {SAGA_INN_PRICE_TICKETS} 张券，把上阵武将的兵力补满，残兵也能接着推下一处。
           </li>
           <li>
@@ -287,6 +289,7 @@ export default async function TrialPage() {
               initialRun={activeRun}
               save={save}
               initialTickets={coupon.tickets}
+              coupon={coupon}
               bank={{
                 goldPerTcr: config.bankGoldPerTcr,
                 maxGoldPerRun: config.bankMaxGoldPerRun,

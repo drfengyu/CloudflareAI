@@ -534,8 +534,30 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.56.0（2026-11-13，讨逆传剧情、场景与立绘）
+**当前版本**：v0.57.0（2026-11-14，讨逆传自动存档、武将特性与战斗界面）
 **下一版本**：待定
+
+- v0.57.0 三国讨逆传自动存档、武将特性、战斗界面与训练场：
+  规则集升级 `SAGA_RULESET = 2`，旧局 `rules: 1` 重放结果不变。
+  `lib/trial/saga/data.ts` 新增无双 / 智圣 / 会心 / 猛将 / 铁壁 / 神速 / 仁德七种固有特性，
+  提供武力 / 智力 / 统率 / 兵力、暴击率（×1.7）与额外攻击次数加成，战斗与结算读 `traitStats`；
+  升级按等级给策略点（上限 12），`tacticsFor(def, level)` 让智将在特定等级习得计策。
+  新指令 `{ k: "retreat" }`：撤退把当前战况（兵力 / 阵型 / 冷却）写回行军态并回到大地图，
+  再战接着打，不掉已拔营寨；`retreatFromBattle` 供前端调用。
+  自动存档：`autoSaveTrialAction` 客户端防抖上报，`saveTrialRunProgress` 以整段 `questions`
+  做乐观锁，返回重放后的 `{ commands, settled, settlement }`；重放到达 `won` 即自动结算，
+  前端不再有「收兵」按钮，兵败 / 平定额度直接走结算卡；刷新时取 localStorage 与服务端
+  指令中更长的一份。
+  `lib/trial/saga/training.ts` 训练场：`SAGA_TRAINING_ITEM_ID = "training"`，2 张券升 1 级，
+  上限 `9 + 已拔营寨 × 3`（封顶 30），低级可按 10 级一档整段买；购买记录带 `cmdIndex` 重放。
+  野外遇敌概率提高（草地 2.4% / 树林 5%）。药店补品类、城内补活动券礼包入口（`coupon` 直通
+  `CouponShop`，余额变化 `router.refresh()` 实时回填）。
+  `components/trial/game.tsx` 战斗改为上下两联布局：武将竖排成列、双方各占半边血条
+  （`paintBattleTeams`），战报与策略选择移到画面下方中间浮层，战场点击可选中敌军；
+  未遇敌时点空白处打开「军中一览」（武将 / 道具 / 装备 / 队伍）。
+  `tests/trial-saga.test.ts` 新增特性、规则集兼容、策略点与计策、撤退、训练场、
+  遇敌概率等用例，共 160 项全过；`tsc`、ESLint、`npm run build` 通过；
+  本机无 `.env.local`，页面未实测。
 
 - v0.56.0 三国讨逆传补全剧情与场景，纯前端表现层，不动经济 / 服务端 / 表结构：
   大地图 `SAGA_FIELD_COLS / ROWS` 由 52×34 扩到 76×48，每张图在官道格上新增

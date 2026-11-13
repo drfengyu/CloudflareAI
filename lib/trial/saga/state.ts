@@ -4,6 +4,7 @@ import {
   SAGA_GENERAL_BY_ID,
   SAGA_ITEM_BY_ID,
   SAGA_STARTER_IDS,
+  traitStats,
 } from "./data";
 import {
   SAGA_MAX_LEVEL,
@@ -178,11 +179,12 @@ export function generalStats(state: SagaGeneralState): SagaGeneralStats {
   const level = clampInt(state.level, 1, SAGA_MAX_LEVEL, 1);
   const weapon = state.weapon ? SAGA_ITEM_BY_ID.get(state.weapon) : null;
   const armor = state.armor ? SAGA_ITEM_BY_ID.get(state.armor) : null;
+  const bonus = traitStats(def);
   return {
-    force: def.force + Math.floor((level - 1) * 1.5),
-    intellect: def.intellect + Math.floor((level - 1) * 1.2),
-    defense: def.defense + Math.floor((level - 1) * 1.3),
-    speed: def.speed + Math.floor((level - 1) * 0.8),
+    force: def.force + bonus.force + Math.floor((level - 1) * 1.5),
+    intellect: def.intellect + bonus.intellect + Math.floor((level - 1) * 1.2),
+    defense: def.defense + bonus.defense + Math.floor((level - 1) * 1.3),
+    speed: def.speed + bonus.speed + Math.floor((level - 1) * 0.8),
     maxTroops: def.baseTroops + (level - 1) * def.growth,
     weaponAtk: weapon?.atk ?? 0,
     armorDef: armor?.def ?? 0,
