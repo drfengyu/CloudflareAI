@@ -287,6 +287,28 @@ export function TrialGame(props: TrialGameProps) {
     return { id: general.id, name: generalName(general.id), current, max };
   });
   const innNeedsRest = troopRows.some((row) => row.current < row.max);
+  /** 客栈按钮的唯一禁用口径：场景 / 兵力 / 金币分开提示；兵败后允许住店重整。 */
+  const innBlocked =
+    !run || !state
+      ? "行军途中才能住店"
+      : state.scene === "won"
+        ? "此地已平定，收兵结算即可"
+        : state.scene === "battle"
+          ? "战斗尚未结束"
+          : state.scene === "lost"
+            ? save.gold < SAGA_INN_PRICE_GOLD
+              ? `金币不足（${SAGA_INN_PRICE_GOLD} 金），只能收兵`
+              : null
+            : !innNeedsRest
+              ? "兵力已满"
+              : save.gold < SAGA_INN_PRICE_GOLD
+                ? `金币不足（${SAGA_INN_PRICE_GOLD} 金）`
+                : null;
+  const innLabel =
+    innBlocked ??
+    (state?.scene === "lost"
+      ? `全军败退 · 住店重整（${SAGA_INN_PRICE_GOLD} 金）`
+      : `住店（${SAGA_INN_PRICE_GOLD} 金）`);
 
   // 大地图按「章节 + 节点数 + 种子」纯函数复现：没开局时也画一张同一个地方的图当作预告。
   const field: SagaField = useMemo(
@@ -777,11 +799,20 @@ export function TrialGame(props: TrialGameProps) {
     setPanel("camp");
   }, []);
 
+  /** 兵败面板直接回城住店，省得先开城中整备再找客栈页签。 */
+  const goInn = useCallback(() => {
+    walkTo(field.city.x, field.city.y, () => setPanel("inn"));
+  }, [field.city.x, field.city.y, walkTo]);
+
 
   // ---- 战斗 ----
   const beginBattle = useCallback(
     (node: number) => {
       if (!run || !state) return;
+      if (state.scene === "lost") {
+        toast.error("全军败退，先回城住店重整再出兵");
+        return;
+      }
       if (!canEngageNode(run, state, node)) {
         toast.error("要先拔掉其余营地，才能直取主帅本阵");
         return;
@@ -871,6 +902,10 @@ export function TrialGame(props: TrialGameProps) {
   const autoBattle = useCallback(
     (node: number) => {
       if (!run || !state) return;
+      if (state.scene === "lost") {
+        toast.error("全军败退，先回城住店重整再出兵");
+        return;
+      }
       if (!canEngageNode(run, state, node)) {
         toast.error("要先拔掉其余营地，才能直取主帅本阵");
         return;
@@ -920,14 +955,20 @@ export function TrialGame(props: TrialGameProps) {
   );
 
   const stayAtInn = useCallback(() => {
-    if (!run || !state || state.scene !== "field") return;
+    if (!run || !state) return;
+    if (state.scene !== "field" && state.scene !== "lost") return;
     if (save.gold < SAGA_INN_PRICE_GOLD) {
       toast.error(`住店要 ${SAGA_INN_PRICE_GOLD} 金`);
       return;
     }
+    const revive = state.scene === "lost";
     appendCommand({ k: "inn" });
     gameAudio.play("heal");
-    toast.success(`花 ${SAGA_INN_PRICE_GOLD} 金歇脚，上阵武将兵力补满`);
+    toast.success(
+      revive
+        ? `花 ${SAGA_INN_PRICE_GOLD} 金住店，全军重整旗鼓`
+        : `花 ${SAGA_INN_PRICE_GOLD} 金歇脚，上阵武将兵力补满`,
+    );
   }, [appendCommand, run, save.gold, state]);
 
   const equipItem = useCallback(
@@ -1597,24 +1638,13 @@ export function TrialGame(props: TrialGameProps) {
                       );
                     })}
                   </div>
-                  <Button
-                    size="sm"
-                    disabled={
-                      !run || !state || state.scene !== "field" || !innNeedsRest || save.gold < SAGA_INN_PRICE_GOLD
-                    }
-                    onClick={stayAtInn}
-                  >
-                    {!run || !state
-                      ? "行军途中才能住店"
-                      : !innNeedsRest
-                        ? "兵力已满"
-                        : save.gold < SAGA_INN_PRICE_GOLD
-                          ? `金币不足（${SAGA_INN_PRICE_GOLD} 金）`
-                          : `住店（${SAGA_INN_PRICE_GOLD} 金）`}
+                  <Button size="sm" disabled={innBlocked !== null} onClick={stayAtInn}>
+                    {innLabel}
                   </Button>
                   <p className="text-xs text-muted-foreground">
                     战斗只掉兵力、不会自己回满；住一次店能接着往下一处打。
-                    兵力只在这次行军里有效，收兵后整队休息，下次出城重新满编。
+                    兵败后也能住店：全队拉回满编、已破营寨不会回退，可以直接重整再战；
+                    不然就只能收兵回城，下次出城再从头满编。
                   </p>
                 </div>
               ) : null}
@@ -1773,6 +1803,7 @@ export function TrialGame(props: TrialGameProps) {
                   onSubmit={() => void submit()}
                   onClose={() => setPanel(null)}
                   onCity={() => walkTo(field.city.x, field.city.y, () => setPanel("hall"))}
+                  onInn={goInn}
                 />
               ) : null}
 
@@ -1792,6 +1823,7 @@ export function TrialGame(props: TrialGameProps) {
                     if (camp) walkTo(camp.x, camp.y + 32, () => openCamp(node));
                   }}
                   onCity={() => walkTo(field.city.x, field.city.y, () => setPanel("hall"))}
+                  onInn={goInn}
                 />
               ) : null}
             </div>
@@ -1804,7 +1836,7 @@ export function TrialGame(props: TrialGameProps) {
               {banner.kind === "won" ? "战斗胜利" : "战斗失利"} · {banner.name}
               {banner.kind === "won"
                 ? ` · +${banner.gold} 金 / +${banner.exp} 经验`
-                : ""}
+                : " · 回城住店可重整旗鼓"}
             </span>
             <button type="button" onClick={() => setBanner(null)} className="rounded p-1 hover:bg-muted">
               <X className="h-4 w-4" />
@@ -1847,7 +1879,8 @@ export function TrialGame(props: TrialGameProps) {
                   <p className="mt-3 text-xs text-muted-foreground">
                     从{chapter.town}出城消耗 {props.priceTickets} 张试炼券。出城后是张俯视大地图，
                     方向键/WASD 自由行走，走到哪座营跟前就打哪座，主帅本阵要先拔尽其余 {props.nodeCount - 1} 座营；
-                    营寨全部攻破、剧情才会推进到下一处地方。兵败可整备后再来，等级、金币、装备与招降武将都会保留。
+                    营寨全部攻破、剧情才会推进到下一处地方。兵败可回城住店重整、接着再战，
+                    也能收兵后重新出城；等级、金币、装备与招降武将都会保留。
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <Button onClick={() => void startRun()} disabled={busy === "start" || tickets < props.priceTickets}>
@@ -2086,6 +2119,7 @@ function CampPanel({
   onSubmit,
   onClose,
   onCity,
+  onInn,
 }: {
   run: SagaRun | null;
   state: SagaReplayState | null;
@@ -2097,6 +2131,7 @@ function CampPanel({
   onSubmit: () => void;
   onClose: () => void;
   onCity: () => void;
+  onInn: () => void;
 }) {
   if (!run || !state || node === null) {
     return <p className="text-sm text-muted-foreground">走到敌营跟前才能开战。</p>;
@@ -2180,12 +2215,19 @@ function CampPanel({
         <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-3">
           <p className="font-medium">全军败退</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            已攻克的营寨与获得的经验、金币、招降武将都会保留；回城整备后再来。
+            已攻克的营寨与获得的经验、金币、招降武将都会保留。回城住店能把队伍拉回满编、
+            接着打；不想再耗店钱就收兵回城，下次出城再战。
           </p>
-          <Button size="sm" className="mt-2" onClick={onSubmit} disabled={busy === "submit"}>
-            <Home className="h-3.5 w-3.5" />
-            {busy === "submit" ? "收兵中…" : "收兵回城"}
-          </Button>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="sm" onClick={onInn}>
+              <Home className="h-3.5 w-3.5" />
+              回城住店
+            </Button>
+            <Button size="sm" variant="outline" onClick={onSubmit} disabled={busy === "submit"}>
+              <Flag className="h-3.5 w-3.5" />
+              {busy === "submit" ? "收兵中…" : "收兵回城"}
+            </Button>
+          </div>
         </div>
       ) : null}
 
@@ -2217,6 +2259,7 @@ function ArmyPanel({
   onClose,
   onVisit,
   onCity,
+  onInn,
 }: {
   run: SagaRun | null;
   state: SagaReplayState | null;
@@ -2229,6 +2272,7 @@ function ArmyPanel({
   onClose: () => void;
   onVisit: (node: number) => void;
   onCity: () => void;
+  onInn: () => void;
 }) {
   if (!run || !state) {
     return <p className="text-sm text-muted-foreground">还没有进行中的行军。</p>;
@@ -2297,12 +2341,19 @@ function ArmyPanel({
         <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-3">
           <p className="font-medium">全军败退</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            已攻克的营寨与获得的经验、金币、招降武将都会保留；收兵回城整备后再来。
+            已攻克的营寨与获得的经验、金币、招降武将都会保留。回城住店能把队伍拉回满编、
+            接着打；不想再耗店钱就收兵回城，下次出城再战。
           </p>
-          <Button size="sm" className="mt-2" onClick={onSubmit} disabled={busy === "submit"}>
-            <Home className="h-3.5 w-3.5" />
-            {busy === "submit" ? "收兵中…" : "收兵回城"}
-          </Button>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="sm" onClick={onInn}>
+              <Home className="h-3.5 w-3.5" />
+              回城住店
+            </Button>
+            <Button size="sm" variant="outline" onClick={onSubmit} disabled={busy === "submit"}>
+              <Flag className="h-3.5 w-3.5" />
+              {busy === "submit" ? "收兵中…" : "收兵回城"}
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="flex flex-wrap gap-2">

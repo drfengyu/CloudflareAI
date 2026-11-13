@@ -534,8 +534,18 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.53.0（2026-11-13，工坊遇敌与走位修复 + 金币商店；钱庄可配双向；BGM / 音效 / 受击特效）
+**当前版本**：v0.53.1（2026-11-13，三国讨逆传兵败后可住店重整）
 **下一版本**：待定
+
+- v0.53.1 兵败后住店重整：`restAtInn(state, revive)` 在 `scene === "lost"` 时掉店钱
+  照收（30 金）、把全队拉回满编；`replaySagaRun` 不再一见 `lost` 就 `break`，
+  而是继续重放城中指令，`inn` 成功且 `revive` 时把场面切回 `field`、清空
+  `state.battle` 让行军从下一步继续。兵败期间 `battle` 指令一律 `break` 丢弃。
+  前台 `innBlocked` 按场景 / 兵力 / 金币给出具体禁用原因；敌营「兵败」面板与
+  军情弹窗新增「回城住店」`goInn`（走到城门后开客栈页签）。金币不足 30 仍住不了店，
+  只能收兵；收兵规则不变（按已拔营寨数结算，平定才发 tcr）。
+  `tests/trial-saga.test.ts` 新增兵败住店用例（重整 / 金币不足 / 兵败期 battle 丢弃），
+  20 项全过；`tsc`、ESLint、`npm run build` 通过；本机无 `.env.local`，页面未实测。
 
 - v0.53.0 工坊修遇敌、钱庄双向、活动音频：
   - 工坊野外遇敌修复：`components/workshop/field-canvas.tsx` 新增 `inFlightRef`（同一时间只发

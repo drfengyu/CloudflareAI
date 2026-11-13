@@ -99,6 +99,55 @@ function easyRun(startSave = initialTrialSave()): SagaRun {
   };
 }
 
+/** 一场必定打输的测试关：三名高速重兵敌将，一回合就能把单人队伍打空，好验证兵败后的重整。 */
+function wreckedRun(): SagaRun {
+  const base = easyRun();
+  const template = base.nodes[0].enemies[0];
+  const brute = (id: string, name: string) => ({
+    ...template,
+    id,
+    name,
+    title: "伏兵",
+    troops: 9999,
+    maxTroops: 9999,
+    force: 400,
+    intellect: 0,
+    defense: 0,
+    speed: 999,
+    tactics: [],
+    boss: false,
+    recruitable: false,
+    recruitHard: false,
+  });
+  const save = initialTrialSave();
+  save.gold = 100;
+  save.party = [save.party[0]];
+  return {
+    ...base,
+    startSave: save,
+    nodes: [
+      {
+        ...base.nodes[0],
+        kind: "battle",
+        name: "死地",
+        rewardGold: 0,
+        rewardExp: 0,
+        enemies: [
+          brute("dengmao", "邓茂"),
+          brute("zhangliang", "张梁"),
+          brute("chengyuanzhi", "程远志"),
+        ],
+      },
+      {
+        ...base.nodes[0],
+        kind: "battle",
+        name: "软柿子",
+        enemies: [{ ...template, boss: false }],
+      },
+    ],
+  };
+}
+
 const winCommands: SagaCommand[] = [
   {
     k: "battle",
@@ -339,6 +388,53 @@ test("客栈住店：缺兵才收 30 金并补满全队，满编或钱不够不�
   // 指令重放走同一口径：满编时插一条住店指令不扣钱。
   const fresh = replaySagaRun(run, [{ k: "inn" }, { k: "leave" }]).state;
   assert.equal(fresh.save.gold, run.startSave.gold);
+});
+
+test("客栈：兵败后住店能重整旗鼓，接着行军", () => {
+  const run = wreckedRun();
+  const lose: SagaCommand[] = [
+    { k: "battle", node: 0, rounds: [[{ g: "liubei", a: "attack", target: 0 }]] },
+  ];
+  const lost = replaySagaRun(run, lose).state;
+  assert.equal(lost.scene, "lost");
+  assert.equal(lost.partyTroops.liubei, 0);
+  assert.equal(lost.save.gold, 100);
+
+  // 败退状态下再出兵无效：零兵力硬打只会白送，得先住店或收兵。
+  const again = replaySagaRun(run, [
+    ...lose,
+    { k: "battle", node: 1, rounds: [[{ g: "liubei", a: "attack", target: 0 }]] },
+  ]).state;
+  assert.equal(again.scene, "lost");
+  assert.equal(again.clearedNodes.length, 0);
+
+  // 住店：收一笔店钱、全队补满、行军回到 field，后续城镇指令重新生效。
+  const rested = replaySagaRun(run, [
+    ...lose,
+    { k: "inn" },
+    { k: "formation", f: "fengshi" },
+  ]).state;
+  assert.equal(rested.scene, "field");
+  assert.equal(rested.save.gold, 100 - SAGA_INN_PRICE_GOLD);
+  assert.equal(rested.partyTroops.liubei, generalStats(run.startSave.party[0]).maxTroops);
+  assert.equal(rested.save.formation, "fengshi");
+
+  // 重整后能接着打下另一座营，行军不会被兵败锁死。
+  const won = replaySagaRun(run, [
+    ...lose,
+    { k: "inn" },
+    { k: "battle", node: 1, rounds: [[{ g: "liubei", a: "attack", target: 0 }]] },
+  ]).state;
+  assert.equal(won.clearedNodes.includes(1), true);
+  assert.equal(won.scene, "field");
+
+  // 店钱不够就救不回来，不给零成本复活留口子。
+  const broke = wreckedRun();
+  broke.startSave.gold = SAGA_INN_PRICE_GOLD - 1;
+  const stuck = replaySagaRun(broke, [...lose, { k: "inn" }]).state;
+  assert.equal(stuck.scene, "lost");
+  assert.equal(stuck.partyTroops.liubei, 0);
+  assert.equal(stuck.save.gold, SAGA_INN_PRICE_GOLD - 1);
 });
 
 test("收兵战果记录存金与通关金币，两者互不覆盖", () => {

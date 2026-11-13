@@ -548,8 +548,11 @@ export function bankSagaGold(state: SagaReplayState, gold: number, bank: SagaBan
   return allowed;
 }
 
-/** 客栈住店：全队任一武将缺兵才收一次钱，把上阵武将补满；全员满编或金币不足返回 false。 */
-export function restAtInn(state: SagaReplayState): boolean {
+/**
+ * 客栈住店：全队任一武将缺兵才收一次钱，把上阵武将补满；全员满编或金币不足返回 false。
+ * `revive` 用于兵败后的重整：哪怕队伍已经换人换到满编，也照收一笔店钱放行。
+ */
+export function restAtInn(state: SagaReplayState, revive = false): boolean {
   if (state.save.gold < SAGA_INN_PRICE_GOLD) return false;
   let healed = 0;
   for (const general of state.save.party) {
@@ -563,7 +566,7 @@ export function restAtInn(state: SagaReplayState): boolean {
     state.partyTroops[general.id] = maxTroops;
     healed += maxTroops - current;
   }
-  if (healed <= 0) return false;
+  if (healed <= 0 && !revive) return false;
   state.save.gold -= SAGA_INN_PRICE_GOLD;
   return true;
 }
@@ -628,7 +631,7 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
   for (let index = 0; index <= total; index++) {
     for (const purchase of purchasesAt.get(index) ?? []) applyPurchase(state, purchase);
     if (index === total) break;
-    if (state.scene === "won" || state.scene === "lost") break;
+    if (state.scene === "won") break;
     if (state.scene === "battle") continue;
     const command = commands[index];
     switch (command.k) {
@@ -647,13 +650,21 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
       case "bank":
         bankSagaGold(state, command.g, run.bank);
         break;
-      case "inn":
-        restAtInn(state);
+      case "inn": {
+        // 兵败后住店是重整旗鼓：店钱照收，全队拉回满编，行军从下一步继续。
+        const revive = state.scene === "lost";
+        if (restAtInn(state, revive) && revive) {
+          state.scene = "field";
+          state.battle = null;
+        }
         break;
+      }
       case "leave":
         index = total;
         break;
       case "battle": {
+        // 败退回城后必须先住店重整，零兵力再出兵只会白送一场。
+        if (state.scene === "lost") break;
         if (!canEngageNode(run, state, command.node)) break;
         // 战斗指令必须一次打完：中途停下就锁在本场，不能靠重开指令反复刷新兵力。
         state.scene = "battle";
