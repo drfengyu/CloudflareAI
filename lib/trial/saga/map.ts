@@ -22,8 +22,8 @@ import {
  * 行军大地图：出城时的种子 + 当前地方 + 节点数就能完整复现一张俯视格网。
  *
  * 地图不入库（`trial_run` 只存节点与种子），客户端每帧按同一份纯函数取图，
- * 服务端重放时完全不需要它——玩家走哪条路不影响任何数值，能作弊的只有「打哪座营」，
- * 而那一条由 `replaySagaRun` 按节点下标校验。
+ * 服务端重放时完全不需要它——走位本身不直接改数值，能作弊的只有「打哪座营」与
+ * 「打不打这场野外遭遇」，两者都由 `replaySagaRun` 校验；遭遇编成来自种子与序号。
  */
 
 const SOLID = new Set<number>([SAGA_TILE_MOUNTAIN, SAGA_TILE_WATER, SAGA_TILE_WALL]);
@@ -87,6 +87,18 @@ export function fieldSpeedAt(field: SagaField, x: number, y: number): number {
   const tile = field.tile;
   const kind = fieldTileAt(field, Math.floor(x / tile), Math.floor(y / tile));
   return kind === SAGA_TILE_FOREST ? 0.72 : 1;
+}
+
+/**
+ * 每走过一格草地 / 树林的遇敌概率；官道、城墙与城内外一律安全。
+ * 概率只决定「什么时候撞上」，编成由种子与第几场遭遇推出，重放不依赖走位。
+ */
+export function fieldEncounterChanceAt(field: SagaField, x: number, y: number): number {
+  const tile = field.tile;
+  const kind = fieldTileAt(field, Math.floor(x / tile), Math.floor(y / tile));
+  if (kind === SAGA_TILE_FOREST) return 0.024;
+  if (kind === SAGA_TILE_GRASS) return 0.011;
+  return 0;
 }
 
 function paintBlob(

@@ -10,6 +10,9 @@ import {
 import { SAGA_CHAPTERS } from "../lib/trial/saga/data";
 import {
   SAGA_RUN_VERSION,
+  SAGA_TILE_FOREST,
+  SAGA_TILE_GRASS,
+  SAGA_TILE_ROAD,
   type SagaCommand,
   type SagaRun,
 } from "../lib/trial/saga/types";
@@ -26,12 +29,18 @@ import {
   settleSagaRun,
 } from "../lib/trial/saga/run";
 import {
+  fieldEncounterChanceAt,
   fieldHotspotNear,
   fieldHitsSolid,
   fieldReachable,
+  fieldTileAt,
   generateSagaField,
   sagaFieldFor,
 } from "../lib/trial/saga/map";
+import {
+  SAGA_MAX_ENCOUNTERS,
+  sagaEncounterFor,
+} from "../lib/trial/saga/encounter";
 import {
   DEFAULT_SAGA_BANK,
   bankCreditsForGold,
@@ -610,4 +619,122 @@ test("大地图不入库存档：只由种子复现，与对局 JSON 里的节�
   // 只有种子/节点数参与地图，行军进度不会改变地形。
   const replayed = { ...run, nodes: run.nodes.slice(0, 3) };
   assert.equal(sagaFieldFor(replayed).camps.length, 3);
+});
+
+// ---------------------------------------------------------------- 野外遇敌
+
+test("野外遭遇编成：同种子同序号固定，1~4 队且将领可有可无", () => {
+  const run = freshRun(11, 5);
+  for (let ordinal = 0; ordinal < SAGA_MAX_ENCOUNTERS; ordinal++) {
+    const node = sagaEncounterFor(run, ordinal);
+    assert.deepEqual(sagaEncounterFor(run, ordinal), node, `第 ${ordinal} 场按序号复现`);
+    assert.equal(node.kind, "battle");
+    assert.equal(node.enemies.length >= 1 && node.enemies.length <= 4, true, "敌军 1~4 队");
+    assert.equal(
+      node.enemies.filter((enemy) => enemy.id.startsWith("foe_")).length >= 1,
+      true,
+      "至少有一队杂兵",
+    );
+    assert.equal(new Set(node.enemies.map((enemy) => enemy.id)).size, node.enemies.length);
+    assert.equal(node.rewardGold > 0 && node.rewardExp > 0, true);
+    assert.equal(
+      node.enemies.every((enemy) => !enemy.recruitable),
+      true,
+      "野外敌军不开放招降",
+    );
+  }
+  // 序号越界按最后一档算，不会崩。
+  assert.deepEqual(
+    sagaEncounterFor(run, SAGA_MAX_ENCOUNTERS + 5),
+    sagaEncounterFor(run, SAGA_MAX_ENCOUNTERS - 1),
+  );
+});
+
+test("野外遭遇兵种：兵士、山贼、盗贼都可能出现，有无将领两种编成都有", () => {
+  const groups = new Set<string>();
+  let withLeader = false;
+  let withoutLeader = false;
+  for (let seed = 1; seed <= 40; seed++) {
+    const run = freshRun(seed, 5);
+    for (let ordinal = 0; ordinal < SAGA_MAX_ENCOUNTERS; ordinal++) {
+      const node = sagaEncounterFor(run, ordinal);
+      groups.add(node.name.includes("·") ? node.name.split("·")[0] : node.name);
+      if (node.enemies.some((enemy) => !enemy.id.startsWith("foe_"))) withLeader = true;
+      else withoutLeader = true;
+    }
+  }
+  assert.deepEqual([...groups].sort(), ["山贼拦路", "散兵游勇", "盗贼伏击"].sort());
+  assert.equal(withLeader && withoutLeader, true, "有将领与纯杂兵两种编成都出现");
+});
+
+test("野外遭遇战：不占营地进度，打赢照常得金币经验并继续行军", () => {
+  const run = easyRun();
+  const rounds = Array.from({ length: 50 }, () => [
+    { g: "liubei", a: "attack" as const, target: 0 },
+    { g: "guanyu", a: "attack" as const, target: 0 },
+    { g: "zhangfei", a: "attack" as const, target: 0 },
+  ]);
+  const result = replaySagaRun(run, [{ k: "skirmish", rounds }]);
+  assert.equal(result.state.encounters, 1, "遭遇场次 +1");
+  assert.equal(result.state.clearedNodes.length, 0, "不占营地进度");
+  assert.equal(result.state.scene, "field", "打赢后接着行军");
+  assert.equal(result.state.goldGained > 0 && result.state.expGained > 0, true);
+  assert.equal(result.state.battlesWon, 1);
+
+  const second = replaySagaRun(run, [
+    { k: "skirmish", rounds },
+    { k: "skirmish", rounds },
+  ]);
+  assert.equal(second.state.encounters, 2, "第二场按下一个序号生成");
+
+  const settled = settleSagaRun(run, [{ k: "skirmish", rounds }]);
+  assert.equal(settled.result.encounters, 1, "战报记录遭遇场次");
+  assert.equal(settled.result.goldGained, result.state.goldGained);
+});
+
+test("野外遭遇指令：空指令被丢弃，每趟最多 10 场", () => {
+  assert.deepEqual(sanitizeSagaCommands([{ k: "skirmish", rounds: [] }]), []);
+  const spam = Array.from({ length: SAGA_MAX_ENCOUNTERS + 4 }, () => ({
+    k: "skirmish" as const,
+    rounds: [[{ g: "liubei", a: "attack" as const, target: 0 }]],
+  }));
+  const cleaned = sanitizeSagaCommands(spam);
+  assert.equal(cleaned.length, SAGA_MAX_ENCOUNTERS);
+  assert.equal(cleaned.every((command) => command.k === "skirmish"), true);
+});
+
+test("野外遭遇只在行军途中发生：兵败后不再受理遭遇指令", () => {
+  const run = wreckedRun();
+  const rounds = [[{ g: "liubei", a: "attack" as const, target: 0 }]];
+  const lost = replaySagaRun(run, [
+    { k: "battle", node: 0, rounds },
+    { k: "skirmish", rounds },
+  ]);
+  assert.equal(lost.state.scene, "lost");
+  assert.equal(lost.state.encounters, 0, "兵败后的遭遇指令被忽略");
+  assert.equal(lost.state.clearedNodes.length, 0);
+});
+
+test("野外遇敌概率：官道安全，草地与树林才有概率", () => {
+  const field = generateSagaField({ chapter: 0, nodeCount: 5, seed: 3 });
+  let walkable = 0;
+  for (let ty = 0; ty < field.rows; ty++) {
+    for (let tx = 0; tx < field.cols; tx++) {
+      const kind = fieldTileAt(field, tx, ty);
+      const chance = fieldEncounterChanceAt(field, (tx + 0.5) * field.tile, (ty + 0.5) * field.tile);
+      if (kind === SAGA_TILE_GRASS || kind === SAGA_TILE_FOREST) {
+        assert.equal(chance > 0, true, `草地/树林有遇敌概率（tile=${kind}）`);
+        walkable += 1;
+      } else {
+        assert.equal(chance, 0, `官道与城池不遇敌（tile=${kind}）`);
+      }
+    }
+  }
+  assert.equal(walkable > 0, true);
+  assert.equal(fieldTileAt(field, field.city.gateTx, field.city.gateTy), SAGA_TILE_ROAD);
+  assert.equal(
+    fieldEncounterChanceAt(field, (field.city.gateTx + 0.5) * field.tile, (field.city.gateTy + 0.5) * field.tile),
+    0,
+    "城门口必定安全",
+  );
 });

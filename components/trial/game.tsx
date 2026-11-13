@@ -29,7 +29,12 @@ import {
   SAGA_ITEMS,
   SAGA_TACTIC_BY_ID,
 } from "@/lib/trial/saga/data";
-import { resolveBattleRound, startBattle } from "@/lib/trial/saga/battle";
+import {
+  resolveBattleRound,
+  startBattle,
+  startEncounterBattle,
+} from "@/lib/trial/saga/battle";
+import { SAGA_MAX_ENCOUNTERS } from "@/lib/trial/saga/encounter";
 import {
   autoBattleRounds,
   canEngageNode,
@@ -38,6 +43,7 @@ import {
   sanitizeSagaCommands,
 } from "@/lib/trial/saga/run";
 import {
+  fieldEncounterChanceAt,
   fieldHitsSolid,
   fieldHotspotNear,
   fieldSpeedAt,
@@ -104,8 +110,10 @@ interface BattleSession {
   scratch: SagaReplayState;
   rounds: SagaRoundCommand[][];
   picks: Record<string, BattlePick>;
-  /** 打的是地图上哪座营。 */
+  /** 打的是地图上哪座营；野外遭遇为 -1。 */
   node: number;
+  /** 野外随机遇敌：结束后按 skirmish 上传，不占营地进度。 */
+  encounter: boolean;
 }
 
 export interface TrialGameProps {
@@ -492,6 +500,13 @@ export function TrialGame(props: TrialGameProps) {
   const interactRef = useRef<(hotspot: FieldHotspot) => void>(() => undefined);
   const settlementRef = useRef(false);
   const focusIdRef = useRef<string | null>(null);
+  /** 行军中野外遇敌的触发入口；不在行军途中或已达上限时为空。 */
+  const encounterTriggerRef = useRef<(() => void) | null>(null);
+  /** 触发后先锁住走位，等战斗面板真正挂上再松开。 */
+  const encounterLockRef = useRef(false);
+  /** 走过多少格才允许下一次判定，避免刚打完又立刻撞上。 */
+  const encounterCooldownRef = useRef(12);
+  const walkTileRef = useRef<string | null>(null);
   const heroColorRef = useRef({ color: "#3f6212", accent: "#bef264" });
   const hudRef = useRef({
     active: false,
@@ -507,6 +522,7 @@ export function TrialGame(props: TrialGameProps) {
 
   useEffect(() => {
     modeRef.current = { battle, anim };
+    if (battle) encounterLockRef.current = false;
   }, [battle, anim]);
 
   useEffect(() => {
@@ -523,6 +539,9 @@ export function TrialGame(props: TrialGameProps) {
     player.stuck = 0;
     arriveRef.current = null;
     hotspotRef.current = null;
+    encounterLockRef.current = false;
+    encounterCooldownRef.current = 12;
+    walkTileRef.current = null;
   }, [field]);
 
   useEffect(() => {
@@ -633,7 +652,7 @@ export function TrialGame(props: TrialGameProps) {
       const hud = hudRef.current;
       const inBattle = Boolean(modeRef.current.battle);
       let moving = false;
-      if (map && !inBattle && !settlementRef.current) {
+      if (map && !inBattle && !settlementRef.current && !encounterLockRef.current) {
         const keys = keysRef.current;
         let vx = 0;
         let vy = 0;
@@ -665,6 +684,21 @@ export function TrialGame(props: TrialGameProps) {
             Math.abs(vx) >= Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
           if (moving) {
             player.stuck = 0;
+            // 每踏入一格判定一次野外遇敌：官道安全，草地、树林才有概率。
+            const tileKey = `${Math.floor(player.x / map.tile)}:${Math.floor(player.y / map.tile)}`;
+            if (walkTileRef.current !== tileKey) {
+              walkTileRef.current = tileKey;
+              if (encounterCooldownRef.current > 0) {
+                encounterCooldownRef.current -= 1;
+              } else {
+                const trigger = encounterTriggerRef.current;
+                const chance = fieldEncounterChanceAt(map, player.x, player.y);
+                if (trigger && chance > 0 && Math.random() < chance) {
+                  moving = false;
+                  trigger();
+                }
+              }
+            }
           } else {
             player.stuck += 1;
             if (player.stuck > 14) {
@@ -825,6 +859,7 @@ export function TrialGame(props: TrialGameProps) {
         rounds: [],
         picks: defaultPicks(battleState),
         node,
+        encounter: false,
       };
       setBattle(session);
       setFocusId(Object.keys(session.picks)[0] ?? null);
@@ -836,9 +871,55 @@ export function TrialGame(props: TrialGameProps) {
     [run, state],
   );
 
+  /**
+   * 行走撞上的野外遭遇：编成由种子与「这是第几场」推出，服务端重放时按同一序号生成。
+   * 每趟最多 SAGA_MAX_ENCOUNTERS 场；战后不用回营，直接接着走。
+   */
+  const beginEncounter = useCallback(() => {
+    if (!run || !state) return;
+    if (battle || settlement || panel) return;
+    if (state.scene !== "field" || state.encounters >= SAGA_MAX_ENCOUNTERS) return;
+    encounterLockRef.current = true;
+    playerRef.current.walkTo = null;
+    arriveRef.current = null;
+    encounterCooldownRef.current = 18;
+    const scratch = JSON.parse(JSON.stringify(state)) as SagaReplayState;
+    const battleState = startEncounterBattle(run, state.encounters, scratch);
+    const session: BattleSession = {
+      battle: battleState,
+      scratch,
+      rounds: [],
+      picks: defaultPicks(battleState),
+      node: -1,
+      encounter: true,
+    };
+    setBattle(session);
+    setFocusId(Object.keys(session.picks)[0] ?? null);
+    setAnim(null);
+    setBanner(null);
+    gameAudio.play("encounter");
+    toast(`野外遇敌 · ${battleState.nodeName}`);
+  }, [battle, panel, run, settlement, state]);
+
+  useEffect(() => {
+    const ready =
+      Boolean(run) &&
+      Boolean(state) &&
+      state?.scene === "field" &&
+      (state?.encounters ?? SAGA_MAX_ENCOUNTERS) < SAGA_MAX_ENCOUNTERS &&
+      !battle &&
+      !settlement &&
+      !panel;
+    encounterTriggerRef.current = ready ? beginEncounter : null;
+  }, [battle, beginEncounter, panel, run, settlement, state]);
+
   const commitBattle = useCallback(
     (session: BattleSession) => {
-      appendCommand({ k: "battle", node: session.node, rounds: session.rounds });
+      appendCommand(
+        session.encounter
+          ? { k: "skirmish", rounds: session.rounds }
+          : { k: "battle", node: session.node, rounds: session.rounds },
+      );
       gameAudio.play(session.battle.phase === "won" ? "win" : "lose");
       setBanner({
         kind: session.battle.phase === "won" ? "won" : "lost",
@@ -932,7 +1013,11 @@ export function TrialGame(props: TrialGameProps) {
   const retreatBattle = useCallback(() => {
     if (!battle) return;
     if (!window.confirm("撤退会立刻结束这次行军：阵亡与消耗不会返还，已攻克的营地存档保留。确定收兵？")) return;
-    appendCommand({ k: "battle", node: battle.node, rounds: battle.rounds });
+    appendCommand(
+      battle.encounter
+        ? { k: "skirmish", rounds: battle.rounds }
+        : { k: "battle", node: battle.node, rounds: battle.rounds },
+    );
     setBattle(null);
     setAnim(null);
     setPanel(null);
@@ -1036,7 +1121,7 @@ export function TrialGame(props: TrialGameProps) {
           {finished
             ? "全剧终"
             : run
-              ? `营地 ${clearedNodes.length}/${run.nodes.length} · 尚余 ${openNodeList.length} 处可攻`
+              ? `营地 ${clearedNodes.length}/${run.nodes.length} · 尚余 ${openNodeList.length} 处可攻 · 遭遇 ${state?.encounters ?? 0}/${SAGA_MAX_ENCOUNTERS}`
               : "整装待发"}
         </span>
         <SoundToggle game="trial" battle={Boolean(battle)} />
@@ -1077,7 +1162,8 @@ export function TrialGame(props: TrialGameProps) {
               <div className="text-sm font-medium">
                 {battle.battle.nodeName}
                 <span className="ml-2 text-xs text-muted-foreground">
-                  第 {battle.battle.round} 回合 · 敌军 {battle.battle.enemies.filter((unit) => !unit.downed).length} 将
+                  第 {battle.battle.round} 回合 · 敌军 {battle.battle.enemies.filter((unit) => !unit.downed).length}{" "}
+                  {battle.encounter ? "队" : "将"}
                 </span>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1879,7 +1965,8 @@ export function TrialGame(props: TrialGameProps) {
                   <p className="mt-3 text-xs text-muted-foreground">
                     从{chapter.town}出城消耗 {props.priceTickets} 张试炼券。出城后是张俯视大地图，
                     方向键/WASD 自由行走，走到哪座营跟前就打哪座，主帅本阵要先拔尽其余 {props.nodeCount - 1} 座营；
-                    营寨全部攻破、剧情才会推进到下一处地方。兵败可回城住店重整、接着再战，
+                    营寨全部攻破、剧情才会推进到下一处地方。草地与树林会随机杀出散兵、山贼、盗贼，
+                    每趟最多 {SAGA_MAX_ENCOUNTERS} 场，官道与城内外不会遇敌。兵败可回城住店重整、接着再战，
                     也能收兵后重新出城；等级、金币、装备与招降武将都会保留。
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -1995,7 +2082,8 @@ export function TrialGame(props: TrialGameProps) {
             操作：方向键 / WASD 或左侧摇杆四向行走，走到城门口、敌营旁按 E / 回车（或点「交互」）；
             也可以直接点击地图上的城池、营寨，或用上方按钮行军。战斗为回合制：逐将选择
             攻击 / 计策 / 防守 / 道具 / 招降，或按「总攻击」「自动战斗」速战。
-            走位本身不影响任何数值：战报只上传编制、购物与「打哪座营、怎么打」的指令，
+            野外草地、树林会随机遇敌，敌军编成由种子与第几场遭遇推出。
+            走位本身不影响任何数值：战报只上传编制、购物与「打哪座营、打不打这场遭遇、怎么打」的指令，
             服务端按种子重放判定；战斗指令存在本机，刷新页面可以接着打。
           </p>
         </div>
@@ -2437,6 +2525,13 @@ function SettlementCard({
               {settlement.bankGold} 金 → +{formatCredits(settlement.bankTcr)} tcr
             </span>
             <span className="ml-2 text-xs text-muted-foreground">与通关奖励一起到账</span>
+          </p>
+        ) : null}
+        {result && result.encounters > 0 ? (
+          <p className="mt-2 text-sm">
+            野外遭遇：
+            <span className="font-medium text-primary">{result.encounters} 场</span>
+            <span className="ml-2 text-xs text-muted-foreground">缴获已计入金币与经验</span>
           </p>
         ) : null}
         {result && result.recruited.length > 0 ? (

@@ -534,8 +534,23 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.53.1（2026-11-13，三国讨逆传兵败后可住店重整）
+**当前版本**：v0.54.0（2026-11-13，三国讨逆传野外随机遇敌）
 **下一版本**：待定
+
+- v0.54.0 野外随机遇敌：新增 `lib/trial/saga/encounter.ts`——`sagaEncounterFor(run, ordinal)`
+  只读 `run.seed` 与「本趟第几场」，决定兵种（兵士 / 山贼 / 盗贼）、1~3 队杂兵与
+  38% 概率的本章敌将（合计最多 4 队），等级 / 兵力 / 金币 / 经验随章节与场次成长，
+  野外敌军不可招降；`SAGA_MAX_ENCOUNTERS = 10` 封顶防刷金。
+  `battle.ts` 抽出 `buildBattle` 并新增 `startEncounterBattle`（节点下标 -1，
+  RNG 盐独立）；新指令 `{ k: "skirmish", rounds }` 只在 `scene === "field"` 受理，
+  按序号重建敌军重放，胜利回 `field`、失败进 `lost`，不占营地进度；空指令丢弃、
+  每趟最多 10 场。`map.ts` 新增 `fieldEncounterChanceAt`（官道 / 城内外 0，
+  草地 1.1%、树林 2.4%）。`components/trial/game.tsx` 逐格判定遇敌（战后冷却 18 格、
+  出城 12 格）、触发即停寻路开遭遇战、HUD「遭遇 n/10」、战斗标题「敌军 N 队」、
+  战报「野外遭遇 N 场」；`SagaReplayState.encounters` / `SagaRunResult.encounters`
+  随重放与结算。`tests/trial-saga.test.ts` 新增 6 项（编成确定性与上限、三类兵种、
+  遭遇战胜利、指令清洗、兵败忽略、地形概率），共 147 项全过；`tsc`、ESLint、
+  `npm run build` 通过；本机无 `.env.local`，页面未实测。
 
 - v0.53.1 兵败后住店重整：`restAtInn(state, revive)` 在 `scene === "lost"` 时掉店钱
   照收（30 金）、把全队拉回满编；`replaySagaRun` 不再一见 `lost` 就 `break`，

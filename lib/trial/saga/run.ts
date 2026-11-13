@@ -6,7 +6,8 @@ import {
   SAGA_ITEM_BY_ID,
   SAGA_ITEMS,
 } from "./data";
-import { startBattle, resolveBattleRound } from "./battle";
+import { startBattle, resolveBattleRound, startEncounterBattle } from "./battle";
+import { SAGA_MAX_ENCOUNTERS } from "./encounter";
 import {
   DEFAULT_SAGA_BANK,
   sanitizeSagaBank,
@@ -390,6 +391,7 @@ export function parseSagaRun(raw: string | null | undefined): SagaRun | null {
             goldGained: clampInt(Number(result.goldGained) || 0, 0, 9_999_999),
             expGained: clampInt(Number(result.expGained) || 0, 0, 9_999_999),
             bankedGold: clampInt(Number(result.bankedGold) || 0, 0, bank.maxGoldPerRun),
+            encounters: clampInt(Number(result.encounters) || 0, 0, SAGA_MAX_ENCOUNTERS),
             recruited: Array.isArray(result.recruited)
               ? result.recruited.filter((name): name is string => typeof name === "string").slice(0, 12)
               : [],
@@ -442,6 +444,7 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
   if (!Array.isArray(raw)) return [];
   const out: SagaCommand[] = [];
   let totalRounds = 0;
+  let skirmishes = 0;
   for (const item of raw.slice(0, SAGA_MAX_COMMANDS)) {
     if (!item || typeof item !== "object") continue;
     const it = item as Record<string, unknown>;
@@ -510,6 +513,21 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
         out.push({ k: "battle", node, rounds });
         break;
       }
+      case "skirmish": {
+        if (!Array.isArray(it.rounds) || skirmishes >= SAGA_MAX_ENCOUNTERS) break;
+        const rounds: SagaRoundCommand[][] = [];
+        for (const round of it.rounds) {
+          if (totalRounds >= SAGA_MAX_TOTAL_ROUNDS) break;
+          if (rounds.length >= SAGA_MAX_ROUNDS_PER_BLOCK) break;
+          rounds.push(sanitizeRoundCommands(round));
+          totalRounds += 1;
+        }
+        // 空指令打不完一场遭遇，重放只会把行军锁在战斗里，直接丢掉。
+        if (rounds.length === 0) break;
+        skirmishes += 1;
+        out.push({ k: "skirmish", rounds });
+        break;
+      }
       default:
         break;
     }
@@ -531,6 +549,7 @@ export function createReplayState(run: SagaRun): SagaReplayState {
     goldGained: 0,
     expGained: 0,
     bankedGold: 0,
+    encounters: 0,
     recruited: [],
     battlesWon: 0,
   };
@@ -684,6 +703,25 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
         }
         break;
       }
+      case "skirmish": {
+        // 野外遭遇只在行军途中发生；兵败或正在打别的仗时一律不理。
+        if (state.scene !== "field" || state.encounters >= SAGA_MAX_ENCOUNTERS) break;
+        const ordinal = state.encounters;
+        state.encounters += 1;
+        state.scene = "battle";
+        const battle = startEncounterBattle(run, ordinal, state);
+        for (const round of command.rounds) {
+          resolveBattleRound(battle, round, state);
+          if (battle.phase !== "select") break;
+        }
+        state.battle = battle;
+        if (battle.phase === "won") {
+          state.scene = "field";
+        } else if (battle.phase === "lost") {
+          state.scene = "lost";
+        }
+        break;
+      }
       default:
         break;
     }
@@ -729,6 +767,7 @@ export function settleSagaRun(run: SagaRun, commands: SagaCommand[]): SagaSettle
     goldGained: replay.state.goldGained,
     expGained: replay.state.expGained,
     bankedGold: replay.state.bankedGold,
+    encounters: replay.state.encounters,
     recruited: replay.state.recruited
       .map((id) => SAGA_GENERAL_BY_ID.get(id)?.name ?? id)
       .slice(0, 12),

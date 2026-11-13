@@ -232,6 +232,8 @@ export interface SagaRunResult {
   expGained: number;
   /** 本次行军在钱庄存下的金币；收兵时按 bank.ts 的汇率折成 tcr。 */
   bankedGold: number;
+  /** 本次行军打过的野外遭遇战次数，战报展示用。 */
+  encounters: number;
   recruited: string[];
   battlesWon: number;
   party: { id: string; name: string; level: number }[];
@@ -271,7 +273,9 @@ export type SagaCommand =
   | { k: "inn" }
   | { k: "leave" }
   /** 打的是图上哪座营：大地图上可以自由挑顺序，首领营要先破其余营。 */
-  | { k: "battle"; node: number; rounds: SagaRoundCommand[][] };
+  | { k: "battle"; node: number; rounds: SagaRoundCommand[][] }
+  /** 野外遭遇战：不占营地进度，编成由种子与这是第几场遭遇推出。 */
+  | { k: "skirmish"; rounds: SagaRoundCommand[][] };
 
 export interface SagaBattleGeneral {
   id: string;
@@ -367,6 +371,7 @@ export interface SagaReplayState {
   expGained: number;
   /** 已经存进钱庄、尚未在收兵时结算 tcr 的金币。 */
   bankedGold: number;
+  encounters: number;
   recruited: string[];
   battlesWon: number;
 }

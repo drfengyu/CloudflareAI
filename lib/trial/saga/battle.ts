@@ -3,12 +3,14 @@ import {
   SAGA_GENERAL_BY_ID,
   SAGA_ITEM_BY_ID,
 } from "./data";
+import { sagaEncounterFor } from "./encounter";
 import { generalStats, grantGeneralExp, recruitToSave } from "./state";
 import {
   type SagaBattleEvent,
   type SagaBattleGeneral,
   type SagaBattleState,
   type SagaItemDef,
+  type SagaNode,
   type SagaReplayState,
   type SagaRoundCommand,
   type SagaRun,
@@ -56,7 +58,34 @@ function counterMod(attacker: SagaBattleState["playerFormation"], defender: Saga
 const living = (list: SagaBattleGeneral[]): SagaBattleGeneral[] => list.filter((g) => !g.downed);
 
 export function startBattle(run: SagaRun, nodeIndex: number, state: SagaReplayState): SagaBattleState {
-  const node = run.nodes[nodeIndex];
+  return buildBattle(
+    run.nodes[nodeIndex],
+    nodeIndex,
+    (run.seed ^ ((nodeIndex + 1) * 0x9e3779b9)) >>> 0,
+    state,
+  );
+}
+
+/** 野外遭遇战：编成由种子与序号推出，节点下标记 -1，不占营地进度。 */
+export function startEncounterBattle(
+  run: SagaRun,
+  ordinal: number,
+  state: SagaReplayState,
+): SagaBattleState {
+  return buildBattle(
+    sagaEncounterFor(run, ordinal),
+    -1,
+    (run.seed ^ Math.imul(ordinal + 101, 0x85ebca6b)) >>> 0,
+    state,
+  );
+}
+
+function buildBattle(
+  node: SagaNode,
+  nodeIndex: number,
+  rngState: number,
+  state: SagaReplayState,
+): SagaBattleState {
   const buffs = state.buffs;
   const party: SagaBattleGeneral[] = state.save.party.map((saved) => {
     const def = SAGA_GENERAL_BY_ID.get(saved.id);
@@ -133,7 +162,7 @@ export function startBattle(run: SagaRun, nodeIndex: number, state: SagaReplaySt
     target: 0,
     log: [],
     lastEvents: [],
-    rngState: (run.seed ^ ((nodeIndex + 1) * 0x9e3779b9)) >>> 0,
+    rngState,
     rewardGold: node.rewardGold,
     rewardExp: node.rewardExp,
     pendingRecruits: [],
