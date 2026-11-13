@@ -223,8 +223,8 @@ body {
   }
 }
 
-/* 每日试炼：受击抖动与飘字。每次动作后靠 key 重挂载触发一次。 */
-@keyframes trial-hurt {
+/* 活动小游戏战斗反馈：受击抖动、伤害飘字与斜劈光带。每次命中靠 key 重挂载触发一次。 */
+@keyframes battle-hurt {
   0%,
   100% {
     transform: translateX(0) rotate(0deg);
@@ -243,22 +243,55 @@ body {
   }
 }
 
-@keyframes trial-float {
+@keyframes battle-float {
   from {
     opacity: 1;
-    transform: translateY(0) scale(1);
+    transform: translate(-50%, 0) scale(1);
   }
   to {
     opacity: 0;
-    transform: translateY(-34px) scale(1.12);
+    transform: translate(-50%, -34px) scale(1.12);
   }
 }
 
-.trial-hurt {
-  animation: trial-hurt 320ms ease-out;
+@keyframes battle-slash {
+  0% {
+    opacity: 0;
+    transform: rotate(-32deg) scaleX(0.15);
+  }
+  25% {
+    opacity: 0.9;
+  }
+  100% {
+    opacity: 0;
+    transform: rotate(-32deg) scaleX(1.1);
+  }
 }
 
-.trial-float {
-  animation: trial-float 900ms ease-out forwards;
+.battle-hurt {
+  animation: battle-hurt 340ms ease-out;
+}
+
+.battle-float {
+  animation: battle-float 880ms ease-out forwards;
+}
+
+.battle-slash::before {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 50%;
+  height: 3px;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, transparent, #fff6d5 30%, #ffd27a 60%, transparent);
+  box-shadow: 0 0 12px 3px rgba(255, 197, 96, 0.55);
+  transform-origin: center;
+  animation: battle-slash 420ms ease-out forwards;
+}
+
+.battle-slash-player::before {
+  background: linear-gradient(90deg, transparent, #ffd9d0 30%, #ef7d63 60%, transparent);
+  box-shadow: 0 0 12px 3px rgba(239, 125, 99, 0.5);
 }
 

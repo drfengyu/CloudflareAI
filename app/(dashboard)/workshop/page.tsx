@@ -18,6 +18,7 @@ import {
 } from "@/lib/workshop/config";
 import { WORKSHOP_AREAS, WORKSHOP_GYMS } from "@/lib/workshop/battle";
 import { emptyWorkshopState } from "@/lib/workshop/state";
+import { WORKSHOP_SHOP_ITEMS } from "@/lib/workshop/shop";
 import { getWorkshopConfig } from "@/lib/workshop/settings";
 import { getWorkshopSnapshot, type WorkshopSnapshot } from "@/lib/workshop/store";
 
@@ -50,7 +51,12 @@ function rulesCard(config: WorkshopConfig, exploreTickets: number, gymTickets: n
           <li>
             <b>进图</b>一次花 <CouponCount kind="workshop" count={exploreTickets} />
             （1 张 = {formatCredits(config.couponUnitCredits)} cr 券面）：从营地出发，
-            在高草丛、花丛里走动就会遇到野生灵宠，打赢给经验与随机补给，也可以直接扔球捕捉。
+            在高草丛、花丛里走动就会遇到野生灵宠，打赢给经验、金币与随机补给，也可以直接扔球捕捉。
+          </li>
+          <li>
+            <b>金币</b>来自野外与道馆战利品，只在本活动里流通：工坊商店里{" "}
+            {WORKSHOP_SHOP_ITEMS.map((item) => `${item.name} ${item.price} 金`).join(" / ")}
+            ，道馆首胜还会额外掉一大笔金币。
           </li>
           <li>
             一张图能走 {config.runMaxSteps} 步、最多遇 {config.runMaxEncounters} 只灵宠，

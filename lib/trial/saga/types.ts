@@ -5,6 +5,8 @@
  * 不直接上报金币、等级或胜负。剧情地点与敌将配置随出城落库，随机数由种子推进。
  */
 
+import type { SagaBankPolicy } from "./bank";
+
 export const SAGA_RUN_VERSION = 7;
 export const SAGA_SAVE_VERSION = 1;
 
@@ -212,6 +214,8 @@ export interface SagaPurchase {
   id: string;
   itemId: string;
   tickets: number;
+  /** tcr 换金币的购买记录：这一笔换进游戏的金币数（`itemId` 为 `bank_gold`）。 */
+  gold?: number;
   at: number;
   /** 购买时已经执行过的指令数：军需从下一条指令起生效。 */
   cmdIndex: number;
@@ -242,6 +246,8 @@ export interface SagaRun {
   startSave: TrialSave;
   purchases: SagaPurchase[];
   shopSeq: number;
+  /** 出城时冻结的钱庄汇率：改后台设置不影响已经开出的行军。 */
+  bank: SagaBankPolicy;
   endSave?: TrialSave;
   result?: SagaRunResult;
 }
@@ -259,7 +265,7 @@ export type SagaCommand =
   | { k: "shop"; i: string }
   | { k: "equip"; g: string; slot: "weapon" | "armor"; i: string | null }
   | { k: "party"; active: string[] }
-  /** 钱庄存金：按 100 金一档扣，收兵时统一折成 tcr 发放。 */
+  /** 钱庄存金：按本次行军的存金价整档扣，收兵时统一折成 tcr 发放。 */
   | { k: "bank"; g: number }
   /** 客栈住店：花固定金币把上阵武将的兵力补满。 */
   | { k: "inn" }

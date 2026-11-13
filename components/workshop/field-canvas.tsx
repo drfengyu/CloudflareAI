@@ -118,6 +118,10 @@ export function WorkshopFieldCanvas(props: WorkshopFieldCanvasProps) {
   const facingRef = useRef<WorkshopFacing>("down");
   const hopRef = useRef<{ fromX: number; fromY: number; dx: number; dy: number; t: number } | null>(null);
   const pendingRef = useRef<WorkshopWalkPath>([]);
+  /** 同一时间只允许一段路径在路上：并发的第二段会被服务端当成「又走了一步」而错位。 */
+  const inFlightRef = useRef(false);
+  /** 服务端已经判了遇敌 / 收官：本地游程立刻停下，不再发任何路径。 */
+  const stoppedRef = useRef(false);
   const keysRef = useRef({ up: false, down: false, left: false, right: false });
   const queueRef = useRef<WorkshopFacing[]>([]);
   const hotspotRef = useRef<WorkshopFieldHotspot>(null);
@@ -129,16 +133,23 @@ export function WorkshopFieldCanvas(props: WorkshopFieldCanvasProps) {
   const onInteractRef = useRef(props.onInteract);
   const [hud, setHud] = useState({ steps: props.run.steps, encounters: props.run.encounters });
 
+  const applyCounts = useCallback(
+    (run: { steps: number; encounters: number }) => {
+      countsRef.current = { steps: run.steps, encounters: run.encounters };
+      setHud({ steps: run.steps, encounters: run.encounters });
+    },
+    [],
+  );
+
   const applyRun = useCallback(
     (run: { tx: number; ty: number; steps: number; encounters: number }) => {
       anchorRef.current = { tx: run.tx, ty: run.ty, steps: run.steps, encounters: run.encounters };
       cursorRef.current = { tx: run.tx, ty: run.ty };
-      countsRef.current = { steps: run.steps, encounters: run.encounters };
       hopRef.current = null;
       queueRef.current = [];
-      setHud({ steps: run.steps, encounters: run.encounters });
+      applyCounts(run);
     },
-    [],
+    [applyCounts],
   );
 
   useEffect(() => {
@@ -152,6 +163,11 @@ export function WorkshopFieldCanvas(props: WorkshopFieldCanvasProps) {
       partyColor: props.partyColor,
       partyAccent: props.partyAccent,
     };
+    if (props.locked) {
+      pendingRef.current = [];
+      queueRef.current = [];
+      hopRef.current = null;
+    }
   }, [
     props.locked,
     props.onWalk,
@@ -176,23 +192,59 @@ export function WorkshopFieldCanvas(props: WorkshopFieldCanvasProps) {
       return;
     }
     seedRef.current = props.seed;
+    stoppedRef.current = false;
     applyRun(props.run);
     pendingRef.current = [];
   }, [props.seed, props.run, applyRun]);
 
-  /** 把攒下的路径交给服务端重放；失败就把主角拉回服务端上次认可的位置。 */
+  /**
+   * 把攒下的路径交给服务端重放。
+   *
+   * 正常走位（ok）只跟服务端对一下计数，不重置本地光标与队列——否则每 700ms
+   * 一次确认都会把正在走的下一步和点击寻路清掉，看起来就是「走两步卡一下」。
+   * 只有遇敌 / 收官 / 请求失败才拉回服务端坐标；前者还会锁死本地游程，
+   * 防止战斗面板挂载前的最后几步再发一次、被服务端当成「上一场还没结束」。
+   */
   const flush = useCallback(async (): Promise<WorkshopWalkResult | null> => {
+    if (inFlightRef.current || stoppedRef.current || lockedRef.current) return null;
     const path = pendingRef.current;
     if (path.length === 0) return null;
     pendingRef.current = [];
-    const result = await onWalkRef.current(path);
-    if (!result) {
-      cursorRef.current = { tx: anchorRef.current.tx, ty: anchorRef.current.ty };
-      return null;
+    inFlightRef.current = true;
+    const sentCursor = { tx: cursorRef.current.tx, ty: cursorRef.current.ty };
+    try {
+      const result = await onWalkRef.current(path);
+      if (!result) {
+        cursorRef.current = { tx: anchorRef.current.tx, ty: anchorRef.current.ty };
+        hopRef.current = null;
+        queueRef.current = [];
+        applyCounts(anchorRef.current);
+        return null;
+      }
+      if (result.kind !== "ok") {
+        stoppedRef.current = true;
+        pendingRef.current = [];
+        applyRun(result);
+        return result;
+      }
+      anchorRef.current = {
+        tx: result.tx,
+        ty: result.ty,
+        steps: result.steps,
+        encounters: result.encounters,
+      };
+      applyCounts(result);
+      // 服务端重放与本地预测应当逐格一致；只有撞墙判定真的分叉时才把主角拉回。
+      if (result.tx !== sentCursor.tx || result.ty !== sentCursor.ty) {
+        cursorRef.current = { tx: result.tx, ty: result.ty };
+        hopRef.current = null;
+        queueRef.current = [];
+      }
+      return result;
+    } finally {
+      inFlightRef.current = false;
     }
-    applyRun(result);
-    return result;
-  }, [applyRun]);
+  }, [applyCounts, applyRun]);
 
   // ---- 画布尺寸：位图按 CSS 宽 × devicePixelRatio 放大，逻辑高跟着画布比例走 ----
   useEffect(() => {
@@ -309,7 +361,7 @@ export function WorkshopFieldCanvas(props: WorkshopFieldCanvasProps) {
       prev = elapsed;
       const time = elapsed / 1000;
 
-      if (lockedRef.current) {
+      if (lockedRef.current || stoppedRef.current) {
         hopRef.current = null;
       } else {
         if (!hopRef.current) {
@@ -322,7 +374,7 @@ export function WorkshopFieldCanvas(props: WorkshopFieldCanvasProps) {
           hop.t += (dt / STEP_MS) * speed;
           if (hop.t >= 1) hopRef.current = null;
         }
-        if (pendingRef.current.length > 0) {
+        if (pendingRef.current.length > 0 && !inFlightRef.current) {
           const total = pendingRef.current.reduce((sum, run) => sum + run[1], 0);
           if (total >= FLUSH_STEPS || elapsed - lastFlush > FLUSH_MS) {
             lastFlush = elapsed;
@@ -366,7 +418,9 @@ export function WorkshopFieldCanvas(props: WorkshopFieldCanvasProps) {
     raf = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(raf);
-      if (pendingRef.current.length > 0) void flush();
+      // 卸载时绝不能补发：遇敌后画布随战斗面板一起卸载，这一段路径会被服务端拒绝，
+      // 弹出的「上一场战斗还没结束」正是玩家看到的那个 bug。
+      pendingRef.current = [];
     };
   }, [field, flush]);
 

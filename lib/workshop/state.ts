@@ -68,6 +68,8 @@ export interface WorkshopState {
   /** 图鉴：`line:tier`。 */
   dex: string[];
   items: WorkshopInventory;
+  /** 工坊金币：野外/道馆战利品，只在本活动里流通，可在工坊商店买补给。 */
+  gold: number;
   /** 已获得的道馆徽章数 0~3。 */
   badges: number;
   activePetId: string | null;
@@ -95,6 +97,7 @@ export function emptyWorkshopState(day = cnDateString()): WorkshopState {
     box: [],
     dex: [],
     items: emptyInventory(),
+    gold: 0,
     badges: 0,
     activePetId: null,
     run: null,
@@ -272,6 +275,7 @@ export function normalizeWorkshopState(raw: unknown, day = cnDateString()): Work
   base.party = party;
   base.box = box;
   base.starter = starter;
+  base.gold = clampCount(it.gold);
   base.badges = Math.min(WORKSHOP_GYM_COUNT, clampCount(it.badges));
   base.entersToday = sameDay
     ? Math.min(1_000_000, clampCount(it.entersToday ?? it.exploresToday ?? it.gathersToday))

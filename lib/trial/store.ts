@@ -1,12 +1,14 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { d1Run, db } from "@/lib/db/d1-http";
-import { trialRuns } from "@/lib/db/schema";
+import { topups, trialRuns } from "@/lib/db/schema";
 import {
   couponTicketBalance,
   payWithCoupon,
   refundCouponPayment,
 } from "@/lib/activity/coupons";
 import { grantTempCredits } from "@/lib/activity/rewards";
+import { getTemporaryBalance } from "@/lib/billing/display-balance";
+import { refundPermanentCredits, spendCredits } from "@/lib/billing/spend";
 import {
   TOPUP_TYPE_TRIAL,
   trialActivityKey,
@@ -15,8 +17,15 @@ import {
   type TrialConfig,
 } from "./config";
 import { SAGA_CHAPTERS, SAGA_ITEM_BY_ID } from "./saga/data";
-import { bankCreditsForGold } from "./saga/bank";
 import {
+  SAGA_BANK_MAX_TCR_BUY,
+  bankBuyRoom,
+  bankCreditsForGold,
+  bankGoldForTcr,
+  sanitizeSagaBank,
+} from "./saga/bank";
+import {
+  SAGA_BANK_GOLD_ITEM_ID,
   generateSagaRun,
   parseSagaRun,
   sanitizeSagaCommands,
@@ -171,12 +180,18 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
     .limit(1);
 
   const now = Date.now();
+  const bank = sanitizeSagaBank({
+    goldPerTcr: config.bankGoldPerTcr,
+    maxGoldPerRun: config.bankMaxGoldPerRun,
+    goldPerTcrBuy: config.bankGoldPerTcrBuy,
+  });
   const buildRun = () =>
     generateSagaRun({
       activityKey,
       save,
       nodeCount: config.questionCount,
       seed: newSeed(),
+      bank,
     });
 
   if (stale[0]) {
@@ -260,7 +275,7 @@ function settlementFromStored(run: SagaRun, cleared: number, total: number): Tri
     reward: 0,
     clearReward: 0,
     bankGold,
-    bankTcr: bankCreditsForGold(bankGold),
+    bankTcr: bankCreditsForGold(bankGold, run.bank),
     durationMs: 0,
     victory: result?.victory ?? cleared >= total,
     result,
@@ -313,7 +328,7 @@ export async function submitTrialRun(input: {
       ? trialRewardFor(input.config, cleared)
       : 0;
   const bankGold = settled.result.bankedGold;
-  const bankTcr = bankCreditsForGold(bankGold);
+  const bankTcr = bankCreditsForGold(bankGold, run.bank);
   const reward = Math.round((clearReward + bankTcr) * 100) / 100;
   const status = "scored";
   const storedRun: SagaRun = { ...run, endSave: settled.endSave, result: settled.result };
@@ -505,6 +520,121 @@ export async function buyTrialSupply(input: {
   return {
     purchases: next.purchases,
     tickets: await couponTicketBalance(input.userId, "trial", activityKey, input.config.couponUnitCredits),
+  };
+}
+
+export interface GoldPurchaseResult {
+  purchases: SagaPurchase[];
+  /** 这一笔换进游戏的金币。 */
+  gold: number;
+  /** 这一笔扣掉的 tcr。 */
+  tcr: number;
+  /** 换完这一笔后还剩多少 tcr（未过期的临时余额）。 */
+  tcrBalance: number;
+}
+
+/**
+ * 钱庄换金：按出城时冻结的汇率，1 tcr 换 `goldPerTcrBuy` 金，数量由玩家自选。
+ *
+ * 金币不是服务端余额，不能只扣钱不落账：购买记录本身就是发金凭据，
+ * 收兵重放时从 cmdIndex 起把金币加进存档。并发 CAS 失败会把 tcr 按永久 cr 退回
+ * （与买券失败的回滚同口径，钱不会凭空消失）。
+ */
+export async function buyTrialGold(input: {
+  userId: string;
+  runId: string;
+  tcr: number;
+  purchaseId: string;
+  cmdIndex: number;
+  config: TrialConfig;
+}): Promise<GoldPurchaseResult> {
+  const activityKey = assertActiveWindow(input.config);
+  const purchaseId = String(input.purchaseId ?? "");
+  if (!PURCHASE_ID_PATTERN.test(purchaseId)) throw new TrialError("购买凭据无效");
+  const tcr = Math.trunc(Number(input.tcr) || 0);
+  if (!Number.isFinite(tcr) || tcr < 1 || tcr > SAGA_BANK_MAX_TCR_BUY) {
+    throw new TrialError(`每次换金额度 1～${SAGA_BANK_MAX_TCR_BUY} tcr`);
+  }
+
+  const rows = await db
+    .select({
+      id: trialRuns.id,
+      status: trialRuns.status,
+      questions: trialRuns.questions,
+      activityKey: trialRuns.activityKey,
+    })
+    .from(trialRuns)
+    .where(and(eq(trialRuns.id, input.runId), eq(trialRuns.userId, input.userId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new TrialError("行军不存在");
+  if (row.activityKey !== activityKey) throw new TrialError("这次行军不属于当前活动");
+  if (row.status !== "active") throw new TrialError("这次行军已经结束");
+  const run = parseSagaRun(row.questions);
+  if (!run) throw new TrialError("行军数据异常，请重新出发");
+
+  const gold = bankGoldForTcr(tcr, run.bank);
+  const boughtGold = run.purchases.reduce((sum, purchase) => sum + (purchase.gold ?? 0), 0);
+  const existing = run.purchases.find((purchase) => purchase.id === purchaseId);
+  if (existing) {
+    // 幂等重放：金额以已落账的那笔为准，不按这次请求参数重新折算。
+    const recordedGold = existing.gold ?? 0;
+    return {
+      purchases: run.purchases,
+      gold: recordedGold,
+      tcr: Math.max(1, Math.round(recordedGold / run.bank.goldPerTcrBuy)),
+      tcrBalance: await getTemporaryBalance(input.userId),
+    };
+  }
+  if (run.purchases.length >= SAGA_MAX_PURCHASES) throw new TrialError("这次行军换得够多了");
+  if (gold <= 0) throw new TrialError("换金比例无效，请联系管理员");
+  if (gold > bankBuyRoom(boughtGold, run.bank)) {
+    throw new TrialError(`每次行军最多换 ${run.bank.maxGoldPerRun} 金`);
+  }
+
+  const paid = await spendCredits(input.userId, tcr, { temporaryOnly: true });
+  if (!paid.ok) throw new TrialError(`${paid.reason}：换 ${gold} 金需要 ${tcr} tcr`);
+
+  const topupId = crypto.randomUUID();
+  try {
+    await db.insert(topups).values({
+      id: topupId,
+      userId: input.userId,
+      amount: -tcr,
+      type: TOPUP_TYPE_TRIAL,
+      description: `三国讨逆传 钱庄换金（${tcr} tcr → ${gold} 金）`,
+      createdAt: new Date(),
+    });
+  } catch (error) {
+    await refundPermanentCredits(input.userId, tcr, "钱庄换金记账失败回滚");
+    throw error;
+  }
+
+  const cmdIndex = Math.max(0, Math.min(SAGA_MAX_COMMANDS, Math.trunc(Number(input.cmdIndex) || 0)));
+  const next: SagaRun = {
+    ...run,
+    purchases: [
+      ...run.purchases,
+      { id: purchaseId, itemId: SAGA_BANK_GOLD_ITEM_ID, tickets: 0, gold, at: Date.now(), cmdIndex },
+    ],
+    shopSeq: run.shopSeq + 1,
+  };
+  const updated = await d1Run(
+    `UPDATE trial_run SET questions = ?
+      WHERE id = ? AND userId = ? AND status = 'active' AND questions = ?`,
+    [JSON.stringify(next), input.runId, input.userId, row.questions],
+  );
+  if (updated.changes !== 1) {
+    await d1Run("DELETE FROM topup WHERE id = ?", [topupId]).catch(() => undefined);
+    await refundPermanentCredits(input.userId, tcr, "钱庄换金冲突回滚");
+    throw new TrialError("行军状态已变化，请刷新页面后重试");
+  }
+
+  return {
+    purchases: next.purchases,
+    gold,
+    tcr,
+    tcrBalance: await getTemporaryBalance(input.userId),
   };
 }
 

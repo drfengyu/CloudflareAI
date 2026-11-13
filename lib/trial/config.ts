@@ -39,6 +39,12 @@ export interface TrialConfig {
   couponUnitCredits: number;
   /** 剧情通关奖励 tcr 的有效天数。 */
   rewardValidDays: number;
+  /** 钱庄存金：多少行军金币折 1 tcr。 */
+  bankGoldPerTcr: number;
+  /** 每次行军最多存多少金币（按存金价向下取整）。 */
+  bankMaxGoldPerRun: number;
+  /** 钱庄换金：1 tcr 能换回多少行军金币，必须低于存金价。 */
+  bankGoldPerTcrBuy: number;
   /** 攻克节点数 → tcr 档位（只有走完当前剧情才发）。 */
   tiers: TrialTier[];
 }
@@ -51,6 +57,9 @@ export const DEFAULT_TRIAL_CONFIG: TrialConfig = {
   runPriceCredits: 5,
   couponUnitCredits: 5,
   rewardValidDays: 30,
+  bankGoldPerTcr: 100,
+  bankMaxGoldPerRun: 600,
+  bankGoldPerTcrBuy: 40,
   tiers: [
     { correct: 2, reward: 1 },
     { correct: 3, reward: 2 },
@@ -103,6 +112,18 @@ export function sanitizeTrialConfig(raw: unknown): TrialConfig {
   );
   const questionCount = boundedInteger(it.questionCount, d.questionCount, 2, TRIAL_MAX_FLOORS);
   const tiers = sanitizeTrialTiers(it.tiers, questionCount);
+  const bankGoldPerTcr = boundedInteger(it.bankGoldPerTcr, d.bankGoldPerTcr, 2, 1_000_000);
+  const bankMaxGoldPerRun = Math.max(
+    bankGoldPerTcr,
+    Math.floor(
+      boundedInteger(it.bankMaxGoldPerRun, d.bankMaxGoldPerRun, 0, 100_000_000) / bankGoldPerTcr,
+    ) * bankGoldPerTcr,
+  );
+  // 换回价必须低于存金价：否则「存 100 金换 1 tcr，再用 1 tcr 换回 100+ 金」就是无限刷金。
+  const bankGoldPerTcrBuy = Math.min(
+    bankGoldPerTcr - 1,
+    boundedInteger(it.bankGoldPerTcrBuy, d.bankGoldPerTcrBuy, 1, 1_000_000),
+  );
   return {
     enabled: it.enabled === true,
     startAt: typeof it.startAt === "string" ? it.startAt.trim() : "",
@@ -114,6 +135,9 @@ export function sanitizeTrialConfig(raw: unknown): TrialConfig {
     ),
     couponUnitCredits: unit,
     rewardValidDays: boundedInteger(it.rewardValidDays, d.rewardValidDays, 1, 3650),
+    bankGoldPerTcr,
+    bankMaxGoldPerRun,
+    bankGoldPerTcrBuy,
     tiers: tiers.length > 0 ? tiers : sanitizeTrialTiers(d.tiers, questionCount),
   };
 }

@@ -1005,6 +1005,12 @@ export async function updateTrialSettings(formData: {
   /** 1 张活动券兑换所需的 cr。 */
   couponUnitCredits: number;
   rewardValidDays: number;
+  /** 钱庄存金：多少行军金币换 1 tcr。 */
+  bankGoldPerTcr: number;
+  /** 每次行军最多存 / 换多少金币。 */
+  bankMaxGoldPerRun: number;
+  /** 钱庄换金：1 tcr 换回多少金币。 */
+  bankGoldPerTcrBuy: number;
   tiers: { correct: number; reward: number }[];
 }) {
   const currentUserId = await requireUser();
@@ -1039,6 +1045,16 @@ export async function updateTrialSettings(formData: {
   }));
   if (tiers.length === 0) throw new Error("至少要配一个平定奖励档位");
 
+  const bankGoldPerTcr = Math.trunc(
+    requireNumber(formData.bankGoldPerTcr, "钱庄存金价（金/tcr）", 2, 1_000_000),
+  );
+  const bankGoldPerTcrBuy = Math.trunc(
+    requireNumber(formData.bankGoldPerTcrBuy, "钱庄换金价（金/tcr）", 1, 1_000_000),
+  );
+  if (bankGoldPerTcrBuy >= bankGoldPerTcr) {
+    throw new Error("换金价必须低于存金价，否则来回兑换能无限刷金");
+  }
+
   const config = sanitizeTrialConfig({
     enabled: formData.enabled === true,
     startAt,
@@ -1047,6 +1063,11 @@ export async function updateTrialSettings(formData: {
     runPriceCredits: requireNumber(formData.runPriceCredits, "每次出城军令", 0.01, 1_000_000),
     couponUnitCredits: requireNumber(formData.couponUnitCredits, "活动券单价", 0.01, 1_000_000),
     rewardValidDays: Math.trunc(requireNumber(formData.rewardValidDays, "奖励有效期", 1, 3650)),
+    bankGoldPerTcr,
+    bankMaxGoldPerRun: Math.trunc(
+      requireNumber(formData.bankMaxGoldPerRun, "每趟存金上限", 0, 100_000_000),
+    ),
+    bankGoldPerTcrBuy,
     tiers,
   });
 

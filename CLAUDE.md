@@ -534,8 +534,33 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.52.0（2026-11-13，旅店：工坊付费休息与券价、试炼客栈住店与钱庄改单向）
+**当前版本**：v0.53.0（2026-11-13，工坊遇敌与走位修复 + 金币商店；钱庄可配双向；BGM / 音效 / 受击特效）
 **下一版本**：待定
+
+- v0.53.0 工坊修遇敌、钱庄双向、活动音频：
+  - 工坊野外遇敌修复：`components/workshop/field-canvas.tsx` 新增 `inFlightRef`（同一时间只发
+    一段路径）与 `stoppedRef`（服务端判 encounter / capped 后锁死本地游程），画布卸载时清空
+    `pendingRef` 不再补发；纯 `ok` 确认只 `applyCounts`，不重置本地光标 / 跳跃 / 点击队列。
+    此前遇敌瞬间的并发路径会被 `walkWorkshopField` 当成「上一场战斗还没结束」拒绝，
+    并因 `applyRun` 重置光标表现为走两步被拉回。
+  - 工坊金币与商店：`lib/workshop/shop.ts`（精灵球 25 金 / 药水 20 金、单次 1~10 个），
+    `WorkshopState.gold`（旧档默认 0），`workshopVictoryGold`（野生 `10 + tier×4 + level`，
+    道馆 `100 × stage`），`buyWorkshopShopItem` + `buyWorkshopShopItemAction`（限流 60/60s）。
+  - 钱庄改为**可配置双向**：`lib/trial/saga/bank.ts` 的 `SagaBankPolicy`
+    （`goldPerTcr` 默认 100、`maxGoldPerRun` 默认 600、`goldPerTcrBuy` 默认 40 且强制
+    < 存金价），出城时 `sanitizeSagaBank` 冻结进 `SagaRun.bank`；旧局无 `bank` 字段退回
+    `DEFAULT_SAGA_BANK`。换金走 `buyTrialGold`（`temporaryOnly` 扣 tcr + 负流水 +
+    `itemId = "bank_gold"` 购买记录，重放时于 `cmdIndex` 加金，CAS 冲突退款）。
+    `spendCredits` 重新支持 `temporaryOnly`（不足时把已扣的临时行加回去）。
+    面板改数量输入 + 「全部」；后台试炼表单新增三项并校验换金价 < 存金价。
+  - 音频：`lib/game/audio.ts` 用 Web Audio 合成 4 套 BGM 与 14 种音效（无素材），
+    `components/activity/sound-toggle.tsx` 用 `useSyncExternalStore` 读开关，
+    默认关闭、点击后 `window.confirm` 二次确认，偏好存 `localStorage: cloudai:game-audio`；
+    离开活动页 `setTheme(null)`。试炼 `playBattleSfx` 按 460ms 动画节拍播报，
+    工坊 `playBattleHitFx` 解析日志伤害并按 540ms 顺序触发受击抖动 / 飘字 / 斜劈
+    （`app/globals.css` 的 `battle-hurt` / `battle-float` / `battle-slash`）。
+  - 验证：`tsc`、触碰文件的 ESLint、`npx tsx --test tests/*.test.ts`（140 项）、
+    `npm run build` 全过；本机无 `.env.local`，页面 / 音频未在真实浏览器实测。
 
 - v0.52.0 两处「旅店」补齐，钱庄收口：
   - 灵宠工坊：免费休息仍是每日一次（整队倒地照旧放开），用完后按后台新增的

@@ -21,6 +21,11 @@ import {
   petStats,
 } from "../lib/workshop/pets";
 import {
+  WORKSHOP_SHOP_BY_ID,
+  WORKSHOP_SHOP_ITEMS,
+  WORKSHOP_SHOP_MAX_QTY,
+} from "../lib/workshop/shop";
+import {
   emptyWorkshopState,
   highestTier,
   normalizeWorkshopRunShape,
@@ -212,11 +217,44 @@ test("道馆胜利发徽章与补给，并清空遭遇", () => {
   assert.equal(result.status, "won");
   assert.equal(result.state.encounter, null);
   assert.equal(result.state.badges, 1);
-  assert.deepEqual(result.drops, { ball: 2, potion: 2 });
+  assert.deepEqual(result.drops, { ball: 2, potion: 2, gold: 100 });
+  assert.equal(result.state.gold, 100);
   assert.equal(result.expGained > 0, true);
   // 入参不被修改。
   assert.equal(state.badges, 0);
   assert.notEqual(state.encounter, null);
+});
+
+test("野外胜利按阶数与等级掉金币，道馆掉得更多", () => {
+  const pet = createPet({ lineKey: "ember", tier: 9, level: 50 });
+  const wild = createWildEncounter("ash", () => 0);
+  assert.ok(wild);
+  const state = workshopState({
+    starter: "ember",
+    party: [pet],
+    activePetId: pet.id,
+    encounter: wild,
+  });
+  const result = resolveWorkshopBattle(state, { kind: "move", moveId: "signature" }, () => 0.5);
+  assert.equal(result.status, "won");
+  assert.equal(result.drops.gold, 10 + wild.tier * 4 + wild.level);
+  assert.equal(result.state.gold, result.drops.gold);
+  assert.equal(result.events.some((event) => event.text.includes(`捡到 ${result.drops.gold} 金`)), true);
+});
+
+test("工坊商店：补给齐全、价格为正，旧存档金币缺省为 0", () => {
+  assert.equal(WORKSHOP_SHOP_MAX_QTY >= 1, true);
+  for (const item of WORKSHOP_SHOP_ITEMS) {
+    assert.equal(item.price > 0, true);
+    assert.equal(WORKSHOP_SHOP_BY_ID.get(item.id)?.price, item.price);
+  }
+  const legacy = normalizeWorkshopState(
+    { starter: "ember", party: [], items: { ball: 3, potion: 1 } },
+    "2026-11-13",
+  );
+  assert.equal(legacy.gold, 0);
+  const rich = normalizeWorkshopState({ gold: 99_999_999 }, "2026-11-13");
+  assert.equal(rich.gold, 99_999);
 });
 
 test("精灵球捕捉成功入队，道馆战禁止使用精灵球", () => {

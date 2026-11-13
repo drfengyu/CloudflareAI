@@ -8,6 +8,7 @@ import type { WorkshopBattleAction } from "@/lib/workshop/battle";
 import type { WorkshopWalkPath } from "@/lib/workshop/run";
 import {
   battleWorkshop,
+  buyWorkshopShopItem,
   challengeWorkshopGym,
   chooseWorkshopStarter,
   claimWorkshopMilestones,
@@ -22,6 +23,7 @@ import {
   type WorkshopActionResult,
   type WorkshopBattleActionResult,
   type WorkshopRestResult,
+  type WorkshopShopResult,
   type WorkshopWalkActionResult,
 } from "@/lib/workshop/store";
 
@@ -169,6 +171,30 @@ export async function restWorkshopPartyAction(): Promise<ActionResult<WorkshopRe
     return { success: true, data };
   } catch (error) {
     return fail(error, "休息失败");
+  }
+}
+
+/** 工坊商店：用金币买精灵球 / 药水。 */
+export async function buyWorkshopShopItemAction(input: {
+  itemId: string;
+  quantity: number;
+}): Promise<ActionResult<WorkshopShopResult>> {
+  try {
+    const userId = await requireUser();
+    if (!(await checkRateLimit(`workshop-shop:${userId}`, { window: 60_000, limit: 60 }))) {
+      return { success: false, error: "买得太频繁，请稍后再试" };
+    }
+    const config = await getWorkshopConfig();
+    const data = await buyWorkshopShopItem(
+      userId,
+      String(input?.itemId ?? ""),
+      Number(input?.quantity) || 0,
+      config,
+    );
+    revalidatePath("/workshop");
+    return { success: true, data };
+  } catch (error) {
+    return fail(error, "购买失败");
   }
 }
 

@@ -5,10 +5,14 @@ import { temporaryBalances, topups, users } from "@/lib/db/schema";
 /**
  * 花 cr：先扣未过期的临时余额（最早过期的先扣），不足再扣永久余额。
  * 与消费侧 `deductCredits` 同一优先级，区别是这里要求总额足够——买券、买游戏装备都不允许透支。
+ *
+ * `temporaryOnly` 给钱庄换金用：只认 tcr，不动永久 cr；
+ * 临时余额不够时把已扣的临时行原样加回去，再返回失败。
  */
 export async function spendCredits(
   userId: string,
   amount: number,
+  options: { temporaryOnly?: boolean } = {},
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   let remaining = amount;
   const touched: { id: string; taken: number }[] = [];
@@ -41,6 +45,15 @@ export async function spendCredits(
   }
 
   if (remaining > 0) {
+    if (options.temporaryOnly) {
+      for (const t of touched) {
+        await d1Run("UPDATE temporary_balance SET amount = amount + ? WHERE id = ?", [
+          t.taken,
+          t.id,
+        ]);
+      }
+      return { ok: false, reason: "tcr 不足" };
+    }
     const { changes } = await d1Run(
       "UPDATE user SET balanceCredits = balanceCredits - ? WHERE id = ? AND balanceCredits >= ?",
       [remaining, userId, remaining],

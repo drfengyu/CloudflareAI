@@ -137,9 +137,10 @@ export default async function TrialPage() {
             ；按达到的最高档发放，奖励 tcr {config.rewardValidDays} 天内有效。未平定不发。
           </li>
           <li>
-            城镇钱庄是单向的：<b>100 金 = 1 tcr</b>，每次行军最多存 300 金（3 tcr），收兵时到账；
-            tcr 不能换回行军金币，金币只在游戏里赚、在游戏里花。客栈花{" "}
-            {SAGA_INN_PRICE_GOLD} 金住一次，把上阵武将的兵力补满，残兵也能接着推下一处。
+            城镇钱庄<b>双向兑换、数量自选</b>：每 {config.bankGoldPerTcr} 金存成 1 tcr（每趟最多存{" "}
+            {config.bankMaxGoldPerRun} 金，收兵时到账），也能按 1 tcr = {config.bankGoldPerTcrBuy} 金换回金币、
+            当场花；两向价差就是钱庄的抽成。客栈花 {SAGA_INN_PRICE_GOLD} 金住一次，
+            把上阵武将的兵力补满，残兵也能接着推下一处。
           </li>
           <li>
             不设次数与时限。中途关掉页面不算失败，回来接着走当前剧情；
@@ -292,6 +293,11 @@ export default async function TrialPage() {
               save={save}
               initialTickets={coupon.tickets}
               initialTcr={tempCredits}
+              bank={{
+                goldPerTcr: config.bankGoldPerTcr,
+                maxGoldPerRun: config.bankMaxGoldPerRun,
+                goldPerTcrBuy: config.bankGoldPerTcrBuy,
+              }}
               priceTickets={priceTickets}
               unitCredits={config.couponUnitCredits}
               nodeCount={config.questionCount}

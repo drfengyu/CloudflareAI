@@ -1,4 +1,4 @@
-# 限时活动·灵宠工坊（v0.52.0，v0.51.0 改为冒险地图）
+# 限时活动·灵宠工坊（v0.53.0，v0.51.0 改为冒险地图）
 
 红白机式养成：开局三选一初始灵宠，花活动券进图，在俯视角的冒险地图里一格一步地走，
 草丛里摇出野生灵宠后用招式打倒或精灵球捕捉，升级到门槛自动进化，走到地图另一头的道馆
@@ -34,17 +34,22 @@
    整队倒地时这一道闸放开，否则没药水就只能一直躺着）；免费次数用完后可按后台设定的
    `restCostCredits` 花工坊券付费休息，券不足只能等第二天。
 8. **道馆**：道馆在地图另一头，必须把主角走到它跟前一格才能挑战（服务端按光标坐标判邻居），
-   按徽章数顺序发放，胜利给徽章 + 2 精灵球 + 2 药水；三枚徽章解锁星陨高地。
-9. **合成**（保留）：两只同线同阶灵宠合成一只高一阶（取两者较高等级、满血），不花券、
-   不会失败；队伍↔队伍留在队伍，仓库内合成留在仓库。
-10. **里程碑**：任意一条线首次达到配置阶位发一次 tcr，`tierKey = tier:N`；判定取图鉴与当前
+   按徽章数顺序发放，胜利给徽章 + 2 精灵球 + 2 药水 + 金币；三枚徽章解锁星陨高地。
+9. **金币与商店**（v0.53.0）：野生胜利掉 `10 + 阶数×4 + 等级` 金，道馆首胜按关卡
+   掉 100 / 200 / 300 金；工坊商店卖精灵球 25 金、药水 20 金，一次买 1~10 个，
+   战斗中不能进店。金币只在本活动里流通（不换成 tcr、不接受 cr 充值），
+   来源与去向都留在游戏内。
+10. **合成**（保留）：两只同线同阶灵宠合成一只高一阶（取两者较高等级、满血），不花券、
+    不会失败；队伍↔队伍留在队伍，仓库内合成留在仓库。
+11. **里程碑**：任意一条线首次达到配置阶位发一次 tcr，`tierKey = tier:N`；判定取图鉴与当前
     灵宠的最高阶，合成消耗掉低阶灵宠也不会让已达成阶位回退。
-11. **图鉴**：3 条线 × 9 阶，拥有某阶即视为见过 1~该阶；未解锁格位显示剪影。
+12. **图鉴**：3 条线 × 9 阶，拥有某阶即视为见过 1~该阶；未解锁格位显示剪影。
 
 ## 存档结构
 
 整份进度存 `workshop_state.state` JSON：`day / entersToday / gymsToday / starter / party /
-box / dex / items{ball,potion} / badges / activePetId / run / encounter / restDay`。纯数据与纯函数
+box / dex / items{ball,potion} / gold / badges / activePetId / run / encounter / restDay`
+（`gold` 为 v0.53.0 新增，旧档读回默认 0）。纯数据与纯函数
 在 `lib/workshop/state.ts`、`lib/workshop/pets.ts`，服务端与单测共用。
 
 进行中的一趟探险是 `run = { areaKey, seed, tx, ty, steps, encounters, startedAt }`：
@@ -72,7 +77,14 @@ box / dex / items{ball,potion} / badges / activePetId / run / encounter / restDa
   `refundCouponPayment` 把券退回原处。收兵离开（`leaveWorkshopField`）不退券，战斗中也拒绝离开。
 - 写入用 `WHERE version = ?` 乐观锁；并发战斗 / 捕捉 / 走位只有一个能推进，另一个收到「操作冲突，请刷新后重试」。
 - 里程碑先 `INSERT OR IGNORE` 占住 `activity_milestone` 唯一键再发 tcr；发奖失败删掉占位行。
-- Server Action 限流：`workshop-enter` 30 次/60s、`workshop-walk` 240 次/60s（走位是逐格高频上报）。
+- Server Action 限流：`workshop-enter` 30 次/60s、`workshop-walk` 240 次/60s（走位是逐格高频上报）、
+  `workshop-shop` 60 次/60s。
+- **走位并发收敛**（v0.53.0）：`field-canvas.tsx` 同一时间只允许一段路径在路上
+  （`inFlightRef`），服务端判遇敌 / 走满后立即 `stoppedRef` 锁死本地游程并清空待发路径；
+  画布卸载（战斗面板挂载）时不再补发残路径。纯 `ok` 确认只同步步数 / 遇敌数，
+  不清本地光标与点击寻路队列；只有服务端游标与本地预测分叉、遇敌或请求失败才把主角
+  拉回服务端坐标。此前遇敌瞬间的并发路径会被服务端当成「上一场战斗还没结束」拒绝，
+  并表现为走两步被拉回原位。
 
 ## 画面
 
@@ -81,6 +93,21 @@ box / dex / items{ball,potion} / badges / activePetId / run / encounter / restDa
 逻辑视野固定宽 640，高度随画布 CSS 比例推导（窄屏 4:3 且不超过屏高 42%，宽屏 16:9），
 位图按 `CSS 宽 / 640 × devicePixelRatio`（夹 1~2）放大，`ctx.setTransform` 回到逻辑坐标，
 所以画面在大屏和手机上都铺得开又不会被拉伸。
+
+战斗面板（v0.53.0）在 DOM 层补上打击反馈：`BattlePanel` 解析服务端日志里的
+「造成 N 伤害」，按 540ms 间隔依次触发敌方 / 我方受击抖动（`battle-hurt`）、
+伤害飘字（`battle-float`，≥28 记重击并带 `!`）与斜劈光带（`battle-slash`，
+敌方金色 / 我方红色），靠父节点 `key` 变化重挂载重播；CSS 在 `app/globals.css`。
+
+## 音乐与音效（v0.53.0）
+
+与三国讨逆传共用 `lib/game/audio.ts`（Web Audio 合成，无音频素材）：野外
+`workshop-field`（106 BPM）、战斗 `workshop-battle`（150 BPM）。默认关闭，
+战斗面板上方的 `SoundToggle` 需二次确认才播放，选择记在 `localStorage`
+（`cloudai:game-audio`），进入 / 结束战斗时自动换曲目。
+动作音效：招式 `hit` / 重击 `crit`、精灵球 `capture`、药水与休息 `heal`、
+防御 `guard`、换宠 `click`、逃跑 `flee`、遇敌 `encounter`、购买与补领 `coin`、
+胜利 `win`、全灭 `lose`。
 
 ## 配置
 
@@ -102,6 +129,10 @@ box / dex / items{ball,potion} / badges / activePetId / run / encounter / restDa
 道馆胜利掉落与徽章、捕捉入队与道馆禁用精灵球、倒地自动换人 / 全灭判负（判负同时收兵回营地、
 整队按四分之一血扶起）。
 
+工坊金币掉落、商店补给与价格、旧档 `gold` 缺省 / 封顶另有单测覆盖
+（`tests/activity-games.test.ts`）；走位并发修复与 `BattleFx` 音效 / 动画属于客户端行为，
+做了类型检查与构建验证，未在真实浏览器里试听试玩。
+
 画家层另用无 DOM 的桩 `CanvasRenderingContext2D`（只认标准成员、坐标一律查 `NaN`）跑过
 7000+ 帧：5 个区域 × 4 种种子 × 全部视野高度 × 4 个朝向 × 三档徽章，无异常、无非法颜色与
-越界 alpha。真机手机与浏览器实测尚未做（本机没有 Node / npm，起不了 `npm run dev`）。
+越界 alpha。真机手机与浏览器实测尚未做（本机没有可用的 `.env.local`，起不了需要登录态的页面）。

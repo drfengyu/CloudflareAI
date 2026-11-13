@@ -31,6 +31,9 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
   const [price, setPrice] = useState(String(initialConfig.runPriceCredits));
   const [couponUnit, setCouponUnit] = useState(String(initialConfig.couponUnitCredits));
   const [validDays, setValidDays] = useState(String(initialConfig.rewardValidDays));
+  const [bankGoldPerTcr, setBankGoldPerTcr] = useState(String(initialConfig.bankGoldPerTcr));
+  const [bankMaxGold, setBankMaxGold] = useState(String(initialConfig.bankMaxGoldPerRun));
+  const [bankBuy, setBankBuy] = useState(String(initialConfig.bankGoldPerTcrBuy));
   const [tiers, setTiers] = useState<TierRow[]>(() =>
     initialConfig.tiers.map((tier) => ({ correct: String(tier.correct), reward: String(tier.reward) })),
   );
@@ -49,9 +52,12 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
         runPriceCredits: Number(price),
         couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
+        bankGoldPerTcr: Number(bankGoldPerTcr),
+        bankMaxGoldPerRun: Number(bankMaxGold),
+        bankGoldPerTcrBuy: Number(bankBuy),
         tiers: tiers.map((row) => ({ correct: Number(row.correct), reward: Number(row.reward) })),
       }),
-    [enabled, startAt, endAt, questionCount, price, couponUnit, validDays, tiers],
+    [enabled, startAt, endAt, questionCount, price, couponUnit, validDays, bankGoldPerTcr, bankMaxGold, bankBuy, tiers],
   );
 
   async function handleSubmit(e: React.FormEvent) {
@@ -66,6 +72,9 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
         runPriceCredits: Number(price),
         couponUnitCredits: Number(couponUnit),
         rewardValidDays: Number(validDays),
+        bankGoldPerTcr: Number(bankGoldPerTcr),
+        bankMaxGoldPerRun: Number(bankMaxGold),
+        bankGoldPerTcrBuy: Number(bankBuy),
         tiers: tiers.map((row) => ({ correct: Number(row.correct), reward: Number(row.reward) })),
       });
       toast.success("每日试炼配置已保存");
@@ -168,6 +177,45 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
         </div>
       </div>
 
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div>
+          <label className="mb-1 block text-sm font-medium">存金价：金 / tcr</label>
+          <input
+            type="number"
+            min={2}
+            step="1"
+            value={bankGoldPerTcr}
+            onChange={(e) => setBankGoldPerTcr(e.target.value)}
+            className={FIELD_CLASS}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">玩家存金时，多少行军金币折 1 tcr</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">每趟存 / 换金上限（金）</label>
+          <input
+            type="number"
+            min={0}
+            step="1"
+            value={bankMaxGold}
+            onChange={(e) => setBankMaxGold(e.target.value)}
+            className={FIELD_CLASS}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">会按存金价向下取整，两个方向共用</p>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">换金价：金 / tcr</label>
+          <input
+            type="number"
+            min={1}
+            step="1"
+            value={bankBuy}
+            onChange={(e) => setBankBuy(e.target.value)}
+            className={FIELD_CLASS}
+          />
+          <p className="mt-1 text-xs text-muted-foreground">必须低于存金价，两向价差就是钱庄抽成</p>
+        </div>
+      </div>
+
       <div>
         <div className="flex items-center justify-between gap-2">
           <label className="block text-sm font-medium">平定一处地方的奖励档位（tcr）</label>
@@ -232,6 +280,11 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
             .map((tier) => `攻克 ${tier.correct} 处 ${formatCredits(tier.reward)} tcr`)
             .join(" · ")}
           ；平定一处地方的奖励 {formatCredits(preview.tiers[preview.tiers.length - 1]?.reward ?? 0)} tcr。
+        </p>
+        <p className="mt-1 text-muted-foreground">
+          钱庄：{preview.bankGoldPerTcr} 金 = 1 tcr，1 tcr = {preview.bankGoldPerTcrBuy} 金；
+          每趟最多 {preview.bankMaxGoldPerRun} 金，单趟存满可得{" "}
+          {Math.floor(preview.bankMaxGoldPerRun / preview.bankGoldPerTcr)} tcr。
         </p>
       </div>
 

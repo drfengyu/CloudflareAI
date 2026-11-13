@@ -27,6 +27,11 @@ import {
   petStats,
 } from "./pets";
 import {
+  WORKSHOP_SHOP_BY_ID,
+  WORKSHOP_SHOP_MAX_QTY,
+  type WorkshopShopItemId,
+} from "./shop";
+import {
   areaByKey,
   createGymEncounter,
   nextGym,
@@ -526,6 +531,53 @@ export async function restWorkshopParty(
     ...actionResult(outcome.snapshot),
     healed: outcome.result,
     paidCredits: payment ? creditsForTickets(payment.tickets, config.couponUnitCredits) : 0,
+  };
+}
+
+export interface WorkshopShopResult extends WorkshopActionResult {
+  /** 这次花掉的金币。 */
+  spent: number;
+  bought: { ball: number; potion: number };
+}
+
+/** 工坊商店：用活动内金币买精灵球 / 药水，战斗中不可用。 */
+export async function buyWorkshopShopItem(
+  userId: string,
+  itemId: string,
+  quantity: number,
+  config: WorkshopConfig,
+): Promise<WorkshopShopResult> {
+  const activityKey = assertActiveWindow(config);
+  const item = WORKSHOP_SHOP_BY_ID.get(String(itemId ?? "") as WorkshopShopItemId);
+  if (!item) throw new WorkshopError("商店里没有这件补给");
+  const qty = Math.trunc(Number(quantity) || 0);
+  if (qty < 1 || qty > WORKSHOP_SHOP_MAX_QTY) {
+    throw new WorkshopError(`一次只能买 1~${WORKSHOP_SHOP_MAX_QTY} 个`);
+  }
+  const cost = item.price * qty;
+  await ensureStateRow(userId, activityKey);
+  const { snapshot } = await attemptWrite(userId, activityKey, (state) => {
+    if (state.encounter) throw new WorkshopError("战斗中不能逛商店，打完再来");
+    if (state.gold < cost) {
+      throw new WorkshopError(`金币不够：${qty} 个${item.name}要 ${cost} 金，现在只有 ${state.gold} 金`);
+    }
+    return {
+      next: {
+        ...state,
+        gold: state.gold - cost,
+        items:
+          item.id === "ball"
+            ? { ...state.items, ball: state.items.ball + qty }
+            : { ...state.items, potion: state.items.potion + qty },
+      },
+      result: null,
+    };
+  });
+
+  return {
+    ...actionResult(snapshot),
+    spent: cost,
+    bought: { ball: item.id === "ball" ? qty : 0, potion: item.id === "potion" ? qty : 0 },
   };
 }
 

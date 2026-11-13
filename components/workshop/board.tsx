@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeftRight,
@@ -22,6 +22,8 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CouponCount } from "@/components/activity/coupon-badge";
+import { SoundToggle } from "@/components/activity/sound-toggle";
+import { gameAudio } from "@/lib/game/audio";
 import { formatCredits } from "@/lib/billing/credits";
 import { cnDateString } from "@/lib/date";
 import { cn } from "@/lib/utils";
@@ -48,7 +50,9 @@ import {
 } from "@/lib/workshop/battle";
 import { highestTier, type WorkshopState } from "@/lib/workshop/state";
 import { workshopFieldFor } from "@/lib/workshop/field";
+import { WORKSHOP_SHOP_ITEMS, type WorkshopShopItemId } from "@/lib/workshop/shop";
 import {
+  buyWorkshopShopItemAction,
   chooseWorkshopStarterAction,
   challengeWorkshopGymAction,
   claimWorkshopMilestonesAction,
@@ -93,6 +97,14 @@ interface WorkshopBoardProps {
 
 type TabKey = "adventure" | "team" | "dex";
 type BattleStatus = "ongoing" | "won" | "lost" | "captured" | "fled";
+
+interface BattleFx {
+  /** 每次命中换一个值，靠 key 重挂载让受击动画重播。 */
+  seq: number;
+  target: "enemy" | "player";
+  amount: number;
+  crit: boolean;
+}
 
 const TAB_LABEL: Record<TabKey, string> = {
   adventure: "冒险",
@@ -148,11 +160,29 @@ function ExpBar({ pet }: { pet: WorkshopPet }) {
 export function WorkshopBoard(props: WorkshopBoardProps) {
   const router = useRouter();
   const [state, setState] = useState<WorkshopState>(props.initial);
+  const [version, setVersion] = useState(props.version);
   const [granted, setGranted] = useState<number[]>(props.grantedTiers);
   const [tab, setTab] = useState<TabKey>("adventure");
   const [busy, setBusy] = useState<string | null>(null);
   const [log, setLog] = useState<WorkshopBattleEvent[]>([]);
   const [lastStatus, setLastStatus] = useState<BattleStatus | null>(null);
+  const [fx, setFx] = useState<BattleFx | null>(null);
+  const fxTimers = useRef<number[]>([]);
+  const fxSeq = useRef(0);
+
+  useEffect(() => {
+    return () => {
+      for (const timer of fxTimers.current) window.clearTimeout(timer);
+      fxTimers.current = [];
+    };
+  }, []);
+
+  // 服务端刷新出更新版本（比如别的标签页触发了遇敌）时，客户端不能抱着旧存档不放：
+  // 旧存档里的 run/encounter 会让之后的每一次走位都被服务端拒绝。
+  if (props.version > version) {
+    setVersion(props.version);
+    setState(props.initial);
+  }
 
   const active = state.party.find((pet) => pet.id === state.activePetId) ?? state.party[0] ?? null;
   const alive = state.party.some((pet) => pet.hp > 0);
@@ -167,10 +197,12 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
 
   function acceptData(data: {
     state: WorkshopState;
+    version: number;
     milestoneReward: number;
     milestoneTiers: number[];
   }) {
     setState(data.state);
+    setVersion(data.version);
     if (data.milestoneTiers.length > 0) {
       setGranted((prev) => [...new Set([...prev, ...data.milestoneTiers])]);
       if (data.milestoneReward > 0) {
@@ -178,6 +210,28 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
           `达成 ${data.milestoneTiers.join(" / ")} 阶，获得 ${formatCredits(data.milestoneReward)} tcr`,
         );
       }
+    }
+  }
+
+  /** 把战斗日志里的「造成 N 伤害」按发生顺序排成受击动画；good 打的是敌方，bad 打的是我方。 */
+  function playBattleHitFx(events: WorkshopBattleEvent[]) {
+    for (const timer of fxTimers.current) window.clearTimeout(timer);
+    fxTimers.current = [];
+    let delay = 0;
+    for (const event of events) {
+      const match = /造成 (\d+) 伤害/.exec(event.text);
+      if (!match || (event.tone !== "good" && event.tone !== "bad")) continue;
+      const amount = Number(match[1]);
+      const target: BattleFx["target"] = event.tone === "good" ? "enemy" : "player";
+      const crit = target === "enemy" && amount >= 28;
+      fxTimers.current.push(
+        window.setTimeout(() => {
+          fxSeq.current += 1;
+          setFx({ seq: fxSeq.current, target, amount, crit });
+          gameAudio.play(crit ? "crit" : "hit");
+        }, delay),
+      );
+      delay += 540;
     }
   }
 
@@ -191,6 +245,7 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
       return;
     }
     acceptData(res.data);
+    gameAudio.play("capture");
     toast.success("伙伴已就位，去灰烬原野进图吧");
     router.refresh();
   }
@@ -220,6 +275,8 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
     const res = await walkWorkshopFieldAction(path);
     if (!res.success) {
       toast.error(res.error);
+      // 本地状态可能已经落后（例如服务端早已遇敌）：拉一次服务端状态，别在旧图上继续走。
+      router.refresh();
       return null;
     }
     acceptData(res.data);
@@ -227,6 +284,7 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
     if (walkResult.kind === "encounter") {
       setLastStatus(null);
       setLog([{ text: "草丛里窜出一只灵宠！", tone: "bad" }]);
+      gameAudio.play("encounter");
     } else if (walkResult.kind === "capped") {
       setLog([
         {
@@ -280,6 +338,7 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
         ? [{ text: `道馆战开始：${petName(encounter)}（Lv.${encounter.level}）`, tone: "info" }]
         : [],
     );
+    if (encounter) gameAudio.play("encounter");
     router.refresh();
   }
 
@@ -293,16 +352,27 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
       return;
     }
     acceptData(res.data);
-    setLog((prev) => [...prev, ...res.data.battle.events].slice(-24));
-    setLastStatus(res.data.battle.status);
-    if (res.data.battle.status === "captured") {
-      toast.success(
-        res.data.battle.captured ? `捕捉到 ${res.data.battle.captured.name}` : "捕捉成功",
-      );
+    const battle = res.data.battle;
+    setLog((prev) => [...prev, ...battle.events].slice(-24));
+    setLastStatus(battle.status);
+    if (action.kind === "ball") gameAudio.play("capture");
+    else if (action.kind === "potion") gameAudio.play("heal");
+    else if (action.kind === "guard") gameAudio.play("guard");
+    else if (action.kind === "switch") gameAudio.play("click");
+    else if (action.kind === "run") gameAudio.play("flee");
+    playBattleHitFx(battle.events);
+    if (battle.status === "captured") {
+      toast.success(battle.captured ? `捕捉到 ${battle.captured.name}` : "捕捉成功");
     }
-    if (res.data.battle.status === "won") toast.success("战斗胜利");
-    if (res.data.battle.status === "lost") toast.error("队伍全灭，被伙伴扶回营地休整");
-    if (res.data.battle.status !== "ongoing") router.refresh();
+    if (battle.status === "won") {
+      gameAudio.play("win");
+      toast.success("战斗胜利");
+    }
+    if (battle.status === "lost") {
+      gameAudio.play("lose");
+      toast.error("队伍全灭，被伙伴扶回营地休整");
+    }
+    if (battle.status !== "ongoing") router.refresh();
   }
 
   async function rest() {
@@ -315,6 +385,7 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
       return;
     }
     acceptData(res.data);
+    gameAudio.play("heal");
     toast.success(
       res.data.paidCredits > 0
         ? `付费 ${formatCredits(res.data.paidCredits)} cr 休息，回复 ${res.data.healed} 点体力`
@@ -375,6 +446,21 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
     router.refresh();
   }
 
+  async function buyShop(itemId: WorkshopShopItemId, quantity: number) {
+    if (busy) return;
+    setBusy(`shop-${itemId}-${quantity}`);
+    const res = await buyWorkshopShopItemAction({ itemId, quantity });
+    setBusy(null);
+    if (!res.success) {
+      toast.error(res.error);
+      return;
+    }
+    acceptData(res.data);
+    gameAudio.play("coin");
+    const item = WORKSHOP_SHOP_ITEMS.find((row) => row.id === itemId);
+    toast.success(`买下 ${item?.name ?? "补给"} ×${quantity}，花费 ${res.data.spent} 金`);
+  }
+
   async function claimMilestones() {
     if (busy) return;
     setBusy("claim");
@@ -385,6 +471,7 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
       return;
     }
     if (res.data.reward > 0) {
+      gameAudio.play("coin");
       toast.success(`补领 ${formatCredits(res.data.reward)} tcr`);
       setGranted((prev) => [...new Set([...prev, ...res.data.tiers])]);
       router.refresh();
@@ -449,6 +536,9 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
         <span className="flex items-center gap-1.5">
           <Heart className="h-4 w-4" /> 药水 {state.items.potion}
         </span>
+        <span className="flex items-center gap-1.5">
+          <Coins className="h-4 w-4 text-amber-500" /> 金币 {state.gold}
+        </span>
         <span className="flex items-center gap-1.5 text-muted-foreground">
           <Map className="h-4 w-4" /> 进图 {state.entersToday}/{props.dailyExplores}
         </span>
@@ -498,11 +588,18 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
           {active ? `出战：${petName(active)} Lv.${active.level}` : "没有可出战的灵宠"}
           {state.encounter ? " · 战斗中" : ""}
         </span>
+        <SoundToggle game="workshop" battle={Boolean(state.encounter)} />
       </div>
 
       {tab === "adventure" ? (
         state.encounter ? (
-          <BattlePanel state={state} busy={busy} log={log} onAction={(action) => void act(action)} />
+          <BattlePanel
+            state={state}
+            busy={busy}
+            log={log}
+            fx={fx}
+            onAction={(action) => void act(action)}
+          />
         ) : (
           <AdventurePanel
             state={state}
@@ -521,6 +618,7 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
             exploreTickets={props.exploreTickets}
             gymTickets={props.gymTickets}
             couponTickets={props.couponTickets}
+            gold={state.gold}
             nextGym={nextGym ?? undefined}
             log={log}
             lastStatus={lastStatus}
@@ -531,6 +629,7 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
             onLeaveField={() => void leaveField()}
             onGym={() => void challengeGym()}
             onClaim={() => void claimMilestones()}
+            onBuyShop={(itemId, quantity) => void buyShop(itemId, quantity)}
             onDismissLog={() => {
               setLog([]);
               setLastStatus(null);
@@ -560,10 +659,11 @@ interface BattlePanelProps {
   state: WorkshopState;
   busy: string | null;
   log: WorkshopBattleEvent[];
+  fx: BattleFx | null;
   onAction: (action: WorkshopBattleAction) => void;
 }
 
-function BattlePanel({ state, busy, log, onAction }: BattlePanelProps) {
+function BattlePanel({ state, busy, log, fx, onAction }: BattlePanelProps) {
   const [switchOpen, setSwitchOpen] = useState(false);
   const encounter = state.encounter;
   if (!encounter) return null;
@@ -595,7 +695,26 @@ function BattlePanel({ state, busy, log, onAction }: BattlePanelProps) {
             </span>
           </div>
         </div>
-        <PixelPet lineKey={encounter.lineKey} tier={encounter.tier} size={72} />
+        <div
+          key={fx?.target === "enemy" ? `enemy-${fx.seq}` : "enemy"}
+          className={cn("relative shrink-0", fx?.target === "enemy" && "battle-hurt")}
+        >
+          <PixelPet lineKey={encounter.lineKey} tier={encounter.tier} size={72} />
+          {fx?.target === "enemy" ? (
+            <>
+              <span className="battle-slash pointer-events-none absolute inset-0" />
+              <span
+                className={cn(
+                  "battle-float pointer-events-none absolute -top-2 left-1/2 text-sm font-bold tabular-nums",
+                  fx.crit ? "text-amber-500" : "text-amber-600",
+                )}
+              >
+                -{fx.amount}
+                {fx.crit ? "!" : ""}
+              </span>
+            </>
+          ) : null}
+        </div>
       </div>
 
       <div className="grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_220px]">
@@ -608,7 +727,13 @@ function BattlePanel({ state, busy, log, onAction }: BattlePanelProps) {
             ))}
             {log.length === 0 ? <p className="text-muted-foreground">战斗继续，选择指令。</p> : null}
           </div>
-          <div className="rounded border border-border p-2">
+          <div
+            key={fx?.target === "player" ? `player-${fx.seq}` : "player"}
+            className={cn(
+              "relative rounded border border-border p-2",
+              fx?.target === "player" && "battle-hurt",
+            )}
+          >
             <div className="flex items-center justify-between gap-2 text-sm">
               <span className="font-medium">
                 {petName(active)}
@@ -624,6 +749,14 @@ function BattlePanel({ state, busy, log, onAction }: BattlePanelProps) {
               <span>攻 {petStats(active.tier, active.level).atk} · 防 {petStats(active.tier, active.level).def}</span>
             </div>
             <ExpBar pet={active} />
+            {fx?.target === "player" ? (
+              <>
+                <span className="battle-slash battle-slash-player pointer-events-none absolute inset-0" />
+                <span className="battle-float pointer-events-none absolute right-3 top-0 text-sm font-bold tabular-nums text-destructive">
+                  -{fx.amount}
+                </span>
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -735,6 +868,7 @@ interface AdventurePanelProps {
   exploreTickets: number;
   gymTickets: number;
   couponTickets: number;
+  gold: number;
   nextGym: WorkshopGym | undefined;
   log: WorkshopBattleEvent[];
   lastStatus: BattleStatus | null;
@@ -745,6 +879,7 @@ interface AdventurePanelProps {
   onLeaveField: () => void;
   onGym: () => void;
   onClaim: () => void;
+  onBuyShop: (itemId: WorkshopShopItemId, quantity: number) => void;
   onDismissLog: () => void;
 }
 
@@ -896,6 +1031,58 @@ function AdventurePanel(props: AdventurePanelProps) {
 
       <div>
         <p className="mb-2 flex items-center gap-1.5 text-sm font-medium">
+          <Coins className="h-4 w-4 text-amber-500" /> 工坊商店
+          <span className="ml-auto flex items-center gap-1 text-xs font-normal text-muted-foreground">
+            <Coins className="h-3.5 w-3.5 text-amber-500" /> 金币 {props.gold}
+          </span>
+        </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {WORKSHOP_SHOP_ITEMS.map((item) => {
+            const owned = item.id === "ball" ? state.items.ball : state.items.potion;
+            const busyOne = busy === `shop-${item.id}-1`;
+            const busyFive = busy === `shop-${item.id}-5`;
+            return (
+              <div key={item.id} className="rounded-lg border border-border p-3">
+                <div className="flex items-center justify-between text-sm">
+                  <p className="font-medium">{item.name}</p>
+                  <span className="tabular-nums text-muted-foreground">{item.price} 金 / 个</span>
+                </div>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {item.desc} · 现有 {owned}
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busy !== null || props.gold < item.price}
+                    onClick={() => props.onBuyShop(item.id, 1)}
+                  >
+                    {busyOne ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Coins className="h-3.5 w-3.5" />}
+                    买 1 个
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={busy !== null || props.gold < item.price * 5}
+                    onClick={() => props.onBuyShop(item.id, 5)}
+                  >
+                    {busyFive ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                    买 5 个
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          金币来自野外与道馆战利品，只在灵宠工坊里流通，不换成 tcr。
+        </p>
+      </div>
+
+      <div>
+        <p className="mb-2 flex items-center gap-1.5 text-sm font-medium">
           <Swords className="h-4 w-4" /> 道馆挑战
           <span className="ml-auto text-xs font-normal text-muted-foreground">
             今日 {state.gymsToday}/{props.dailyGyms} · 单次{" "}
@@ -932,7 +1119,9 @@ function AdventurePanel(props: AdventurePanelProps) {
                 <p className="text-[11px] text-muted-foreground">
                   馆主 {gym.leader} · {workshopTierName(gym.lineKey, gym.tier)} Lv.{gym.level}
                 </p>
-                <p className="text-[11px] text-muted-foreground">胜利：{gym.badge} + 2 球 + 2 药</p>
+                <p className="text-[11px] text-muted-foreground">
+                  胜利：{gym.badge} + 2 球 + 2 药 + {100 * gym.stage} 金
+                </p>
                 <Button
                   type="button"
                   size="sm"

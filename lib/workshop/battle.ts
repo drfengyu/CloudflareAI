@@ -280,7 +280,13 @@ export interface WorkshopBattleResult {
   levelUps: { petId: string; name: string; level: number }[];
   evolved: { petId: string; name: string }[];
   captured?: { name: string; tier: number; to: "party" | "box" };
-  drops: { ball: number; potion: number };
+  drops: { ball: number; potion: number; gold: number };
+}
+
+/** 胜利掉金：野生按阶数与等级给，道馆按关卡给一大笔，用来在工坊商店买补给。 */
+export function workshopVictoryGold(encounter: Pick<WorkshopEncounter, "kind" | "tier" | "level" | "gymStage">): number {
+  if (encounter.kind === "gym") return 100 * Math.max(1, Math.trunc(encounter.gymStage ?? 1));
+  return 10 + encounter.tier * 4 + encounter.level;
 }
 
 function cloneState(state: WorkshopState): WorkshopState {
@@ -320,7 +326,7 @@ export function resolveWorkshopBattle(
     expGained: 0,
     levelUps: [],
     evolved: [],
-    drops: { ball: 0, potion: 0 },
+    drops: { ball: 0, potion: 0, gold: 0 },
   };
 
   const enemyName = () => petName(encounter);
@@ -399,28 +405,30 @@ export function resolveWorkshopBattle(
     events.push({ text: `获得 ${exp} 点经验`, tone: "good" });
 
     if (encounter.kind === "gym") {
+      const gold = workshopVictoryGold(encounter);
       state.badges = Math.min(3, state.badges + 1);
       state.items = { ball: state.items.ball + 2, potion: state.items.potion + 2 };
-      result.drops = { ball: 2, potion: 2 };
+      state.gold += gold;
+      result.drops = { ball: 2, potion: 2, gold };
       const gym = gymByStage(encounter.gymStage ?? 0);
       events.push({
-        text: `战胜${gym?.leader ?? "馆主"}，获得${gym?.badge ?? "徽章"}，补给 +2 球 +2 药水`,
+        text: `战胜${gym?.leader ?? "馆主"}，获得${gym?.badge ?? "徽章"}，补给 +2 球 +2 药水 +${gold} 金`,
         tone: "good",
       });
     } else {
       const ball = random() < 0.25 ? 1 : 0;
       const potion = random() < 0.15 ? 1 : 0;
+      const gold = workshopVictoryGold(encounter);
       state.items = {
         ball: state.items.ball + ball,
         potion: state.items.potion + potion,
       };
-      result.drops = { ball, potion };
-      if (ball || potion) {
-        events.push({
-          text: `捡到${ball ? ` 精灵球 ×${ball}` : ""}${potion ? ` 药水 ×${potion}` : ""}`,
-          tone: "good",
-        });
-      }
+      state.gold += gold;
+      result.drops = { ball, potion, gold };
+      events.push({
+        text: `捡到 ${gold} 金${ball ? ` · 精灵球 ×${ball}` : ""}${potion ? ` · 药水 ×${potion}` : ""}`,
+        tone: "good",
+      });
     }
 
     finish();
