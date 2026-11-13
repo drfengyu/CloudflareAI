@@ -91,7 +91,7 @@ export function fieldSpeedAt(field: SagaField, x: number, y: number): number {
   return kind === SAGA_TILE_FOREST ? 0.72 : 1;
 }
 
-/** 挨着水面的草地算滩涂（海边）：只供沿岸行走，不会遇敌。 */
+/** 挨着水面的草地算滩涂（海边）：沿岸能走，也一样可能撞见流寇。 */
 export function fieldShoreAt(field: SagaField, tx: number, ty: number): boolean {
   if (fieldTileAt(field, tx, ty) !== SAGA_TILE_GRASS) return false;
   for (let dy = -1; dy <= 1; dy++) {
@@ -104,16 +104,22 @@ export function fieldShoreAt(field: SagaField, tx: number, ty: number): boolean 
 }
 
 /**
- * 每走过一格草地 / 树林的遇敌概率；官道、墙内与海边滩涂一律安全。
+ * 每走过一格野外路面的遇敌概率；官道、草地、海边滩涂与树林都会遇敌，
+ * 只有城墙、城门洞与城内校场安全（`SAGA_TILE_YARD` / `SAGA_TILE_WALL`）。
  * 概率只决定「什么时候撞上」，编成由种子与第几场遭遇推出，重放不依赖走位。
  */
 export function fieldEncounterChanceAt(field: SagaField, x: number, y: number): number {
   const tile = field.tile;
   const tx = Math.floor(x / tile);
   const ty = Math.floor(y / tile);
+  // 城门洞归城内管，站在门洞里不算出城。
+  if (tx === field.city.gateTx && (ty === field.city.gateTy || ty === field.city.gateTy + 1)) {
+    return 0;
+  }
   const kind = fieldTileAt(field, tx, ty);
   if (kind === SAGA_TILE_FOREST) return 0.05;
-  if (kind === SAGA_TILE_GRASS) return fieldShoreAt(field, tx, ty) ? 0 : 0.024;
+  if (kind === SAGA_TILE_GRASS) return fieldShoreAt(field, tx, ty) ? 0.02 : 0.024;
+  if (kind === SAGA_TILE_ROAD) return 0.012;
   return 0;
 }
 

@@ -17,6 +17,8 @@ import {
   SAGA_TILE_FOREST,
   SAGA_TILE_GRASS,
   SAGA_TILE_ROAD,
+  SAGA_TILE_WALL,
+  SAGA_TILE_YARD,
   type SagaCommand,
   type SagaRun,
 } from "../lib/trial/saga/types";
@@ -887,67 +889,64 @@ test("野外遭遇只在行军途中发生：兵败后不再受理遭遇指令",
   assert.equal(lost.state.clearedNodes.length, 0);
 });
 
-test("野外遇敌概率：官道安全，草地与树林才有概率，海边滩涂除外", () => {
+test("野外遇敌概率：官道、草地、海边与树林都遇敌，城墙与城内校场除外", () => {
   const field = generateSagaField({ chapter: 0, nodeCount: 5, seed: 3 });
-  let walkable = 0;
+  let forest = 0;
+  let grass = 0;
+  let road = 0;
   let shore = 0;
+  let safeCity = 0;
   for (let ty = 0; ty < field.rows; ty++) {
     for (let tx = 0; tx < field.cols; tx++) {
       const kind = fieldTileAt(field, tx, ty);
       const chance = fieldEncounterChanceAt(field, (tx + 0.5) * field.tile, (ty + 0.5) * field.tile);
+      const gate = tx === field.city.gateTx && (ty === field.city.gateTy || ty === field.city.gateTy + 1);
+      if (gate) {
+        assert.equal(chance, 0, "城门洞归城内，站着不遇敌");
+        continue;
+      }
       if (kind === SAGA_TILE_FOREST) {
-        assert.equal(chance > 0, true, `树林有遇敌概率（tile=${kind}）`);
-        walkable += 1;
+        assert.equal(chance, 0.05);
+        forest += 1;
       } else if (kind === SAGA_TILE_GRASS) {
         if (fieldShoreAt(field, tx, ty)) {
-          assert.equal(chance, 0, "挨着水的滩涂不遇敌");
+          assert.equal(chance, 0.02, "海边滩涂也会遇敌");
           shore += 1;
         } else {
-          assert.equal(chance > 0, true, `草地有遇敌概率（tile=${kind}）`);
-          walkable += 1;
+          assert.equal(chance, 0.024);
+          grass += 1;
         }
+      } else if (kind === SAGA_TILE_ROAD) {
+        assert.equal(chance, 0.012, "官道也会遇敌");
+        road += 1;
       } else {
-        assert.equal(chance, 0, `官道与城池不遇敌（tile=${kind}）`);
+        assert.equal(chance, 0, `城墙与城内校场不遇敌（tile=${kind}）`);
+        if (kind === SAGA_TILE_WALL || kind === SAGA_TILE_YARD) safeCity += 1;
       }
     }
   }
-  assert.equal(walkable > 0, true);
-  assert.equal(shore > 0, true, "地图上要有挨着水的滩涂");
-  assert.equal(fieldTileAt(field, field.city.gateTx, field.city.gateTy), SAGA_TILE_ROAD);
+  assert.equal(forest > 0 && grass > 0 && road > 0 && shore > 0, true, "树林 / 草地 / 官道 / 海边滩涂都要有");
+  assert.equal(safeCity > 0, true, "地图上要有城墙与城内校场");
+});
+
+test("出城即入遇敌范围：城门外有概率，城门洞与城内校场恒为 0", () => {
+  const field = generateSagaField({ chapter: 0, nodeCount: 5, seed: 7 });
   assert.equal(
     fieldEncounterChanceAt(field, (field.city.gateTx + 0.5) * field.tile, (field.city.gateTy + 0.5) * field.tile),
     0,
     "城门口必定安全",
   );
-});
-
-test("野外遇敌概率：树林 5%、草地 2.4%，滩涂与官道为 0", () => {
-  const field = generateSagaField({ chapter: 0, nodeCount: 5, seed: 7 });
-  let forest = false;
-  let grass = false;
-  let shore = false;
-  for (let ty = 0; ty < field.rows; ty++) {
-    for (let tx = 0; tx < field.cols; tx++) {
-      const kind = fieldTileAt(field, tx, ty);
-      const chance = fieldEncounterChanceAt(field, (tx + 0.5) * field.tile, (ty + 0.5) * field.tile);
-      if (kind === SAGA_TILE_FOREST) {
-        assert.equal(chance, 0.05);
-        forest = true;
-      } else if (kind === SAGA_TILE_GRASS) {
-        if (fieldShoreAt(field, tx, ty)) {
-          assert.equal(chance, 0, "水边沙岸不遇敌");
-          shore = true;
-        } else {
-          assert.equal(chance, 0.024);
-          grass = true;
-        }
-      } else {
-        assert.equal(chance, 0);
-      }
+  assert.equal(fieldEncounterChanceAt(field, field.spawn.x, field.spawn.y) > 0, true, "出城后的出生点已在野外");
+  for (let tx = field.city.tx + 1; tx < field.city.tx + field.city.w - 1; tx++) {
+    for (let ty = field.city.ty + 1; ty < field.city.ty + field.city.h - 1; ty++) {
+      if (fieldTileAt(field, tx, ty) !== SAGA_TILE_YARD) continue;
+      assert.equal(
+        fieldEncounterChanceAt(field, (tx + 0.5) * field.tile, (ty + 0.5) * field.tile),
+        0,
+        "城内校场不遇敌",
+      );
     }
   }
-  assert.equal(forest && grass, true, "地图上同时有树林与草地");
-  assert.equal(shore, true, "地图上有水边沙岸");
 });
 
 test("官道贯通：城门口沿官道能走到每座营与每个乡野点位", () => {

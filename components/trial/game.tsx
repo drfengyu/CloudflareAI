@@ -844,7 +844,7 @@ export function TrialGame(props: TrialGameProps) {
             Math.abs(vx) >= Math.abs(vy) ? (vx > 0 ? "right" : "left") : vy > 0 ? "down" : "up";
           if (moving) {
             player.stuck = 0;
-            // 每踏入一格判定一次野外遇敌：官道与海边滩涂安全，草地、树林才有概率。
+            // 每踏入一格判定一次野外遇敌：出城后官道、草地、海边与树林都有概率，只有城内与城门洞安全。
             const tileKey = `${Math.floor(player.x / map.tile)}:${Math.floor(player.y / map.tile)}`;
             if (walkTileRef.current !== tileKey) {
               walkTileRef.current = tileKey;
@@ -1401,32 +1401,32 @@ export function TrialGame(props: TrialGameProps) {
         ) : null}
 
         {battle ? (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-2 pb-2">
-            <div className="pointer-events-auto w-full max-w-3xl overflow-hidden rounded-xl border border-amber-200/25 bg-[#14110d]/92 text-[11px] text-amber-50 shadow-2xl backdrop-blur">
-              <div className="flex flex-wrap items-center justify-between gap-1.5 border-b border-white/10 px-2.5 py-1.5">
-                <span className="flex min-w-0 items-center gap-2 text-xs font-medium">
-                  <span className="truncate">{battle.battle.nodeName}</span>
-                  <span className="shrink-0 text-[10px] font-normal text-white/50">
+          <div className="border-t border-amber-200/20 bg-[#14110d] px-2 py-2 sm:px-3">
+            <div className="mx-auto w-full max-w-5xl text-xs text-amber-50">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-0.5 pb-2">
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="truncate text-sm font-medium">{battle.battle.nodeName}</span>
+                  <span className="shrink-0 text-[11px] text-white/50">
                     第 {battle.battle.round} 回合 · 敌 {battle.battle.enemies.filter((unit) => !unit.downed).length}{" "}
                     {battle.encounter ? "队" : "将"}
                   </span>
                 </span>
-                <span className="flex shrink-0 gap-1.5">
-                  <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={allAttack} disabled={battleLocked}>
+                <span className="flex shrink-0 gap-2">
+                  <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={allAttack} disabled={battleLocked}>
                     总攻击
                   </Button>
-                  <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]" onClick={retreatBattle} disabled={battleLocked}>
+                  <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={retreatBattle} disabled={battleLocked}>
                     撤退
                   </Button>
-                  <Button size="sm" className="h-6 px-2 text-[11px]" onClick={executeRound} disabled={battleLocked}>
-                    执行
+                  <Button size="sm" className="h-7 px-2.5 text-xs" onClick={executeRound} disabled={battleLocked}>
+                    执行回合
                   </Button>
                 </span>
               </div>
 
-              {/* 战报：动画中的事件优先，平时留最近两条 */}
-              <div className="min-h-[28px] border-b border-white/10 px-2.5 py-1 font-mono text-[10.5px] leading-relaxed text-amber-100/80">
-                {(anim && anim.events.length > 0 ? anim.events.slice(-2) : battle.battle.log.slice(-2)).map(
+              {/* 战报：动画中的事件优先，平时留最近三条 */}
+              <div className="mt-2 min-h-[30px] rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-amber-100/80">
+                {(anim && anim.events.length > 0 ? anim.events.slice(-3) : battle.battle.log.slice(-3)).map(
                   (event, index) => (
                     <p key={index} className="truncate">
                       {event.text}
@@ -1434,40 +1434,61 @@ export function TrialGame(props: TrialGameProps) {
                   ),
                 )}
                 {battle.battle.log.length === 0 && !anim ? (
-                  <p className="text-white/45">点击敌将设为目标，逐将选好战术后执行；撤退只退出这一场。</p>
+                  <p className="text-white/45">点画布上的敌将可设为目标；逐将选好战术后执行，撤退只退出这一场。</p>
                 ) : null}
               </div>
 
-              <div className="max-h-[150px] space-y-1 overflow-y-auto px-2 py-1.5">
+              <div className="mt-2 space-y-1.5">
                 {battle.battle.party.map((unit) => {
                   const pick = battle.picks[unit.id];
                   const alive = !unit.downed;
+                  const order = !alive
+                    ? "已败退"
+                    : !pick
+                      ? "待命"
+                      : pick.a === "attack"
+                        ? `攻击 · ${battle.battle.enemies[pick.target ?? 0]?.name ?? "敌将"}`
+                        : pick.a === "tactic"
+                          ? (pick.t ? SAGA_TACTIC_BY_ID.get(pick.t)?.name : "") || "计策"
+                          : pick.a === "item"
+                            ? `道具 · ${itemName(pick.i ?? "")}`
+                            : pick.a === "recruit"
+                              ? "招降"
+                              : "防御";
                   return (
                     <div
                       key={unit.id}
                       className={cn(
-                        "flex flex-wrap items-center gap-1 rounded border px-1.5 py-1",
-                        focusId === unit.id ? "border-amber-300/70 bg-amber-300/10" : "border-white/10",
+                        "rounded-lg border px-2.5 py-1.5 transition-colors",
+                        focusId === unit.id
+                          ? "border-amber-300/70 bg-amber-300/10"
+                          : "border-white/10 bg-white/[0.03]",
                         !alive && "opacity-45",
                       )}
                       onClick={() => alive && setFocusId(unit.id)}
                     >
-                      <span className="w-[92px] shrink-0 truncate font-medium">
-                        {unit.name} <span className="text-white/45">Lv{unit.level}</span>
-                      </span>
-                      <span className="w-[84px] shrink-0 tabular-nums text-white/60">
-                        兵 {Math.max(0, unit.troops)}/{unit.maxTroops}
-                      </span>
-                      <span className="w-[38px] shrink-0 tabular-nums text-sky-200/80">策 {unit.tacticPoints}</span>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="min-w-[96px] text-[13px] font-medium">
+                          {unit.name}{" "}
+                          <span className="text-[11px] font-normal text-white/45">Lv{unit.level}</span>
+                        </span>
+                        <span className="text-[11px] tabular-nums text-white/65">
+                          兵 {Math.max(0, unit.troops)}/{unit.maxTroops}
+                        </span>
+                        <span className="text-[11px] tabular-nums text-sky-200/80">
+                          策 {unit.tacticPoints}
+                        </span>
+                        <span className="ml-auto text-[11px] text-amber-100/55">{order}</span>
+                      </div>
                       {alive && pick ? (
-                        <div className="flex flex-wrap items-center gap-1">
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                           {(
                             [
-                              ["attack", "攻"],
-                              ["tactic", "策"],
-                              ["guard", "守"],
-                              ["item", "道"],
-                              ["recruit", "降"],
+                              ["attack", "攻击"],
+                              ["tactic", "计策"],
+                              ["guard", "防御"],
+                              ["item", "道具"],
+                              ["recruit", "招降"],
                             ] as [BattleAction, string][]
                           ).map(([action, label]) => {
                             const disabled =
@@ -1499,7 +1520,7 @@ export function TrialGame(props: TrialGameProps) {
                                   )
                                 }
                                 className={cn(
-                                  "rounded border px-1.5 py-0.5 text-[10px]",
+                                  "rounded-md border px-2 py-1 text-[11px]",
                                   pick.a === action
                                     ? "border-amber-300 bg-amber-300 text-black"
                                     : "border-white/15 hover:bg-white/10",
@@ -1526,7 +1547,7 @@ export function TrialGame(props: TrialGameProps) {
                                     : prev,
                                 )
                               }
-                              className="h-5 rounded border border-white/15 bg-black/40 px-0.5 text-[10px] text-amber-50"
+                              className="h-6 rounded-md border border-white/15 bg-black/40 px-1 text-[11px] text-amber-50"
                             >
                               {battle.battle.enemies.map((enemy, index) =>
                                 enemy.downed ? null : (
@@ -1538,7 +1559,7 @@ export function TrialGame(props: TrialGameProps) {
                             </select>
                           ) : null}
                           {pick.a === "tactic" ? (
-                            <span className="flex flex-wrap gap-1">
+                            <span className="flex flex-wrap gap-1.5">
                               {unit.tactics.map((tactic) => (
                                 <button
                                   key={tactic}
@@ -1558,7 +1579,7 @@ export function TrialGame(props: TrialGameProps) {
                                     )
                                   }
                                   className={cn(
-                                    "rounded border px-1.5 py-0.5 text-[10px]",
+                                    "rounded-md border px-2 py-1 text-[11px]",
                                     pick.t === tactic ? "border-amber-300 bg-amber-300/20" : "border-white/15",
                                   )}
                                 >
@@ -1583,7 +1604,7 @@ export function TrialGame(props: TrialGameProps) {
                                     : prev,
                                 )
                               }
-                              className="h-5 rounded border border-white/15 bg-black/40 px-0.5 text-[10px] text-amber-50"
+                              className="h-6 rounded-md border border-white/15 bg-black/40 px-1 text-[11px] text-amber-50"
                             >
                               <option value="" className="bg-[#14110d]">选择道具</option>
                               {availableItems(battle.scratch).map((item) => (
@@ -1594,9 +1615,7 @@ export function TrialGame(props: TrialGameProps) {
                             </select>
                           ) : null}
                         </div>
-                      ) : (
-                        <span className="text-[10px] text-red-300/80">已败退</span>
-                      )}
+                      ) : null}
                     </div>
                   );
                 })}
@@ -2295,8 +2314,8 @@ export function TrialGame(props: TrialGameProps) {
                     出城后是张俯视大地图，方向键/WASD 自由行走，沿官道会路过村庄、祠堂与渡口，
                     走过去能听一段本地故事、记一条军令；走到哪座营跟前就打哪座，
                     主帅本阵要先拔尽其余 {props.nodeCount - 1} 座营。营寨全部攻破、剧情才会推进到下一处地方。
-                    草地与树林会随机杀出散兵、山贼、盗贼，每趟最多 {SAGA_MAX_ENCOUNTERS} 场，
-                    官道、海边滩涂与城内外不会遇敌。每一步都会自动存档：撤退只结束当前这一场仗，
+                    官道、草地、海边滩涂与树林会随机杀出散兵、山贼、盗贼，每趟最多 {SAGA_MAX_ENCOUNTERS} 场，
+                    只有城墙内与城门洞不会遇敌。每一步都会自动存档：撤退只结束当前这一场仗，
                     兵败也能回城住店重整，等级、金币、装备与招降武将都不会丢。
                   </p>
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -3105,6 +3124,11 @@ function SettlementCard({
             回到城镇
           </Button>
         </div>
+        {next ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            不急着出发也可以：点「回到城镇」整理装备，下次再出发仍从{next.town}开始，等级、金币与装备都已存好。
+          </p>
+        ) : null}
       </div>
     </div>
   );

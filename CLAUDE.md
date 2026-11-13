@@ -534,8 +534,23 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.57.1（2026-11-14，讨逆传存档回档与安全地形修复）
+**当前版本**：v0.57.2（2026-11-14，讨逆传战斗排版与野外遇敌规则修正）
 **下一版本**：待定
+
+- v0.57.2 三国讨逆传战斗排版与遇敌规则修正：
+  `components/trial/game.tsx` 的战斗指挥区从画布底部浮层改为画布下方独立区块，
+  每名武将拆成「状态行 + 指令行」两行（名字 / 等级 / 兵力 / 计策点 / 当前指令 /
+  五个行动按钮 / 目标 / 计策 / 道具选择），去掉 `max-h-[150px]` 与强制换行，
+  两军血条与队列不再被遮挡；结算卡在「前往下一处 / 回到城镇」下补一句
+  「回城后下次仍从新地方出发，进度已存好」。
+  `lib/trial/saga/map.ts` 的 `fieldEncounterChanceAt` 给官道 1.2%、海边滩涂 2%
+  正概率，城门洞（按 `city.gateTx/gateTy` 判定）、城墙与 `SAGA_TILE_YARD` 城内校场仍为 0，
+  推翻 v0.57.1 的「官道与海边安全」；试炼页规则、开始弹窗、`encounter.ts` 注释同步。
+  `tests/trial-saga.test.ts` 遇敌概率用例改为四类野外地形正概率 + 城内与城门洞为 0，
+  新增「出城即入遇敌范围」，共 162 项全过；`tsc`、ESLint、`npm run build` 通过；
+  本机无 `.env.local`，页面未实测。
+  运维：向受存档回档影响的用户发送站内信补偿 800 cr（`topupType = 13`，
+  幂等 id `trial-save-fix-20261114-5c7dcb78`）。
 
 - v0.57.1 三国讨逆传存档与地形修复：
   `lib/trial/store.ts` 新增 `startedAtDesc`：`typeof(startedAt) = 'text'` 时用
