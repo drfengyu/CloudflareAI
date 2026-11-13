@@ -233,7 +233,7 @@ export default async function TrialPage() {
     return (
       <>
         <PageHeader title="三国讨逆传" description={place} />
-        <PageBody className="space-y-4">
+        <PageBody className="space-y-4 px-3 py-5 sm:px-5 lg:max-w-[1440px] lg:px-8">
           <Notice title={notice.title} hint={notice.hint} />
           {couponCard}
           {track ? historyCard : null}
@@ -249,7 +249,7 @@ export default async function TrialPage() {
         title="三国讨逆传"
         description={`${place} · 剧情回合制兵团战`}
       />
-      <PageBody className="space-y-4">
+      <PageBody className="space-y-4 px-3 py-5 sm:px-5 lg:max-w-[1440px] lg:px-8">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             icon={Flag}

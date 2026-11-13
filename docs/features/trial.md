@@ -9,7 +9,9 @@
 - 配置键：`option.trial_config`（界面按字段拆成数字输入框，管理员不写 JSON）
 - 引擎：`lib/trial/saga/`（存档归一、剧情数据、战斗 / 指令重放、行军结算）
   - `map.ts`：大地图生成（纯函数，按 `章节 + 营寨数 + 种子` 复现，不入库、不被采信）
-- 渲染：`components/trial/renderer.ts`（俯视大地图与回合战斗两套 Canvas 像素场景）
+- 渲染：`components/trial/renderer.ts`（俯视大地图与回合战斗两套 Canvas 像素场景，
+  按 960×540 逻辑坐标绘制；画布位图再按显示尺寸 × devicePixelRatio 放大，上限 2×，
+  每帧 `setTransform` 复位，所以桌面 1440 px 版心与手机端都不会糊）
 - 客户端：`components/trial/game.tsx`（行走与碰撞、城与营的交互、编成商店、回合战斗、行军续局）
 - 账本：`topup.type = 17`（平定奖励与钱庄存金合并成一条正流水；钱庄换金记一条负流水。
   票价在券兑换 / 礼包时已按 type=15 记过支出，出城不再写负流水）

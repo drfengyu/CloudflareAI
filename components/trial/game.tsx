@@ -344,6 +344,8 @@ export function TrialGame(props: TrialGameProps) {
 
   // ---- 大地图行走与画布 ----
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  /** 逻辑 960x540 → 实际位图的放大倍率，让画面在大屏和高分屏上都锐利。 */
+  const viewScaleRef = useRef(1);
   const playerRef = useRef({
     x: 0,
     y: 0,
@@ -437,6 +439,27 @@ export function TrialGame(props: TrialGameProps) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const sync = () => {
+      const cssWidth = canvas.clientWidth || VIEW_W;
+      const dpr = window.devicePixelRatio || 1;
+      const scale = Math.max(1, Math.min(2, dpr * (cssWidth / VIEW_W)));
+      const w = Math.round(VIEW_W * scale);
+      const h = Math.round(VIEW_H * scale);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      viewScaleRef.current = scale;
+    };
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const start = performance.now();
@@ -523,6 +546,7 @@ export function TrialGame(props: TrialGameProps) {
       hotspotRef.current = spot;
 
       const time = (nowMs - start) / 1000;
+      ctx.setTransform(viewScaleRef.current, 0, 0, viewScaleRef.current, 0, 0);
       if (modeRef.current.battle) {
         const session = modeRef.current.battle;
         const focusTarget =
@@ -841,7 +865,7 @@ export function TrialGame(props: TrialGameProps) {
         </span>
       </div>
 
-      <div className="relative overflow-hidden rounded-xl border border-border bg-black">
+      <div className="relative -mx-5 overflow-hidden rounded-none border-y border-border bg-black sm:mx-0 sm:rounded-xl sm:border">
         <canvas
           ref={canvasRef}
           width={VIEW_W}

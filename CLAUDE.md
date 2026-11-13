@@ -534,9 +534,14 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.50.0（2026-11-13，三国讨逆传改为大地图自由行军）
+**当前版本**：v0.50.1（2026-11-13，行军画面做大 + 高分屏清晰度）
 **下一版本**：v0.51.0（尚未选型）
 
+- v0.50.1 行军画面尺寸与清晰度：试炼页 `PageBody` 用 `px-3 sm:px-5 lg:max-w-[1440px] lg:px-8`
+  覆盖默认窄版心，画布容器在窄屏 `-mx-5` 满幅出血到卡片两边；`components/trial/game.tsx`
+  按「CSS 宽 / 960 × devicePixelRatio（夹在 1 ~ 2）」设置画布位图尺寸，`ResizeObserver`
+  跟随布局变化，每帧 `ctx.setTransform(scale, 0, 0, scale, 0, 0)` 回到 960×540 逻辑坐标，
+  所以 `renderer.ts` 的美术与点击寻路的坐标换算都不用改。逻辑视野仍是 16:9。
 - v0.50.0 三国讨逆传的行军从线性节点改为**类吞食天地的俯视大地图**：新增
   `lib/trial/saga/map.ts`（纯函数：`generateSagaField({ 章节, 营寨数, 种子 })` 生成
   52×34 格网，地貌 blob + 河流 + 官道串起城门与各营，另有碰撞 / 减速 / 可达性 BFS /
