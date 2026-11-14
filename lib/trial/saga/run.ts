@@ -432,6 +432,16 @@ export function parseSagaRun(raw: string | null | undefined): SagaRun | null {
   const bank = sanitizeSagaBank(it.bank);
   const result = it.result;
   const commands = sanitizeSagaCommands(it.commands);
+  const storedRules = clampInt(Number(it.rules) || 1, 1, 99);
+  const storedFrom = Number.isFinite(Number(it.rulesFrom))
+    ? clampInt(Number(it.rulesFrom), 0, SAGA_MAX_COMMANDS)
+    : undefined;
+  const storedLegacy = Number.isFinite(Number(it.legacyRules))
+    ? clampInt(Number(it.legacyRules) || 1, 1, 99)
+    : undefined;
+  // 旧规则行军续玩：已经落过的指令仍按旧规则重放，从下一条指令起套用当前规则，
+  // 这样旧战报不变，新开的战斗（主帅本阵也在内）能拿到增兵与配装。
+  const upgrading = storedRules < SAGA_RULESET && storedFrom === undefined;
   return {
     version: SAGA_RUN_VERSION,
     kind: "saga",
@@ -442,7 +452,9 @@ export function parseSagaRun(raw: string | null | undefined): SagaRun | null {
     purchases: parsePurchases(it.purchases, bank),
     shopSeq: clampInt(Number(it.shopSeq) || 0, 0, 1_000_000),
     bank,
-    rules: clampInt(Number(it.rules) || 1, 1, 99),
+    rules: upgrading ? SAGA_RULESET : storedRules,
+    rulesFrom: upgrading ? commands.length : storedFrom,
+    legacyRules: upgrading ? storedRules : storedLegacy,
     commands: commands.length > 0 ? commands : undefined,
     endSave,
     result:
@@ -604,7 +616,8 @@ export function sagaRunUntouched(run: SagaRun): boolean {
 export function createReplayState(run: SagaRun): SagaReplayState {
   return {
     scene: "field",
-    rules: run.rules ?? 1,
+    // 旧规则行军从旧规则重放，到 `rulesFrom` 再切到当前规则。
+    rules: run.legacyRules ?? run.rules ?? 1,
     clearedNodes: [],
     completed: 0,
     victory: false,
@@ -750,6 +763,7 @@ export function retreatFromBattle(state: SagaReplayState): boolean {
 
 export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplayResult {
   const state = createReplayState(run);
+  const currentRules = run.rules ?? 1;
   const purchasesAt = new Map<number, SagaPurchase[]>();
   for (const purchase of run.purchases) {
     const list = purchasesAt.get(purchase.cmdIndex) ?? [];
@@ -758,6 +772,7 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
   }
   const total = Math.min(commands.length, SAGA_MAX_COMMANDS);
   for (let index = 0; index <= total; index++) {
+    if (index === run.rulesFrom) state.rules = currentRules;
     for (const purchase of purchasesAt.get(index) ?? []) applyPurchase(state, purchase);
     if (index === total) break;
     if (state.scene === "won") break;
@@ -828,6 +843,8 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
         break;
     }
   }
+  // 重放结束后的新指令（以及下一次开战）一律按当前规则。
+  state.rules = currentRules;
   return { state, cleared: state.completed, victory: state.victory };
 }
 

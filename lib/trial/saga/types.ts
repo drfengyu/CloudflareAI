@@ -328,6 +328,13 @@ export interface SagaRun {
   /** 战斗规则版本，见 `SAGA_RULESET`；旧行军缺省按 1。 */
   rules?: number;
   /**
+   * 旧规则行军续玩时的分界：第几条指令起改用当前 `rules`。
+   * 之前的指令仍按 `legacyRules` 重放，已经打过的仗不会因为改版翻盘。
+   */
+  rulesFrom?: number;
+  /** 升级前这套行军使用的规则版本（`rulesFrom` 之前的指令生效）。 */
+  legacyRules?: number;
+  /**
    * 自动存档的指令进度：客户端每次生成指令就整段回传，服务端只保留与重放等价的副本，
    * 断线后从最近一次存档接着走，不再从头再来。
    */

@@ -793,7 +793,7 @@ function finishBattle(
           text: `${name} 升至 ${saved.level} 级`,
         });
         const learned =
-          state.rules >= 2
+          battle.rules >= 2
             ? tacticsFor(def, saved.level).filter((id) => !before.includes(id))
             : [];
         if (learned.length > 0) {

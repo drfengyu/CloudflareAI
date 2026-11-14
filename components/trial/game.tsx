@@ -3101,6 +3101,8 @@ function CampPanel({
   }
   const target = run.nodes[node];
   if (!target) return <p className="text-sm text-muted-foreground">此处没有敌营。</p>;
+  // 按实际开战编成预览：补进来的士兵位和敌方兵器甲胄都要能看到。
+  const preview = startBattle(run, node, state);
   const cleared = state.clearedNodes.includes(node);
   const available = canEngageNode(run, state, node);
   const others = run.nodes
@@ -3127,7 +3129,20 @@ function CampPanel({
 
       <div className="rounded-lg border border-border p-3">
         <p className="text-xs text-muted-foreground">
-          敌将：{target.enemies.map((enemy) => `${enemy.name}（Lv${enemy.level}，兵力 ${enemy.troops}）`).join("、")}
+          敌军：
+          {preview.enemies
+            .map((enemy) => {
+              const weapon = enemy.weapon ? SAGA_ITEM_BY_ID.get(enemy.weapon) : null;
+              const armor = enemy.armor ? SAGA_ITEM_BY_ID.get(enemy.armor) : null;
+              const gear = [
+                weapon ? `${weapon.name}${enemy.weaponPlus ? `+${enemy.weaponPlus}` : ""}` : "",
+                armor ? `${armor.name}${enemy.armorPlus ? `+${enemy.armorPlus}` : ""}` : "",
+              ]
+                .filter(Boolean)
+                .join(" / ");
+              return `${enemy.name}（Lv${enemy.level}，兵力 ${enemy.troops}，${gear || "空手"}）`;
+            })
+            .join("、")}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
           战利品约 {target.rewardGold} 金 / {target.rewardExp} 经验；平定此处最高 {formatCredits(maxReward)} 金（未平定不发）。

@@ -1299,18 +1299,21 @@ test("武将特性：无双 / 智圣 / 会心 / 猛将等固有特性挂在指�
   assert.equal(traitStats(SAGA_GENERAL_BY_ID.get("zhaoyun")).force, 0, "会心不加四维");
 });
 
-test("战斗规则：新行军启用特性与成长计策，旧行军 rules=1 按老规则重放", () => {
+test("战斗规则：新行军启用特性与成长计策，旧行军已落的战报仍按老规则重放", () => {
   const run = freshRun();
   assert.equal(run.rules, SAGA_RULESET);
-  const old = parseSagaRun(JSON.stringify({ ...run, rules: undefined }));
+  const recorded: SagaCommand[] = [{ k: "battle", node: 0, rounds: [] }];
+  const old = parseSagaRun(JSON.stringify({ ...run, rules: undefined, commands: recorded }));
   assert.ok(old);
-  assert.equal(old.rules, 1, "旧行军缺省 rules=1");
+  assert.equal(old.rules, SAGA_RULESET, "读取旧行军时切到当前规则");
+  assert.equal(old.legacyRules, 1, "缺省按 v1 重放旧指令");
+  assert.equal(old.rulesFrom, recorded.length);
 
   const newBattle = replaySagaRun(run, [{ k: "battle", node: 0, rounds: [] }]).state.battle;
-  const oldBattle = replaySagaRun(old, [{ k: "battle", node: 0, rounds: [] }]).state.battle;
+  const oldBattle = replaySagaRun(old, recorded).state.battle;
   assert.ok(newBattle && oldBattle);
   assert.equal(newBattle.party[0].traits?.includes("rende"), true, "新规则带特性");
-  assert.deepEqual(oldBattle.party[0].traits, [], "旧规则不启用特性");
+  assert.deepEqual(oldBattle.party[0].traits, [], "旧战报不启用特性");
 
   const save = initialTrialSave();
   save.party = [createGeneralState("zhaoyun", 9)];
@@ -1381,6 +1384,48 @@ test("营寨增兵：按种子补士兵位，双方最多 5 人，敌将带装�
   const legacyBattle = startBattle(legacy, 0, createReplayState(legacy));
   assert.equal(legacyBattle.enemies.length, run.nodes[0].enemies.length, "旧规则不补士兵位");
   assert.equal(legacyBattle.enemies.every((enemy) => enemy.weapon === null), true, "旧规则敌军不带装备");
+});
+
+test("旧规则行军续玩：旧战报按原规则重放，下一场战斗起补兵配装", () => {
+  const legacy = { ...freshRun(23, 5), rules: 2 };
+  // 旧版已经落下的两条指令：开一场营寨仗（不打完）再撤退。
+  const oldCommands: SagaCommand[] = [
+    { k: "battle", node: 0, rounds: [] },
+    { k: "retreat" },
+  ];
+  const stored = parseSagaRun(JSON.stringify({ ...legacy, commands: oldCommands }));
+  assert.ok(stored);
+  assert.equal(stored.rules, SAGA_RULESET, "旧行军读出来就切到当前规则");
+  assert.equal(stored.legacyRules, 2, "记下旧规则版本");
+  assert.equal(stored.rulesFrom, oldCommands.length, "从下一条指令起生效");
+
+  const opened = startBattle(legacy, 0, createReplayState(legacy));
+  const replayed = replaySagaRun(stored, [oldCommands[0]]);
+  assert.equal(replayed.state.battle?.rules, 2, "已落的战斗仍按旧规则");
+  assert.deepEqual(
+    replayed.state.battle?.enemies.map((enemy) => enemy.id),
+    opened.enemies.map((enemy) => enemy.id),
+    "旧战斗编成不变",
+  );
+
+  const next = replaySagaRun(stored, [...oldCommands, { k: "battle", node: 1, rounds: [] }]);
+  assert.equal(next.state.battle?.rules, SAGA_RULESET, "之后的战斗按当前规则");
+  assert.equal(
+    (next.state.battle?.enemies.length ?? 0) > legacy.nodes[1].enemies.length,
+    true,
+    "新战斗补了士兵位",
+  );
+  assert.equal(
+    next.state.battle?.enemies.every((enemy) => Boolean(enemy.weapon && enemy.armor)),
+    true,
+    "新战斗敌军带装备",
+  );
+
+  const again = parseSagaRun(JSON.stringify(stored));
+  assert.ok(again);
+  assert.equal(again.rules, SAGA_RULESET);
+  assert.equal(again.rulesFrom, oldCommands.length, "重复读取不会把分界往后挪");
+  assert.equal(again.legacyRules, 2);
 });
 
 test("命中：智力被压制会落空，旧规则仍按原公式必中", () => {
