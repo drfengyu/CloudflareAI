@@ -1432,7 +1432,6 @@ export function TrialGame(props: TrialGameProps) {
     },
     [],
   );
-  const inCityPanel = FIELD_FACILITIES.some((spot) => spot.id === panel);
   const panelTitle =
     panel === "dex"
       ? "武将图鉴"
@@ -1450,7 +1449,8 @@ export function TrialGame(props: TrialGameProps) {
                   ? `${chapter.town} · 训练场`
                   : panel === "coupon"
                     ? `${chapter.town} · 活动券礼包`
-                    : `${chapter.town}城 · 城中整备`;
+                    : (FIELD_FACILITIES.find((spot) => spot.id === panel)?.label ??
+                      `${chapter.town}城 · 城中整备`);
 
   return (
     <div className="space-y-3">
@@ -1955,26 +1955,6 @@ export function TrialGame(props: TrialGameProps) {
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
               <span className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium">{panelTitle}</span>
-                {inCityPanel ? (
-                  <span className="flex flex-wrap gap-1">
-                    {FIELD_FACILITIES.map((spot) => (
-                      <button
-                        key={spot.id}
-                        type="button"
-                        title={spot.hint}
-                        onClick={() => setPanel(spot.id)}
-                        className={cn(
-                          "rounded border px-2 py-0.5 text-[11px]",
-                          panel === spot.id
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-border hover:bg-muted",
-                        )}
-                      >
-                        {spot.label}
-                      </button>
-                    ))}
-                  </span>
-                ) : null}
               </span>
               <button type="button" onClick={() => setPanel(null)} className="rounded p-1 hover:bg-muted">
                 <X className="h-4 w-4" />
@@ -2936,7 +2916,7 @@ export function TrialGame(props: TrialGameProps) {
           <p className="max-w-md text-xs text-muted-foreground">
             操作：方向键 / WASD 或左侧摇杆四向行走，走到城门口、敌营、乡野点位旁按 E / 回车（或点「交互」）；
             也可以直接点击地图上的城池、营寨、村庄与渡口。点城池走进城中街道，在街上四向走动，
-            走到铺子门口按 E 进店，柜台前按 E 与掌柜说话、办正事；皇宫里可以面见主公议事；从城门出城。
+            走到铺子 / 皇宫门口会自动进门，柜台前按 E 与掌柜说话、办正事；皇宫里可以面见主公议事；从城门出城。
             战斗为回合制：逐将选择攻击 / 计策 / 防守 / 道具 / 招降，或按「总攻击」「自动战斗」速战。
             野外草地、树林会随机遇敌，敌军编成由种子与第几场遭遇推出。
             走位本身不影响任何数值：战报只上传编制、购物与「打哪座营、打不打这场遭遇、怎么打」的指令，

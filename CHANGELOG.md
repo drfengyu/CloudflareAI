@@ -5,6 +5,23 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.76.1] - 2026-11-14
+
+### 变更
+
+- 三国讨逆传城内铺子 / 皇宫不再需要按 E 进门：走到门口并朝北贴近门脸即自动切内景
+  （`doorSpotAt`：横向 ±48px、门前 6~46px）；`streetTargetAt` 跳过铺子与皇宫，E 只留给
+  街坊、陈设、营帐、桃园碑与城门。回街落在门口下方并朝南，不会立刻又进门。
+- 城内设施面板移除跨店页签：进店办正事弹出的面板不再列出其他铺子，换一家要回街走过去；
+  面板标题改为显示当前设施名。
+- 同步街景底部提示、画布无障碍标签与试炼页操作说明。
+
+### 验证
+
+- `tsc` 全量 0 错误；`components/trial/town.tsx` / `components/trial/game.tsx`
+  ESLint 0 错误 0 警告；`tests/trial-saga.test.ts` 51/51 通过。
+  未在真实浏览器逐帧核对自动进门。
+
 ## [0.76.0] - 2026-11-14
 
 ### 变更

@@ -16,7 +16,7 @@ import { SagaPortrait } from "./scenes";
 /**
  * 城中街景：北排皇宫与铺面、南排铺面围出一座二维城镇，玩家四向走动。
  * 两排之间是石板广场，南排背后是南街；南北两排的门口都朝南。
- * 走到门口按 E 进店；店里走到柜台前与掌柜说话、办正事。
+ * 铺子与皇宫走到门口就自动进门；店里走到柜台前与掌柜说话、办正事。
  *
  * 街景与内景都用 Canvas 现画，逻辑坐标固定 960×540（按 DPR 放大位图），
  * 镜头双向跟随走位。交互点、遮挡与柜台位置都在此文件里，服务端不参与。
@@ -1957,6 +1957,8 @@ function streetTargetAt(player: WalkState, time: number): StreetTarget | null {
   const py = player.y;
 
   for (const spot of STREET_SPOTS) {
+    // 铺子与皇宫走到门口就自动进门，不再占用 E 键
+    if (spot.kind === "shop" || spot.kind === "palace") continue;
     const dx = Math.abs(px - spot.x);
     if (dx > spot.width / 2 + 22) continue;
     const dy = py - spot.y;
@@ -2036,6 +2038,18 @@ function streetSpotAtPoint(px: number, py: number, x: number, y: number): Street
     }
   }
   return best;
+}
+
+/** 走到铺子 / 皇宫门口就直接切内景，不必再按 E：只有朝北贴到门脸那一小段才算。 */
+function doorSpotAt(player: WalkState): StreetSpot | null {
+  if (player.facing !== "up") return null;
+  for (const spot of STREET_SPOTS) {
+    if (spot.kind !== "shop" && spot.kind !== "palace") continue;
+    if (Math.abs(player.x - spot.x) > Math.min(48, spot.width / 2 - 10)) continue;
+    const dy = player.y - spot.y;
+    if (dy >= 6 && dy <= 46) return spot;
+  }
+  return null;
 }
 
 /** 南排门脸立在地面上，按整块占地挡住走位；北排门脸在走位区之外。 */
@@ -2488,6 +2502,12 @@ export function WalkTown({
       }
       player.moving = moved && !frozen;
 
+      // 城里的门不再等 E：走到门口（朝北贴近门脸）就切进铺子 / 皇宫内景
+      if (!frozen && current.kind === "street") {
+        const door = doorSpotAt(player);
+        if (door) enterSpot(door);
+      }
+
       if (
         !frozen &&
         current.kind !== "street" &&
@@ -2527,7 +2547,7 @@ export function WalkTown({
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [exitScene]);
+  }, [enterSpot, exitScene]);
 
   const sceneLabel =
     scene.kind === "street"
@@ -2550,7 +2570,7 @@ export function WalkTown({
         height={VIEW_H * 2}
         className="block aspect-[16/9] w-full cursor-pointer touch-none"
         onClick={handleCanvasClick}
-        aria-label="城中街景：方向键或 WASD 行走，E / 回车交互"
+        aria-label="城中街景：方向键或 WASD 行走，铺子与皇宫走到门口自动进门，E / 回车与街坊交谈"
       />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
@@ -2647,7 +2667,7 @@ export function WalkTown({
       ) : null}
 
       <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 hidden -translate-x-1/2 rounded-full border border-amber-900/40 bg-black/55 px-3 py-1 text-[11px] text-amber-100/60 backdrop-blur sm:block">
-        方向键 / WASD 或点击地面走动 · 走到门口按 E 进店 · 柜台前按 E 与掌柜交谈
+        方向键 / WASD 或点击地面走动 · 走到铺子 / 皇宫门口直接进门 · 柜台前按 E 与掌柜交谈
       </p>
     </div>
   );
