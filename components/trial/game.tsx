@@ -1589,8 +1589,14 @@ export function TrialGame(props: TrialGameProps) {
                           武 {enemy.force} · 智 {enemy.intellect} · 防 {enemy.defense} · 速 {enemy.speed} · 策 {enemy.tacticPoints}
                         </p>
                         <p className="text-[10px] text-white/55">
-                          兵器 {weapon ? `${weapon.name}（+${enemy.weaponAtk}）` : "无"} · 甲胄{" "}
-                          {armor ? `${armor.name}（+${enemy.armorDef}）` : "无"}
+                          兵器{" "}
+                          {weapon
+                            ? `${weapon.name}${enemy.weaponPlus ? `+${enemy.weaponPlus}` : ""}（+${enemy.weaponAtk}）`
+                            : "无"}{" "}
+                          · 甲胄{" "}
+                          {armor
+                            ? `${armor.name}${enemy.armorPlus ? `+${enemy.armorPlus}` : ""}（+${enemy.armorDef}）`
+                            : "无"}
                         </p>
                         <p className="text-[10px] text-white/55">
                           计策{" "}

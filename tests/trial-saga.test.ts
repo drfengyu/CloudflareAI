@@ -1006,11 +1006,11 @@ test("野外遭遇兵种：兵士、山贼、海贼、盗贼都可能出现，�
   assert.equal(withLeader && withoutLeader, true, "有将领与纯杂兵两种编成都出现");
 });
 
-test("杂兵装备：v4 按等级发兵甲但比敌将低一档，v3 杂兵仍空手", () => {
+test("杂兵装备：v5 按等级发兵甲但比敌将低一档，旧规则杂兵仍空手", () => {
   const weapons = ["iron_sword", "spear", "blade", "guandao"];
   const armors = ["cloth", "leather", "iron_armor", "heavy_armor"];
   const expectedTier = (level: number, shift: number) =>
-    Math.min(weapons.length - 1, Math.max(0, Math.floor((level - 1) / 8) + shift));
+    Math.min(weapons.length - 1, Math.max(0, Math.floor((level - 1) / 5) + shift));
 
   const run = { ...freshRun(31, 5), rules: SAGA_RULESET };
   const state = createReplayState(run);
@@ -1023,6 +1023,7 @@ test("杂兵装备：v4 按等级发兵甲但比敌将低一档，v3 杂兵仍�
       assert.equal(foe.weapon, weapons[tier], "杂兵兵器比同级敌将低一档");
       assert.equal(foe.armor, armors[tier]);
       assert.equal(foe.weaponAtk > 0 && foe.armorDef > 0, true, "杂兵装备计入攻防");
+      assert.equal((foe.weaponPlus ?? 0) <= 1 && (foe.armorPlus ?? 0) <= 1, true, "杂兵强化最多 +1");
     }
     for (const leader of battle.enemies.filter((enemy) => !enemy.id.startsWith("foe_"))) {
       assert.equal(leader.weapon, weapons[expectedTier(leader.level, 0)], "领头敌将按本级发装备");
@@ -1038,6 +1039,72 @@ test("杂兵装备：v4 按等级发兵甲但比敌将低一档，v3 杂兵仍�
     true,
     "v3 杂兵不带装备",
   );
+});
+
+test("敌方装备强化：按种子固定、加成按铁匠铺口径，旧规则仍是 8 级一档且不强化", () => {
+  const run = freshRun(41, 5);
+  let enhanced = 0;
+  for (let node = 0; node < run.nodes.length; node++) {
+    const battle = startBattle(run, node, createReplayState(run));
+    const again = startBattle(run, node, createReplayState(run));
+    assert.deepEqual(
+      again.enemies.map((enemy) => `${enemy.weapon}:${enemy.weaponPlus}:${enemy.armorPlus}:${enemy.weaponAtk}`),
+      battle.enemies.map((enemy) => `${enemy.weapon}:${enemy.weaponPlus}:${enemy.armorPlus}:${enemy.weaponAtk}`),
+      "同种子同营地的强化结果固定",
+    );
+    for (const enemy of battle.enemies) {
+      const weaponPlus = enemy.weaponPlus ?? 0;
+      const armorPlus = enemy.armorPlus ?? 0;
+      assert.equal(weaponPlus >= 0 && weaponPlus <= 3, true, "强化等级 0~3");
+      if (weaponPlus > 0 || armorPlus > 0) enhanced += 1;
+      assert.equal(
+        enemy.weaponAtk,
+        forgeStat(String(enemy.weapon), weaponPlus),
+        "兵器攻击按铁匠铺口径加成",
+      );
+      assert.equal(enemy.armorDef, forgeStat(String(enemy.armor), armorPlus));
+    }
+  }
+  assert.equal(enhanced > 0, true, "随机强化会出现");
+
+  const legacy = { ...run, rules: 4 };
+  const legacyBattle = startBattle(legacy, 0, createReplayState(legacy));
+  assert.equal(
+    legacyBattle.enemies.every((enemy) => (enemy.weaponPlus ?? 0) === 0 && (enemy.armorPlus ?? 0) === 0),
+    true,
+    "v4 不强化",
+  );
+});
+
+test("招降只收人：敌将带着强化装备来降，入队后仍是空手", () => {
+  const run = { ...easyRun(), rules: SAGA_RULESET };
+  const enemy = run.nodes[0].enemies[0];
+  enemy.recruitable = true;
+  enemy.recruitHard = false;
+  // 兵力压到三成以下才可招降，留一支护卫先清场。
+  enemy.troops = 1;
+  enemy.maxTroops = 100;
+  const state = createReplayState(run);
+  const battle = startBattle(run, 0, state);
+  assert.equal(Boolean(battle.enemies[0].weapon && battle.enemies[0].armor), true, "先有随身装备");
+  for (let round = 0; round < 60 && battle.phase === "select"; round++) {
+    const guardIndex = battle.enemies.findIndex(
+      (unit) => !unit.downed && unit.id.startsWith("guard_"),
+    );
+    const commands = battle.party
+      .filter((unit) => !unit.downed)
+      .map((unit) => ({
+        g: unit.id,
+        a: guardIndex >= 0 ? ("attack" as const) : ("recruit" as const),
+        target: guardIndex >= 0 ? guardIndex : 0,
+      }));
+    resolveBattleRound(battle, commands, state);
+  }
+  assert.equal(state.recruited.includes("zhangjiao"), true, "招降成功入队");
+  const joined = [...state.save.party, ...state.save.reserve].find((member) => member.id === "zhangjiao");
+  assert.ok(joined, "入队的武将在队伍或后备里");
+  assert.equal(joined.weapon, null, "招降不带兵器");
+  assert.equal(joined.armor, null, "招降不带甲胄");
 });
 
 test("野外遭遇战：不占营地进度，打赢照常得金币经验并继续行军", () => {

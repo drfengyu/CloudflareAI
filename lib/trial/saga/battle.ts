@@ -7,6 +7,7 @@ import {
   tacticsFor,
 } from "./data";
 import { sagaEncounterFor } from "./encounter";
+import { forgeStat } from "./forge";
 import { generalStats, grantGeneralExp, recruitToSave } from "./state";
 import {
   SAGA_PARTY_SIZE,
@@ -93,24 +94,35 @@ const GEAR_TIERS = {
   armor: ["cloth", "leather", "iron_armor", "heavy_armor"],
 } as const;
 
-/** 每 8 级升一档；杂兵传 -1 拿低一档的旧兵器。 */
-function gearTierFor(level: number, shift = 0): number {
-  return clamp(Math.floor((level - 1) / 8) + shift, 0, GEAR_TIERS.weapon.length - 1);
+/** 每 `step` 级升一档；杂兵传 -1 拿低一档的旧兵器。v5 起改成 5 级一档。 */
+function gearTierFor(level: number, shift = 0, step = 8): number {
+  return clamp(Math.floor((level - 1) / step) + shift, 0, GEAR_TIERS.weapon.length - 1);
 }
 
-function tierGear(tier: number): {
+/** 装备的随机强化等级：等级越高越容易强化，杂兵最多 +1。 */
+function gearPlusFor(rng: () => number, level: number, poor: boolean): number {
+  const cap = poor ? 1 : Math.min(3, 1 + Math.floor(level / 8));
+  return Math.floor(rng() * (cap + 1));
+}
+
+function tierGear(tier: number, weaponPlus = 0, armorPlus = 0): {
   weapon: string;
   armor: string;
   weaponAtk: number;
   armorDef: number;
+  weaponPlus: number;
+  armorPlus: number;
 } {
   const weapon = GEAR_TIERS.weapon[clamp(tier, 0, GEAR_TIERS.weapon.length - 1)];
   const armor = GEAR_TIERS.armor[clamp(tier, 0, GEAR_TIERS.armor.length - 1)];
   return {
     weapon,
     armor,
-    weaponAtk: SAGA_ITEM_BY_ID.get(weapon)?.atk ?? 0,
-    armorDef: SAGA_ITEM_BY_ID.get(armor)?.def ?? 0,
+    // 强化加成按铁匠铺同一口径：每级两成基础属性。
+    weaponAtk: forgeStat(weapon, weaponPlus),
+    armorDef: forgeStat(armor, armorPlus),
+    weaponPlus,
+    armorPlus,
   };
 }
 
@@ -145,7 +157,10 @@ function buildSoldier(
   const jitter = 0.9 + rng() * 0.2;
   const troops = Math.max(60, Math.round((90 + level * 9) * (1 + chapter * 0.05) * jitter));
   const intellect = Math.max(12, Math.round(20 + level * 0.5));
-  const gear = tierGear(gearTierFor(level, -1));
+  // v5 起 5 级一档并可能带随机强化；旧规则不多抽随机数，重放结果不变。
+  const weaponPlus = rules >= 5 ? gearPlusFor(rng, level, true) : 0;
+  const armorPlus = rules >= 5 ? gearPlusFor(rng, level, true) : 0;
+  const gear = tierGear(gearTierFor(level, -1, rules >= 5 ? 5 : 8), weaponPlus, armorPlus);
   return {
     id: `guard_${nodeIndex}_${slot}`,
     name: `${SOLDIER_NAMES[slot % SOLDIER_NAMES.length]}${SOLDIER_MARKS[slot] ?? slot + 1}`,
@@ -168,6 +183,8 @@ function buildSoldier(
     armorDef: gear.armorDef,
     weapon: gear.weapon,
     armor: gear.armor,
+    weaponPlus: gear.weaponPlus,
+    armorPlus: gear.armorPlus,
     color: "#57534e",
     accent: "#e7e5e4",
     guard: false,
@@ -280,12 +297,19 @@ function buildBattle(
       boss: false,
     };
   });
+  // v5 起敌方装备每 5 级升一档，并按种子滚一次强化；旧规则沿用 8 级一档、不强化。
+  const gearStep = rules >= 5 ? 5 : 8;
+  const gearRng = rules >= 5 ? seedRng((rngState ^ 0x2545f491) >>> 0) : null;
   const enemies: SagaBattleGeneral[] = node.enemies.slice(0, SAGA_PARTY_SIZE).map((enemy) => {
     // v4 起杂兵也带装备，但比同级敌将低一档；v3 只有敌将带装备。
     const gear =
       rules < 3 || (rules < 4 && enemy.poor)
         ? null
-        : tierGear(gearTierFor(enemy.level, enemy.poor ? -1 : 0));
+        : tierGear(
+            gearTierFor(enemy.level, enemy.poor ? -1 : 0, gearStep),
+            gearRng ? gearPlusFor(gearRng, enemy.level, Boolean(enemy.poor)) : 0,
+            gearRng ? gearPlusFor(gearRng, enemy.level, Boolean(enemy.poor)) : 0,
+          );
     return {
       id: enemy.id,
       name: enemy.name,
@@ -310,6 +334,8 @@ function buildBattle(
       armorDef: gear?.armorDef ?? 0,
       weapon: gear?.weapon ?? null,
       armor: gear?.armor ?? null,
+      weaponPlus: gear?.weaponPlus ?? 0,
+      armorPlus: gear?.armorPlus ?? 0,
       color: enemy.color,
       accent: enemy.accent,
       guard: false,

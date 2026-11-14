@@ -13,10 +13,11 @@ export const SAGA_SAVE_VERSION = 1;
 /**
  * 战斗规则版本：v2 起武将固有特性、按等级成长策略点与领悟计策生效；
  * v3 起营寨随机增兵、敌将带装备、命中与伤害按智力 / 等级浮动；
- * v4 起杂兵（兵士 / 山贼 / 海贼 / 盗贼）也按等级带装备，但比同级敌将低一档。
+ * v4 起杂兵（兵士 / 山贼 / 海贼 / 盗贼）也按等级带装备，但比同级敌将低一档；
+ * v5 起敌方装备每 5 级升一档并带随机强化，招降只收人、不带随身装备。
  * 旧行军没有这个字段，重放时按 v1 走，避免改版把还没收兵的对局打乱。
  */
-export const SAGA_RULESET = 4;
+export const SAGA_RULESET = 5;
 
 export const SAGA_PARTY_SIZE = 5;
 export const SAGA_RESERVE_SIZE = 12;
@@ -378,6 +379,9 @@ export interface SagaBattleGeneral {
   /** 装备外观：立绘与战阵造型按穿戴的兵器 / 甲胄改变。 */
   weapon: string | null;
   armor: string | null;
+  /** 敌方装备的随机强化等级（0 表示未强化），只影响本场攻防与敌情面板。 */
+  weaponPlus?: number;
+  armorPlus?: number;
   color: string;
   accent: string;
   guard: boolean;
