@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Boxes, LayoutDashboard, Sparkles, Wallet } from "lucide-react";
+import { Boxes, LayoutDashboard, ListChecks, Wallet } from "lucide-react";
 import {
   Sheet,
   SheetContent,
@@ -17,7 +17,7 @@ import { SidebarNav } from "./sidebar";
 const TABS = [
   { href: "/dashboard", label: "看板", icon: LayoutDashboard },
   { href: "/models", label: "模型库", icon: Boxes },
-  { href: "/lottery", label: "活动", icon: Sparkles },
+  { href: "/tasks", label: "活动", icon: ListChecks },
   { href: "/wallet", label: "钱包", icon: Wallet },
 ];
 

@@ -48,13 +48,6 @@ import {
 } from "@/lib/lottery/store";
 import { drawStatsDelta, type LotteryStatsDelta } from "@/lib/lottery/stats";
 import { lotteryDraws, temporaryBalances, topups } from "@/lib/db/schema";
-import {
-  DRAW_RECORD_PAGE_SIZE,
-  MY_RECORDS_LIMIT,
-  listDrawRecords,
-  lotteryBalance,
-  type DrawRecord,
-} from "@/lib/lottery/records";
 
 type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
 
@@ -459,37 +452,6 @@ export async function drawLottery(
     console.error("[drawLottery] Error:", error);
     return { success: false, error: error instanceof Error ? error.message : "开奖失败" };
   }
-}
-
-/**
- * 「我的转盘记录」的局部翻页数据：与首屏同一活动轮次口径。
- * 总条数取累计统计行的 draws（省掉一次明细 COUNT），再封顶到最新 MY_RECORDS_LIMIT 条；
- * 页码按封顶后的总页数夹取，避免翻到 30 条以外。
- */
-export async function listMyActivityRecords(
-  page: number,
-): Promise<{ records: DrawRecord[]; totalRecords: number; totalPages: number }> {
-  const userId = await requireUser();
-  const config = await getLotteryConfig();
-  const activityKey = currentActivityKey(config);
-
-  const [myStats, currentStats] = await Promise.all([
-    lotteryBalance({ userId }),
-    activityKey ? lotteryBalance({ userId, activityKey }) : Promise.resolve(null),
-  ]);
-
-  const totalRecords = Math.min((activityKey ? currentStats?.draws : myStats.draws) ?? 0, MY_RECORDS_LIMIT);
-  const totalPages = Math.max(1, Math.ceil(totalRecords / DRAW_RECORD_PAGE_SIZE));
-  const safePage = Math.min(Math.max(1, Math.trunc(Number(page)) || 1), totalPages);
-
-  const records = await listDrawRecords({
-    userId,
-    limit: DRAW_RECORD_PAGE_SIZE,
-    offset: (safePage - 1) * DRAW_RECORD_PAGE_SIZE,
-    activityKey,
-  });
-
-  return { records, totalRecords, totalPages };
 }
 
 /** 档位赠券的唯一索引冲突是「这一档早领过了」，不是故障，不该拖垮整批。 */

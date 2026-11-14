@@ -7,50 +7,6 @@ import { RAIDEN_STAGES } from "./config";
 
 /** 只读查询：活动页、后台记录页共用。这里的返回值全部是可直接跨 Server/Client 边界的类型。 */
 
-export interface RaidenRunView {
-  id: string;
-  status: string;
-  stage: number;
-  score: number;
-  revives: number;
-  creditsSpent: number;
-  startedAt: string;
-  endedAt: string | null;
-}
-
-const RUN_STATUS_LABEL: Record<string, string> = {
-  active: "进行中",
-  cleared: "全关通关",
-  failed: "阵亡",
-  abandoned: "已放弃",
-};
-
-export function runStatusLabel(status: string): string {
-  return RUN_STATUS_LABEL[status] ?? status;
-}
-
-function toRunView(row: {
-  id: string;
-  status: string;
-  stage: number;
-  score: number;
-  revives: number;
-  creditsSpent: number;
-  startedAt: Date;
-  endedAt: Date | null;
-}): RaidenRunView {
-  return {
-    id: row.id,
-    status: row.status,
-    stage: row.stage,
-    score: Number(row.score ?? 0),
-    revives: Number(row.revives ?? 0),
-    creditsSpent: Number(row.creditsSpent ?? 0),
-    startedAt: new Date(row.startedAt).toISOString(),
-    endedAt: row.endedAt ? new Date(row.endedAt).toISOString() : null,
-  };
-}
-
 export interface MyRaidenSummary {
   runsToday: number;
   totalRuns: number;
@@ -65,7 +21,6 @@ export interface MyRaidenSummary {
     bestDurationMs: number | null;
     firstClearedAt: string | null;
   }[];
-  recentRuns: RaidenRunView[];
 }
 
 export async function myRaidenSummary(
@@ -73,7 +28,7 @@ export async function myRaidenSummary(
   activityKey: string | null,
 ): Promise<MyRaidenSummary> {
   const scope = activityKey ? eq(raidenRuns.activityKey, activityKey) : undefined;
-  const [progressRows, clearRows, runRows, todayRows] = await Promise.all([
+  const [progressRows, clearRows, todayRows] = await Promise.all([
     db
       .select()
       .from(raidenProgress)
@@ -95,12 +50,6 @@ export async function myRaidenSummary(
           activityKey ? eq(raidenClears.activityKey, activityKey) : undefined,
         ),
       ),
-    db
-      .select()
-      .from(raidenRuns)
-      .where(and(eq(raidenRuns.userId, userId), scope))
-      .orderBy(desc(raidenRuns.startedAt))
-      .limit(6),
     db
       .select({ n: sql<number>`COUNT(*)` })
       .from(raidenRuns)
@@ -130,7 +79,6 @@ export async function myRaidenSummary(
         firstClearedAt: row?.firstClearedAt ? new Date(row.firstClearedAt).toISOString() : null,
       };
     }),
-    recentRuns: runRows.map(toRunView),
   };
 }
 

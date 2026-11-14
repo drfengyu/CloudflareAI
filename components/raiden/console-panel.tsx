@@ -50,7 +50,7 @@ import type { ActivityCouponView } from "@/lib/activity/coupons";
 import { CouponShop } from "@/components/activity/coupon-shop";
 import { LoadoutShop } from "./loadout-shop";
 
-type TabKey = "loadout" | "coupon" | "records" | "rank" | "rules" | "live";
+type TabKey = "loadout" | "coupon" | "stats" | "rank" | "rules" | "live";
 
 const STATUS_LABEL: Record<RaidenActivityStatus, string> = {
   active: "进行中",
@@ -69,7 +69,7 @@ const STATUS_TONE: Record<RaidenActivityStatus, "success" | "muted" | "warning" 
 const IDLE_TABS: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { key: "loadout", label: "装备", icon: Gamepad2 },
   { key: "coupon", label: "券", icon: Gem },
-  { key: "records", label: "记录", icon: ScrollText },
+  { key: "stats", label: "战绩", icon: ScrollText },
   { key: "rank", label: "排行", icon: ListOrdered },
   { key: "rules", label: "规则", icon: Swords },
 ];
@@ -80,7 +80,7 @@ const RUN_TABS: { key: TabKey; label: string; icon: React.ComponentType<{ classN
   { key: "rules", label: "规则", icon: Swords },
 ];
 
-/** 游戏画面旁的作战面板：准备期放装备/记录/排行/规则，出击后切成实时战况。 */
+/** 游戏画面旁的作战面板：准备期放装备/战绩/排行/规则，出击后切成实时战况。 */
 export function ConsolePanel({
   config,
   status,
@@ -204,8 +204,8 @@ export function ConsolePanel({
           <LoadoutShop config={config} loadout={loadout} onChange={onLoadoutChange} />
         ) : active === "coupon" ? (
           <CouponShop activities={[coupon]} tone="dark" />
-        ) : active === "records" ? (
-          <RecordsPanel summary={summary} />
+        ) : active === "stats" ? (
+          <StatsPanel summary={summary} />
         ) : active === "rank" ? (
           <RankPanel leaderboard={leaderboard} firstClears={firstClears} />
         ) : (
@@ -536,7 +536,7 @@ function Chip({
   );
 }
 
-function RecordsPanel({ summary }: { summary: MyRaidenSummary }) {
+function StatsPanel({ summary }: { summary: MyRaidenSummary }) {
   return (
     <div className="space-y-3">
       <div className="grid gap-1.5 [grid-template-columns:repeat(auto-fit,minmax(140px,1fr))]">
@@ -578,56 +578,11 @@ function RecordsPanel({ summary }: { summary: MyRaidenSummary }) {
         })}
       </div>
 
-      {summary.recentRuns.length > 0 ? (
-        <div className="space-y-1">
-          <p className="text-[10px] font-medium text-white/45">最近出击</p>
-          {summary.recentRuns.map((run) => (
-            <div
-              key={run.id}
-              className="flex items-center justify-between gap-2 text-[10px] text-white/45"
-            >
-              <span>
-                {formatCnDateTime(run.startedAt, {
-                  month: "2-digit",
-                  day: "2-digit",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-              <span>
-                STAGE {Math.max(1, run.stage)} · {run.score.toLocaleString("en-US")} 分
-              </span>
-              <Badge
-                tone={
-                  run.status === "cleared"
-                    ? "success"
-                    : run.status === "failed"
-                      ? "danger"
-                      : run.status === "active"
-                        ? "info"
-                        : "muted"
-                }
-              >
-                {runStatusText(run.status)}
-              </Badge>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="py-4 text-center text-[10px] text-white/35">
-          还没有出击记录。第一次出击会写进这里。
-        </p>
-      )}
+      <p className="text-center text-[10px] text-white/35">
+        只统计当前活动轮次的通关进度，不保留逐次出击明细。
+      </p>
     </div>
   );
-}
-
-function runStatusText(status: string): string {
-  if (status === "cleared") return "通关";
-  if (status === "failed") return "阵亡";
-  if (status === "active") return "进行中";
-  if (status === "abandoned") return "放弃";
-  return status;
 }
 
 function RankPanel({

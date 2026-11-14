@@ -1,6 +1,6 @@
 import { and, desc, eq, gt, gte, inArray, isNull, lt, sql } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
-import { batchRows, db } from "@/lib/db/d1-http";
+import { db } from "@/lib/db/d1-http";
 import { couponPackPurchases, lotteryDraws, lotteryTickets, lotteryUserStats, users } from "@/lib/db/schema";
 import { cnLastNDaysStart, cnStartOfToday, cnStartOfTomorrow } from "@/lib/date";
 import { maskUserLabel } from "@/lib/mask";
@@ -8,7 +8,7 @@ import { round2 } from "./prize-math";
 import { LOTTERY_STATS_ALL_SCOPE } from "./stats";
 
 /**
- * 转盘记录读取层：用户侧逐次明细 + 管理侧收益聚合。
+ * 转盘记录读取层：收益聚合、用户统计与大奖播报。
  *
  * 不新增账本表——买券的钱在 `lottery_ticket.priceCredits`、开奖的账在
  * `lottery_draw.deltaCredits`，两边已经逐笔记全了，这里只做读取。
@@ -22,34 +22,6 @@ import { LOTTERY_STATS_ALL_SCOPE } from "./stats";
 export interface LotteryWindow {
   start: Date;
   end: Date;
-}
-
-/**
- * `unknown` = 历史券行已被清理（用户注销级联删除），面值按 0 计；`free` = 每日免费抽；
- * `coupon` = 活动券直付（迁移 026 起付费抽不再关联抽奖券，ticketId 为 null 且非免费抽）。
- */
-export type TicketSourceLabel = "buy" | "gift" | "prize" | "free" | "coupon" | "unknown";
-
-/** 一注开奖的完整记录：抽奖结果 + 消耗掉的券面值与来源。 */
-export interface DrawRecord {
-  id: string;
-  userId: string;
-  batchId: string;
-  seq: number;
-  ring: "inner" | "outer";
-  label: string;
-  multiplier: number | null;
-  deltaCredits: number;
-  /** 这注的 cr 变动落在哪本账：tcr = 限时余额；cr = 余额（cr 档或倒扣）。 */
-  balanceUnit: "cr" | "tcr";
-  baseCredits: number;
-  /** 这一注抽中的赠券档抽奖等价张数（外圈赠券档）；不进 cr 账本，展示时按券价折算成活动券。 */
-  grantTickets: number;
-  createdAt: Date | null;
-  ticketSource: TicketSourceLabel;
-  ticketCredits: number;
-  /** 活动轮次标识（startAt 字符串）；历史数据为 null。 */
-  activityKey: string | null;
 }
 
 /**
@@ -275,12 +247,6 @@ export async function lotteryPackDiscount(win?: LotteryWindow): Promise<number> 
   return round2(Number(rows[0]?.discount ?? 0));
 }
 
-/** 转盘记录每页条数：首屏与卡片内局部翻页共用，超过一页才在卡片底部翻页。 */
-export const DRAW_RECORD_PAGE_SIZE = 10;
-
-/** 用户侧「我的转盘记录」只保留当期最新 30 条：用户主要看最近单抽 / 10 连的结果，更早的明细不再翻页展示（管理端不受此限）。 */
-export const MY_RECORDS_LIMIT = 30;
-
 /** 后台时间窗按北京时间算，与用量看板一致；「全部」即不加过滤。 */
 export function rangeWindow(range: string): LotteryWindow | undefined {
   const end = cnStartOfTomorrow();
@@ -288,103 +254,6 @@ export function rangeWindow(range: string): LotteryWindow | undefined {
   if (range === "7d") return { start: cnLastNDaysStart(7), end };
   if (range === "30d") return { start: cnLastNDaysStart(30), end };
   return undefined;
-}
-
-/** 逐次明细：用户侧「我的转盘记录」与管理侧「最近开奖」共用。 */
-export async function listDrawRecords(opts: {
-  win?: LotteryWindow;
-  userId?: string;
-  activityKey?: string | null;
-  limit?: number;
-  offset?: number;
-}): Promise<DrawRecord[]> {
-  const win = drawWindowCondition(opts.win);
-  const activityCond =
-    opts.activityKey !== undefined
-      ? opts.activityKey === null
-        ? isNull(lotteryDraws.activityKey)
-        : eq(lotteryDraws.activityKey, opts.activityKey)
-      : undefined;
-  const where = and(
-    win,
-    activityCond,
-    opts.userId ? eq(lotteryDraws.userId, opts.userId) : undefined,
-  );
-
-  const rows = await db
-    .select({
-      id: lotteryDraws.id,
-      userId: lotteryDraws.userId,
-      batchId: lotteryDraws.batchId,
-      seq: lotteryDraws.seq,
-      ring: lotteryDraws.ring,
-      label: lotteryDraws.label,
-      multiplier: lotteryDraws.multiplier,
-      deltaCredits: lotteryDraws.deltaCredits,
-      baseCredits: lotteryDraws.baseCredits,
-      grantTickets: lotteryDraws.grantTickets,
-      createdAt: lotteryDraws.createdAt,
-      ticketId: lotteryDraws.ticketId,
-      ticketCredits: lotteryDraws.ticketCredits,
-      freeDrawDate: lotteryDraws.freeDrawDate,
-      activityKey: lotteryDraws.activityKey,
-    })
-    .from(lotteryDraws)
-    .where(where)
-    .orderBy(desc(lotteryDraws.createdAt), desc(lotteryDraws.seq))
-    .limit(opts.limit ?? 50)
-    .offset(opts.offset ?? 0);
-
-  const ticketIds = [...new Set(rows.map((r) => r.ticketId).filter((id): id is string => !!id))];
-  // 2026-10-28 修复：管理侧一次取 200 条明细，inArray 最多可到 200 个 id；
-  // D1 每条语句最多 100 个绑定参数，必须分段查（batchRows(ids, 1) 即每段 100 个）。
-  const ticketMap = new Map<
-    string,
-    { id: string; source: "buy" | "gift" | "prize"; priceCredits: number }
-  >();
-  for (const chunk of batchRows(ticketIds, 1)) {
-    const part = await db
-      .select({
-        id: lotteryTickets.id,
-        source: lotteryTickets.source,
-        priceCredits: lotteryTickets.priceCredits,
-      })
-      .from(lotteryTickets)
-      .where(inArray(lotteryTickets.id, chunk));
-    for (const t of part) ticketMap.set(t.id, t);
-  }
-
-  return rows.map((row) => {
-    const ticket = row.ticketId ? ticketMap.get(row.ticketId) : undefined;
-    const deltaCredits = Number(row.deltaCredits);
-    // 免费抽看 freeDrawDate；有 ticketId 是历史抽奖券（查不到券行=注销级联删除→unknown）；
-    // 都没有时按券面区分：活动券直付记单券价(>0)→coupon，历史免费抽券面为 0/null→free。
-    const source: TicketSourceLabel = row.freeDrawDate
-      ? "free"
-      : row.ticketId
-        ? (ticket?.source ?? "unknown")
-        : Number(row.ticketCredits ?? 0) > 0
-          ? "coupon"
-          : "free";
-    return {
-      id: row.id,
-      userId: row.userId,
-      batchId: row.batchId,
-      seq: row.seq,
-      ring: row.ring,
-      label: row.label,
-      multiplier: row.multiplier,
-      deltaCredits,
-      // 奖品文案以单位结尾；历史「cr 永久」也归到 cr。
-      balanceUnit: deltaCredits > 0 && /\btcr\s*$/.test(row.label) ? "tcr" : "cr",
-      baseCredits: Number(row.baseCredits),
-      grantTickets: Number(row.grantTickets ?? 0),
-      createdAt: row.createdAt,
-      ticketSource: source,
-      ticketCredits: Number(row.ticketCredits ?? ticket?.priceCredits ?? 0),
-      activityKey: row.activityKey,
-    };
-  });
 }
 
 /** 一条大奖播报记录。 */

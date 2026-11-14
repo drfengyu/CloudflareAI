@@ -2,13 +2,12 @@ import { Coins, Gem, Layers, Trophy } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FlipBoard } from "@/components/flip/board";
-import { FlipRoundList } from "@/components/flip/round-list";
 import { formatCredits } from "@/lib/billing/credits";
 import { requireUser } from "@/lib/usage/meter";
 import { FLIP_CARD_COUNT, flipActivityKey, flipActivityWindow, flipExpectation, flipRewardTickets } from "@/lib/flip/config";
 import { getFlipConfig } from "@/lib/flip/settings";
 import { countRoundsToday, findOpenRound, type PendingRound } from "@/lib/flip/store";
-import { flipGlobalStats, flipSummary, listMyRounds, FLIP_ROUND_PAGE_SIZE, type FlipGlobalStats, type FlipRoundView, type FlipSummary } from "@/lib/flip/records";
+import { flipGlobalStats, flipSummary, type FlipGlobalStats, type FlipSummary } from "@/lib/flip/records";
 import { getActivityCouponView } from "@/lib/activity/coupons";
 import { couponTickets, ticketsForCost } from "@/lib/activity/ticket-math";
 import { CouponCount } from "@/components/activity/coupon-badge";
@@ -82,49 +81,27 @@ export default async function FlipPage() {
   );
 
   // 活动没开或还没开始时，一条 flip_round 查询都不发：这一轮没人能开局，读了也只有零值，
-  // 白占 D1 的每日读额度。已经结束的轮次要读——用户回来对账看他赢了多少。
+  // 白占 D1 的每日读额度。
   const trackRounds = windowInfo.status === "active" || windowInfo.status === "ended";
-  const idle: [PendingRound | null, number, FlipSummary, FlipRoundView[], FlipGlobalStats] = [
+  const idle: [PendingRound | null, number, FlipSummary, FlipGlobalStats] = [
     null,
     0,
     EMPTY_SUMMARY,
-    [],
     EMPTY_GLOBAL_STATS,
   ];
-  const [pendingRound, roundsToday, summary, fetchedRounds, globalStats] = trackRounds
+  const [pendingRound, roundsToday, summary, globalStats] = trackRounds
     ? await Promise.all([
         findOpenRound(userId),
         countRoundsToday(userId),
         flipSummary(userId, activityKey),
-        listMyRounds(userId, activityKey, FLIP_ROUND_PAGE_SIZE + 1),
         flipGlobalStats(activityKey),
       ])
     : idle;
 
-  // 多取的那一条只用来探测「还有下一页」，翻页本身走卡片内的局部刷新。
-  const hasMoreRounds = fetchedRounds.length > FLIP_ROUND_PAGE_SIZE;
-  const rounds = fetchedRounds.slice(0, FLIP_ROUND_PAGE_SIZE);
   // 「最好一张」按实发口径比较：券奖看 rewardTickets / 面值，tcr 奖看 rewardCredits，
   // 不能用 MAX(cr) 反推券张数——历史 tcr 奖可能恰好是券单价的整数倍。
   const bestIsTickets =
     summary.bestTickets > 0 && summary.bestTicketCredits >= summary.best;
-
-  const recordsCard = (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base">我的牌局</CardTitle>
-        <span className="text-xs text-muted-foreground">每页 {FLIP_ROUND_PAGE_SIZE} 局</span>
-      </CardHeader>
-      <CardContent>
-        <FlipRoundList
-          key={activityKey ?? "history"}
-          rounds={rounds}
-          hasNext={hasMoreRounds}
-          unitCredits={config.couponUnitCredits}
-        />
-      </CardContent>
-    </Card>
-  );
 
   const rulesCard = (
     <Card>
@@ -168,7 +145,6 @@ export default async function FlipPage() {
         <PageHeader title="翻牌夺宝" description="12 张牌一桌 · 翻开一张就结算" />
         <PageBody className="space-y-4">
           <Notice title={notice.title} hint={notice.hint} />
-          {trackRounds ? recordsCard : null}
           {rulesCard}
         </PageBody>
       </>
@@ -255,7 +231,6 @@ export default async function FlipPage() {
           />
         </div>
 
-        {recordsCard}
         {rulesCard}
       </PageBody>
     </>

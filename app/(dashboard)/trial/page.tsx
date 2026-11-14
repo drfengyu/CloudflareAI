@@ -17,10 +17,8 @@ import { getTrialConfig } from "@/lib/trial/settings";
 import {
   campaignComplete,
   findActiveTrialRun,
-  listTrialRuns,
   loadTrialSave,
   type ActiveTrialRun,
-  type TrialHistoryRow,
   type TrialSaveState,
 } from "@/lib/trial/store";
 import { SAGA_CHAPTERS } from "@/lib/trial/saga/data";
@@ -75,15 +73,9 @@ export default async function TrialPage() {
   const windowInfo = trialActivityWindow(config);
   const activityKey = trialActivityKey(config);
 
-  const track = windowInfo.status === "active" || windowInfo.status === "ended";
-  const [saveState, activeRun, history]: [
-    TrialSaveState,
-    ActiveTrialRun | null,
-    TrialHistoryRow[],
-  ] = await Promise.all([
+  const [saveState, activeRun]: [TrialSaveState, ActiveTrialRun | null] = await Promise.all([
     loadTrialSave(userId, activityKey),
     windowInfo.status === "active" ? findActiveTrialRun(userId, activityKey) : Promise.resolve(null),
-    track ? listTrialRuns(userId, activityKey, 8) : Promise.resolve([]),
   ]);
 
   const save = saveState.save;
@@ -147,48 +139,6 @@ export default async function TrialPage() {
     </Card>
   );
 
-  const historyCard = (
-    <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-base">行军录</CardTitle>
-        <span className="text-xs text-muted-foreground">已平定 {save.stats.wins} 处地方</span>
-      </CardHeader>
-      <CardContent>
-        {history.length === 0 ? (
-          <p className="text-sm text-muted-foreground">还没有行军记录。</p>
-        ) : (
-          <div className="space-y-1">
-            {history.map((row) => (
-              <div
-                key={row.id}
-                className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
-              >
-                <span className="text-muted-foreground">
-                  {new Date(row.startedAt).toLocaleString("zh-CN", { hour12: false })}
-                </span>
-                <span className="flex items-center gap-3 tabular-nums">
-                  <span>
-                    {row.status === "active" ? "行军中" : `攻破 ${row.correct}/${row.questionCount} 座营寨`}
-                  </span>
-                  <span className="flex items-center gap-2">
-                    {row.clearGold > 0 ? (
-                      <span className="font-medium text-success">+{formatCredits(row.clearGold)} 金</span>
-                    ) : null}
-                    {row.reward > 0 ? (
-                      <span className="font-medium text-success">+{formatCredits(row.reward)} tcr</span>
-                    ) : row.clearGold > 0 ? null : (
-                      <span className="text-muted-foreground">无奖励</span>
-                    )}
-                  </span>
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
-
   const progressCard = (
     <Card>
       <CardHeader>
@@ -240,7 +190,6 @@ export default async function TrialPage() {
         <PageHeader title="三国讨逆传" description={place} />
         <PageBody className="space-y-4">
           <Notice title={notice.title} hint={notice.hint} />
-          {track ? historyCard : null}
           {rulesCard}
         </PageBody>
       </>
@@ -335,7 +284,6 @@ export default async function TrialPage() {
         </div>
 
         {progressCard}
-        {historyCard}
         {rulesCard}
       </PageBody>
     </>

@@ -5,6 +5,29 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.75.0] - 2026-11-14
+
+### 变更
+
+- 用户侧活动页不再展示「最近 N 次」的逐次明细，四个玩法统一只留当期汇总：
+  - 幸运转盘：移除「我的转盘记录」卡片（最近 30 条开奖明细与卡内分页），改为纯汇总卡
+    「我的转盘战绩」（抽奖次数 / 外圈命中 / 中奖发放 / 倒扣回收 / 已开奖消耗 / 本期净收益）。
+    删除服务端动作 `listMyActivityRecords` 与读函数 `listDrawRecords`。
+  - 翻牌夺宝：移除「我的牌局」明细表（含局内分页），保留战绩汇总、大奖墙与全站热度。
+    删除读函数 `listMyRounds` 与组件 `components/flip/round-list.tsx`。
+  - 雷电行动：作战面板页签「记录」改为「战绩」，去掉「最近出击」列表，只留当期汇总与关卡首通时间。
+    删除 `RaidenRunView` / `runStatusLabel` 与 `myRaidenSummary` 的 `recentRuns`。
+  - 三国讨逆传：移除「行军录」历史列表，保留剧情存档、平定进度与规则卡。
+    删除 `listTrialRuns` 与 `TrialHistoryRow`。
+- 逐次资金流水仍完整落库（`lottery_draw` / `flip_round` / `raiden_runs`），回看改走个人账本 `/ledger`；
+  管理端 `/admin/activity` 的窗口统计不受影响。
+- 移动端底部「活动」页签由 `/lottery` 改指任务成就 `/tasks`，不再默认打开转盘。
+
+### 验证
+
+- `tsc --noEmit` 全量无实际错误（仅 `--incremental` 的 TS5074 提示）；改动文件 ESLint 0 错误 0 警告；
+  可加载单测 142/142 通过。未在真实浏览器逐页核对。
+
 ## [0.74.0] - 2026-11-14
 
 ### 变更

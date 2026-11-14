@@ -1,63 +1,13 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/d1-http";
-import { flipRounds, type FlipRound } from "@/lib/db/schema";
-import { parseFlipBoard, round2 } from "./config";
+import { flipRounds } from "@/lib/db/schema";
+import { round2 } from "./config";
 
 /**
- * 翻牌夺宝的读侧聚合。
+ * 翻牌夺宝的读侧聚合：个人活动汇总与全站热度。
  *
- * 只有已完成的局才带牌桌：没翻开的局把 `board` 发给前端等于提前公布答案，
- * 所以这里一律返回 `board: null`，由界面画 12 张背面。
+ * 用户页不再展示逐局牌局明细，这里只保留按活动轮次聚合的数字。
  */
-
-export interface FlipRoundView {
-  id: string;
-  priceCredits: number;
-  /** 翻开的位置（0 起）；未翻为 null。 */
-  position: number | null;
-  /** 实发 cr；未翻为 null（不是 0，界面据此区分「还没翻」和「翻了是空牌」）。 */
-  reward: number | null;
-  /** 券奖实发的整张数；null = 这张发的是 tcr（或未翻/空牌）。 */
-  rewardTickets: number | null;
-  /** 已翻开才揭晓的牌桌。 */
-  board: number[] | null;
-  createdAt: Date;
-}
-
-function toRoundView(row: FlipRound): FlipRoundView {
-  const settled = row.status === "settled";
-  return {
-    id: row.id,
-    priceCredits: Number(row.priceCredits),
-    position: settled ? (row.position ?? null) : null,
-    reward: settled ? round2(Number(row.rewardCredits ?? 0)) : null,
-    rewardTickets: settled && row.rewardTickets !== null ? Number(row.rewardTickets) : null,
-    board: settled ? parseFlipBoard(row.board) : null,
-    createdAt: new Date(row.createdAt ?? Date.now()),
-  };
-}
-
-/** 我的牌局每页局数：首屏与卡片内局部翻页共用。 */
-export const FLIP_ROUND_PAGE_SIZE = 10;
-
-/** 本活动轮次的牌局明细，按翻页取。 */
-export async function listMyRounds(
-  userId: string,
-  activityKey: string | null,
-  limit = FLIP_ROUND_PAGE_SIZE,
-  offset = 0,
-): Promise<FlipRoundView[]> {
-  // 活动没填开始时间时没有「当前轮次」这个口径可统计，历史局留在它自己那一轮里。
-  if (!activityKey) return [];
-  const rows = await db
-    .select()
-    .from(flipRounds)
-    .where(and(eq(flipRounds.userId, userId), eq(flipRounds.activityKey, activityKey)))
-    .orderBy(desc(flipRounds.createdAt))
-    .limit(limit)
-    .offset(offset);
-  return rows.map((row) => toRoundView(row as FlipRound));
-}
 
 export interface FlipSummary {
   rounds: number;

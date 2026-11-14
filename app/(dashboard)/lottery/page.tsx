@@ -16,14 +16,8 @@ import {
   type LotteryConfig,
 } from "@/lib/lottery/prize-math";
 import { countConsecutiveMisses, hasUsedFreeDrawToday } from "@/lib/lottery/store";
-import {
-  DRAW_RECORD_PAGE_SIZE,
-  MY_RECORDS_LIMIT,
-  listDrawRecords,
-  listRecentBigWins,
-  lotteryBalance,
-} from "@/lib/lottery/records";
-import { LotteryRecords } from "./lottery-records";
+import { listRecentBigWins, lotteryBalance } from "@/lib/lottery/records";
+import { LotteryStats } from "./lottery-stats";
 import { LotteryWheel, type WheelOuter, type WheelSector } from "./lottery-wheel";
 import { getActivityCouponView } from "@/lib/activity/coupons";
 import { ActivityWindowBadge } from "@/components/activity/activity-window-badge";
@@ -115,35 +109,21 @@ export default async function LotteryPage() {
   const windowInfo = activityWindow(config);
   const activityKey = currentActivityKey(config);
 
-  // 记录按当前活动轮次过滤，页面只展示当期数据。
+  // 记录口径按当前活动轮次过滤，页面只展示当期数据。
   // countConsecutiveMisses 按当前活动轮次过滤，新活动保底重置。
   // currentStats = 当前活动战绩（新活动重计），myStats = 全部活动累计（转盘「累计抽奖」）。
-  // 首屏只出第一页，后续翻页走卡片内的局部刷新（listMyActivityRecords）。
-  const [myStats, currentStats, records, freeDrawUsed, consecutiveMisses, bigWins, coupon] =
+  const [myStats, currentStats, freeDrawUsed, consecutiveMisses, bigWins, coupon] =
     await Promise.all([
       lotteryBalance({ userId }),
       activityKey ? lotteryBalance({ userId, activityKey }) : Promise.resolve(null),
-      listDrawRecords({ userId, limit: DRAW_RECORD_PAGE_SIZE, activityKey }),
       hasUsedFreeDrawToday(userId),
       countConsecutiveMisses(userId, 30, activityKey),
       listRecentBigWins({ thresholdCredits: 500, thresholdTickets: 3, hours: 24, limit: 20 }),
       getActivityCouponView(userId, "lottery"),
     ]);
 
-  // 当期口径的开奖总数即累计统计行的 draws；用户侧只展示最新 MY_RECORDS_LIMIT 条，更早的不再翻页。
-  const recordTotal = Math.min((activityKey ? currentStats?.draws : myStats.draws) ?? 0, MY_RECORDS_LIMIT);
-  const recordTotalPages = Math.max(1, Math.ceil(recordTotal / DRAW_RECORD_PAGE_SIZE));
-
-  const recordsCard = (
-    <LotteryRecords
-      key={activityKey ?? "history"}
-      balance={currentStats}
-      records={records}
-      totalPages={recordTotalPages}
-      totalRecords={recordTotal}
-      pageSize={DRAW_RECORD_PAGE_SIZE}
-      activityLabel={activityKey ?? "历史活动"}
-    />
+  const statsCard = (
+    <LotteryStats balance={currentStats} activityLabel={activityKey ?? "历史活动"} />
   );
 
   if (windowInfo.status !== "active") {
@@ -161,7 +141,7 @@ export default async function LotteryPage() {
         <PageHeader title="幸运转盘" description="活动券与累抽奖励" />
         <PageBody className="space-y-6">
           <Notice title={notice.title} hint={notice.hint} />
-          {recordsCard}
+          {statsCard}
         </PageBody>
       </>
     );
@@ -197,7 +177,7 @@ export default async function LotteryPage() {
           luckyThreshold={LUCKY_MISS_THRESHOLD}
           bigWins={bigWins}
         />
-        {recordsCard}
+        {statsCard}
       </PageBody>
     </>
   );

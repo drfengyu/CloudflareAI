@@ -344,7 +344,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   - 资金：买券「临时余额→永久余额」且不透支；中奖进带过期的临时余额；倒扣直接扣永久余额、允许负数；统一 `topup` type 6，不写 `usage_log`
   - 展示：扇区/规则/结果/流水一律实际 cr。**内圈存绝对 cr、外圈存倍数 × 基数（`ticket`/`batch`）**，所以券价是独立的利润率杠杆：奖池不动、调高券价，返还率就下降。想让奖池跟着券价走，用后台的「按 ×N 重算内圈」按钮（显式动作，不做默认耦合）
   - 后台：`/admin/settings` 新卡片配奖池与累抽档位，顶部实时显示内圈期望 / 外圈期望 / 单券综合 / 返还率 / 站点每券净得（默认池按券价 100 配平到约 91.1%），外圈每行现算该档实际 cr
-  - 记录：`lib/lottery/records.ts` 只读聚合（不新增表）——用户侧「我的转盘记录」逐次明细 + 汇总，管理侧 `/admin/lottery` 按今日/近 7 日/近 30 日窗口出站点净收益、按用户聚合与最近 200 注明细；净收益 = 券面 + 回收 − 发放，只算已开奖的券
+  - 记录：`lib/lottery/records.ts` 只读聚合（不新增表）——用户侧只有当期战绩汇总（`/lottery` 的「我的转盘战绩」卡），**不再列出逐次开奖明细**；管理侧并进 `/admin/activity`，按今日/近 7 日/近 30 日窗口出站点收支与按用户收益；净收益 = 券面 + 回收 − 发放，只算已开奖的券
   - 奖型：外圈 `kind = "credits" | "tickets"`，赠券档直接发 `source='prize'` 的券、不动 cr 也不写流水，张数记在 `lottery_draw.grantTickets`（`migrations/008_lottery_prize_tickets.sql`）；期望返还把赠券按券价折算计入成本。**改奖池的顺序固定为「代码先上线，再写 `option.lottery_config`」**，旧代码会把 `kind:'tickets'` 读成 0 cr 奖品
 - ✅ **新用户注册奖励**（2026-06-16）：
   - 新用户注册时自动获得 2000 credits
@@ -534,8 +534,18 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.74.0（2026-11-14，三国讨逆传城中二维布局）
+**当前版本**：v0.75.0（2026-11-14，用户侧活动记录收口 + 移动端活动入口改指任务成就）
 **下一版本**：待定
+
+- v0.75.0 用户侧活动记录收口：`/lottery`、`/flip`、`/trial`、`/raiden` 四个玩法页统一撤掉
+  「最近 N 次」的逐次明细——转盘「我的转盘记录」30 条（`listDrawRecords` /
+  `listMyActivityRecords` / `lottery-records.tsx`）、翻牌「我的牌局」（`listMyRounds` /
+  `round-list.tsx`）、雷电「最近出击」（`RaidenRunView` / `runStatusLabel`）、试炼「行军录」
+  （`listTrialRuns`）。当期战绩汇总、排行、大奖墙与首通播报全部保留；转盘新增纯汇总卡
+  `lottery-stats.tsx`（「我的转盘战绩」），雷电作战面板页签「记录」改为「战绩」。逐次资金
+  仍完整记在 `lottery_draw` / `flip_round` / `raiden_runs` 上，只是不面向用户列表，回看走
+  `/ledger`。移动端底部「活动」页签由 `/lottery` 改指 `/tasks`。`tsc` 0 错误（仅 TS5074
+  增量构建提示）、改动文件 ESLint 0/0、可加载单测 142/142，未在真实浏览器逐页核对。
 
 - v0.74.0 三国讨逆传城中二维布局：街景从单条横向长街改为 1440×1180 的二维城镇，
   北排七间门脸朝南、南排六处铺面与城门，中间石板广场与南街由东西巷道连通；镜头横纵

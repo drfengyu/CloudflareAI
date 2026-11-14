@@ -285,13 +285,10 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
 `lib/lottery/records.ts` 只负责读。2026-10-29 起，「不限时间」的开奖汇总改读累计行
 `lottery_user_stats`（开奖时增量维护），管理端的时间窗仍回到明细聚合。
 
-**用户侧**：`/lottery` 页面下方「我的转盘记录」卡片——逐次时间、落在哪一圈、结果文案、cr 变动、
-这一注的活动券来源与面值（活动券 / 免费），外加一排汇总（次数、外圈命中、中奖发放、倒扣回收、已开奖消耗、本期净收益）。
-**只显示当前活动轮次的最新 30 条**：用户主要关注最近单抽 / 10 连的结果，明细取当期最新 30 条（`MY_RECORDS_LIMIT`，
-`listDrawRecords` 按 `activityKey` 过滤），每页 10 条、最多 3 页，翻页在卡片内局部刷新
-（服务端动作 `listMyActivityRecords`，不改 URL、不整页刷新，页码按封顶后的总页数夹取）；
-战绩汇总仍按当期全量算（不受 30 条限制），总数取 `min(当期累计行 draws, 30)`；
-管理员改 `startAt` 开启新一轮后旧轮记录不再显示，当轮结束后仍可查看。
+**用户侧**：`/lottery` 页面下方「我的转盘战绩」卡片只给当期汇总（抽奖次数、外圈命中、中奖发放、
+倒扣回收、已开奖消耗、本期净收益），**不再保留最近 30 次开奖的逐次明细**。开奖结果只在转盘结果面板
+里即时呈现，想回看走 `/ledger` 的活动类别；逐次钱仍然完整记在 `lottery_draw` 上，只是不面向用户列表。
+汇总按当前活动轮次全量算，管理员改 `startAt` 开启新一轮后自动归零。
 
 **管理侧**：转盘的逐次明细、按用户收益与礼包让利已并入 `/admin/activity`
 （六种限时活动按北京日汇总的站点收支，见 `docs/features/activity-ledger.md`）。
@@ -309,10 +306,10 @@ D1 免费层每天 500 万行读取，5.6k 行的一张表开几次页面就见�
 | `lib/lottery/prize-math.ts` | 纯计算：类型、配置清洗、活动窗口、按权重开奖、期望返还与返还率。**不 import 任何读库代码**，后台表单据此在浏览器里实时算返还率 |
 | `lib/lottery/config.ts` | `getLotteryConfig()`：读 `option.lottery_config` |
 | `lib/lottery/store.ts` | 账本原语：扣 cr / 发tcr 余额 / 倒扣回收 / 开奖统计增量 / 累抽领取记录 |
-| `lib/lottery/records.ts` | 只读聚合：用户侧逐次明细与战绩汇总（管理侧已并入 `/admin/activity`） |
+| `lib/lottery/records.ts` | 只读聚合：用户当期战绩汇总、大奖播报与按用户收益（管理侧已并入 `/admin/activity`） |
 | `app/(dashboard)/lottery/actions.ts` | `drawLottery` 等抽奖服务端动作 |
 | `app/(dashboard)/lottery/lottery-wheel.tsx` | 双圈 SVG 转盘与结果面板（客户端） |
-| `app/(dashboard)/lottery/lottery-records.tsx` | 「我的转盘记录」卡片（服务端渲染） |
+| `app/(dashboard)/lottery/lottery-stats.tsx` | 「我的转盘战绩」卡片（服务端渲染，只有汇总） |
 | `app/(dashboard)/admin/lottery/page.tsx` | 旧后台入口，跳转到 `/admin/activity` |
 | `app/(dashboard)/admin/settings/lottery-form.tsx` | 后台配置表单 |
 | `scripts/lottery-sim.ts` | 奖池模拟器（只读线上配置，跑蒙特卡洛出体感与收益指标） |

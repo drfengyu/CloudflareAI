@@ -4,8 +4,6 @@ import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/usage/meter";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getFlipConfig } from "@/lib/flip/settings";
-import { flipActivityKey } from "@/lib/flip/config";
-import { FLIP_ROUND_PAGE_SIZE, listMyRounds, type FlipRoundView } from "@/lib/flip/records";
 import { flipCard, openRound, type FlipOutcome, type OpenedRound } from "@/lib/flip/store";
 
 type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
@@ -55,27 +53,4 @@ export async function revealFlipCard(input: {
   } catch (error) {
     return fail(error, "翻牌失败");
   }
-}
-
-/**
- * 「我的牌局」卡片的局部翻页数据：多取一条探测还有没有下一页，省一次 COUNT。
- */
-export async function listMyFlipRounds(
-  page: number,
-): Promise<{ rounds: FlipRoundView[]; hasNext: boolean }> {
-  const userId = await requireUser();
-  const config = await getFlipConfig();
-  const activityKey = flipActivityKey(config);
-  const safePage = Math.max(1, Math.trunc(Number(page)) || 1);
-
-  const rows = await listMyRounds(
-    userId,
-    activityKey,
-    FLIP_ROUND_PAGE_SIZE + 1,
-    (safePage - 1) * FLIP_ROUND_PAGE_SIZE,
-  );
-  return {
-    rounds: rows.slice(0, FLIP_ROUND_PAGE_SIZE),
-    hasNext: rows.length > FLIP_ROUND_PAGE_SIZE,
-  };
 }
