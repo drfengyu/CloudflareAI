@@ -27,6 +27,12 @@ import {
 } from "./saga/bank";
 import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "./saga/inn";
 import {
+  SAGA_FORGE_ITEM_ID,
+  SAGA_FORGE_MAX_LEVEL,
+  forgeCost,
+  gearLevel,
+} from "./saga/forge";
+import {
   generateSagaRun,
   parseSagaRun,
   replaySagaRun,
@@ -615,6 +621,123 @@ export async function buyTrialItem(input: {
   return {
     purchases: next.purchases,
     tickets: await couponTicketBalance(input.userId, "trial", activityKey, input.config.couponUnitCredits),
+  };
+}
+
+export interface GearUpgradeResult {
+  purchases: SagaPurchase[];
+  /** 强化这一笔之后，本活动还剩多少张券。 */
+  tickets: number;
+  /** 强化后的等级，客户端可直接更新展示。 */
+  level: number;
+}
+
+/**
+ * 铁匠铺强化：一次抬高一级，价格随当前等级递增；装备必须在库存或已穿在身上。
+ * 服务端按购买前的指令进度重放校验等级与持有情况，再扣券并把记录写进行军 JSON。
+ */
+export async function upgradeTrialGear(input: {
+  userId: string;
+  runId: string;
+  gearId: string;
+  purchaseId: string;
+  cmdIndex: number;
+  commands?: unknown[];
+  config: TrialConfig;
+}): Promise<GearUpgradeResult> {
+  const activityKey = assertActiveWindow(input.config);
+  const purchaseId = String(input.purchaseId ?? "");
+  if (!PURCHASE_ID_PATTERN.test(purchaseId)) throw new TrialError("强化凭据无效");
+  const gearId = String(input.gearId ?? "");
+  const gear = SAGA_ITEM_BY_ID.get(gearId);
+  if (!gear || (gear.kind !== "weapon" && gear.kind !== "armor")) {
+    throw new TrialError("铁匠铺只收兵器与甲胄");
+  }
+
+  const rows = await db
+    .select({
+      id: trialRuns.id,
+      status: trialRuns.status,
+      questions: trialRuns.questions,
+      activityKey: trialRuns.activityKey,
+    })
+    .from(trialRuns)
+    .where(and(eq(trialRuns.id, input.runId), eq(trialRuns.userId, input.userId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new TrialError("行军不存在");
+  if (row.activityKey !== activityKey) throw new TrialError("这次行军不属于当前活动");
+  if (row.status !== "active") throw new TrialError("这次行军已经结束");
+  const run = parseSagaRun(row.questions);
+  if (!run) throw new TrialError("行军数据异常，请重新出发");
+
+  const cmds = sanitizeSagaCommands((input.commands ?? []).slice(0, SAGA_MAX_COMMANDS));
+  const progress = replaySagaRun({ ...run, commands: cmds }, cmds).state.save;
+  const current = gearLevel(progress, gearId);
+
+  if (run.purchases.some((purchase) => purchase.id === purchaseId)) {
+    return {
+      purchases: run.purchases,
+      tickets: await couponTicketBalance(input.userId, "trial", activityKey, input.config.couponUnitCredits),
+      level: current,
+    };
+  }
+  if (run.purchases.length >= SAGA_MAX_PURCHASES) throw new TrialError("这次行军买得够多了");
+
+  const targetLevel = current + 1;
+  if (targetLevel > SAGA_FORGE_MAX_LEVEL) {
+    throw new TrialError(`强化上限为 ${SAGA_FORGE_MAX_LEVEL} 级`);
+  }
+  const tickets = forgeCost(gearId, current);
+  if (tickets <= 0) throw new TrialError("该装备已强化到顶");
+  const owned =
+    (progress.gear[gearId] ?? 0) > 0 ||
+    [...progress.party, ...progress.reserve].some(
+      (general) => general.weapon === gearId || general.armor === gearId,
+    );
+  if (!owned) throw new TrialError("先备好这件装备再来强化");
+
+  const cmdIndex = Math.max(0, Math.min(SAGA_MAX_COMMANDS, Math.trunc(Number(input.cmdIndex) || 0)));
+  const paid = await payWithCoupon(
+    input.userId,
+    "trial",
+    activityKey,
+    tickets * input.config.couponUnitCredits,
+    input.config.couponUnitCredits,
+  );
+  if (!paid.ok) throw new TrialError(paid.reason);
+
+  const next: SagaRun = {
+    ...run,
+    purchases: [
+      ...run.purchases,
+      {
+        id: purchaseId,
+        itemId: SAGA_FORGE_ITEM_ID,
+        tickets,
+        gearId,
+        targetLevel,
+        at: Date.now(),
+        cmdIndex,
+      },
+    ],
+    shopSeq: run.shopSeq + 1,
+    ...(cmds.length > 0 ? { commands: cmds } : {}),
+  };
+  const updated = await d1Run(
+    `UPDATE trial_run SET questions = ?
+      WHERE id = ? AND userId = ? AND status = 'active' AND questions = ?`,
+    [JSON.stringify(next), input.runId, input.userId, row.questions],
+  );
+  if (updated.changes !== 1) {
+    await refundCouponPayment(paid.payment);
+    throw new TrialError("行军状态已变化，请刷新页面后重试");
+  }
+
+  return {
+    purchases: next.purchases,
+    tickets: await couponTicketBalance(input.userId, "trial", activityKey, input.config.couponUnitCredits),
+    level: targetLevel,
   };
 }
 

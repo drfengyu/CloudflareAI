@@ -10,7 +10,9 @@ import {
   saveTrialRunProgress,
   startTrialRun,
   submitTrialRun,
+  upgradeTrialGear,
   type CouponPurchaseResult,
+  type GearUpgradeResult,
   type ItemPurchaseResult,
   type StartedTrial,
   type TrialProgressResult,
@@ -121,6 +123,36 @@ export async function buyTrialItemAction(input: {
     return { success: true, data };
   } catch (error) {
     return fail(error, "购买失败");
+  }
+}
+
+/** 铁匠铺强化：一次一级，服务端按指令进度核对当前等级后再扣券。 */
+export async function upgradeTrialGearAction(input: {
+  runId: string;
+  gearId: string;
+  purchaseId: string;
+  cmdIndex: number;
+  commands?: unknown[];
+}): Promise<ActionResult<GearUpgradeResult>> {
+  try {
+    const userId = await requireUser();
+    if (!(await checkRateLimit(`trial-forge:${userId}`, { window: 60_000, limit: 40 }))) {
+      return { success: false, error: "强化太频繁，请稍后再试" };
+    }
+    const config = await getTrialConfig();
+    const data = await upgradeTrialGear({
+      userId,
+      runId: String(input.runId ?? ""),
+      gearId: String(input.gearId ?? ""),
+      purchaseId: String(input.purchaseId ?? ""),
+      cmdIndex: Number(input.cmdIndex) || 0,
+      commands: Array.isArray(input.commands) ? input.commands : [],
+      config,
+    });
+    revalidatePath("/trial");
+    return { success: true, data };
+  } catch (error) {
+    return fail(error, "强化失败");
   }
 }
 

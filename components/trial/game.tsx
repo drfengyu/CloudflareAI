@@ -58,6 +58,12 @@ import { expToNext, generalStats, partyPower } from "@/lib/trial/saga/state";
 import { SAGA_COUPON_ITEM_ID, bankCreditsForGold, couponGoldCost, couponsForGold, type SagaBankPolicy } from "@/lib/trial/saga/bank";
 import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "@/lib/trial/saga/inn";
 import {
+  SAGA_FORGE_MAX_LEVEL,
+  forgeCost,
+  forgeStat,
+  gearLevel,
+} from "@/lib/trial/saga/forge";
+import {
   SAGA_TRAINING_ITEM_ID,
   SAGA_TRAINING_TICKETS_PER_LEVEL,
   trainingCost,
@@ -98,6 +104,7 @@ import {
   buyTrialCouponsAction,
   buyTrialItemAction,
   startTrialAction,
+  upgradeTrialGearAction,
 } from "@/app/(dashboard)/trial/actions";
 import {
   DEFAULT_VIEW,
@@ -329,6 +336,18 @@ export function TrialGame(props: TrialGameProps) {
     (sum, purchase) => (purchase.itemId === SAGA_COUPON_ITEM_ID ? sum + (purchase.coupons ?? 0) : sum),
     0,
   );
+  /** 铁匠铺可强化的装备：库存里的 + 武将身上穿着的，按 ID 去重。 */
+  const forgeGearIds = useMemo(() => {
+    const ids = new Set(Object.keys(save.gear));
+    for (const member of [...save.party, ...save.reserve]) {
+      if (member.weapon) ids.add(member.weapon);
+      if (member.armor) ids.add(member.armor);
+    }
+    return [...ids].filter((id) => {
+      const kind = SAGA_ITEM_BY_ID.get(id)?.kind;
+      return kind === "weapon" || kind === "armor";
+    });
+  }, [save]);
 
   /** 上阵武将当前兵力：没出城时就是满编；行军中的残兵来自重放状态。 */
   const troopRows = save.party.map((general) => {
@@ -600,6 +619,46 @@ export function TrialGame(props: TrialGameProps) {
       }
     },
     [busy, commands, run, runId, save, tickets, trainTargets],
+  );
+
+  /** 铁匠铺强化：一次一级，价格随等级递增；服务端重放核对当前等级后再扣券。 */
+  const forgeGear = useCallback(
+    async (gearId: string) => {
+      if (!runId || !run || busy) return;
+      const level = gearLevel(save, gearId);
+      if (level >= SAGA_FORGE_MAX_LEVEL) {
+        toast.error(`${itemName(gearId)} 已强化到顶`);
+        return;
+      }
+      const cost = forgeCost(gearId, level);
+      if (cost <= 0) return;
+      if (tickets < cost) {
+        toast.error(`试炼券不足（要 ${cost} 张）`);
+        return;
+      }
+      setBusy(`forge:${gearId}`);
+      try {
+        const purchaseId = crypto.randomUUID().replace(/-/g, "").slice(0, 32);
+        const result = await upgradeTrialGearAction({
+          runId,
+          gearId,
+          purchaseId,
+          cmdIndex: commands.length,
+          commands,
+        });
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
+        setRun((prev) => (prev ? { ...prev, purchases: result.data.purchases } : prev));
+        setTickets(result.data.tickets);
+        gameAudio.play("coin");
+        toast.success(`${itemName(gearId)} 强化到 +${result.data.level}，花了 ${cost} 张券`);
+      } finally {
+        setBusy(null);
+      }
+    },
+    [busy, commands, run, runId, save, tickets],
   );
 
   const bankGold = useCallback(
@@ -1815,6 +1874,65 @@ export function TrialGame(props: TrialGameProps) {
                       );
                     })}
                   </div>
+                  {panel === "forge" ? (
+                    <div className="space-y-2 border-t border-border pt-3">
+                      <p className="text-xs text-muted-foreground">
+                        强化：每级提升两成基础属性，最高 +{SAGA_FORGE_MAX_LEVEL} 级；换将、卸装都不掉级。
+                      </p>
+                      {forgeGearIds.length === 0 ? (
+                        <p className="rounded-lg border border-border p-2 text-xs text-muted-foreground">
+                          先备一件兵器或甲胄，再来铁匠铺开炉。
+                        </p>
+                      ) : (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {forgeGearIds.map((gearId) => {
+                            const level = gearLevel(save, gearId);
+                            const maxed = level >= SAGA_FORGE_MAX_LEVEL;
+                            const cost = forgeCost(gearId, level);
+                            const stat = forgeStat(gearId, level);
+                            const nextStat = maxed ? stat : forgeStat(gearId, level + 1);
+                            const working = busy === `forge:${gearId}`;
+                            return (
+                              <div key={gearId} className="rounded-lg border border-border p-2.5">
+                                <div className="flex items-center justify-between text-sm">
+                                  <span className="font-medium">
+                                    {itemName(gearId)}
+                                    <span className="ml-1.5 text-[11px] text-amber-600 dark:text-amber-400">
+                                      +{level}
+                                    </span>
+                                  </span>
+                                  <span className="text-xs tabular-nums text-muted-foreground">
+                                    {SAGA_ITEM_BY_ID.get(gearId)?.kind === "weapon" ? "攻" : "防"} {stat}
+                                    {maxed ? "" : ` → ${nextStat}`}
+                                  </span>
+                                </div>
+                                <div className="mt-1.5 flex items-center justify-between gap-2">
+                                  <span className="flex items-center gap-1 text-xs tabular-nums text-muted-foreground">
+                                    {maxed ? (
+                                      "已满级"
+                                    ) : (
+                                      <>
+                                        <Ticket className="h-3 w-3 text-violet-400" />
+                                        {cost} 张
+                                      </>
+                                    )}
+                                  </span>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={!run || maxed || tickets < cost || working}
+                                    onClick={() => void forgeGear(gearId)}
+                                  >
+                                    {maxed ? "满级" : working ? "强化中…" : "强化"}
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
                   <p className="text-xs text-muted-foreground">
                     买入的装备进编成所穿戴，伤药在战斗中取用；装备可以换给任何武将。
                   </p>

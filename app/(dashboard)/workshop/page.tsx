@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkshopBoard } from "@/components/workshop/board";
 import { CouponCount } from "@/components/activity/coupon-badge";
 import { CouponShop } from "@/components/activity/coupon-shop";
+import { ActivityWindowBadge } from "@/components/activity/activity-window-badge";
 import { formatCredits } from "@/lib/billing/credits";
 import { getActivityCouponView } from "@/lib/activity/coupons";
 import { listGrantedMilestones } from "@/lib/activity/rewards";
@@ -147,7 +148,17 @@ export default async function WorkshopPage() {
 
   return (
     <>
-      <PageHeader title="灵宠工坊" description="三选一 · 进图捕捉 · 道馆徽章" />
+      <PageHeader
+        title="灵宠工坊"
+        description="三选一 · 进图捕捉 · 道馆徽章"
+        action={
+          <ActivityWindowBadge
+            win={windowInfo}
+            tickets={ownTickets}
+            couponName={coupon.couponName}
+          />
+        }
+      />
       <PageBody className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Card>

@@ -15,6 +15,7 @@ import {
   type SagaGeneralState,
   type TrialSave,
 } from "./types";
+import { forgeStat, normalizeGearLevels } from "./forge";
 
 export function createGeneralState(id: string, level = 1): SagaGeneralState {
   return { id, level: Math.max(1, Math.min(SAGA_MAX_LEVEL, Math.trunc(level))), exp: 0, weapon: null, armor: null };
@@ -37,6 +38,7 @@ export function initialTrialSave(): TrialSave {
     reserve: [],
     bag: { herb: 2 },
     gear: {},
+    gearLevels: {},
     met: [...SAGA_STARTER_IDS],
     recruited: [...SAGA_STARTER_IDS],
     stats: { runs: 0, wins: 0, battlesWon: 0, bestCleared: 0, recruited: 0 },
@@ -149,6 +151,7 @@ export function normalizeTrialSave(raw: unknown): TrialSave {
     reserve,
     bag: normalizeItemMap(it.bag, bagAllowed),
     gear: normalizeItemMap(it.gear, gearAllowed),
+    gearLevels: normalizeGearLevels(it.gearLevels),
     met: [...met],
     recruited: [...recruited],
     stats: {
@@ -171,7 +174,11 @@ export interface SagaGeneralStats {
   armorDef: number;
 }
 
-export function generalStats(state: SagaGeneralState): SagaGeneralStats {
+/** 武将属性；传入存档的 `gearLevels` 时，兵器 / 甲胄按铁匠铺强化等级加成。 */
+export function generalStats(
+  state: SagaGeneralState,
+  gearLevels?: Record<string, number>,
+): SagaGeneralStats {
   const def = SAGA_GENERAL_BY_ID.get(state.id);
   if (!def) {
     return { force: 1, intellect: 1, defense: 1, speed: 1, maxTroops: 1, weaponAtk: 0, armorDef: 0 };
@@ -186,8 +193,8 @@ export function generalStats(state: SagaGeneralState): SagaGeneralStats {
     defense: def.defense + bonus.defense + Math.floor((level - 1) * 1.3),
     speed: def.speed + bonus.speed + Math.floor((level - 1) * 0.8),
     maxTroops: def.baseTroops + (level - 1) * def.growth,
-    weaponAtk: weapon?.atk ?? 0,
-    armorDef: armor?.def ?? 0,
+    weaponAtk: weapon ? forgeStat(weapon.id, gearLevels?.[weapon.id] ?? 0) : 0,
+    armorDef: armor ? forgeStat(armor.id, gearLevels?.[armor.id] ?? 0) : 0,
   };
 }
 

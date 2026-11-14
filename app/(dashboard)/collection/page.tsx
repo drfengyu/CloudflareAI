@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollectionSky } from "@/components/collection/sky";
 import { CouponCount } from "@/components/activity/coupon-badge";
 import { CouponShop } from "@/components/activity/coupon-shop";
+import { ActivityWindowBadge } from "@/components/activity/activity-window-badge";
 import { formatCredits } from "@/lib/billing/credits";
 import { getActivityCouponView } from "@/lib/activity/coupons";
 import { listGrantedMilestones } from "@/lib/activity/rewards";
@@ -157,7 +158,17 @@ export default async function CollectionPage() {
 
   return (
     <>
-      <PageHeader title="星图共鸣" description="观星得石 · 点亮星座 · 每日共鸣" />
+      <PageHeader
+        title="星图共鸣"
+        description="观星得石 · 点亮星座 · 每日共鸣"
+        action={
+          <ActivityWindowBadge
+            win={windowInfo}
+            tickets={coupon.tickets}
+            couponName={coupon.couponName}
+          />
+        }
+      />
       <PageBody className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat

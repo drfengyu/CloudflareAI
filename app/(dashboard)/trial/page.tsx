@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrialGame } from "@/components/trial/game";
 import { CouponCount } from "@/components/activity/coupon-badge";
 import { CouponShop } from "@/components/activity/coupon-shop";
+import { ActivityWindowBadge } from "@/components/activity/activity-window-badge";
 import { formatCredits } from "@/lib/billing/credits";
 import { getActivityCouponView } from "@/lib/activity/coupons";
 import { requireUser } from "@/lib/usage/meter";
@@ -24,6 +25,7 @@ import {
   type TrialSaveState,
 } from "@/lib/trial/store";
 import { SAGA_CHAPTERS } from "@/lib/trial/saga/data";
+import { SAGA_FORGE_MAX_LEVEL } from "@/lib/trial/saga/forge";
 import { SAGA_INN_PRICE_TICKETS } from "@/lib/trial/saga/inn";
 import { partyPower } from "@/lib/trial/saga/state";
 
@@ -126,6 +128,7 @@ export default async function TrialPage() {
           <li>
             出城<b>不花券</b>。铁匠铺、药铺、客栈、军需帐与<b>训练场</b>全部用<b>活动券</b>标价（1 张 ={" "}
             {formatCredits(config.couponUnitCredits)} cr 券面），买装备、伤药、军需、住店与逐级训练都在购买时实时扣券；
+            铁匠铺还能逐级<b>强化装备</b>（每件最高 +{SAGA_FORGE_MAX_LEVEL} 级，每级提升两成基础属性，换将卸装不掉级）；
             城中还有<b>活动券礼包</b>入口，可当场兑换或购买。战斗缴获的金币可在钱庄存成 tcr，
             也能按同一券面价（1 张 = {formatCredits(config.couponUnitCredits)} cr ≈ 同等金币）换成活动券当场使用。
           </li>
@@ -250,6 +253,13 @@ export default async function TrialPage() {
       <PageHeader
         title="三国讨逆传"
         description={`${place} · 剧情回合制兵团战`}
+        action={
+          <ActivityWindowBadge
+            win={windowInfo}
+            tickets={coupon.tickets}
+            couponName={coupon.couponName}
+          />
+        }
       />
       <PageBody className="space-y-4 px-3 py-5 sm:px-5 lg:max-w-[1440px] lg:px-8">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

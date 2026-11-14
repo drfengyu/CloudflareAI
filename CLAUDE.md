@@ -534,8 +534,23 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.58.0（2026-11-14，活动中心 2.0 与钱庄金币换券）
+**当前版本**：v0.59.0（2026-11-14，铁匠铺装备强化与玩法页倒计时）
 **下一版本**：待定
+
+- v0.59.0 铁匠铺装备强化与玩法页倒计时：
+  新增 `lib/trial/saga/forge.ts`：`SAGA_FORGE_MAX_LEVEL = 5`、`forgeCost`（`priceTickets + 当前等级 × 2`）、
+  `forgeBonus` / `forgeStat`（每级 +20% 基础属性）、`upgradeGear`（只升不降）、
+  `normalizeGearLevels`（只留武器 / 护甲，截断 0~5 级）。
+  `TrialSave.gearLevels` 存强化等级，与装备解耦；`generalStats(state, gearLevels?)`
+  可选第二参，`battle.ts` 建阵与招降补兵传入 `state.save.gearLevels`，其余旧调用不变。
+  购买记录 `{ itemId: "forge", gearId, targetLevel, cmdIndex }` 由 `parsePurchases` / `applyPurchase`
+  读取；服务端 `upgradeTrialGear`（`lib/trial/store.ts`）重放核对持有与当前等级，
+  目标等级由服务端定（当前 +1），`payWithCoupon` 扣券后写记录，乐观锁失败退款、`purchaseId` 幂等。
+  铁匠铺面板下半区展示 `+等级`、攻 / 防 `当前 → 下一级`、下一级券价与强化按钮。
+  另把 `components/activity/activity-window-badge.tsx` 接入 `/trial`、`/workshop`、`/collection`
+  活动进行中的页头（复用 `activityCountdown` 与临期券提醒）。
+  `tests/trial-saga.test.ts` 新增两项铁匠铺用例（共 43 项）；`tsc`、ESLint 通过；
+  本机无 `.env.local`，页面未实测。
 
 - v0.58.0 活动中心 2.0 与钱庄金币换券：
   活动中心 `/cashback` 顶部改为实时进度卡 —— `lib/activity/hub.ts` 的 `loadActivityHub`

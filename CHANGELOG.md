@@ -5,6 +5,37 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.59.0] - 2026-11-14
+
+### 新增
+
+- 三国讨逆传铁匠铺新增**装备强化**：花试炼券把兵器 / 甲胄逐级强化，每件最多 +5 级。
+  - `lib/trial/saga/forge.ts`：`SAGA_FORGE_MAX_LEVEL`、`forgeCost`（券价 = 装备原价 + 当前等级 × 2）、
+    `forgeBonus` / `forgeStat`（每级 +20% 基础属性，满级约两倍）、`upgradeGear`（只升不降）与
+    `normalizeGearLevels`（只留武器 / 护甲，截断到 0~5 级）。
+  - 强化等级存进剧情存档 `TrialSave.gearLevels`，与装备解耦：换将、卸装、跨城镇换装都不掉级。
+  - `generalStats(state, gearLevels?)` 按强化等级算武器攻击 / 护甲防御，战斗建阵与招降补兵
+    都带强化加成；兵力上限与战力估算等旧调用保持原值。
+  - `upgradeTrialGear`（`lib/trial/store.ts`）：按客户端指令重放核对持有与当前等级，
+    目标等级由服务端定（当前 +1），`payWithCoupon` 扣券后把
+    `{ itemId: "forge", gearId, targetLevel, cmdIndex }` 写进购买记录；乐观锁失败退款，
+    同一 `purchaseId` 幂等。
+  - 铁匠铺面板下半区：列出库存与身上装备，显示 `+等级`、攻 / 防 `当前 → 下一级`、
+    下一级券价与「强化」按钮；试炼页规则同步。
+- `/trial`、`/workshop`、`/collection` 活动进行中的页头统一挂
+  `components/activity/activity-window-badge.tsx`：复用活动中心的倒计时与临期券提醒
+  （「XX券还剩 N 张，活动结束后作废」），2 天内琥珀、6 小时内红色。
+
+### 变更
+
+- 城中文案与试炼规则：铁匠铺说明从「卖装备」扩为「买卖 + 强化」。
+
+### 测试
+
+- `tests/trial-saga.test.ts` 新增铁匠铺用例（共 43 项）：券价随等级递增与满级归零、
+  属性加成取整、非装备拒绝、脏强化表截断、购买记录按指令位置生效且只升不降、
+  收兵存档保留等级、越界目标等级与非法记录被丢弃。
+
 ## [0.58.0] - 2026-11-14
 
 ### 新增

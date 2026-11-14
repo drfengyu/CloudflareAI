@@ -75,6 +75,10 @@
   `activityCountdown`），服务器先算首屏文案，`components/activity/countdown.tsx`
   每 30 秒在浏览器里刷新；剩余 2 天内转琥珀色、6 小时内转红色。
 - **券临期提醒**：仍有券且倒计时进入「soon / urgent」时，卡片提示「活动结束后作废」。
+- **玩法页同步**：`/trial`、`/workshop`、`/collection` 的活动进行中页头挂
+  `components/activity/activity-window-badge.tsx`——同一个倒计时 + 临期券提醒
+  （「XX券还剩 N 张，活动结束后作废」），不用回活动中心也能看到。未开启 / 未开始 /
+  已结束时页头不挂倒计时，沿用页面内的 Notice 说明。
 - **今日日程**：按活动给出一行日程摘要与直达链接；未开启的玩法标注「未开启」。
 - 服务端聚合只读，不写库；`ResolvedActivity` 新增 `startMs` / `endMs`，
   由各活动的 `*ActivityWindow` 统一提供，读侧无需重复解析配置。

@@ -19,6 +19,7 @@ import {
 } from "./bank";
 import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "./inn";
 import { SAGA_TRAINING_ITEM_ID, trainGeneral } from "./training";
+import { SAGA_FORGE_ITEM_ID, SAGA_FORGE_MAX_LEVEL, upgradeGear } from "./forge";
 import {
   applyChapterUnlock,
   cloneSave,
@@ -374,6 +375,25 @@ function parsePurchases(raw: unknown, bank: SagaBankPolicy): SagaPurchase[] {
       });
       continue;
     }
+    // 铁匠铺：记录被强化的装备与目标等级，重放时按购买位置直接抬强化等级。
+    if (itemId === SAGA_FORGE_ITEM_ID) {
+      const gearId = String(it.gearId ?? "").slice(0, 32);
+      const gear = SAGA_ITEM_BY_ID.get(gearId);
+      if (!gear || (gear.kind !== "weapon" && gear.kind !== "armor")) continue;
+      const targetLevel = clampInt(Number(it.targetLevel) || 0, 0, SAGA_FORGE_MAX_LEVEL);
+      if (targetLevel < 1) continue;
+      ids.add(id);
+      out.push({
+        id,
+        itemId,
+        tickets: clampInt(Number(it.tickets) || 0, 0, 999),
+        gearId,
+        targetLevel,
+        at,
+        cmdIndex,
+      });
+      continue;
+    }
     const def = SAGA_ITEM_BY_ID.get(itemId);
     if (!def || !def.priceTickets) continue;
     if (isPassiveSupply(itemId)) {
@@ -656,6 +676,12 @@ function applyPurchase(state: SagaReplayState, purchase: SagaPurchase): void {
   if (purchase.itemId === SAGA_TRAINING_ITEM_ID) {
     if (purchase.generalId && typeof purchase.targetLevel === "number") {
       trainGeneral(state.save, purchase.generalId, purchase.targetLevel);
+    }
+    return;
+  }
+  if (purchase.itemId === SAGA_FORGE_ITEM_ID) {
+    if (purchase.gearId && typeof purchase.targetLevel === "number") {
+      upgradeGear(state.save, purchase.gearId, purchase.targetLevel);
     }
     return;
   }

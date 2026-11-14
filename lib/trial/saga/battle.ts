@@ -119,7 +119,7 @@ function buildBattle(
   const rules = state.rules ?? 1;
   const party: SagaBattleGeneral[] = state.save.party.map((saved) => {
     const def = SAGA_GENERAL_BY_ID.get(saved.id);
-    const stats = generalStats(saved);
+    const stats = generalStats(saved, state.save.gearLevels);
     const maxTroops = Math.max(
       1,
       Math.round(stats.maxTroops * (1 + buffs.troopPct / 100)),
@@ -629,7 +629,7 @@ function finishBattle(
         if (result.joined === "party") {
           const saved = state.save.party.find((g) => g.id === id);
           if (saved) {
-            const stats = generalStats(saved);
+            const stats = generalStats(saved, state.save.gearLevels);
             state.partyTroops[id] = Math.round(stats.maxTroops * (1 + state.buffs.troopPct / 100));
           }
         }

@@ -174,6 +174,8 @@ export interface TrialSave {
   reserve: SagaGeneralState[];
   bag: Record<string, number>;
   gear: Record<string, number>;
+  /** 铁匠铺强化等级：按装备 ID 记 1~5 级，0 级不入表。 */
+  gearLevels: Record<string, number>;
   met: string[];
   recruited: string[];
   stats: SagaStats;
@@ -280,6 +282,8 @@ export interface SagaPurchase {
   /** 训练场：受训武将与该次训练的目标等级。 */
   generalId?: string;
   targetLevel?: number;
+  /** 铁匠铺：被强化的装备与强化后的等级（`itemId` 为 `forge`）。 */
+  gearId?: string;
   at: number;
   /** 购买时已经执行过的指令数：装备 / 军需 / 住店从下一步行动起生效。 */
   cmdIndex: number;

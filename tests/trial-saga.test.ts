@@ -79,6 +79,7 @@ import {
   findGeneral,
   generalStats,
   initialTrialSave,
+  normalizeTrialSave,
 } from "../lib/trial/saga/state";
 import { startBattle } from "../lib/trial/saga/battle";
 import {
@@ -88,6 +89,13 @@ import {
   trainingCost,
   trainingLevelCap,
 } from "../lib/trial/saga/training";
+import {
+  SAGA_FORGE_ITEM_ID,
+  SAGA_FORGE_MAX_LEVEL,
+  forgeCost,
+  forgeStat,
+  normalizeGearLevels,
+} from "../lib/trial/saga/forge";
 
 function trial(overrides: Partial<TrialConfig> = {}): TrialConfig {
   return { ...DEFAULT_TRIAL_CONFIG, ...overrides };
@@ -625,6 +633,68 @@ test("钱庄换券：结算时扣掉兑换金币，战斗缴获照常入账", ()
   const settled = settleSagaRun(purchased, winCommands);
   assert.equal(settled.endSave.gold, 80, "100 − 50 换券 + 30 战利品");
   assert.equal(settled.result.goldGained, 30, "换券不算战斗战利品");
+});
+
+test("铁匠铺强化：价格随等级递增、满级封顶，属性按基础两成叠加", () => {
+  assert.equal(forgeCost("iron_sword", 0), 1);
+  assert.equal(forgeCost("iron_sword", 1), 3);
+  assert.equal(forgeCost("iron_sword", 4), 9);
+  assert.equal(forgeCost("iron_sword", SAGA_FORGE_MAX_LEVEL), 0, "满级不再收费");
+  assert.equal(forgeCost("guandao", 0), 5);
+  assert.equal(forgeCost("herb", 0), 0, "消耗品不能强化");
+  assert.equal(forgeCost("not_an_item", 0), 0);
+
+  assert.equal(forgeStat("iron_sword", 0), 8);
+  assert.equal(forgeStat("iron_sword", 3), 13);
+  assert.equal(forgeStat("iron_sword", SAGA_FORGE_MAX_LEVEL), 16);
+  assert.equal(forgeStat("guandao", SAGA_FORGE_MAX_LEVEL), 54);
+  assert.equal(forgeStat("cloth", SAGA_FORGE_MAX_LEVEL), 12);
+  assert.equal(forgeStat("herb", 5), 0);
+
+  assert.deepEqual(
+    normalizeGearLevels({ iron_sword: 9, cloth: -2, herb: 3, guandao: "2" }),
+    { iron_sword: SAGA_FORGE_MAX_LEVEL, guandao: 2 },
+    "只留可强化装备，等级截断到 0~5",
+  );
+  assert.deepEqual(normalizeTrialSave({ ...initialTrialSave(), gearLevels: undefined }).gearLevels, {});
+});
+
+test("铁匠铺强化：购买记录按指令位置抬等级，收兵存档保留，脏记录被丢掉", () => {
+  const run = freshRun(81, 2);
+  const guanyu = run.startSave.party.find((general) => general.id === "guanyu")!;
+  assert.equal(guanyu.weapon, "iron_sword");
+  const purchases = [
+    { id: "forge1", itemId: SAGA_FORGE_ITEM_ID, tickets: 1, gearId: "iron_sword", targetLevel: 1, at: 1, cmdIndex: 0 },
+    { id: "forge2", itemId: SAGA_FORGE_ITEM_ID, tickets: 3, gearId: "iron_sword", targetLevel: 2, at: 2, cmdIndex: 0 },
+    { id: "forge3", itemId: SAGA_FORGE_ITEM_ID, tickets: 1, gearId: "iron_sword", targetLevel: 1, at: 3, cmdIndex: 0 },
+  ];
+  const state = replaySagaRun({ ...run, purchases }, []).state;
+  assert.equal(state.save.gearLevels.iron_sword, 2, "等级只增不减");
+  assert.equal(
+    generalStats(state.save.party.find((general) => general.id === "guanyu")!, state.save.gearLevels)
+      .weaponAtk,
+    11,
+    "铁剑强化到 +2：8 + 3",
+  );
+  assert.equal(generalStats(guanyu).weaponAtk, 8, "不传等级表时按原属性");
+
+  const forged = settleSagaRun({ ...easyRun(), purchases }, winCommands);
+  assert.equal(forged.endSave.gearLevels.iron_sword, 2, "收兵存档保留强化等级");
+
+  const parsed = parseSagaRun(
+    JSON.stringify({
+      ...run,
+      purchases: [
+        { id: "forge4", itemId: SAGA_FORGE_ITEM_ID, tickets: 9, gearId: "iron_sword", targetLevel: 99, at: 1, cmdIndex: 0 },
+        { id: "forge5", itemId: SAGA_FORGE_ITEM_ID, tickets: 1, gearId: "herb", targetLevel: 1, at: 1, cmdIndex: 0 },
+        { id: "forge6", itemId: SAGA_FORGE_ITEM_ID, tickets: 1, gearId: "cloth", targetLevel: 0, at: 1, cmdIndex: 0 },
+        { id: "forge7", itemId: SAGA_FORGE_ITEM_ID, tickets: 1, gearId: "not_an_item", targetLevel: 1, at: 1, cmdIndex: 0 },
+      ],
+    }),
+  );
+  assert.ok(parsed);
+  assert.equal(parsed.purchases.length, 1, "非装备与零级记录被丢掉");
+  assert.equal(parsed.purchases[0]?.targetLevel, SAGA_FORGE_MAX_LEVEL, "目标等级按上限截断");
 });
 
 test("攻克章节：发金币经验、进下一章并解锁武将写进存档", () => {
