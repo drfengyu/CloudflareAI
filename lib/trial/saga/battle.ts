@@ -93,6 +93,7 @@ const GEAR_TIERS = {
   armor: ["cloth", "leather", "iron_armor", "heavy_armor"],
 } as const;
 
+/** 每 8 级升一档；杂兵传 -1 拿低一档的旧兵器。 */
 function gearTierFor(level: number, shift = 0): number {
   return clamp(Math.floor((level - 1) / 8) + shift, 0, GEAR_TIERS.weapon.length - 1);
 }
@@ -205,7 +206,7 @@ export function startEncounterBattle(
   state: SagaReplayState,
 ): SagaBattleState {
   return buildBattle(
-    sagaEncounterFor(run, ordinal),
+    sagaEncounterFor(run, ordinal, state.rules ?? 1),
     -1,
     (run.seed ^ Math.imul(ordinal + 101, 0x85ebca6b)) >>> 0,
     state,
@@ -280,7 +281,11 @@ function buildBattle(
     };
   });
   const enemies: SagaBattleGeneral[] = node.enemies.slice(0, SAGA_PARTY_SIZE).map((enemy) => {
-    const gear = rules >= 3 ? tierGear(gearTierFor(enemy.level)) : null;
+    // v4 起杂兵也带装备，但比同级敌将低一档；v3 只有敌将带装备。
+    const gear =
+      rules < 3 || (rules < 4 && enemy.poor)
+        ? null
+        : tierGear(gearTierFor(enemy.level, enemy.poor ? -1 : 0));
     return {
       id: enemy.id,
       name: enemy.name,

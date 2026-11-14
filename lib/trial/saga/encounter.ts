@@ -1,5 +1,5 @@
 /**
- * 野外遭遇战：行军大地图上随机撞见的散兵、山贼与盗贼。
+ * 野外遭遇战：行军大地图上随机撞见的散兵、山贼、海贼与盗贼。
  *
  * 编成只由「行军种子 + 本次第几场遭遇」推出，客户端即时开战、服务端收兵重放都用
  * 同一份纯函数，随机多少队、有没有将领都不需要上传。每趟最多 SAGA_MAX_ENCOUNTERS 场，
@@ -19,7 +19,7 @@ import type { SagaEnemy, SagaNode, SagaRun } from "./types";
 export const SAGA_MAX_ENCOUNTERS = 10;
 
 interface FoeTemplate {
-  key: "soldier" | "bandit" | "thief";
+  key: "soldier" | "bandit" | "pirate" | "thief";
   name: string;
   title: string;
   group: string;
@@ -82,6 +82,26 @@ const FOES: FoeTemplate[] = [
     accent: "#ddd6fe",
   },
 ];
+
+/** v4 起的第四类杂兵：海边滩涂登岸的海贼。 */
+const PIRATE: FoeTemplate = {
+  key: "pirate",
+  name: "海贼",
+  title: "水匪",
+  group: "海贼劫掠",
+  blurb: "海贼趁潮水登岸，抢完粮船又来劫这趟行军的辎重。",
+  force: 66,
+  intellect: 18,
+  defense: 46,
+  speed: 58,
+  baseTroops: 92,
+  growth: 7,
+  color: "#0e7490",
+  accent: "#cffafe",
+};
+
+/** v4 之前的编成只在这三类里抽，旧行军重放时结果与改版前一致。 */
+const FOES_V4: FoeTemplate[] = [...FOES, PIRATE];
 
 const SQUAD_MARKS = ["甲", "乙", "丙", "丁"];
 
@@ -161,6 +181,8 @@ function squadEnemy(
     defense: foe.defense + Math.floor(level * 1),
     speed: foe.speed + Math.floor(level * 0.5),
     tactics: [],
+    // 杂兵的兵器甲胄比同级敌将低一档，见 `buildBattle` 的装备档位。
+    poor: true,
     color: foe.color,
     accent: foe.accent,
     recruitable: false,
@@ -171,14 +193,15 @@ function squadEnemy(
 
 /**
  * 第 ordinal 场野外遭遇（从 0 起）的敌军编成；同种子同序号结果固定。
- * 1~4 队：可能全是兵士 / 山贼 / 盗贼，也可能由一名本章敌将领头。
+ * 1~4 队：可能全是兵士 / 山贼 / 海贼 / 盗贼，也可能由一名本章敌将领头。
+ * v4 之前只有前三种杂兵，旧行军按原编成重放。
  */
-export function sagaEncounterFor(run: SagaRun, ordinal: number): SagaNode {
+export function sagaEncounterFor(run: SagaRun, ordinal: number, rules: number): SagaNode {
   const index = clampInt(ordinal, 0, SAGA_MAX_ENCOUNTERS - 1);
   const chapter =
     SAGA_CHAPTERS[clampInt(run.startSave.chapter, 0, SAGA_CHAPTERS.length - 1)];
   const rng = mulberry32((run.seed ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0);
-  const foe = pick(rng, FOES);
+  const foe = pick(rng, rules >= 4 ? FOES_V4 : FOES);
   const hasLeader = rng() < 0.38;
   const squad = 1 + Math.floor(rng() * 3);
   const enemies: SagaEnemy[] = [];

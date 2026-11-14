@@ -82,7 +82,7 @@ import {
   initialTrialSave,
   normalizeTrialSave,
 } from "../lib/trial/saga/state";
-import { resolveBattleRound, startBattle } from "../lib/trial/saga/battle";
+import { resolveBattleRound, startBattle, startEncounterBattle } from "../lib/trial/saga/battle";
 import { battleEnemyAtPoint, makeSagaView } from "../components/trial/renderer";
 import {
   SAGA_TRAINING_ITEM_ID,
@@ -965,8 +965,8 @@ test("军令：进度从重放状态与乡野见闻推出，主线优先", () =>
 test("野外遭遇编成：同种子同序号固定，1~4 队且将领可有可无", () => {
   const run = freshRun(11, 5);
   for (let ordinal = 0; ordinal < SAGA_MAX_ENCOUNTERS; ordinal++) {
-    const node = sagaEncounterFor(run, ordinal);
-    assert.deepEqual(sagaEncounterFor(run, ordinal), node, `第 ${ordinal} 场按序号复现`);
+    const node = sagaEncounterFor(run, ordinal, run.rules ?? 1);
+    assert.deepEqual(sagaEncounterFor(run, ordinal, run.rules ?? 1), node, `第 ${ordinal} 场按序号复现`);
     assert.equal(node.kind, "battle");
     assert.equal(node.enemies.length >= 1 && node.enemies.length <= 4, true, "敌军 1~4 队");
     assert.equal(
@@ -984,26 +984,60 @@ test("野外遭遇编成：同种子同序号固定，1~4 队且将领可有可�
   }
   // 序号越界按最后一档算，不会崩。
   assert.deepEqual(
-    sagaEncounterFor(run, SAGA_MAX_ENCOUNTERS + 5),
-    sagaEncounterFor(run, SAGA_MAX_ENCOUNTERS - 1),
+    sagaEncounterFor(run, SAGA_MAX_ENCOUNTERS + 5, run.rules ?? 1),
+    sagaEncounterFor(run, SAGA_MAX_ENCOUNTERS - 1, run.rules ?? 1),
   );
 });
 
-test("野外遭遇兵种：兵士、山贼、盗贼都可能出现，有无将领两种编成都有", () => {
+test("野外遭遇兵种：兵士、山贼、海贼、盗贼都可能出现，有无将领两种编成都有", () => {
   const groups = new Set<string>();
   let withLeader = false;
   let withoutLeader = false;
   for (let seed = 1; seed <= 40; seed++) {
     const run = freshRun(seed, 5);
     for (let ordinal = 0; ordinal < SAGA_MAX_ENCOUNTERS; ordinal++) {
-      const node = sagaEncounterFor(run, ordinal);
+      const node = sagaEncounterFor(run, ordinal, run.rules ?? 1);
       groups.add(node.name.includes("·") ? node.name.split("·")[0] : node.name);
       if (node.enemies.some((enemy) => !enemy.id.startsWith("foe_"))) withLeader = true;
       else withoutLeader = true;
     }
   }
-  assert.deepEqual([...groups].sort(), ["山贼拦路", "散兵游勇", "盗贼伏击"].sort());
+  assert.deepEqual([...groups].sort(), ["山贼拦路", "散兵游勇", "盗贼伏击", "海贼劫掠"].sort());
   assert.equal(withLeader && withoutLeader, true, "有将领与纯杂兵两种编成都出现");
+});
+
+test("杂兵装备：v4 按等级发兵甲但比敌将低一档，v3 杂兵仍空手", () => {
+  const weapons = ["iron_sword", "spear", "blade", "guandao"];
+  const armors = ["cloth", "leather", "iron_armor", "heavy_armor"];
+  const expectedTier = (level: number, shift: number) =>
+    Math.min(weapons.length - 1, Math.max(0, Math.floor((level - 1) / 8) + shift));
+
+  const run = { ...freshRun(31, 5), rules: SAGA_RULESET };
+  const state = createReplayState(run);
+  for (let ordinal = 0; ordinal < SAGA_MAX_ENCOUNTERS; ordinal++) {
+    const battle = startEncounterBattle(run, ordinal, state);
+    const squads = battle.enemies.filter((enemy) => enemy.id.startsWith("foe_"));
+    assert.equal(squads.length >= 1, true, `第 ${ordinal} 场有杂兵`);
+    for (const foe of squads) {
+      const tier = expectedTier(foe.level, -1);
+      assert.equal(foe.weapon, weapons[tier], "杂兵兵器比同级敌将低一档");
+      assert.equal(foe.armor, armors[tier]);
+      assert.equal(foe.weaponAtk > 0 && foe.armorDef > 0, true, "杂兵装备计入攻防");
+    }
+    for (const leader of battle.enemies.filter((enemy) => !enemy.id.startsWith("foe_"))) {
+      assert.equal(leader.weapon, weapons[expectedTier(leader.level, 0)], "领头敌将按本级发装备");
+    }
+  }
+
+  const legacy = { ...run, rules: 3 };
+  const legacyBattle = startEncounterBattle(legacy, 0, createReplayState(legacy));
+  assert.equal(
+    legacyBattle.enemies
+      .filter((enemy) => enemy.id.startsWith("foe_"))
+      .every((enemy) => enemy.weapon === null),
+    true,
+    "v3 杂兵不带装备",
+  );
 });
 
 test("野外遭遇战：不占营地进度，打赢照常得金币经验并继续行军", () => {
