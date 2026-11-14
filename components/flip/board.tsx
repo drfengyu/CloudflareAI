@@ -52,11 +52,17 @@ export function FlipBoard(props: FlipBoardProps) {
   const [round, setRound] = useState<ActiveRound | null>(props.pendingRound);
   const [outcome, setOutcome] = useState<FlipOutcome | null>(null);
   const [busy, setBusy] = useState<"open" | "reveal" | null>(null);
+  /** 正在翻的那一张，用来只给被点的牌显示加载态。 */
+  const [flipping, setFlipping] = useState<number | null>(null);
 
   const revealed = outcome?.board ?? null;
 
   async function onOpen() {
     if (busy) return;
+    if (props.coupon.tickets < props.priceTickets) {
+      toast.error(`活动券不足：还差 ${props.priceTickets - props.coupon.tickets} 张，可在本页券包兑换`);
+      return;
+    }
     setBusy("open");
     const res = await openFlipRound();
     setBusy(null);
@@ -73,8 +79,10 @@ export function FlipBoard(props: FlipBoardProps) {
   async function onFlip(position: number) {
     if (busy || !round || revealed) return;
     setBusy("reveal");
+    setFlipping(position);
     const res = await revealFlipCard({ roundId: round.roundId, position });
     setBusy(null);
+    setFlipping(null);
     if (!res.success) {
       toast.error(res.error);
       return;
@@ -142,6 +150,7 @@ export function FlipBoard(props: FlipBoardProps) {
             unitCredits={props.unitCredits}
             picked={revealed ? outcome?.position === position : false}
             disabled={revealed !== null || round === null || busy !== null}
+            loading={flipping === position}
             onPick={() => void onFlip(position)}
           />
         ))}
@@ -149,14 +158,14 @@ export function FlipBoard(props: FlipBoardProps) {
 
       <div className="flex flex-wrap items-center gap-3">
         {revealed ? (
-          <Button onClick={() => void onOpen()} disabled={busy !== null || props.roundsLeft <= 0 || insufficient}>
+          <Button onClick={() => void onOpen()} disabled={busy !== null || props.roundsLeft <= 0}>
             {busy === "open" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             再来一局（<CouponCount kind="flip" count={props.priceTickets} />）
           </Button>
         ) : round ? (
           <p className="text-sm text-muted-foreground">上面挑一张翻开，翻开即结算。</p>
         ) : (
-          <Button onClick={() => void onOpen()} disabled={busy !== null || props.roundsLeft <= 0 || insufficient}>
+          <Button onClick={() => void onOpen()} disabled={busy !== null || props.roundsLeft <= 0}>
             {busy === "open" ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
             开一局（<CouponCount kind="flip" count={props.priceTickets} />）
           </Button>
@@ -166,7 +175,7 @@ export function FlipBoard(props: FlipBoardProps) {
         ) : null}
         {insufficient && props.roundsLeft > 0 ? (
           <span className="text-xs text-muted-foreground">
-            活动券不足，还差 {props.priceTickets - couponTickets} 张，先在下方券包兑换。
+            活动券不足，还差 {props.priceTickets - couponTickets} 张，可在本页券包兑换。
           </span>
         ) : null}
       </div>

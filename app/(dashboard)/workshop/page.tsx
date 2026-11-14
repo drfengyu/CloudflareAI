@@ -147,6 +147,33 @@ export default async function WorkshopPage() {
         }
       />
       <PageBody className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <PawPrint className="h-4 w-4" /> 冒险与养成
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <WorkshopBoard
+              initial={snapshot.state}
+              version={snapshot.version}
+              lines={WORKSHOP_LINES}
+              areas={WORKSHOP_AREAS}
+              gyms={WORKSHOP_GYMS}
+              milestones={config.milestones}
+              grantedTiers={grantedTiers}
+              dailyExplores={config.dailyExplores}
+              dailyGyms={config.dailyGyms}
+              runLimits={{ maxSteps: config.runMaxSteps, maxEncounters: config.runMaxEncounters }}
+              exploreTickets={exploreTickets}
+              gymTickets={gymTickets}
+              restTickets={ticketsForCost(config.restCostCredits, config.couponUnitCredits)}
+              couponTickets={ownTickets}
+              coupon={coupon}
+            />
+          </CardContent>
+        </Card>
+
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <Card>
             <CardContent className="flex flex-col gap-1 py-4">
@@ -206,33 +233,6 @@ export default async function WorkshopPage() {
             </CardContent>
           </Card>
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <PawPrint className="h-4 w-4" /> 冒险与养成
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <WorkshopBoard
-              initial={snapshot.state}
-              version={snapshot.version}
-              lines={WORKSHOP_LINES}
-              areas={WORKSHOP_AREAS}
-              gyms={WORKSHOP_GYMS}
-              milestones={config.milestones}
-              grantedTiers={grantedTiers}
-              dailyExplores={config.dailyExplores}
-              dailyGyms={config.dailyGyms}
-              runLimits={{ maxSteps: config.runMaxSteps, maxEncounters: config.runMaxEncounters }}
-              exploreTickets={exploreTickets}
-              gymTickets={gymTickets}
-              restTickets={ticketsForCost(config.restCostCredits, config.couponUnitCredits)}
-              couponTickets={ownTickets}
-              coupon={coupon}
-            />
-          </CardContent>
-        </Card>
 
         {rulesCard(config, exploreTickets, gymTickets)}
       </PageBody>

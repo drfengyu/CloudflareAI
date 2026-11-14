@@ -26,6 +26,7 @@ import {
 import { LotteryRecords } from "./lottery-records";
 import { LotteryWheel, type WheelOuter, type WheelSector } from "./lottery-wheel";
 import { getActivityCouponView } from "@/lib/activity/coupons";
+import { ActivityWindowBadge } from "@/components/activity/activity-window-badge";
 
 import { PageBody } from "@/components/dashboard/section";
 
@@ -135,7 +136,7 @@ export default async function LotteryPage() {
 
   const recordsCard = (
     <LotteryRecords
-      key={records[0]?.id ?? "empty"}
+      key={activityKey ?? "history"}
       balance={currentStats}
       records={records}
       totalPages={recordTotalPages}
@@ -170,7 +171,13 @@ export default async function LotteryPage() {
 
   return (
     <>
-      <PageHeader title="幸运转盘" description="活动券与累抽奖励" />
+      <PageHeader
+        title="幸运转盘"
+        description="活动券与累抽奖励"
+        action={
+          <ActivityWindowBadge win={windowInfo} tickets={coupon.tickets} couponName={coupon.couponName} />
+        }
+      />
       <PageBody className="space-y-6">
         <LotteryWheel
           innerSectors={innerSectors}

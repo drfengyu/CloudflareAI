@@ -150,3 +150,13 @@ box / dex / items{ball,potion} / gold / badges / activePetId / run / encounter /
 画家层另用无 DOM 的桩 `CanvasRenderingContext2D`（只认标准成员、坐标一律查 `NaN`）跑过
 7000+ 帧：5 个区域 × 4 种种子 × 全部视野高度 × 4 个朝向 × 三档徽章，无异常、无非法颜色与
 越界 alpha。真机手机与浏览器实测尚未做（本机没有可用的 `.env.local`，起不了需要登录态的页面）。
+
+## 画面交互（v0.70.0）
+
+- HUD 的活动券数改成按钮，点了切到「券包」页签；休息按钮旁边常驻说明为什么不能休息
+  （战斗中 / 队伍状态已满 / 券不足还差几张），不用对着灰按钮猜。
+- 战斗动作失败除了 toast 还在面板上方留一条错误条，带「同步进度」按钮拉权威存档；
+  战斗结束（`state.encounter` 清空，经 `acceptData`）时自动收掉。
+- 野外走位的全局 keydown 跳过 `INPUT` / `TEXTAREA` / `SELECT` 与 `contenteditable`，
+  WASD 和 Enter 不再抢输入框。
+- 页面把玩法卡挪到五行统计卡之前，手机首屏先看到能操作的部分。

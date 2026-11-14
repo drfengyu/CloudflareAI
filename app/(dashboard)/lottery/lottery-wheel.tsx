@@ -379,6 +379,12 @@ export function LotteryWheel(props: LotteryWheelProps) {
     [],
   );
 
+  // 窄屏上转盘占满一屏，开奖结果在下方；抽完自动把结果滚进视野，省得用户找。
+  useEffect(() => {
+    if (!results || !window.matchMedia("(max-width: 1023px)").matches) return;
+    document.getElementById("lottery-current-result")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [results]);
+
   function later(fn: () => void, ms: number) {
     const id = window.setTimeout(fn, ms);
     timers.current.push(id);
@@ -389,7 +395,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
     // 免费抽只对单抽生效；其余按整张扣当期活动券。
     const useFree = count === 1 && canFreeDraw;
     if (!useFree && !canPay(count)) {
-      toast.error(`活动券不足：本次还差 ${couponCostFor(count) - couponTickets} 张`);
+      toast.error(`活动券不足：本次还差 ${couponCostFor(count) - couponTickets} 张，可在下方券包兑换`);
       return;
     }
     timers.current.forEach((id) => clearTimeout(id));
@@ -408,7 +414,8 @@ export function LotteryWheel(props: LotteryWheelProps) {
       setPhase("idle");
       // 开奖失败时预转已经转出去了，用一段短减速把它停住（目标角不变，只改时长，所以不会跳）。
       setInnerSpin({ ms: 400, easing: SETTLE_EASING });
-      toast.error(response.error);
+      // 服务端失败时整次抽奖都不结算，这里明说没扣券，免得用户以为券被吞了。
+      toast.error(`${response.error}（本次未扣券，券包不变）`);
       router.refresh();
       return;
     }
@@ -762,8 +769,9 @@ export function LotteryWheel(props: LotteryWheelProps) {
           <div className="mt-2 grid grid-cols-2 gap-3">
             <button
               onClick={() => handleDraw(1)}
-              disabled={!active || busy || (!canFreeDraw && !canPay(1))}
-              className="h-11 rounded-lg bg-cyan-400 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!active || busy}
+              aria-disabled={!active || busy || (!canFreeDraw && !canPay(1))}
+              className="h-11 rounded-lg bg-cyan-400 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:opacity-40"
             >
               {busy ? (
                 "开奖中…"
@@ -778,8 +786,9 @@ export function LotteryWheel(props: LotteryWheelProps) {
             </button>
             <button
               onClick={() => handleDraw(10)}
-              disabled={!active || busy || !canPay(10)}
-              className="h-11 rounded-lg border border-fuchsia-400/70 text-sm font-semibold text-fuchsia-200 transition hover:bg-fuchsia-400/10 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!active || busy}
+              aria-disabled={!active || busy || !canPay(10)}
+              className="h-11 rounded-lg border border-fuchsia-400/70 text-sm font-semibold text-fuchsia-200 transition hover:bg-fuchsia-400/10 disabled:cursor-not-allowed disabled:opacity-40 aria-disabled:opacity-40"
             >
               {busy ? (
                 "开奖中…"
@@ -791,6 +800,14 @@ export function LotteryWheel(props: LotteryWheelProps) {
               )}
             </button>
           </div>
+
+          {active && (!canFreeDraw && !canPay(1)) ? (
+            <p className="mt-2 text-center text-[11px] text-amber-300/90">
+              活动券不足：单抽还差 {couponCostFor(1) - couponTickets} 张
+              {!canPay(10) ? `，十连还差 ${couponCostFor(10) - couponTickets} 张` : ""}
+              ，先在下方券包兑换。
+            </p>
+          ) : null}
 
           <CouponEntry activity={props.coupon} tone="dark" label="兑换活动券" className="mt-2" />
 
@@ -870,7 +887,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id="lottery-current-result">
           <CardHeader className="pb-2">
             <CardTitle className="text-base">本次结果</CardTitle>
           </CardHeader>

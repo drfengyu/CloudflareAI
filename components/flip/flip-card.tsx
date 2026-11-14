@@ -3,6 +3,7 @@
 import { flipRewardTickets, formatFlipReward } from "@/lib/flip/config";
 import { CouponCount } from "@/components/activity/coupon-badge";
 import { Money } from "@/components/currency/money";
+import { Loader2 } from "lucide-react";
 
 export interface FlipCardProps {
   /** 牌桌上的第几张（0 起），只用于展示编号。 */
@@ -13,6 +14,8 @@ export interface FlipCardProps {
   unitCredits: number;
   /** 用户翻的是不是这一张。 */
   picked: boolean;
+  /** 正在等服务端翻牌结果的是不是这一张。 */
+  loading?: boolean;
   disabled: boolean;
   onPick: () => void;
 }
@@ -23,7 +26,7 @@ export interface FlipCardProps {
  * 牌背刻意做得一模一样、不给任何「这张看起来更大」的暗示——赔率只由开局那次洗牌决定，
  * 界面不该给出误导挑选的线索。
  */
-export function FlipCard({ position, reward, unitCredits, picked, disabled, onPick }: FlipCardProps) {
+export function FlipCard({ position, reward, unitCredits, picked, loading = false, disabled, onPick }: FlipCardProps) {
   const revealed = reward !== null;
   const tickets = revealed ? flipRewardTickets(reward, unitCredits) : null;
   const label = revealed ? formatFlipReward(reward, tickets) : "";
@@ -34,7 +37,8 @@ export function FlipCard({ position, reward, unitCredits, picked, disabled, onPi
       type="button"
       onClick={onPick}
       disabled={disabled || revealed}
-      aria-label={revealed ? `第 ${position + 1} 张：${label}` : `翻开第 ${position + 1} 张`}
+      aria-busy={loading}
+      aria-label={loading ? `正在翻开第 ${position + 1} 张` : revealed ? `第 ${position + 1} 张：${label}` : `翻开第 ${position + 1} 张`}
       className="group relative aspect-[3/4] rounded-xl border border-border bg-card transition-shadow disabled:cursor-default"
     >
       <span
@@ -45,7 +49,11 @@ export function FlipCard({ position, reward, unitCredits, picked, disabled, onPi
         }}
       >
         <span className="absolute inset-0 flex items-center justify-center rounded-xl [backface-visibility:hidden] group-hover:bg-secondary/70">
-          <span className="text-lg text-muted-foreground/50">✦</span>
+          {loading ? (
+            <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          ) : (
+            <span className="text-lg text-muted-foreground/50">✦</span>
+          )}
         </span>
         <span
           className={[

@@ -289,6 +289,9 @@ export function WorkshopFieldCanvas(props: WorkshopFieldCanvasProps) {
       return true;
     };
     const down = (event: KeyboardEvent) => {
+      // 在输入框里打字时别把 WASD 当成走位，也别抢 Enter。
+      const target = event.target as HTMLElement | null;
+      if (target?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target?.tagName ?? "")) return;
       const k = event.key.toLowerCase();
       if ((k === "e" || k === "enter") && !event.repeat) {
         const spot = hotspotRef.current;

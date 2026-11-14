@@ -12,6 +12,7 @@ import { flipGlobalStats, flipSummary, listMyRounds, FLIP_ROUND_PAGE_SIZE, type 
 import { getActivityCouponView } from "@/lib/activity/coupons";
 import { couponTickets, ticketsForCost } from "@/lib/activity/ticket-math";
 import { CouponCount } from "@/components/activity/coupon-badge";
+import { ActivityWindowBadge } from "@/components/activity/activity-window-badge";
 
 import { PageBody } from "@/components/dashboard/section";
 
@@ -116,7 +117,7 @@ export default async function FlipPage() {
       </CardHeader>
       <CardContent>
         <FlipRoundList
-          key={rounds[0]?.id ?? "empty"}
+          key={activityKey ?? "history"}
           rounds={rounds}
           hasNext={hasMoreRounds}
           unitCredits={config.couponUnitCredits}
@@ -176,8 +177,41 @@ export default async function FlipPage() {
 
   return (
     <>
-      <PageHeader title="翻牌夺宝" description="12 张牌一桌 · 翻开一张就结算" />
+      <PageHeader
+        title="翻牌夺宝"
+        description="12 张牌一桌 · 翻开一张就结算"
+        action={
+          <ActivityWindowBadge win={windowInfo} tickets={coupon.tickets} couponName={coupon.couponName} />
+        }
+      />
       <PageBody className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              牌桌
+              <span className="ml-2 text-xs font-normal text-muted-foreground">
+                {expectation.winningCards} 张有奖 · 中奖概率 {expectation.hitChancePercent}%
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FlipBoard
+              priceTickets={priceTickets}
+              cardCount={FLIP_CARD_COUNT}
+              unitCredits={config.couponUnitCredits}
+              boardCouponTickets={boardCouponTickets}
+              rewardValidDays={config.rewardValidDays}
+              dailyRounds={config.dailyRounds}
+              roundsLeft={Math.max(0, config.dailyRounds - roundsToday)}
+              coupon={coupon}
+              boardTotal={expectation.boardTotal}
+              expectedPerRound={expectation.expectedPerRound}
+              hitChancePercent={expectation.hitChancePercent}
+              pendingRound={pendingRound}
+            />
+          </CardContent>
+        </Card>
+
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             icon={Layers}
@@ -220,33 +254,6 @@ export default async function FlipPage() {
             hint={`${globalStats.players} 人参与 · 全站 ${globalStats.totalRounds} 局`}
           />
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">
-              牌桌
-              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                {expectation.winningCards} 张有奖 · 中奖概率 {expectation.hitChancePercent}%
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FlipBoard
-              priceTickets={priceTickets}
-              cardCount={FLIP_CARD_COUNT}
-              unitCredits={config.couponUnitCredits}
-              boardCouponTickets={boardCouponTickets}
-              rewardValidDays={config.rewardValidDays}
-              dailyRounds={config.dailyRounds}
-              roundsLeft={Math.max(0, config.dailyRounds - roundsToday)}
-              coupon={coupon}
-              boardTotal={expectation.boardTotal}
-              expectedPerRound={expectation.expectedPerRound}
-              hitChancePercent={expectation.hitChancePercent}
-              pendingRound={pendingRound}
-            />
-          </CardContent>
-        </Card>
 
         {recordsCard}
         {rulesCard}

@@ -171,6 +171,8 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [log, setLog] = useState<WorkshopBattleEvent[]>([]);
   const [lastStatus, setLastStatus] = useState<BattleStatus | null>(null);
+  /** 战斗请求失败时留在界面上，比一闪而过的 toast 更容易被看到。 */
+  const [battleError, setBattleError] = useState<string | null>(null);
   const [fx, setFx] = useState<BattleFx | null>(null);
   const fxTimers = useRef<number[]>([]);
   const fxSeq = useRef(0);
@@ -199,6 +201,16 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
     (item) => item.tier <= reached && item.reward > 0 && !granted.includes(item.tier),
   );
   const nextGym = props.gyms.find((gym) => gym.stage === state.badges + 1) ?? null;
+  /** 休息按钮为什么点不了：直接写在旁边，省得玩家对着灰按钮猜。 */
+  const restHint = state.encounter
+    ? "战斗结束后才能休息"
+    : state.party.length === 0
+      ? null
+      : alive && !hurt
+        ? "队伍状态已满，无需休息"
+        : !freeRest && props.couponTickets < props.restTickets
+          ? `活动券不足，还差 ${props.restTickets - props.couponTickets} 张`
+          : null;
 
   function acceptData(data: {
     state: WorkshopState;
@@ -208,6 +220,8 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
   }) {
     setState(data.state);
     setVersion(data.version);
+    // 战斗结束后把上次的报错收掉，别让旧错误一直挂在下一场战斗上方。
+    if (!data.state.encounter) setBattleError(null);
     if (data.milestoneTiers.length > 0) {
       setGranted((prev) => [...new Set([...prev, ...data.milestoneTiers])]);
       if (data.milestoneReward > 0) {
@@ -354,10 +368,12 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
     setBusy(null);
     if (!res.success) {
       toast.error(res.error);
+      setBattleError(res.error);
       // 服务端可能已经在别处结算完这场战斗：拉一次权威存档，别让战斗页永远卡住
       router.refresh();
       return;
     }
+    setBattleError(null);
     acceptData(res.data);
     const battle = res.data.battle;
     setLog((prev) => [...prev, ...battle.events].slice(-24));
@@ -549,9 +565,14 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
         <span className="flex items-center gap-1.5">
           <Coins className="h-4 w-4 text-amber-500" /> 金币 {state.gold}
         </span>
-        <span className="flex items-center gap-1.5">
+        <button
+          type="button"
+          className="flex items-center gap-1.5 transition-colors hover:text-foreground"
+          title="打开活动券兑换"
+          onClick={() => setTab("coupon")}
+        >
           <CouponCount kind="workshop" count={props.coupon.tickets} /> 活动券
-        </span>
+        </button>
         <span className="flex items-center gap-1.5 text-muted-foreground">
           <Map className="h-4 w-4" /> 进图 {state.entersToday}/{props.dailyExplores}
         </span>
@@ -579,7 +600,24 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
               : `付费休息（${props.restTickets} 张券）`
             : "紧急休整"}
         </Button>
+        {restHint ? <span className="text-xs text-muted-foreground">{restHint}</span> : null}
       </div>
+
+      {battleError ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          <span>战斗没能同步：{battleError}</span>
+          <button
+            type="button"
+            className="rounded border border-destructive/40 px-2 py-0.5 font-medium hover:bg-destructive/10"
+            onClick={() => {
+              setBattleError(null);
+              router.refresh();
+            }}
+          >
+            同步进度
+          </button>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         {(["adventure", "team", "dex", "coupon"] as TabKey[]).map((key) => (

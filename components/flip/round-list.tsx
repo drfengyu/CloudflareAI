@@ -90,7 +90,7 @@ export function FlipRoundList({
   return (
     <div className="space-y-2">
       <div className="overflow-x-auto rounded-lg border border-border">
-        <table className="w-full text-left text-sm">
+        <table className="w-full min-w-[520px] text-left text-sm">
           <thead className="bg-secondary/50 text-xs text-muted-foreground">
             <tr>
               <th className="px-3 py-2 font-medium">时间</th>

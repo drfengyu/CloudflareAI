@@ -130,8 +130,15 @@ function CouponShopItem({
               step="1"
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  void handleExchange();
+                }
+              }}
               disabled={busy !== null}
               placeholder="兑换张数"
+              aria-label={`兑换${activity.couponName}的张数`}
               className={cn(
                 "min-w-0 flex-1 rounded-lg border px-2.5 py-1.5 text-sm tabular-nums outline-none",
                 dark
@@ -154,7 +161,7 @@ function CouponShopItem({
             {exchangeCost > 0 ? ` · 本次需 ${formatCredits(exchangeCost)} cr` : " · 输入要兑换的整张数"}
           </p>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {activity.packs.map((pack) => {
               const soldOut =
                 (pack.dailyLimit !== null && pack.boughtToday >= pack.dailyLimit) ||

@@ -157,6 +157,25 @@ export default async function CollectionPage() {
         }
       />
       <PageBody className="space-y-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">星图</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CollectionSky
+              initial={snapshot.state}
+              constellations={CONSTELLATIONS}
+              dailyObserves={config.dailyObserves}
+              priceTickets={priceTickets}
+              coupon={coupon}
+              setRewards={config.setRewards}
+              grantedSets={grantedSets}
+              resonanceReward={config.resonanceReward}
+              today={today}
+            />
+          </CardContent>
+        </Card>
+
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             icon={Telescope}
@@ -183,25 +202,6 @@ export default async function CollectionPage() {
             hint={`每座每天共鸣 ${formatCredits(config.resonanceReward)} tcr`}
           />
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">星图</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CollectionSky
-              initial={snapshot.state}
-              constellations={CONSTELLATIONS}
-              dailyObserves={config.dailyObserves}
-              priceTickets={priceTickets}
-              coupon={coupon}
-              setRewards={config.setRewards}
-              grantedSets={grantedSets}
-              resonanceReward={config.resonanceReward}
-              today={today}
-            />
-          </CardContent>
-        </Card>
 
         {rulesCard(config, priceTickets)}
       </PageBody>

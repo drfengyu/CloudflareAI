@@ -119,7 +119,7 @@ function StarMap({
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") onSelect(node.id);
               }}
-              className="cursor-pointer outline-none"
+              className="cursor-pointer rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
             >
               {on ? (
                 <circle cx={node.x} cy={node.y} r={radius + 3.4} fill={hex} opacity={0.18} />
@@ -159,7 +159,7 @@ function StarMap({
                 />
               ) : null}
               {/* 透明命中区，手机上也点得中 */}
-              <circle cx={node.x} cy={node.y} r={6} fill="transparent" />
+              <circle cx={node.x} cy={node.y} r={7} fill="transparent" />
             </g>
           );
         })}

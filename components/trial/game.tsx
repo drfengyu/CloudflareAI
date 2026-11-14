@@ -165,7 +165,9 @@ export interface TrialGameProps {
 }
 
 const HUD_CELL = "flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-xs";
-const PANEL_CLASS = "absolute inset-x-3 bottom-3 top-14 z-20 flex flex-col overflow-hidden rounded-xl border border-border bg-card/97 shadow-2xl backdrop-blur sm:inset-x-6";
+// 手机竖屏时画布只有约 200px 高，弹层改钉在视口上才够放内容；sm 起回到画布内。
+// 层级顺序：面板 50/30 > 开场卡 40/20；结算卡 60/40 压在最上面，对话浮层固定 z-50。
+const PANEL_CLASS = "fixed inset-x-3 bottom-3 top-14 z-50 flex flex-col overflow-hidden rounded-xl border border-border bg-card/97 shadow-2xl backdrop-blur sm:absolute sm:inset-x-6 sm:z-30";
 const PANEL_BODY = "min-h-0 flex-1 overflow-y-auto p-3 sm:p-4";
 
 function generalName(id: string): string {
@@ -300,7 +302,9 @@ export function TrialGame(props: TrialGameProps) {
   const [visitedPois, setVisitedPois] = useState<string[]>([]);
   const [seenScenes, setSeenScenes] = useState<string[]>([]);
   /** 自动存档指示：saving 时 HUD 显示「存档中」，失败不挡玩法。 */
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  /** 存档失败后点重试会 +1，让自动存档 effect 用同一批指令再跑一次。 */
+  const [saveRetry, setSaveRetry] = useState(0);
   /** 训练场里每个武将输入的目标等级。 */
   const [trainTargets, setTrainTargets] = useState<Record<string, string>>({});
   const saveSeq = useRef(0);
@@ -491,7 +495,8 @@ export function TrialGame(props: TrialGameProps) {
         const result = await autoSaveTrialAction({ runId, commands });
         if (seq !== saveSeq.current) return;
         if (!result.success) {
-          setSaveState("idle");
+          // 存档失败不能装作没事：进度只在服务端，这里标红并让玩家点重试。
+          setSaveState("error");
           return;
         }
         setSaveState("saved");
@@ -502,7 +507,7 @@ export function TrialGame(props: TrialGameProps) {
       })();
     }, 700);
     return () => window.clearTimeout(timer);
-  }, [commands, finishRun, router, run, runId, settlement]);
+  }, [commands, finishRun, router, run, runId, saveRetry, settlement]);
 
   const appendCommand = useCallback((command: SagaCommand) => {
     setCommands((prev) => [...prev, command]);
@@ -1420,10 +1425,15 @@ export function TrialGame(props: TrialGameProps) {
           <Users className="h-3.5 w-3.5 text-muted-foreground" />
           战力 {partyPower(save)}
         </span>
-        <span className={HUD_CELL}>
+        <button
+          type="button"
+          className={cn(HUD_CELL, "transition-colors hover:bg-muted")}
+          title="打开活动券礼包"
+          onClick={() => setPanel("coupon")}
+        >
           <CouponIcon kind="trial" className="h-3.5 w-3.5" />
           {tickets} 张活动券
-        </span>
+        </button>
         {run && nextQuest ? (
           <span className={HUD_CELL} title={nextQuest.desc}>
             <ScrollText className="h-3.5 w-3.5 text-amber-500" />
@@ -1440,9 +1450,21 @@ export function TrialGame(props: TrialGameProps) {
               ? `营地 ${clearedNodes.length}/${run.nodes.length} · 尚余 ${openNodeList.length} 处可攻 · 遭遇 ${state?.encounters ?? 0} 场`
               : "整装待发"}
           {run ? (
-            <span className="text-muted-foreground">
-              {saveState === "saving" ? " · 存档中…" : saveState === "saved" ? " · 已自动存档" : ""}
-            </span>
+            saveState === "error" ? (
+              <button
+                type="button"
+                onClick={() => setSaveRetry((prev) => prev + 1)}
+                className="text-destructive underline decoration-dotted underline-offset-2 hover:text-destructive/80"
+                title="进度尚未存到服务端，点这里重试"
+              >
+                {" "}
+                · 存档失败，点此重试
+              </button>
+            ) : (
+              <span className="text-muted-foreground">
+                {saveState === "saving" ? " · 存档中…" : saveState === "saved" ? " · 已自动存档" : ""}
+              </span>
+            )
           ) : null}
         </span>
         <SoundToggle game="trial" battle={Boolean(battle)} />
@@ -2580,7 +2602,7 @@ export function TrialGame(props: TrialGameProps) {
         ) : null}
 
         {!run && !settlement ? (
-          <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm sm:absolute sm:z-20">
             <div className="max-h-full w-full max-w-lg overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-5 shadow-2xl">
               <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">三国讨逆传</p>
               <h3 className="mt-1 text-xl font-semibold">
@@ -3343,7 +3365,7 @@ function SettlementCard({
   const retry = !settlement.victory && !finale;
   const city = before?.town ?? "此地";
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm sm:absolute sm:z-40">
       <div className="max-h-full w-full max-w-lg overflow-y-auto rounded-xl border border-border bg-card p-5 shadow-2xl">
         <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">行军战报</p>
         <h3 className="mt-1 text-xl font-semibold">
