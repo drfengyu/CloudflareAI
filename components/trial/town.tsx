@@ -14,20 +14,28 @@ import {
 import { SagaPortrait } from "./scenes";
 
 /**
- * 城中街景：横向一条主街，铺子与皇宫排在街北，玩家四向走动，
- * 走到铺子门口按 E 进店；店里走到柜台前与掌柜说话、办正事。
+ * 城中街景：北排皇宫与铺面、南排铺面围出一座二维城镇，玩家四向走动。
+ * 两排之间是石板广场，南排背后是南街；南北两排的门口都朝南。
+ * 走到门口按 E 进店；店里走到柜台前与掌柜说话、办正事。
  *
  * 街景与内景都用 Canvas 现画，逻辑坐标固定 960×540（按 DPR 放大位图），
- * 镜头只跟横向走位。交互点、遮挡与柜台位置都在此文件里，服务端不参与。
+ * 镜头双向跟随走位。交互点、遮挡与柜台位置都在此文件里，服务端不参与。
  */
 
-const TOWN_W = 2020;
-const DOOR_Y = 310;
-const STREET_TOP = 322;
-const STREET_BOTTOM = 528;
-const SHOP_WALK_TOP = 418;
+const TOWN_W = 1440;
+const TOWN_H = 1180;
+const WALK_LEFT = 40;
+const WALK_RIGHT = 1400;
+const WALK_TOP = 336;
+const WALK_BOTTOM = 1150;
+const SHOP_WALK_TOP = 340;
+const ROOM_WALK_TOP = 340;
 const ROOM_WALK_BOTTOM = 512;
 const ROOM_EXIT_X = 480;
+const SHOP_LEFT = 104;
+const SHOP_RIGHT = 856;
+const PALACE_LEFT = 130;
+const PALACE_RIGHT = 830;
 
 const townFont = (size: number): string =>
   `600 ${size}px "Noto Serif SC", "Songti SC", "STSong", serif`;
@@ -49,26 +57,32 @@ interface StreetSpot {
   id: FieldFacilityId | "palace";
   label: string;
   x: number;
+  /** 门脸基线（门口所在的世界 y）。 */
+  y: number;
   width: number;
+  /** 门脸向上占的高度，南排要按它挡住走位。 */
+  height: number;
   kind: "shop" | "palace" | "monument" | "tent" | "gate";
   accent: string;
   roof: string;
 }
 
 const STREET_SPOTS: StreetSpot[] = [
-  { id: "gate", label: "城门", x: 100, width: 150, kind: "gate", accent: "#a87947", roof: "#4a4238" },
-  { id: "forge", label: "铁匠铺", x: 285, width: 132, kind: "shop", accent: "#c2703a", roof: "#564337" },
-  { id: "herb", label: "药铺", x: 430, width: 132, kind: "shop", accent: "#7f9a54", roof: "#4a4a38" },
-  { id: "supply", label: "军需帐", x: 575, width: 132, kind: "shop", accent: "#b08a4e", roof: "#54473a" },
-  { id: "inn", label: "客栈", x: 720, width: 132, kind: "shop", accent: "#c99a5b", roof: "#5a4636" },
-  { id: "bank", label: "钱庄", x: 865, width: 132, kind: "shop", accent: "#b9a05a", roof: "#4a4236" },
-  { id: "coupon", label: "活动券", x: 1010, width: 132, kind: "shop", accent: "#c98a9a", roof: "#54403e" },
-  { id: "tent", label: "营帐", x: 1155, width: 140, kind: "tent", accent: "#a87947", roof: "#6b5a3f" },
-  { id: "train", label: "训练场", x: 1300, width: 132, kind: "shop", accent: "#a2623a", roof: "#4f4033" },
-  { id: "hall", label: "编成所", x: 1445, width: 132, kind: "shop", accent: "#7f8f5a", roof: "#474a3a" },
-  { id: "tavern", label: "酒馆", x: 1590, width: 132, kind: "shop", accent: "#c07a4a", roof: "#5a4436" },
-  { id: "record", label: "桃园碑", x: 1715, width: 88, kind: "monument", accent: "#b9a05a", roof: "#4a4438" },
-  { id: "palace", label: "皇宫", x: 1880, width: 200, kind: "palace", accent: "#b23a32", roof: "#5c2a22" },
+  // 北排：排在上方，玩家从广场一侧走到门口
+  { id: "forge", label: "铁匠铺", x: 160, y: 300, width: 128, height: 180, kind: "shop", accent: "#c2703a", roof: "#564337" },
+  { id: "herb", label: "药铺", x: 330, y: 300, width: 128, height: 180, kind: "shop", accent: "#7f9a54", roof: "#4a4a38" },
+  { id: "supply", label: "军需帐", x: 500, y: 300, width: 128, height: 180, kind: "shop", accent: "#b08a4e", roof: "#54473a" },
+  { id: "palace", label: "皇宫", x: 720, y: 300, width: 250, height: 220, kind: "palace", accent: "#b23a32", roof: "#5c2a22" },
+  { id: "inn", label: "客栈", x: 950, y: 300, width: 128, height: 180, kind: "shop", accent: "#c99a5b", roof: "#5a4636" },
+  { id: "bank", label: "钱庄", x: 1120, y: 300, width: 128, height: 180, kind: "shop", accent: "#b9a05a", roof: "#4a4236" },
+  { id: "coupon", label: "活动券", x: 1290, y: 300, width: 128, height: 180, kind: "shop", accent: "#c98a9a", roof: "#54403e" },
+  // 南排：门脸朝南，玩家从南街一侧走到门口
+  { id: "train", label: "训练场", x: 210, y: 880, width: 128, height: 180, kind: "shop", accent: "#a2623a", roof: "#4f4033" },
+  { id: "hall", label: "编成所", x: 390, y: 880, width: 128, height: 180, kind: "shop", accent: "#7f8f5a", roof: "#474a3a" },
+  { id: "tavern", label: "酒馆", x: 570, y: 880, width: 128, height: 180, kind: "shop", accent: "#c07a4a", roof: "#5a4436" },
+  { id: "tent", label: "营帐", x: 760, y: 880, width: 150, height: 150, kind: "tent", accent: "#a87947", roof: "#6b5a3f" },
+  { id: "record", label: "桃园碑", x: 980, y: 880, width: 90, height: 120, kind: "monument", accent: "#b9a05a", roof: "#4a4438" },
+  { id: "gate", label: "城门", x: 1180, y: 880, width: 160, height: 180, kind: "gate", accent: "#a87947", roof: "#4a4238" },
 ];
 
 const SPOT_BY_ID = new Map(STREET_SPOTS.map((spot) => [spot.id, spot]));
@@ -114,9 +128,9 @@ const STREET_WALKERS: StreetWalker[] = [
     title: "街口里正",
     color: "#6f5a3a",
     accent: "#e3c98e",
-    baseX: 640,
-    range: 180,
-    y: 404,
+    baseX: 620,
+    range: 260,
+    y: 480,
     speed: 0.24,
     phase: 0.4,
     scale: 1,
@@ -134,9 +148,9 @@ const STREET_WALKERS: StreetWalker[] = [
     title: "街边小贩",
     color: "#8f4a52",
     accent: "#f2c9c0",
-    baseX: 1240,
-    range: 140,
-    y: 460,
+    baseX: 760,
+    range: 220,
+    y: 1040,
     speed: 0.34,
     phase: 1.9,
     scale: 0.94,
@@ -154,9 +168,9 @@ const STREET_WALKERS: StreetWalker[] = [
     title: "街口孩童",
     color: "#4e6a8a",
     accent: "#cfe4f2",
-    baseX: 990,
-    range: 220,
-    y: 386,
+    baseX: 950,
+    range: 150,
+    y: 400,
     speed: 0.46,
     phase: 4.2,
     scale: 0.8,
@@ -185,8 +199,8 @@ const STREET_PROPS: StreetProp[] = [
     label: "告示牌",
     npcId: "street-notice",
     title: "城中告示",
-    x: 762,
-    y: 474,
+    x: 1060,
+    y: 600,
     w: 28,
     h: 30,
     lines: ["榜文上写着募兵的名目，墨迹被露水洇开了一角。", "落款是本地县衙，末尾还按着一方朱印。"],
@@ -196,8 +210,8 @@ const STREET_PROPS: StreetProp[] = [
     label: "水井",
     npcId: "street-well",
     title: "街口水井",
-    x: 1120,
-    y: 470,
+    x: 720,
+    y: 570,
     w: 44,
     h: 30,
     lines: ["井台边的青石被绳子磨出了槽。", "木桶还挂在轱辘上，井水映着一小片天。"],
@@ -364,7 +378,10 @@ export interface WalkTownProps {
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(max, value));
 
-const streetCamX = (x: number): number => clamp(x - VIEW_W / 2, 0, TOWN_W - VIEW_W);
+const streetCam = (x: number, y: number): { x: number; y: number } => ({
+  x: clamp(x - VIEW_W / 2, 0, TOWN_W - VIEW_W),
+  y: clamp(y - VIEW_H / 2, 0, TOWN_H - VIEW_H),
+});
 
 function walkerX(walker: StreetWalker, time: number): number {
   return walker.baseX + Math.sin(time * walker.speed + walker.phase) * walker.range;
@@ -466,7 +483,7 @@ function paintRidge(
 function paintShopFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: number, time: number): void {
   const w = spot.width;
   const left = sx - w / 2;
-  const base = DOOR_Y;
+  const base = spot.y;
 
   ctx.fillStyle = "rgba(0,0,0,0.34)";
   ctx.beginPath();
@@ -571,7 +588,7 @@ function paintShopFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: num
 function paintPalaceFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: number, time: number): void {
   const w = spot.width;
   const left = sx - w / 2;
-  const base = DOOR_Y;
+  const base = spot.y;
 
   ctx.fillStyle = "rgba(0,0,0,0.4)";
   ctx.beginPath();
@@ -688,7 +705,7 @@ function paintPalaceFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: n
 }
 
 function paintMonument(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: number, time: number): void {
-  const base = DOOR_Y;
+  const base = spot.y;
   ctx.fillStyle = "rgba(0,0,0,0.32)";
   ctx.beginPath();
   ctx.ellipse(sx, base + 12, 44, 10, 0, 0, Math.PI * 2);
@@ -748,7 +765,7 @@ function paintMonument(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: numb
 }
 
 function paintTentFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: number, time: number): void {
-  const base = DOOR_Y;
+  const base = spot.y;
   ctx.fillStyle = "rgba(0,0,0,0.32)";
   ctx.beginPath();
   ctx.ellipse(sx, base + 14, 74, 12, 0, 0, Math.PI * 2);
@@ -849,7 +866,7 @@ function paintTentFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: num
 function paintGateFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: number, time: number): void {
   const w = spot.width;
   const left = sx - w / 2;
-  const base = DOOR_Y;
+  const base = spot.y;
 
   ctx.fillStyle = "rgba(0,0,0,0.38)";
   ctx.beginPath();
@@ -1125,108 +1142,171 @@ function paintWalkerSprite(
 function paintStreet(
   ctx: CanvasRenderingContext2D,
   time: number,
-  camX: number,
+  cam: { x: number; y: number },
   player: WalkState,
   partyColor: string,
   partyAccent: string,
 ): void {
-  const sky = ctx.createLinearGradient(0, 0, 0, 210);
-  sky.addColorStop(0, "#151d32");
-  sky.addColorStop(0.55, "#3c3a52");
-  sky.addColorStop(1, "#8a6048");
-  ctx.fillStyle = sky;
+  const camX = cam.x;
+  const camY = cam.y;
+  const horizon = 300 - camY;
+
+  ctx.fillStyle = "#241f19";
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 
-  ctx.fillStyle = "rgba(236,240,248,0.65)";
-  for (let i = 0; i < 46; i++) {
-    const x = (i * 149 + 31) % VIEW_W;
-    const y = ((i * 47) % 118) + 8;
-    ctx.fillRect(x, y, 1.3, 1.3);
+  const skyBottom = 236 - camY;
+  if (skyBottom > 0) {
+    const sky = ctx.createLinearGradient(0, -camY, 0, skyBottom);
+    sky.addColorStop(0, "#151d32");
+    sky.addColorStop(0.55, "#3c3a52");
+    sky.addColorStop(1, "#8a6048");
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, VIEW_W, Math.min(VIEW_H, skyBottom));
   }
 
-  paintRidge(ctx, camX * 0.1, 168, 30, "#242a3d", 0.5);
-  paintRidge(ctx, camX * 0.16, 188, 20, "#1c2132", 1.7);
+  ctx.fillStyle = "rgba(236,240,248,0.65)";
+  for (let i = 0; i < 120; i++) {
+    const sx = ((i * 149 + 31) % TOWN_W) - camX;
+    const sy = ((i * 47) % 118) + 8 - camY;
+    if (sx < -2 || sx > VIEW_W + 2 || sy < -2 || sy > skyBottom) continue;
+    ctx.fillRect(sx, sy, 1.3, 1.3);
+  }
 
+  paintRidge(ctx, camX * 0.12, 172 - camY * 0.45, 30, "#242a3d", 0.5);
+  paintRidge(ctx, camX * 0.2, 194 - camY * 0.55, 20, "#1c2132", 1.7);
+
+  const wallTop = 236 - camY;
   ctx.fillStyle = "#2b2924";
-  ctx.fillRect(0, 168, VIEW_W, 44);
+  ctx.fillRect(0, wallTop, VIEW_W, 64);
   ctx.fillStyle = "#39362f";
   for (let x = -((camX * 0.3) % 30); x < VIEW_W; x += 30) {
-    ctx.fillRect(x, 160, 16, 9);
+    ctx.fillRect(x, wallTop - 8, 16, 9);
   }
 
-  const ground = ctx.createLinearGradient(0, DOOR_Y, 0, VIEW_H);
+  const ground = ctx.createLinearGradient(0, horizon, 0, VIEW_H);
   ground.addColorStop(0, "#5d5240");
   ground.addColorStop(0.55, "#4a4031");
   ground.addColorStop(1, "#2f2a21");
   ctx.fillStyle = ground;
-  ctx.fillRect(0, DOOR_Y, VIEW_W, VIEW_H - DOOR_Y);
+  ctx.fillRect(0, horizon, VIEW_W, VIEW_H - horizon);
 
-  for (let row = 0; row < 8; row++) {
-    const y = DOOR_Y + 6 + row * 30;
-    ctx.strokeStyle = row % 2 === 0 ? "rgba(22,18,12,0.3)" : "rgba(22,18,12,0.2)";
-    ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(22,18,12,0.26)";
+  ctx.lineWidth = 1;
+  for (let wy = 340; wy < TOWN_H; wy += 36) {
+    const sy = wy - camY;
+    if (sy < -2 || sy > VIEW_H + 2) continue;
     ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(VIEW_W, y);
+    ctx.moveTo(0, sy);
+    ctx.lineTo(VIEW_W, sy);
     ctx.stroke();
-    const shift = (camX + row * 26) % 56;
-    for (let x = -shift; x < VIEW_W; x += 56) {
+  }
+  for (let wx = camX - ((camX + 26) % 52); wx < camX + VIEW_W; wx += 52) {
+    if (wx < 0 || wx > TOWN_W) continue;
+    const sx = wx - camX;
+    ctx.beginPath();
+    ctx.moveTo(sx, Math.max(0, horizon));
+    ctx.lineTo(sx, VIEW_H);
+    ctx.stroke();
+  }
+
+  const paintRoad = (x: number, y: number, w: number, h: number) => {
+    const rx = x - camX;
+    const ry = y - camY;
+    if (rx > VIEW_W || rx + w < 0 || ry > VIEW_H || ry + h < 0) return;
+    const road = ctx.createLinearGradient(0, ry, 0, ry + h);
+    road.addColorStop(0, "#6b5d47");
+    road.addColorStop(1, "#544736");
+    ctx.fillStyle = road;
+    ctx.fillRect(rx, ry, w, h);
+    ctx.fillStyle = "rgba(30,25,18,0.32)";
+    ctx.fillRect(rx, ry, w, 3);
+    ctx.fillRect(rx, ry + h - 3, w, 3);
+    ctx.strokeStyle = "rgba(232,214,176,0.11)";
+    ctx.lineWidth = 1.2;
+    for (let wy = y + 24; wy < y + h; wy += 28) {
+      const sy = wy - camY;
+      if (sy < -2 || sy > VIEW_H + 2) continue;
       ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x, y + 30);
+      ctx.moveTo(rx, sy);
+      ctx.lineTo(rx + w, sy);
       ctx.stroke();
     }
-  }
+    for (let wx = x - (x % 56); wx < x + w; wx += 56) {
+      const sx = wx - camX;
+      if (sx < -2 || sx > VIEW_W + 2) continue;
+      ctx.beginPath();
+      ctx.moveTo(sx, Math.max(ry, 0));
+      ctx.lineTo(sx, Math.min(ry + h, VIEW_H));
+      ctx.stroke();
+    }
+  };
+  paintRoad(0, 340, TOWN_W, 352);
+  paintRoad(0, 888, TOWN_W, 262);
+  paintRoad(28, 340, 120, 810);
+  paintRoad(1266, 340, 136, 810);
 
-  const road = ctx.createLinearGradient(0, 382, 0, 486);
-  road.addColorStop(0, "#6b5d47");
-  road.addColorStop(1, "#544736");
-  ctx.fillStyle = road;
-  ctx.fillRect(0, 382, VIEW_W, 104);
-  ctx.strokeStyle = "rgba(232,214,176,0.14)";
-  ctx.lineWidth = 1.4;
-  for (let x = -((camX * 1) % 44); x < VIEW_W; x += 44) {
-    ctx.beginPath();
-    ctx.moveTo(x, 386);
-    ctx.lineTo(x + 22, 482);
-    ctx.stroke();
-  }
-  ctx.fillStyle = "rgba(30,25,18,0.35)";
-  ctx.fillRect(0, 378, VIEW_W, 4);
-  ctx.fillRect(0, 486, VIEW_W, 4);
+  const viewLeft = camX - 160;
+  const viewRight = camX + VIEW_W + 160;
+  const viewTop = camY - 280;
+  const viewBottom = camY + VIEW_H + 80;
+  const inView = (x: number, y: number, halfW = 0): boolean =>
+    x + halfW > viewLeft && x - halfW < viewRight && y > viewTop && y < viewBottom;
 
-  for (const spot of STREET_SPOTS) {
-    const sx = spot.x - camX;
-    if (sx < -spot.width - 40 || sx > VIEW_W + spot.width + 40) continue;
-    if (spot.kind === "shop") paintShopFront(ctx, spot, sx, time);
-    else if (spot.kind === "palace") paintPalaceFront(ctx, spot, sx, time);
-    else if (spot.kind === "monument") paintMonument(ctx, spot, sx, time);
-    else if (spot.kind === "tent") paintTentFront(ctx, spot, sx, time);
-    else paintGateFront(ctx, spot, sx, time);
-  }
-
-  for (let wx = 205; wx < TOWN_W - 40; wx += 215) {
-    paintLampPost(ctx, wx - camX, 392, time, wx * 0.013);
-  }
-  for (const wx of [560, 1200, 1660]) {
-    paintBannerPost(ctx, wx - camX, 404, time, wx * 0.01);
-  }
-  for (const prop of STREET_PROPS) {
-    const px = prop.x - camX;
-    if (px < -60 || px > VIEW_W + 60) continue;
-    if (prop.id === "well") paintWell(ctx, px, prop.y, time);
-    else paintNotice(ctx, px, prop.y);
-  }
+  ctx.save();
+  ctx.translate(-camX, -camY);
 
   const bodies: { y: number; draw: () => void }[] = [];
+  for (const spot of STREET_SPOTS) {
+    if (!inView(spot.x, spot.y, spot.width / 2)) continue;
+    bodies.push({
+      y: spot.y,
+      draw: () => {
+        if (spot.kind === "shop") paintShopFront(ctx, spot, spot.x, time);
+        else if (spot.kind === "palace") paintPalaceFront(ctx, spot, spot.x, time);
+        else if (spot.kind === "monument") paintMonument(ctx, spot, spot.x, time);
+        else if (spot.kind === "tent") paintTentFront(ctx, spot, spot.x, time);
+        else paintGateFront(ctx, spot, spot.x, time);
+      },
+    });
+  }
+
+  for (const [lx, ly] of [
+    [220, 652],
+    [620, 652],
+    [1020, 652],
+    [1320, 652],
+    [260, 1118],
+    [760, 1118],
+    [1240, 1118],
+  ] as [number, number][]) {
+    if (!inView(lx, ly)) continue;
+    bodies.push({ y: ly, draw: () => paintLampPost(ctx, lx, ly, time, lx * 0.013) });
+  }
+  for (const [bx, by] of [
+    [300, 664],
+    [720, 684],
+    [1140, 664],
+  ] as [number, number][]) {
+    if (!inView(bx, by)) continue;
+    bodies.push({ y: by, draw: () => paintBannerPost(ctx, bx, by, time, bx * 0.01) });
+  }
+  for (const prop of STREET_PROPS) {
+    if (!inView(prop.x, prop.y, prop.w)) continue;
+    bodies.push({
+      y: prop.y + prop.h / 2,
+      draw: () => {
+        if (prop.id === "well") paintWell(ctx, prop.x, prop.y, time);
+        else paintNotice(ctx, prop.x, prop.y);
+      },
+    });
+  }
   for (const walker of STREET_WALKERS) {
     const wx = walkerX(walker, time);
-    const sx = wx - camX;
-    if (sx < -40 || sx > VIEW_W + 40) continue;
+    if (!inView(wx, walker.y)) continue;
     bodies.push({
       y: walker.y,
       draw: () => {
-        paintWalkerSprite(ctx, sx, walker.y, {
+        paintWalkerSprite(ctx, wx, walker.y, {
           facing: walkerFacing(walker, time),
           moving: true,
           color: walker.color,
@@ -1237,14 +1317,14 @@ function paintStreet(
           basket: walker.basket,
           time,
         });
-        paintNameTag(ctx, sx, walker.y - 44 * walker.scale - 10, walker.name);
+        paintNameTag(ctx, wx, walker.y - 44 * walker.scale - 10, walker.name);
       },
     });
   }
   bodies.push({
     y: player.y,
     draw: () => {
-      paintHeroSprite(ctx, player.x - camX, player.y, {
+      paintHeroSprite(ctx, player.x, player.y, {
         time,
         facing: player.facing,
         moving: player.moving,
@@ -1255,6 +1335,7 @@ function paintStreet(
   });
   bodies.sort((a, b) => a.y - b.y);
   for (const body of bodies) body.draw();
+  ctx.restore();
 
   const vignette = ctx.createRadialGradient(VIEW_W / 2, 300, 260, VIEW_W / 2, 270, 620);
   vignette.addColorStop(0, "rgba(0,0,0,0)");
@@ -1806,36 +1887,35 @@ function paintPalace(
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 }
 
+function spotActionLabel(spot: StreetSpot): string {
+  if (spot.kind === "gate") return "出城行军";
+  if (spot.kind === "palace") return "进宫面见主公";
+  if (spot.kind === "monument") return "查看桃园碑";
+  if (spot.kind === "tent") return "走进营帐议事";
+  return `进入${spot.label}`;
+}
+
 function streetTargetAt(player: WalkState, time: number): StreetTarget | null {
   let best: StreetTarget | null = null;
   let bestScore = Number.POSITIVE_INFINITY;
   const px = player.x;
   const py = player.y;
 
-  if (py <= STREET_TOP + 62) {
-    for (const spot of STREET_SPOTS) {
-      const dx = Math.abs(px - spot.x);
-      if (dx > spot.width / 2 + 22) continue;
-      const score = dx + (py - STREET_TOP) * 0.6;
-      if (score < bestScore) {
-        bestScore = score;
-        best = {
-          kind: "spot",
-          spot,
-          label:
-            spot.kind === "gate"
-              ? "出城行军"
-              : spot.kind === "palace"
-                ? "进宫面见主公"
-                : spot.kind === "monument"
-                  ? "查看桃园碑"
-                  : spot.kind === "tent"
-                    ? "走进营帐议事"
-                    : `进入${spot.label}`,
-          walkX: spot.x,
-          walkY: STREET_TOP + 10,
-        };
-      }
+  for (const spot of STREET_SPOTS) {
+    const dx = Math.abs(px - spot.x);
+    if (dx > spot.width / 2 + 22) continue;
+    const dy = py - spot.y;
+    if (dy < -6 || dy > 86) continue;
+    const score = dx + dy * 0.6;
+    if (score < bestScore) {
+      bestScore = score;
+      best = {
+        kind: "spot",
+        spot,
+        label: spotActionLabel(spot),
+        walkX: spot.x,
+        walkY: clamp(spot.y + 34, WALK_TOP, WALK_BOTTOM),
+      };
     }
   }
 
@@ -1871,6 +1951,56 @@ function streetTargetAt(player: WalkState, time: number): StreetTarget | null {
   }
 
   return best;
+}
+
+/** 点画布时按整座门脸命中，点屋顶也能走到门口。 */
+function streetSpotAtPoint(px: number, py: number, x: number, y: number): StreetTarget | null {
+  let best: StreetTarget | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const spot of STREET_SPOTS) {
+    const dx = Math.abs(x - spot.x);
+    const dy = y - spot.y;
+    if (dx > spot.width / 2 + 26 || dy < -spot.height - 30 || dy > 86) continue;
+    const score = Math.abs(dy) + dx * 0.2;
+    if (score < bestScore) {
+      bestScore = score;
+      const frontY = clamp(spot.y + 34, WALK_TOP, WALK_BOTTOM);
+      // 玩家在南排门脸北侧时先绕到侧边，逐轴滑墙能走到门口，不会顶在墙上
+      const behind = spot.y >= 600 && py < spot.y - spot.height - 10;
+      best = {
+        kind: "spot",
+        spot,
+        label: spotActionLabel(spot),
+        walkX: behind
+          ? px < spot.x
+            ? spot.x - spot.width / 2 - 30
+            : spot.x + spot.width / 2 + 30
+          : spot.x,
+        walkY: frontY,
+      };
+    }
+  }
+  return best;
+}
+
+/** 南排门脸立在地面上，按整块占地挡住走位；北排门脸在走位区之外。 */
+function streetSolidAt(x: number, y: number): boolean {
+  for (const spot of STREET_SPOTS) {
+    if (spot.y < 600) continue;
+    if (Math.abs(x - spot.x) > spot.width / 2 + 6) continue;
+    if (y > spot.y - spot.height - 10 && y < spot.y + 10) return true;
+  }
+  for (const prop of STREET_PROPS) {
+    if (Math.abs(x - prop.x) < prop.w / 2 + 8 && Math.abs(y - prop.y) < prop.h / 2 + 7) return true;
+  }
+  return false;
+}
+
+/** 内景里的柜台与御案是一整块障碍，只能绕着走。 */
+function roomSolidAt(x: number, y: number, scene: Scene): boolean {
+  if (scene.kind === "shop") return x > 282 && x < 678 && y > 332 && y < 418;
+  if (scene.kind === "palace") return x > 330 && x < 630 && y > 296 && y < 382;
+  return false;
 }
 
 function roomTargetAt(scene: Scene, player: WalkState): RoomTarget | null {
@@ -1912,9 +2042,9 @@ export function WalkTown({
   const activeRef = useRef(active);
   const propsRef = useRef({ chapterIndex, townName, partyColor, partyAccent, onFacility, onLeave, onCouncil, onArmy });
   const playerRef = useRef<WalkState>({
-    x: 240,
-    y: 440,
-    facing: "right",
+    x: 1180,
+    y: 960,
+    facing: "up",
     moving: false,
     walkTo: null,
     pending: null,
@@ -1923,7 +2053,7 @@ export function WalkTown({
   const targetRef = useRef<TownTarget | null>(null);
   const promptRef = useRef<string | null>(null);
   const timeRef = useRef(0);
-  const returnRef = useRef({ x: 240, y: 440 });
+  const returnRef = useRef({ x: 1180, y: 960 });
 
   useEffect(() => {
     propsRef.current = { chapterIndex, townName, partyColor, partyAccent, onFacility, onLeave, onCouncil, onArmy };
@@ -1968,7 +2098,12 @@ export function WalkTown({
     speechRef.current = null;
     setSpeech(null);
     const back = returnRef.current;
-    goScene({ kind: "street" }, back.x, STREET_TOP + 24, "down");
+    goScene(
+      { kind: "street" },
+      back.x,
+      clamp(back.y + 16, WALK_TOP, WALK_BOTTOM),
+      "down",
+    );
   }, [goScene]);
 
   const enterSpot = useCallback(
@@ -1981,7 +2116,7 @@ export function WalkTown({
         propsRef.current.onFacility(spot.id as FieldFacilityId);
         return;
       }
-      returnRef.current = { x: spot.x, y: STREET_TOP + 24 };
+      returnRef.current = { x: spot.x, y: clamp(spot.y + 34, WALK_TOP, WALK_BOTTOM) };
       if (spot.kind === "palace") {
         goScene({ kind: "palace" }, 480, 470, "up");
         return;
@@ -2104,17 +2239,18 @@ export function WalkTown({
       const player = playerRef.current;
       const current = sceneRef.current;
       if (current.kind === "street") {
-        const camX = streetCamX(player.x);
-        const wx = sx + camX;
-        const tap = streetTargetAt({ ...player, x: wx, y: sy }, timeRef.current);
+        const cam = streetCam(player.x, player.y);
+        const wx = sx + cam.x;
+        const wy = sy + cam.y;
+        const tap = streetSpotAtPoint(player.x, player.y, wx, wy);
         if (tap) {
           player.walkTo = { x: tap.walkX, y: tap.walkY };
           player.pending = tap;
           return;
         }
         player.walkTo = {
-          x: clamp(wx, 60, TOWN_W - 60),
-          y: clamp(sy, STREET_TOP + 8, STREET_BOTTOM),
+          x: clamp(wx, WALK_LEFT, WALK_RIGHT),
+          y: clamp(wy, WALK_TOP, WALK_BOTTOM),
         };
         player.pending = null;
         return;
@@ -2125,12 +2261,15 @@ export function WalkTown({
           player.pending = { kind: "exit", label: "出宫回街", walkX: ROOM_EXIT_X, walkY: 508 };
           return;
         }
-        if (sy < 392) {
+        if (sy < 384 && Math.abs(sx - 480) < 190) {
           player.walkTo = { x: 480, y: 388 };
           player.pending = { kind: "dais", label: "上前奏事", walkX: 480, walkY: 388 };
           return;
         }
-        player.walkTo = { x: clamp(sx, 130, 830), y: clamp(sy, 384, ROOM_WALK_BOTTOM) };
+        player.walkTo = {
+          x: clamp(sx, PALACE_LEFT, PALACE_RIGHT),
+          y: clamp(sy, ROOM_WALK_TOP, ROOM_WALK_BOTTOM),
+        };
         player.pending = null;
         return;
       }
@@ -2139,12 +2278,15 @@ export function WalkTown({
         player.pending = { kind: "exit", label: "回到街上", walkX: ROOM_EXIT_X, walkY: 508 };
         return;
       }
-      if (sy < 414) {
+      if (sy < 424 && Math.abs(sx - 480) < 210) {
         player.walkTo = { x: 480, y: 422 };
         player.pending = { kind: "counter", label: "与掌柜交谈", walkX: 480, walkY: 422 };
         return;
       }
-      player.walkTo = { x: clamp(sx, 104, 856), y: clamp(sy, SHOP_WALK_TOP, ROOM_WALK_BOTTOM) };
+      player.walkTo = {
+        x: clamp(sx, SHOP_LEFT, SHOP_RIGHT),
+        y: clamp(sy, SHOP_WALK_TOP, ROOM_WALK_BOTTOM),
+      };
       player.pending = null;
     },
     [],
@@ -2221,13 +2363,8 @@ export function WalkTown({
     let last = start;
     let raf = 0;
 
-    const solidAt = (x: number, y: number, current: Scene): boolean => {
-      if (current.kind !== "street") return false;
-      return STREET_PROPS.some(
-        (prop) =>
-          Math.abs(x - prop.x) < prop.w / 2 + 8 && Math.abs(y - prop.y) < prop.h / 2 + 7,
-      );
-    };
+    const solidAt = (x: number, y: number, current: Scene): boolean =>
+      current.kind === "street" ? streetSolidAt(x, y) : roomSolidAt(x, y, current);
 
     const frame = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
@@ -2249,16 +2386,21 @@ export function WalkTown({
         if (keys.up) vy -= 1;
         if (keys.down) vy += 1;
         if (vx === 0 && vy === 0 && player.walkTo) {
-          const dx = player.walkTo.x - player.x;
-          const dy = player.walkTo.y - player.y;
-          if (Math.hypot(dx, dy) < 6) {
+          if (solidAt(player.walkTo.x, player.walkTo.y, current)) {
             player.walkTo = null;
-            const pending = player.pending;
             player.pending = null;
-            if (pending) runTargetRef.current(pending);
           } else {
-            vx = dx;
-            vy = dy;
+            const dx = player.walkTo.x - player.x;
+            const dy = player.walkTo.y - player.y;
+            if (Math.hypot(dx, dy) < 6) {
+              player.walkTo = null;
+              const pending = player.pending;
+              player.pending = null;
+              if (pending) runTargetRef.current(pending);
+            } else {
+              vx = dx;
+              vy = dy;
+            }
           }
         } else if (vx !== 0 || vy !== 0) {
           player.walkTo = null;
@@ -2270,10 +2412,10 @@ export function WalkTown({
           const stepY = (vy / len) * 158 * dt;
           const bounds =
             current.kind === "street"
-              ? { left: 70, right: TOWN_W - 70, top: STREET_TOP + 6, bottom: STREET_BOTTOM }
+              ? { left: WALK_LEFT, right: WALK_RIGHT, top: WALK_TOP, bottom: WALK_BOTTOM }
               : current.kind === "palace"
-                ? { left: 130, right: 830, top: 384, bottom: ROOM_WALK_BOTTOM }
-                : { left: 104, right: 856, top: SHOP_WALK_TOP, bottom: ROOM_WALK_BOTTOM };
+                ? { left: PALACE_LEFT, right: PALACE_RIGHT, top: ROOM_WALK_TOP, bottom: ROOM_WALK_BOTTOM }
+                : { left: SHOP_LEFT, right: SHOP_RIGHT, top: SHOP_WALK_TOP, bottom: ROOM_WALK_BOTTOM };
           if (stepX !== 0 && !solidAt(player.x + stepX, player.y, current)) {
             player.x += stepX;
             moved = true;
@@ -2310,7 +2452,7 @@ export function WalkTown({
 
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (current.kind === "street") {
-        paintStreet(ctx, time, streetCamX(player.x), player, info.partyColor, info.partyAccent);
+        paintStreet(ctx, time, streetCam(player.x, player.y), player, info.partyColor, info.partyAccent);
       } else if (current.kind === "palace") {
         const index = info.chapterIndex % PALACE_LORDS.length;
         paintPalace(
