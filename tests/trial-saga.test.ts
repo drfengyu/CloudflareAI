@@ -61,10 +61,7 @@ import {
   generateSagaField,
   sagaFieldFor,
 } from "../lib/trial/saga/map";
-import {
-  SAGA_MAX_ENCOUNTERS,
-  sagaEncounterFor,
-} from "../lib/trial/saga/encounter";
+import { sagaEncounterFor } from "../lib/trial/saga/encounter";
 import {
   DEFAULT_SAGA_BANK,
   SAGA_COUPON_ITEM_ID,
@@ -964,7 +961,7 @@ test("军令：进度从重放状态与乡野见闻推出，主线优先", () =>
 
 test("野外遭遇编成：同种子同序号固定，1~4 队且将领可有可无", () => {
   const run = freshRun(11, 5);
-  for (let ordinal = 0; ordinal < SAGA_MAX_ENCOUNTERS; ordinal++) {
+  for (let ordinal = 0; ordinal < 12; ordinal++) {
     const node = sagaEncounterFor(run, ordinal, run.rules ?? 1);
     assert.deepEqual(sagaEncounterFor(run, ordinal, run.rules ?? 1), node, `第 ${ordinal} 场按序号复现`);
     assert.equal(node.kind, "battle");
@@ -982,11 +979,6 @@ test("野外遭遇编成：同种子同序号固定，1~4 队且将领可有可�
       "野外敌军不开放招降",
     );
   }
-  // 序号越界按最后一档算，不会崩。
-  assert.deepEqual(
-    sagaEncounterFor(run, SAGA_MAX_ENCOUNTERS + 5, run.rules ?? 1),
-    sagaEncounterFor(run, SAGA_MAX_ENCOUNTERS - 1, run.rules ?? 1),
-  );
 });
 
 test("野外遭遇兵种：兵士、山贼、海贼、盗贼都可能出现，有无将领两种编成都有", () => {
@@ -995,7 +987,7 @@ test("野外遭遇兵种：兵士、山贼、海贼、盗贼都可能出现，�
   let withoutLeader = false;
   for (let seed = 1; seed <= 40; seed++) {
     const run = freshRun(seed, 5);
-    for (let ordinal = 0; ordinal < SAGA_MAX_ENCOUNTERS; ordinal++) {
+    for (let ordinal = 0; ordinal < 12; ordinal++) {
       const node = sagaEncounterFor(run, ordinal, run.rules ?? 1);
       groups.add(node.name.includes("·") ? node.name.split("·")[0] : node.name);
       if (node.enemies.some((enemy) => !enemy.id.startsWith("foe_"))) withLeader = true;
@@ -1014,7 +1006,7 @@ test("杂兵装备：v5 按等级发兵甲但比敌将低一档，旧规则杂�
 
   const run = { ...freshRun(31, 5), rules: SAGA_RULESET };
   const state = createReplayState(run);
-  for (let ordinal = 0; ordinal < SAGA_MAX_ENCOUNTERS; ordinal++) {
+  for (let ordinal = 0; ordinal < 12; ordinal++) {
     const battle = startEncounterBattle(run, ordinal, state);
     const squads = battle.enemies.filter((enemy) => enemy.id.startsWith("foe_"));
     assert.equal(squads.length >= 1, true, `第 ${ordinal} 场有杂兵`);
@@ -1132,14 +1124,15 @@ test("野外遭遇战：不占营地进度，打赢照常得金币经验并继�
   assert.equal(settled.result.goldGained, result.state.goldGained);
 });
 
-test("野外遭遇指令：空指令被丢弃，每趟最多 10 场", () => {
+test("野外遭遇指令：空指令被丢弃，遭遇场次不设上限", () => {
   assert.deepEqual(sanitizeSagaCommands([{ k: "skirmish", rounds: [] }]), []);
-  const spam = Array.from({ length: SAGA_MAX_ENCOUNTERS + 4 }, () => ({
+  const many = 30;
+  const spam = Array.from({ length: many }, () => ({
     k: "skirmish" as const,
     rounds: [[{ g: "liubei", a: "attack" as const, target: 0 }]],
   }));
   const cleaned = sanitizeSagaCommands(spam);
-  assert.equal(cleaned.length, SAGA_MAX_ENCOUNTERS);
+  assert.equal(cleaned.length, many);
   assert.equal(cleaned.every((command) => command.k === "skirmish"), true);
 });
 
@@ -1172,18 +1165,18 @@ test("野外遇敌概率：官道、草地、海边与树林都遇敌，城墙�
         continue;
       }
       if (kind === SAGA_TILE_FOREST) {
-        assert.equal(chance, 0.5);
+        assert.equal(chance, 0.4);
         forest += 1;
       } else if (kind === SAGA_TILE_GRASS) {
         if (fieldShoreAt(field, tx, ty)) {
-          assert.equal(chance, 0.225, "海边滩涂也会遇敌");
+          assert.equal(chance, 0.18, "海边滩涂也会遇敌");
           shore += 1;
         } else {
-          assert.equal(chance, 0.275);
+          assert.equal(chance, 0.22);
           grass += 1;
         }
       } else if (kind === SAGA_TILE_ROAD) {
-        assert.equal(chance, 0.15, "官道也会遇敌");
+        assert.equal(chance, 0.12, "官道也会遇敌");
         road += 1;
       } else {
         assert.equal(chance, 0, `城墙与城内校场不遇敌（tile=${kind}）`);

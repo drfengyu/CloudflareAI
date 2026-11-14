@@ -2,8 +2,8 @@
  * 野外遭遇战：行军大地图上随机撞见的散兵、山贼、海贼与盗贼。
  *
  * 编成只由「行军种子 + 本次第几场遭遇」推出，客户端即时开战、服务端收兵重放都用
- * 同一份纯函数，随机多少队、有没有将领都不需要上传。每趟最多 SAGA_MAX_ENCOUNTERS 场，
- * 免得有人站在草地里原地刷金币；出城后官道、草地、海边滩涂与树林都会遇敌，
+ * 同一份纯函数，随机多少队、有没有将领都不需要上传。遭遇不设场次上限，也不设战后冷却，
+ * 只要跨入新的野外格子就可能再撞上；出城后官道、草地、海边滩涂与树林都会遇敌，
  * 只有城墙、城门洞与城内校场安全。
  */
 
@@ -14,9 +14,7 @@ import {
   tacticsFor,
   traitStats,
 } from "./data";
-import type { SagaEnemy, SagaNode, SagaRun } from "./types";
-
-export const SAGA_MAX_ENCOUNTERS = 10;
+import { SAGA_MAX_COMMANDS, type SagaEnemy, type SagaNode, type SagaRun } from "./types";
 
 interface FoeTemplate {
   key: "soldier" | "bandit" | "pirate" | "thief";
@@ -197,7 +195,7 @@ function squadEnemy(
  * v4 之前只有前三种杂兵，旧行军按原编成重放。
  */
 export function sagaEncounterFor(run: SagaRun, ordinal: number, rules: number): SagaNode {
-  const index = clampInt(ordinal, 0, SAGA_MAX_ENCOUNTERS - 1);
+  const index = clampInt(ordinal, 0, SAGA_MAX_COMMANDS - 1);
   const chapter =
     SAGA_CHAPTERS[clampInt(run.startSave.chapter, 0, SAGA_CHAPTERS.length - 1)];
   const rng = mulberry32((run.seed ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0);

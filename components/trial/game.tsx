@@ -37,7 +37,6 @@ import {
   startBattle,
   startEncounterBattle,
 } from "@/lib/trial/saga/battle";
-import { SAGA_MAX_ENCOUNTERS } from "@/lib/trial/saga/encounter";
 import {
   autoBattleRounds,
   canEngageNode,
@@ -748,12 +747,10 @@ export function TrialGame(props: TrialGameProps) {
   const interactRef = useRef<(hotspot: FieldHotspot) => void>(() => undefined);
   const settlementRef = useRef(false);
   const focusIdRef = useRef<string | null>(null);
-  /** 行军中野外遇敌的触发入口；不在行军途中或已达上限时为空。 */
+  /** 行军中野外遇敌的触发入口；不在行军途中时为空。 */
   const encounterTriggerRef = useRef<(() => void) | null>(null);
   /** 触发后先锁住走位，等战斗面板真正挂上再松开。 */
   const encounterLockRef = useRef(false);
-  /** 走过多少格才允许下一次判定，避免刚打完又立刻撞上。 */
-  const encounterCooldownRef = useRef(12);
   const walkTileRef = useRef<string | null>(null);
   const inTownRef = useRef(false);
   const dialogueRef = useRef(false);
@@ -803,7 +800,6 @@ export function TrialGame(props: TrialGameProps) {
     arriveRef.current = null;
     hotspotRef.current = null;
     encounterLockRef.current = false;
-    encounterCooldownRef.current = 12;
     walkTileRef.current = null;
   }, [field]);
 
@@ -972,15 +968,11 @@ export function TrialGame(props: TrialGameProps) {
             const tileKey = `${Math.floor(player.x / map.tile)}:${Math.floor(player.y / map.tile)}`;
             if (walkTileRef.current !== tileKey) {
               walkTileRef.current = tileKey;
-              if (encounterCooldownRef.current > 0) {
-                encounterCooldownRef.current -= 1;
-              } else {
-                const trigger = encounterTriggerRef.current;
-                const chance = fieldEncounterChanceAt(map, player.x, player.y);
-                if (trigger && chance > 0 && Math.random() < chance) {
-                  moving = false;
-                  trigger();
-                }
+              const trigger = encounterTriggerRef.current;
+              const chance = fieldEncounterChanceAt(map, player.x, player.y);
+              if (trigger && chance > 0 && Math.random() < chance) {
+                moving = false;
+                trigger();
               }
             }
           } else {
@@ -1178,16 +1170,15 @@ export function TrialGame(props: TrialGameProps) {
 
   /**
    * 行走撞上的野外遭遇：编成由种子与「这是第几场」推出，服务端重放时按同一序号生成。
-   * 每趟最多 SAGA_MAX_ENCOUNTERS 场；战后不用回营，直接接着走。
+   * 遭遇不设场次上限与冷却；战后不用回营，直接接着走。
    */
   const beginEncounter = useCallback(() => {
     if (!run || !state) return;
     if (battle || settlement || panel) return;
-    if (state.scene !== "field" || state.encounters >= SAGA_MAX_ENCOUNTERS) return;
+    if (state.scene !== "field") return;
     encounterLockRef.current = true;
     playerRef.current.walkTo = null;
     arriveRef.current = null;
-    encounterCooldownRef.current = 18;
     const scratch = JSON.parse(JSON.stringify(state)) as SagaReplayState;
     const battleState = startEncounterBattle(run, state.encounters, scratch);
     const session: BattleSession = {
@@ -1212,7 +1203,6 @@ export function TrialGame(props: TrialGameProps) {
       Boolean(run) &&
       Boolean(state) &&
       state?.scene === "field" &&
-      (state?.encounters ?? SAGA_MAX_ENCOUNTERS) < SAGA_MAX_ENCOUNTERS &&
       !battle &&
       !settlement &&
       !panel;
@@ -1447,7 +1437,7 @@ export function TrialGame(props: TrialGameProps) {
           {finished
             ? "全剧终"
             : run
-              ? `营地 ${clearedNodes.length}/${run.nodes.length} · 尚余 ${openNodeList.length} 处可攻 · 遭遇 ${state?.encounters ?? 0}/${SAGA_MAX_ENCOUNTERS}`
+              ? `营地 ${clearedNodes.length}/${run.nodes.length} · 尚余 ${openNodeList.length} 处可攻 · 遭遇 ${state?.encounters ?? 0} 场`
               : "整装待发"}
           {run ? (
             <span className="text-muted-foreground">
@@ -2626,7 +2616,7 @@ export function TrialGame(props: TrialGameProps) {
                     出城后是张俯视大地图，方向键/WASD 自由行走，沿官道会路过村庄、祠堂与渡口，
                     走过去能听一段本地故事、记一条军令；走到哪座营跟前就打哪座，
                     主帅本阵要先拔尽其余 {props.nodeCount - 1} 座营。营寨全部攻破、剧情才会推进到下一处地方。
-                    官道、草地、海边滩涂与树林会随机杀出散兵、山贼、海贼、盗贼，每趟最多 {SAGA_MAX_ENCOUNTERS} 场，
+                    官道、草地、海边滩涂与树林会随机杀出散兵、山贼、海贼、盗贼，不设场次上限与冷却，
                     只有城墙内与城门洞不会遇敌。每一步都会自动存档：撤退只结束当前这一场仗，
                     兵败也能回城住店重整，等级、金币、装备与招降武将都不会丢。
                   </p>
