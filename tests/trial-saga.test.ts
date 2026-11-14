@@ -79,7 +79,7 @@ import {
   initialTrialSave,
   normalizeTrialSave,
 } from "../lib/trial/saga/state";
-import { resolveBattleRound, startBattle, startEncounterBattle } from "../lib/trial/saga/battle";
+import { battleTurnOrder, resolveBattleRound, startBattle, startEncounterBattle } from "../lib/trial/saga/battle";
 import { battleEnemyAtPoint, makeSagaView } from "../components/trial/renderer";
 import {
   SAGA_TRAINING_ITEM_ID,
@@ -1030,6 +1030,49 @@ test("杂兵装备：v5 按等级发兵甲但比敌将低一档，旧规则杂�
       .every((enemy) => enemy.weapon === null),
     true,
     "v3 杂兵不带装备",
+  );
+});
+
+test("行动顺序按有效速度排：阵型加成计入，同速玩家先手", () => {
+  const run = freshRun(11, 5);
+  const battle = startBattle(run, 0, createReplayState(run));
+  // 方圆减速 10%、长蛇加速 25%：速度差够大时，基础速度低的敌将也能压过玩家快将。
+  battle.playerFormation = "fangyuan";
+  battle.enemyFormation = "changshe";
+  battle.party.forEach((unit) => {
+    unit.speed = 10;
+  });
+  battle.enemies.forEach((unit) => {
+    unit.speed = 10;
+  });
+  battle.party[0].speed = 100;
+  battle.enemies[0].speed = 120;
+  const order = battleTurnOrder(battle);
+  assert.deepEqual(
+    order.slice(0, 2).map((unit) => unit.id),
+    [battle.enemies[0].id, battle.party[0].id],
+    "基础速度更高的敌将先手",
+  );
+  assert.equal(
+    order.findIndex((unit) => unit.side === "enemy" && unit.speed === 10) <
+      order.findIndex((unit) => unit.side === "player" && unit.speed === 10),
+    true,
+    "长蛇加成后敌军慢将仍快过我方慢将",
+  );
+
+  battle.playerFormation = "yulin";
+  battle.enemyFormation = "yulin";
+  battle.party.forEach((unit) => {
+    unit.speed = 50;
+  });
+  battle.enemies.forEach((unit) => {
+    unit.speed = 50;
+  });
+  const tied = battleTurnOrder(battle);
+  assert.equal(
+    tied.findIndex((unit) => unit.side === "enemy"),
+    battle.party.filter((unit) => !unit.downed).length,
+    "同速时玩家整队先手",
   );
 });
 

@@ -24,6 +24,7 @@ import { formatCredits } from "@/lib/billing/credits";
 import { gameAudio } from "@/lib/game/audio";
 import {
   SAGA_CHAPTERS,
+  SAGA_FORMATION_BY_ID,
   SAGA_FORMATIONS,
   SAGA_GENERAL_BY_ID,
   SAGA_ITEM_BY_ID,
@@ -33,6 +34,7 @@ import {
   tacticsFor,
 } from "@/lib/trial/saga/data";
 import {
+  battleTurnOrder,
   resolveBattleRound,
   startBattle,
   startEncounterBattle,
@@ -1388,6 +1390,41 @@ export function TrialGame(props: TrialGameProps) {
   );
 
   const battleLocked = Boolean(anim);
+  /** 战斗头信息：行动顺序、阵型对抗与当前指挥目标，全部从当前战局推出。 */
+  const battleView = (() => {
+    if (!battle) return null;
+    const current = battle.battle;
+    const turnOrder = battleTurnOrder(current);
+    const focusUnit =
+      current.party.find((unit) => unit.id === focusId && !unit.downed) ??
+      current.party.find((unit) => !unit.downed) ??
+      null;
+    const pick = focusUnit ? battle.picks[focusUnit.id] : null;
+    const actionText = !pick
+      ? "未下令"
+      : pick.a === "attack"
+        ? "攻击"
+        : pick.a === "tactic"
+          ? (pick.t ? SAGA_TACTIC_BY_ID.get(pick.t)?.name : "") || "计策"
+          : pick.a === "item"
+            ? `道具 · ${itemName(pick.i ?? "")}`
+            : pick.a === "recruit"
+              ? "招降"
+              : "防御";
+    const targetName =
+      pick?.a === "attack" ? (current.enemies[pick.target ?? 0]?.name ?? null) : null;
+    const playerFormation = SAGA_FORMATION_BY_ID.get(current.playerFormation) ?? null;
+    const enemyFormation = SAGA_FORMATION_BY_ID.get(current.enemyFormation) ?? null;
+    const counter: "up" | "down" | "even" =
+      playerFormation && enemyFormation
+        ? playerFormation.beats === enemyFormation.id
+          ? "up"
+          : enemyFormation.beats === playerFormation.id
+            ? "down"
+            : "even"
+        : "even";
+    return { turnOrder, focusUnit, actionText, targetName, playerFormation, enemyFormation, counter };
+  })();
   const pressKey = useCallback(
     (dir: "up" | "down" | "left" | "right", pressed: boolean) => {
       if (inTownRef.current) return;
@@ -1548,7 +1585,7 @@ export function TrialGame(props: TrialGameProps) {
           />
         ) : null}
 
-        {battle ? (
+        {battle && battleView ? (
           <div className="border-t border-amber-200/20 bg-[#14110d] px-2 py-2 sm:px-3">
             <div className="mx-auto w-full max-w-5xl text-xs text-amber-50">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-0.5 pb-2">
@@ -1595,6 +1632,64 @@ export function TrialGame(props: TrialGameProps) {
                     执行回合
                   </Button>
                 </span>
+              </div>
+
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-lg border border-white/10 bg-black/25 px-2.5 py-1.5 text-[11px]">
+                <span className="text-white/50">
+                  阵型{" "}
+                  <span className="text-amber-100">{battleView.playerFormation?.name ?? "—"}</span>
+                  <span className="px-1 text-white/30">对</span>
+                  <span className="text-rose-100">{battleView.enemyFormation?.name ?? "—"}</span>
+                </span>
+                <span
+                  title={
+                    battleView.counter === "up"
+                      ? "我军阵型克制敌军：攻击更顺"
+                      : battleView.counter === "down"
+                        ? "我军阵型被克：攻击受阻，回城可换阵"
+                        : "双方阵型互不克制"
+                  }
+                  className={cn(
+                    "rounded px-1.5 py-0.5 text-[10px]",
+                    battleView.counter === "up"
+                      ? "bg-emerald-400/15 text-emerald-200"
+                      : battleView.counter === "down"
+                        ? "bg-rose-400/15 text-rose-200"
+                        : "bg-white/10 text-white/55",
+                  )}
+                >
+                  {battleView.counter === "up" ? "克制" : battleView.counter === "down" ? "被克" : "均势"}
+                </span>
+                <span className="min-w-0 truncate text-white/50">
+                  指挥{" "}
+                  <span className="text-amber-100">{battleView.focusUnit?.name ?? "—"}</span>
+                  <span className="px-1 text-white/30">·</span>
+                  <span className="text-amber-100/85">{battleView.actionText}</span>
+                  {battleView.targetName ? (
+                    <>
+                      <span className="px-1 text-white/30">→</span>
+                      <span className="text-rose-100">{battleView.targetName}</span>
+                    </>
+                  ) : null}
+                </span>
+              </div>
+
+              <div className="mt-1.5 flex items-center gap-1.5 overflow-x-auto rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5">
+                <span className="shrink-0 text-[10px] text-white/45">行动顺序</span>
+                {battleView.turnOrder.map((unit, index) => (
+                  <span
+                    key={`${unit.side}-${unit.id}`}
+                    className={cn(
+                      "flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px]",
+                      unit.side === "player"
+                        ? "border-amber-300/30 bg-amber-300/10 text-amber-100"
+                        : "border-rose-300/25 bg-rose-400/10 text-rose-100",
+                    )}
+                  >
+                    <span className="tabular-nums text-white/40">{index + 1}</span>
+                    {unit.name}
+                  </span>
+                ))}
               </div>
 
               {showEnemyInfo ? (

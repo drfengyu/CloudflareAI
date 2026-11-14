@@ -63,6 +63,19 @@ function counterMod(attacker: SagaBattleState["playerFormation"], defender: Saga
 
 const living = (list: SagaBattleGeneral[]): SagaBattleGeneral[] => list.filter((g) => !g.downed);
 
+/** 本回合行动顺序：有效速度（含阵型加成）从高到低，同速玩家先手。 */
+export function battleTurnOrder(battle: SagaBattleState): SagaBattleGeneral[] {
+  return [...living(battle.party), ...living(battle.enemies)].sort((a, b) => {
+    const aSpeed =
+      a.speed * formationSpd(a.side === "player" ? battle.playerFormation : battle.enemyFormation);
+    const bSpeed =
+      b.speed * formationSpd(b.side === "player" ? battle.playerFormation : battle.enemyFormation);
+    if (bSpeed !== aSpeed) return bSpeed - aSpeed;
+    if (a.side !== b.side) return a.side === "player" ? -1 : 1;
+    return a.id.localeCompare(b.id);
+  });
+}
+
 /** 汇总一组特性上的某项数值，没有特性时为 0。 */
 function traitTotalOf(
   ids: readonly SagaTraitId[] | undefined,
@@ -862,15 +875,7 @@ export function resolveBattleRound(
   if (battle.phase !== "select") return;
   const events: SagaBattleEvent[] = [];
   const byId = new Map(roundCommands.map((command) => [command.g, command]));
-  const actors = [...living(battle.party), ...living(battle.enemies)].sort((a, b) => {
-    const aSpeed =
-      a.speed * formationSpd(a.side === "player" ? battle.playerFormation : battle.enemyFormation);
-    const bSpeed =
-      b.speed * formationSpd(b.side === "player" ? battle.playerFormation : battle.enemyFormation);
-    if (bSpeed !== aSpeed) return bSpeed - aSpeed;
-    if (a.side !== b.side) return a.side === "player" ? -1 : 1;
-    return a.id.localeCompare(b.id);
-  });
+  const actors = battleTurnOrder(battle);
   for (const actor of actors) {
     if (battle.phase !== "select") break;
     if (actor.downed) continue;

@@ -243,6 +243,26 @@ function skyMoodFor(chapterIndex: number): SkyMood {
 
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 
+let reducedMotionQuery: MediaQueryList | null | undefined;
+/** 系统开启「减少动态效果」时关掉震屏与弹跳，只留颜色与数字反馈。 */
+function prefersReducedMotion(): boolean {
+  if (reducedMotionQuery === undefined) {
+    reducedMotionQuery =
+      typeof window !== "undefined" && typeof window.matchMedia === "function"
+        ? window.matchMedia("(prefers-reduced-motion: reduce)")
+        : null;
+  }
+  return reducedMotionQuery?.matches ?? false;
+}
+
+/** 深底章节给队列描一层暖色轮廓光，免得暗景里武将糊成一团。 */
+function isDarkMood(mood: SkyMood): boolean {
+  const r = parseInt(mood.base.slice(1, 3), 16);
+  const g = parseInt(mood.base.slice(3, 5), 16);
+  const b = parseInt(mood.base.slice(5, 7), 16);
+  return r * 0.299 + g * 0.587 + b * 0.114 < 28;
+}
+
 function paintBackdrop(
   ctx: CanvasRenderingContext2D,
   time: number,
@@ -1042,6 +1062,19 @@ function drawMinimap(
     ctx.arc(x + poi.tx * sx, y + poi.ty * sy, 1.8, 0, Math.PI * 2);
     ctx.fill();
   }
+  // 视野框：缩到小地图里标出画布当前看到的范围，跑图时不会迷路。
+  const camW = Math.min(field.worldW, view.w);
+  const camH = Math.min(field.worldH, view.h);
+  const camX = Math.max(0, Math.min(field.worldW - camW, options.x - view.w / 2));
+  const camY = Math.max(0, Math.min(field.worldH - camH, options.y - view.h / 2));
+  ctx.strokeStyle = "rgba(236,226,196,0.55)";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(
+    x + (camX / field.worldW) * w + 0.5,
+    y + (camY / field.worldH) * h + 0.5,
+    (camW / field.worldW) * w,
+    (camH / field.worldH) * h,
+  );
   ctx.fillStyle = "#7fe0a0";
   ctx.beginPath();
   ctx.arc(
@@ -1450,11 +1483,22 @@ function paintSquad(
   downed: boolean,
   weapon: string | null = null,
   armor: string | null = null,
+  rim = false,
 ): void {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(facing * scale, scale);
   ctx.globalAlpha = downed ? 0.28 : 1;
+
+  if (rim) {
+    const glow = ctx.createRadialGradient(0, -46, 6, 0, -46, 74);
+    glow.addColorStop(0, "rgba(255,216,150,0.22)");
+    glow.addColorStop(1, "rgba(255,216,150,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(0, -46, 74, 0, Math.PI * 2);
+    ctx.fill();
+  }
 
   ctx.fillStyle = "rgba(0,0,0,0.32)";
   ctx.beginPath();
@@ -1660,6 +1704,11 @@ export function battleEnemyAtPoint(
 export const BATTLE_FLOAT_MS = 900;
 const DOWN_STAMP_MS = 760;
 
+/** 顶部兵力面板的底边：飘字钳制在它下面，不然会被面板盖住。 */
+function battlePanelBottom(battle: SagaBattleState): number {
+  return 12 + 32 + Math.max(battle.party.length, battle.enemies.length) * 22;
+}
+
 /** 把动画窗口内的伤害/回复数字逐条画出来，而不是只画当前那一条。 */
 function paintBattleFloats(
   ctx: CanvasRenderingContext2D,
@@ -1668,6 +1717,7 @@ function paintBattleFloats(
   elapsed: number,
   k: number,
 ): void {
+  const lanes = new Map<string, number>();
   for (let i = 0; i < anim.events.length; i++) {
     const event = anim.events[i];
     if (event.kind !== "attack" && event.kind !== "tactic" && event.kind !== "heal") continue;
@@ -1677,6 +1727,9 @@ function paintBattleFloats(
     if (age < 90 || age > BATTLE_FLOAT_MS) continue;
     const anchor = findUnit(battle, event.target, k);
     if (!anchor) continue;
+    // 同一目标连续挨打时左右错开，第二、三条不会叠在第一条上。
+    const lane = lanes.get(event.target) ?? 0;
+    lanes.set(event.target, lane + 1);
     const progress = clamp01((age - 90) / (BATTLE_FLOAT_MS - 90));
     const crit = Boolean(event.crit) && event.kind === "attack";
     const color =
@@ -1689,8 +1742,11 @@ function paintBattleFloats(
             : "#ffe3b0";
     const size = crit ? 27 : event.kind === "tactic" ? 22 : 20;
     const text = `${event.kind === "heal" ? "+" : "-"}${event.amount}`;
-    const x = anchor.slot.x + (crit ? 0 : 26) + Math.sin(progress * 5) * 2;
-    const y = anchor.slot.y - 96 - progress * 48;
+    const x = anchor.slot.x + (crit ? 0 : 26) + [0, 18, -18][lane % 3] + Math.sin(progress * 5) * 2;
+    const y = Math.max(
+      battlePanelBottom(battle) + 16,
+      anchor.slot.y - 96 - progress * 48 - Math.floor(lane / 3) * 18,
+    );
     ctx.save();
     ctx.globalAlpha = 1 - progress * progress;
     ctx.textAlign = "center";
@@ -1718,15 +1774,18 @@ function paintDownStamps(
   elapsed: number,
   k: number,
 ): void {
+  // 败退章的停留窗口跟着节拍缩放：2× 速度下印章也跟着短，不拖到下一回合。
+  const span = Math.min(DOWN_STAMP_MS, anim.stepMs * 2.2);
   for (let i = 0; i < anim.events.length; i++) {
     const event = anim.events[i];
     if (event.kind !== "down" || !event.target) continue;
     const age = elapsed - i * anim.stepMs;
-    if (age < 0 || age > DOWN_STAMP_MS) continue;
+    if (age < 0 || age > span) continue;
     const anchor = findUnit(battle, event.target, k);
     if (!anchor) continue;
-    const grow = age < 170 ? 1.8 - (age / 170) * 0.8 : 1;
-    const alpha = age > DOWN_STAMP_MS - 180 ? (DOWN_STAMP_MS - age) / 180 : 1;
+    const reduced = prefersReducedMotion();
+    const grow = reduced || age >= 170 ? 1 : 1.8 - (age / 170) * 0.8;
+    const alpha = age > span - 180 ? (span - age) / 180 : 1;
     const y = anchor.slot.y - 74 * Math.max(0.7, anchor.slot.scale);
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -1746,6 +1805,7 @@ function paintDownStamps(
     ctx.fillText("败", 0, 2);
     ctx.restore();
 
+    if (reduced) continue;
     const dust = clamp01(age / 420);
     ctx.save();
     ctx.globalAlpha = (1 - dust) * 0.6;
@@ -1784,9 +1844,12 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     : 0;
 
   // 震屏与冲击白闪都由当前事件的类型与进度推出来，不掷随机数，回放才稳定。
+  // 系统要求减少动态效果时只保留白闪，不抖画面。
+  const reducedMotion = prefersReducedMotion();
+  const darkStage = isDarkMood(mood);
   let shakeX = 0;
   let shakeY = 0;
-  if (currentEvent && eventProgress < 0.6) {
+  if (!reducedMotion && currentEvent && eventProgress < 0.6) {
     const power =
       currentEvent.kind === "down"
         ? 9
@@ -1814,11 +1877,12 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
   // 正在落章的败将用动态印章，静态「败」字先让位，避免两行字叠在一起。
   const stamping = new Set<string>();
   if (anim) {
+    const stampMs = Math.min(DOWN_STAMP_MS, anim.stepMs * 2.2);
     for (let i = 0; i < anim.events.length; i++) {
       const event = anim.events[i];
       if (event.kind !== "down" || !event.target) continue;
       const age = elapsed - i * anim.stepMs;
-      if (age >= 0 && age <= DOWN_STAMP_MS) stamping.add(event.target);
+      if (age >= 0 && age <= stampMs) stamping.add(event.target);
     }
   }
 
@@ -1903,6 +1967,7 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
       unit.downed,
       unit.weapon,
       unit.armor,
+      !unit.downed && darkStage,
     );
     ctx.filter = "none";
     ctx.restore();
@@ -2045,9 +2110,6 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
 
   ctx.restore();
 
-  // 飘字画在震屏之外，数字不跟着战场抖，连击时也读得清。
-  if (anim) paintBattleFloats(ctx, battle, anim, elapsed, view.k);
-
   if (impact > 0) {
     ctx.fillStyle = `rgba(255,244,220,${impact})`;
     ctx.fillRect(0, 0, view.w, view.h);
@@ -2055,6 +2117,9 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
 
   // 顶部两军兵力面板（左右各半边）
   paintBattleTeams(ctx, battle, target, view);
+
+  // 飘字画在面板之后：位置已钳制在面板下方，既不会被兵力条盖掉，也不遮挡面板。
+  if (anim) paintBattleFloats(ctx, battle, anim, elapsed, view.k);
 
   const vignette = ctx.createRadialGradient(
     view.w / 2,

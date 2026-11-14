@@ -966,7 +966,7 @@ export function TownScene({
               type="button"
               onClick={() => onPick(spot.id)}
               style={{ left: `${spot.x}%`, top: `${spot.y}%` }}
-              className="group absolute -translate-x-1/2 -translate-y-1/2 focus-visible:outline-none"
+              className="group absolute -translate-x-1/2 -translate-y-1/2 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/80 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
             >
               <span className="relative block">
                 <span

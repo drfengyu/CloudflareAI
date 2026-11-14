@@ -330,3 +330,10 @@ body {
   animation: trial-banner-in 320ms ease-out both;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .trial-seal-drop,
+  .trial-banner-in {
+    animation: none;
+  }
+}
+

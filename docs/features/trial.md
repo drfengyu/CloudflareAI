@@ -420,3 +420,25 @@ v0.55 起取消出城券费与金币商店：**活动券（试炼券）是城内
   `paintField` 在精灵画完后罩一层 `fieldTint` 环境色。
 - **暴击标记**：`SagaBattleEvent.crit` 由 `dealDamage` 只写在普攻主事件上，
   是表现层字段，不参与重放校验，也不进存档。
+
+## 战斗界面与演出修补（v0.72.0）
+
+- **飘字不再被面板盖住**：`paintBattleFloats` 改为在 `paintBattleTeams` 之后绘制，
+  同一目标连击按 `[0, 18, -18]` 横向错列、每三轮再上抬 18px；
+  Y 轴钳制在 `battlePanelBottom(battle) + 16` 之下，五人满编时最上排的伤害数字也看得见。
+- **行动顺序**：`battleTurnOrder(battle)` 从 `resolveBattleRound` 抽出并导出，
+  仍按有效速度（`speed × 阵型 spd`）降序、同速玩家先手、同阵营按 id 排序；
+  战斗指令区读同一函数渲染「行动顺序」条，界面与实际出手顺序不会各说各话。
+- **阵型对抗与指挥**：指令区显示我军 / 敌军阵型名，并用 `beats` 推出克制 / 被克 / 均势徽章；
+  「指挥」行显示当前武将 · 动作 → 目标，目标与画布点选、下拉框共用 `battle.picks`。
+- **减少动态效果**：`prefersReducedMotion()` 缓存 `matchMedia("(prefers-reduced-motion: reduce)")`，
+  命中时 `paintBattle` 不震屏、败退印章不缩放且不画扬尘；`globals.css` 同时停掉
+  `.trial-seal-drop` 与 `.trial-banner-in` 的动画。冲击白闪保留，它不产生位移。
+- **败退章跟着倍速**：印章停留窗口改为 `min(760ms, stepMs × 2.2)`，
+  2× 下不会在下一条事件开始后还压着静态「败」字。
+- **暗景轮廓光**：`isDarkMood(mood)` 用 `mood.base` 亮度判定深底章节，
+  `paintSquad` 新增 `rim` 参数，在队列身后铺一层暖色径向光，暗景分得清敌我。
+- **小地图视野框**：`drawMinimap` 按当前镜头在整张大地图上的位置画一圈描边，
+  跑图时能看出画布覆盖范围；玩家点仍画在框上方。
+- **城内焦点环**：`TownScene` 的铺子按钮从 `focus-visible:outline-none` 改为可见的
+  `ring-2 ring-amber-300/80`，键盘 Tab 时看得出停在哪家铺子。
