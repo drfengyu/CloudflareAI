@@ -544,7 +544,9 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   （`listTrialRuns`）。当期战绩汇总、排行、大奖墙与首通播报全部保留；转盘新增纯汇总卡
   `lottery-stats.tsx`（「我的转盘战绩」），雷电作战面板页签「记录」改为「战绩」。逐次资金
   仍完整记在 `lottery_draw` / `flip_round` / `raiden_runs` 上，只是不面向用户列表，回看走
-  `/ledger`。移动端底部「活动」页签由 `/lottery` 改指 `/tasks`。`tsc` 0 错误（仅 TS5074
+  `/ledger`。移动端底部「活动」页签由 `/lottery` 改指 `/tasks`；桌面端顶部「活动中心」模块
+  同步重排为 任务成就 → 活动总览 → 每日试炼 / 灵宠工坊 / 星图共鸣，模块首页落到任务成就，
+  限时玩法统一靠后（`components/dashboard/nav-data.ts`，窄屏抽屉共用同一份顺序）。`tsc` 0 错误（仅 TS5074
   增量构建提示）、改动文件 ESLint 0/0、可加载单测 142/142，未在真实浏览器逐页核对。
 
 - v0.74.0 三国讨逆传城中二维布局：街景从单条横向长街改为 1440×1180 的二维城镇，

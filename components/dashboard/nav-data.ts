@@ -50,12 +50,13 @@ export const NAV: NavGroup[] = [
   },
   {
     title: "活动中心",
+    // 模块首页取第一项：先落到常驻的任务成就，限时玩法统一排在后面
     items: [
+      { href: "/tasks", label: "任务成就", icon: ListChecks },
+      { href: "/cashback", label: "活动总览", icon: PiggyBank },
       { href: "/trial", label: "每日试炼", icon: Swords },
       { href: "/workshop", label: "灵宠工坊", icon: PawPrint },
       { href: "/collection", label: "星图共鸣", icon: Library },
-      { href: "/cashback", label: "活动总览", icon: PiggyBank },
-      { href: "/tasks", label: "任务成就", icon: ListChecks },
     ],
   },
   {

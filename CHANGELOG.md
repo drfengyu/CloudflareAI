@@ -21,7 +21,9 @@
     删除 `listTrialRuns` 与 `TrialHistoryRow`。
 - 逐次资金流水仍完整落库（`lottery_draw` / `flip_round` / `raiden_runs`），回看改走个人账本 `/ledger`；
   管理端 `/admin/activity` 的窗口统计不受影响。
-- 移动端底部「活动」页签由 `/lottery` 改指任务成就 `/tasks`，不再默认打开转盘。
+- 移动端底部「活动」页签由 `/lottery` 改指任务成就 `/tasks`，不再默认打开转盘；
+  桌面端顶部「活动中心」模块同步重排，首页落到任务成就，活动总览随后，每日试炼 / 灵宠工坊 /
+  星图共鸣三个限时玩法统一排在常驻入口之后（窄屏菜单抽屉同序）。
 
 ### 验证
 
