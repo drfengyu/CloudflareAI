@@ -5,6 +5,7 @@ import {
   chatMessages,
   chatSessions,
   checkins,
+  collectionStates,
   flipRounds,
   lotteryDraws,
   messages,
@@ -12,6 +13,7 @@ import {
   topups,
   trialRuns,
   usageLogs,
+  workshopStates,
 } from "@/lib/db/schema";
 import { cnDateString, cnStartOfToday, parseCnWallClock, shiftDateString } from "@/lib/date";
 import type { getTaskSettings } from "@/lib/settings";
@@ -33,6 +35,7 @@ export type TaskPeriod = "daily" | "weekly";
 /** 钱包流水里任务成就占用的 type（8=消费返利、10=充值赠送已被占用）。 */
 export const TASK_TOPUP_TYPE = 9;
 
+/** 目标活跃度：任务合计略高于目标，允许用户跳过个别方向的任务。 */
 export const DAILY_TARGET = 100;
 export const WEEKLY_TARGET = 300;
 
@@ -110,10 +113,72 @@ const chatPromptCount = async (userId: string, w: PeriodWindow) =>
       ),
   );
 
+/** 只算网关（OpenAI / Anthropic 兼容接口）的调用，站内对话另有单独任务。 */
 const apiSuccessCount = async (userId: string, w: PeriodWindow) =>
   countFrom(
     await db
       .select({ n: sql<number>`count(*)` })
+      .from(usageLogs)
+      .where(
+        and(
+          eq(usageLogs.userId, userId),
+          eq(usageLogs.status, "ok"),
+          inArray(usageLogs.channel, ["openai", "anthropic"]),
+          ...inWindow(usageLogs.createdAt, w),
+        ),
+      ),
+  );
+
+/** 按 usage_log.task 统计某个 AI 能力的成功调用（站内 playgound 与网关共用这一列）。 */
+const aiTaskCount = (tasks: string[]) => async (userId: string, w: PeriodWindow) =>
+  countFrom(
+    await db
+      .select({ n: sql<number>`count(*)` })
+      .from(usageLogs)
+      .where(
+        and(
+          eq(usageLogs.userId, userId),
+          eq(usageLogs.status, "ok"),
+          inArray(usageLogs.task, tasks),
+          ...inWindow(usageLogs.createdAt, w),
+        ),
+      ),
+  );
+
+const imageCount = aiTaskCount(["Text-to-Image"]);
+const translateCount = aiTaskCount(["Translation"]);
+const embeddingCount = aiTaskCount(["Embeddings", "Text Embeddings"]);
+
+/** 五种能力算「多方向」体验；站内与网关写的 task 串不一致，两种拼法都收。 */
+const AI_SKILL_TASKS = [
+  "Text Generation",
+  "Text-to-Image",
+  "Translation",
+  "Embeddings",
+  "Text Embeddings",
+  "Image Understanding",
+  "Image-to-Text",
+];
+
+const aiSkillVariety = async (userId: string, w: PeriodWindow) =>
+  countFrom(
+    await db
+      .select({ n: sql<number>`COUNT(DISTINCT ${usageLogs.task})` })
+      .from(usageLogs)
+      .where(
+        and(
+          eq(usageLogs.userId, userId),
+          eq(usageLogs.status, "ok"),
+          inArray(usageLogs.task, AI_SKILL_TASKS),
+          ...inWindow(usageLogs.createdAt, w),
+        ),
+      ),
+  );
+
+const modelVariety = async (userId: string, w: PeriodWindow) =>
+  countFrom(
+    await db
+      .select({ n: sql<number>`COUNT(DISTINCT ${usageLogs.model})` })
       .from(usageLogs)
       .where(
         and(eq(usageLogs.userId, userId), eq(usageLogs.status, "ok"), ...inWindow(usageLogs.createdAt, w)),
@@ -131,7 +196,7 @@ const apiSpend = async (userId: string, w: PeriodWindow) =>
   );
 
 const activityRuns = async (userId: string, w: PeriodWindow) => {
-  const [draws, flips, runs, trials] = await Promise.all([
+  const [draws, flips, runs, trials, workshops, collections] = await Promise.all([
     db
       .select({ n: sql<number>`count(*)` })
       .from(lotteryDraws)
@@ -148,8 +213,24 @@ const activityRuns = async (userId: string, w: PeriodWindow) => {
       .select({ n: sql<number>`count(*)` })
       .from(trialRuns)
       .where(and(eq(trialRuns.userId, userId), ...inWindow(trialRuns.startedAt, w))),
+    // 工坊 / 星图没有「一局」表，按当期存档是否在本周期内写过状态算参与一次。
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(workshopStates)
+      .where(and(eq(workshopStates.userId, userId), ...inWindow(workshopStates.updatedAt, w))),
+    db
+      .select({ n: sql<number>`count(*)` })
+      .from(collectionStates)
+      .where(and(eq(collectionStates.userId, userId), ...inWindow(collectionStates.updatedAt, w))),
   ]);
-  return countFrom(draws) + countFrom(flips) + countFrom(runs) + countFrom(trials);
+  return (
+    countFrom(draws) +
+    countFrom(flips) +
+    countFrom(runs) +
+    countFrom(trials) +
+    Math.min(1, countFrom(workshops)) +
+    Math.min(1, countFrom(collections))
+  );
 };
 
 const claimedRewardCount = async (userId: string, w: PeriodWindow) =>
@@ -217,12 +298,39 @@ export const DAILY_TASKS: TaskDef[] = [
     measure: chatPromptCount,
   },
   {
+    key: "daily_image",
+    title: "文生图 1 次",
+    hint: "在文生图里生成 1 张图片",
+    href: "/playground/image",
+    target: 1,
+    points: 10,
+    measure: imageCount,
+  },
+  {
+    key: "daily_translate",
+    title: "翻译 1 次",
+    hint: "用翻译助手译一段文本",
+    href: "/playground/translate",
+    target: 1,
+    points: 10,
+    measure: translateCount,
+  },
+  {
+    key: "daily_embeddings",
+    title: "嵌入 1 次",
+    hint: "把一段文本向量化",
+    href: "/playground/embeddings",
+    target: 1,
+    points: 10,
+    measure: embeddingCount,
+  },
+  {
     key: "daily_api",
-    title: "API 成功调用 5 次",
-    hint: "任意 API Key 成功调用 5 次",
+    title: "API 成功调用 3 次",
+    hint: "用 API Key 通过网关成功调用 3 次",
     href: "/docs",
-    target: 5,
-    points: 20,
+    target: 3,
+    points: 15,
     measure: apiSuccessCount,
   },
   {
@@ -237,7 +345,7 @@ export const DAILY_TASKS: TaskDef[] = [
   {
     key: "daily_activity",
     title: "参与限时玩法",
-    hint: "转盘 / 翻牌 / 雷电任意玩一局",
+    hint: "试炼 / 工坊 / 星图 / 转盘 / 翻牌 / 雷电任意玩一局",
     href: "/cashback",
     target: 1,
     points: 15,
@@ -249,7 +357,7 @@ export const DAILY_TASKS: TaskDef[] = [
     hint: "领取任意一封带奖励的站内信",
     href: "/messages",
     target: 1,
-    points: 20,
+    points: 15,
     measure: claimedRewardCount,
   },
 ];
@@ -274,12 +382,21 @@ export const WEEKLY_TASKS: TaskDef[] = [
     measure: chatPromptCount,
   },
   {
+    key: "weekly_ai_skills",
+    title: "体验 3 种 AI 能力",
+    hint: "对话 / 文生图 / 翻译 / 嵌入 / 图像理解任意体验 3 种",
+    href: "/models",
+    target: 3,
+    points: 35,
+    measure: aiSkillVariety,
+  },
+  {
     key: "weekly_api",
     title: "API 成功调用 50 次",
-    hint: "本周累计成功调用 50 次",
+    hint: "本周通过网关累计成功调用 50 次",
     href: "/docs",
     target: 50,
-    points: 50,
+    points: 45,
     measure: apiSuccessCount,
   },
   {
@@ -288,16 +405,16 @@ export const WEEKLY_TASKS: TaskDef[] = [
     hint: "本周累计消耗 500 tcr",
     href: "/wallet",
     target: 500,
-    points: 60,
+    points: 55,
     measure: apiSpend,
   },
   {
     key: "weekly_activity",
     title: "参与限时玩法 10 局",
-    hint: "转盘 / 翻牌 / 雷电合计 10 局",
+    hint: "六个玩法合计 10 局（工坊 / 星图每次进入算 1 局）",
     href: "/cashback",
     target: 10,
-    points: 50,
+    points: 45,
     measure: activityRuns,
   },
   {
@@ -306,8 +423,26 @@ export const WEEKLY_TASKS: TaskDef[] = [
     hint: "在线充值或兑换码到账合计 500 cr",
     href: "/wallet",
     target: 500,
-    points: 60,
+    points: 40,
     measure: topupAmount,
+  },
+  {
+    key: "weekly_inbox",
+    title: "领取 3 封奖励信",
+    hint: "本周领取 3 封带附件的站内信",
+    href: "/messages",
+    target: 3,
+    points: 30,
+    measure: claimedRewardCount,
+  },
+  {
+    key: "weekly_models",
+    title: "使用 5 种不同模型",
+    hint: "本周用 5 个不同的模型完成调用",
+    href: "/models",
+    target: 5,
+    points: 30,
+    measure: modelVariety,
   },
 ];
 

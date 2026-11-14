@@ -279,11 +279,16 @@ test("活动券单价：三种活动默认 1 cr / 张，脏值回落、超限封
   assert.equal(sanitizeRaidenConfig({ couponUnitCredits: 9e9 }).couponUnitCredits, 1_000_000);
 });
 
-test("任务：每日 100 活跃度、每周 300 活跃度，里程碑末尾对齐上限", () => {
+test("任务：每日任务合计 120、每周合计 360，均略高于目标 100 / 300", () => {
   const dailyPoints = DAILY_TASKS.reduce((sum, task) => sum + task.points, 0);
   const weeklyPoints = WEEKLY_TASKS.reduce((sum, task) => sum + task.points, 0);
-  assert.equal(dailyPoints, 100);
-  assert.equal(weeklyPoints, 300);
+  assert.equal(dailyPoints, 120);
+  assert.equal(weeklyPoints, 360);
+  assert.ok(dailyPoints > 100);
+  assert.ok(weeklyPoints > 300);
+  // 多方向：每日至少覆盖签到 / 对话 / 图像 / 翻译 / 嵌入 / API / 消费 / 玩法 / 站内信。
+  assert.ok(new Set(DAILY_TASKS.map((task) => task.key)).size === DAILY_TASKS.length);
+  assert.ok(new Set(WEEKLY_TASKS.map((task) => task.key)).size === WEEKLY_TASKS.length);
   assert.equal(DAILY_MILESTONES.at(-1)?.points, 100);
   assert.equal(WEEKLY_MILESTONES.at(-1)?.points, 300);
   assert.deepEqual(

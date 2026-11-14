@@ -4,21 +4,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageBody } from "@/components/dashboard/section";
 import { TaskBoardCard } from "@/components/tasks/task-board";
 import { getTaskSettings } from "@/lib/settings";
-import { listTaskBoard } from "@/lib/tasks/tasks";
+import {
+  DAILY_TARGET,
+  DAILY_TASKS,
+  WEEKLY_TARGET,
+  WEEKLY_TASKS,
+  listTaskBoard,
+  type TaskDef,
+} from "@/lib/tasks/tasks";
 import { requireUser } from "@/lib/usage/meter";
 
 export const dynamic = "force-dynamic";
+
+const sumPoints = (tasks: TaskDef[]): number =>
+  tasks.reduce((sum, task) => sum + task.points, 0);
 
 export default async function TasksPage() {
   const userId = await requireUser();
   const settings = await getTaskSettings();
   const board = await listTaskBoard(userId, settings);
+  const dailyTotal = sumPoints(DAILY_TASKS);
+  const weeklyTotal = sumPoints(WEEKLY_TASKS);
 
   return (
     <>
       <PageHeader
         title="任务成就"
-        description="每日 6 项合计 100 活跃度 · 每周 6 项合计 300 活跃度 · 达成里程碑自动发站内信"
+        description={`每日 ${DAILY_TASKS.length} 项合计 ${dailyTotal} 活跃度 · 每周 ${WEEKLY_TASKS.length} 项合计 ${weeklyTotal} 活跃度 · 达成里程碑自动发站内信`}
       />
       <PageBody className="space-y-4">
         {!settings.enabled && (
@@ -82,9 +94,11 @@ export default async function TasksPage() {
                 做完任务后还要手动点「领取活跃度」，领取后才计入当前周期。
               </li>
               <li>
-                每日活跃度上限 <b className="text-foreground">100</b>，每 25 一档；每周上限{" "}
-                <b className="text-foreground">300</b>，每 50 一档。达到里程碑自动发站内信，
-                奖励为随机 tcr，额度逐档递增，周奖励更丰厚。
+                每日目标 <b className="text-foreground">{DAILY_TARGET}</b>（任务合计{" "}
+                <b className="text-foreground">{dailyTotal}</b>）、每周目标{" "}
+                <b className="text-foreground">{WEEKLY_TARGET}</b>（任务合计{" "}
+                <b className="text-foreground">{weeklyTotal}</b>）：任务多于目标，允许跳过一个方向不做；
+                每日每 25 一档、每周每 50 一档，超过目标的零头不再多算里程碑。
               </li>
               <li>
                 奖励以 tcr 发放，{board.validDays} 天内有效，到期未用自动作废。
