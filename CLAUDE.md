@@ -534,9 +534,18 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.59.0（2026-11-14，铁匠铺装备强化与玩法页倒计时）
+**当前版本**：v0.60.0（2026-11-14，画面与交互修复）
 **下一版本**：待定
 
+- v0.60.0 画面与交互修复：
+  `paintBattle` 增加 `nowMs` 毫秒时间轴：帧循环里的 `time` 是秒、`BattleAnimation.startedAt`
+  是毫秒，原 `elapsed = time - startedAt` 恒为负，所有战斗动画不画但按钮仍锁 1.2 秒以上；
+  回合收尾 `setTimeout` 存进 `animTimerRef`，开新回合与卸载时清理。
+  `battleEnemyAtPoint` 改为命中框内取离触点最近的 slot（4 将以上命中框重叠，原按下标返回第一个）。
+  开场浮层卡片补 `max-h-full overflow-y-auto overscroll-contain`，手机窄屏不再裁掉「出发」按钮。
+  `coupon-shop.tsx` 礼包改「先选中 → 确认条确认」，取消不扣款。
+  城内与行军界面「试炼券」统一为「活动券」、价格图标改 `CouponIcon`；铺子交易按钮统一按 `busy` 禁用；
+  `/trial` 去掉 `lg:max-w-[1440px]`，版心回到 `PageBody` 默认宽度。
 - v0.59.0 铁匠铺装备强化与玩法页倒计时：
   新增 `lib/trial/saga/forge.ts`：`SAGA_FORGE_MAX_LEVEL = 5`、`forgeCost`（`priceTickets + 当前等级 × 2`）、
   `forgeBonus` / `forgeStat`（每级 +20% 基础属性）、`upgradeGear`（只升不降）、

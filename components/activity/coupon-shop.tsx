@@ -49,9 +49,12 @@ function CouponShopItem({
   const router = useRouter();
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  /** 礼包先选中再确认：扣 cr 不可逆，别让一次误触就成交。 */
+  const [confirmPack, setConfirmPack] = useState<string | null>(null);
   const active = activity.status === "active";
   const dark = tone === "dark";
   const unitCredits = activity.unitCredits > 0 ? activity.unitCredits : 1;
+  const pendingPack = activity.packs.find((pack) => pack.key === confirmPack) ?? null;
   const amountNumber = Number(amount);
   const exchangeCost =
     Number.isInteger(amountNumber) && amountNumber > 0
@@ -77,6 +80,7 @@ function CouponShopItem({
     setBusy(packKey);
     const res = await buyCouponPackAction({ kind: activity.kind, pack: packKey });
     setBusy(null);
+    setConfirmPack(null);
     if (!res.success) {
       toast.error(res.message);
       return;
@@ -168,9 +172,10 @@ function CouponShopItem({
                 <button
                   key={pack.key}
                   type="button"
-                  onClick={() => void handlePack(pack.key)}
+                  onClick={() => setConfirmPack(pack.key)}
                   disabled={busy !== null || soldOut}
                   aria-label={`${pack.name} · 实付 ${formatCredits(pack.price)} cr · 得 ${pack.totalTickets} 张`}
+                  aria-pressed={confirmPack === pack.key}
                   title={
                     soldOut
                       ? `${pack.name}已到限购上限`
@@ -258,6 +263,39 @@ function CouponShopItem({
               );
             })}
           </div>
+          {pendingPack ? (
+            <div
+              className={cn(
+                "flex flex-wrap items-center justify-between gap-2 rounded-lg border border-dashed px-2 py-1.5 text-[11px]",
+                dark ? "border-white/20 text-white/70" : "border-border text-muted-foreground",
+              )}
+            >
+              <span className="tabular-nums">
+                确认买 {pendingPack.name}：实付 {formatCredits(pendingPack.price)} cr，得{" "}
+                {pendingPack.totalTickets} 张
+              </span>
+              <span className="flex shrink-0 gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => void handlePack(pendingPack.key)}
+                  disabled={busy !== null}
+                >
+                  {busy === pendingPack.key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                  确认
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setConfirmPack(null)}
+                  disabled={busy !== null}
+                >
+                  取消
+                </Button>
+              </span>
+            </div>
+          ) : null}
           <p className={cn("text-[11px]", dark ? "text-white/35" : "text-muted-foreground")}>
             1 张 = {formatCredits(unitCredits)} cr；礼包填整数张数与倍率，实付 = 张数 × 单价 × 100 ÷ 倍率，
             赠券一并到账；赠送的 tcr 到期作废；玩法只扣对应活动券，当期结束后作废；

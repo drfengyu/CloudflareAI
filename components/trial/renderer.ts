@@ -69,11 +69,11 @@ export type FieldFacilityId =
 export const FIELD_FACILITIES: { id: FieldFacilityId; label: string; hint: string }[] = [
   { id: "record", label: "桃园碑", hint: "查看存档、武将与图鉴" },
   { id: "hall", label: "编成所", hint: "编队、阵型、装备与图鉴" },
-  { id: "train", label: "训练场", hint: "花试炼券逐级提升武将等级" },
-  { id: "forge", label: "铁匠铺", hint: "用试炼券打造武器与防具" },
-  { id: "herb", label: "药铺", hint: "用试炼券购买伤药与良药" },
-  { id: "supply", label: "军需帐", hint: "用试炼券购买此行军需" },
-  { id: "inn", label: "客栈", hint: "花试炼券歇脚，补满上阵武将兵力" },
+  { id: "train", label: "训练场", hint: "花活动券逐级提升武将等级" },
+  { id: "forge", label: "铁匠铺", hint: "用活动券强化武器与防具" },
+  { id: "herb", label: "药铺", hint: "用活动券购买伤药与良药" },
+  { id: "supply", label: "军需帐", hint: "用活动券购买此行军需" },
+  { id: "inn", label: "客栈", hint: "花活动券歇脚，补满上阵武将兵力" },
   { id: "bank", label: "钱庄", hint: "用金币存 tcr，自动结算时到账" },
   { id: "tavern", label: "酒馆", hint: "听一段本地旧事" },
   { id: "tent", label: "营帐", hint: "看军令、召集众将议事" },
@@ -1074,6 +1074,8 @@ export interface BattleAnimation {
 export interface BattlePaintOptions {
   battle: SagaBattleState;
   time: number;
+  /** 毫秒时间轴（performance.now），动画起点 startedAt 用的也是毫秒。 */
+  nowMs?: number;
   target: number;
   animation?: BattleAnimation | null;
   /** 逻辑视野；省略则按 960×540（16:9）画。 */
@@ -1478,7 +1480,7 @@ function paintBattleTeams(
   ctx.fillText(`第 ${battle.round} 回合`, view.w / 2, top + 22);
 }
 
-/** 画布点击：点在哪个敌将身上就返回哪个下标，没点中返回 -1。 */
+/** 画布点击：命中框内取离触点最近的敌将，没点中返回 -1。人多时框会重叠，不能按顺序取第一个。 */
 export function battleEnemyAtPoint(
   view: SagaView,
   battle: SagaBattleState,
@@ -1486,13 +1488,18 @@ export function battleEnemyAtPoint(
   y: number,
 ): number {
   const slots = unitSlots(battle.enemies.length, "enemy", view.k);
+  let best = -1;
+  let bestDistance = Number.POSITIVE_INFINITY;
   for (let index = 0; index < slots.length; index++) {
     const slot = slots[index];
-    if (Math.abs(x - slot.x) <= 58 && y > slot.y - 120 * slot.scale && y < slot.y + 24) {
-      return index;
+    if (Math.abs(x - slot.x) > 58 || y <= slot.y - 120 * slot.scale || y >= slot.y + 24) continue;
+    const distance = Math.hypot(x - slot.x, y - (slot.y - 40 * slot.scale));
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = index;
     }
   }
-  return -1;
+  return best;
 }
 
 export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintOptions): void {
@@ -1500,7 +1507,8 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
   const view = options.view ?? DEFAULT_VIEW;
   const gy = view.groundY;
   const anim = options.animation;
-  const elapsed = anim ? time - anim.startedAt : 0;
+  // time 是秒（环境动画用），动画节拍是毫秒：统一到毫秒再算已播时长。
+  const elapsed = anim ? Math.max(0, (options.nowMs ?? time * 1000) - anim.startedAt) : 0;
   const eventIndex = anim ? Math.floor(elapsed / anim.stepMs) : -1;
   const currentEvent = anim && eventIndex >= 0 && eventIndex < anim.events.length ? anim.events[eventIndex] : null;
   const eventProgress = anim

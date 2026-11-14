@@ -10,7 +10,6 @@ import {
   ScrollText,
   Sparkles,
   Swords,
-  Ticket,
   Users,
   X,
 } from "lucide-react";
@@ -19,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SoundToggle } from "@/components/activity/sound-toggle";
 import { CouponShop } from "@/components/activity/coupon-shop";
+import { CouponIcon } from "@/components/activity/coupon-badge";
 import { cn } from "@/lib/utils";
 import { formatCredits } from "@/lib/billing/credits";
 import { gameAudio } from "@/lib/game/audio";
@@ -280,7 +280,7 @@ export function TrialGame(props: TrialGameProps) {
   }
   const [panel, setPanel] = useState<PanelId>(null);
   const [depositGold, setDepositGold] = useState("");
-  /** 钱庄换券：想换多少张试炼券。 */
+  /** 钱庄换券：想换多少张活动券。 */
   const [exchangeTickets, setExchangeTickets] = useState("");
   const [hallTab, setHallTab] = useState<"party" | "gear" | "formation">("party");
   const [dexTab, setDexTab] = useState<"save" | "dex">("save");
@@ -357,7 +357,7 @@ export function TrialGame(props: TrialGameProps) {
     return { id: general.id, name: generalName(general.id), current, max };
   });
   const innNeedsRest = troopRows.some((row) => row.current < row.max);
-  /** 客栈按钮的唯一禁用口径：场景 / 兵力 / 试炼券分开提示；兵败后允许住店重整。 */
+  /** 客栈按钮的唯一禁用口径：场景 / 兵力 / 活动券分开提示；兵败后允许住店重整。 */
   const innBlocked =
     !run || !state
       ? "行军途中才能住店"
@@ -367,12 +367,12 @@ export function TrialGame(props: TrialGameProps) {
           ? "战斗尚未结束"
           : state.scene === "lost"
             ? tickets < SAGA_INN_PRICE_TICKETS
-              ? `试炼券不足（${SAGA_INN_PRICE_TICKETS} 张）`
+              ? `活动券不足（${SAGA_INN_PRICE_TICKETS} 张）`
               : null
             : !innNeedsRest
               ? "兵力已满"
               : tickets < SAGA_INN_PRICE_TICKETS
-                ? `试炼券不足（${SAGA_INN_PRICE_TICKETS} 张）`
+                ? `活动券不足（${SAGA_INN_PRICE_TICKETS} 张）`
                 : null;
   const innLabel =
     innBlocked ??
@@ -533,7 +533,7 @@ export function TrialGame(props: TrialGameProps) {
     }
   }, []);
 
-  /** 城内所有买卖都走试炼券：装备、伤药、军需和客栈共用这一个入口。 */
+  /** 城内所有买卖都走活动券：装备、伤药、军需和客栈共用这一个入口。 */
   const buyItem = useCallback(
     async (itemId: string, successText?: string, sfx: "coin" | "heal" = "coin") => {
       if (!runId || !run || busy) return;
@@ -543,7 +543,7 @@ export function TrialGame(props: TrialGameProps) {
           : SAGA_ITEM_BY_ID.get(itemId)?.priceTickets ?? 0;
       if (priceTickets < 1) return;
       if (tickets < priceTickets) {
-        toast.error(`试炼券不足（要 ${priceTickets} 张）`);
+        toast.error(`活动券不足（要 ${priceTickets} 张）`);
         return;
       }
       setBusy(`buy:${itemId}`);
@@ -586,7 +586,7 @@ export function TrialGame(props: TrialGameProps) {
       }
       const cost = trainingCost(currentLevel, target);
       if (tickets < cost) {
-        toast.error(`试炼券不足（要 ${cost} 张）`);
+        toast.error(`活动券不足（要 ${cost} 张）`);
         return;
       }
       setBusy(`train:${generalId}`);
@@ -633,7 +633,7 @@ export function TrialGame(props: TrialGameProps) {
       const cost = forgeCost(gearId, level);
       if (cost <= 0) return;
       if (tickets < cost) {
-        toast.error(`试炼券不足（要 ${cost} 张）`);
+        toast.error(`活动券不足（要 ${cost} 张）`);
         return;
       }
       setBusy(`forge:${gearId}`);
@@ -679,7 +679,7 @@ export function TrialGame(props: TrialGameProps) {
     [appendCommand, bank, bankRoom, run, save.gold],
   );
 
-  /** 钱庄换券：金币按券面单价折成试炼券，服务端即时入账，本趟行军马上能用。 */
+  /** 钱庄换券：金币按券面单价折成活动券，服务端即时入账，本趟行军马上能用。 */
   const exchangeCoupons = useCallback(
     async (count: number) => {
       if (!runId || !run || busy) return;
@@ -714,7 +714,7 @@ export function TrialGame(props: TrialGameProps) {
         setTickets(result.data.tickets);
         setExchangeTickets("");
         gameAudio.play("coin");
-        toast.success(`换到 ${count} 张试炼券，花了 ${cost} 金`);
+        toast.success(`换到 ${count} 张活动券，花了 ${cost} 金`);
       } finally {
         setBusy(null);
       }
@@ -724,6 +724,8 @@ export function TrialGame(props: TrialGameProps) {
 
   // ---- 大地图行走与画布 ----
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  /** 回合动画的收尾定时器：开新回合或卸载时清掉，避免迟到的结算覆盖新回合。 */
+  const animTimerRef = useRef<number | null>(null);
   /** 逻辑 960x540 → 实际位图的放大倍率，让画面在大屏和高分屏上都锐利。 */
   const viewScaleRef = useRef(1);
   /** 逻辑视野：宽恒 960，高跟着画布实际比例走。 */
@@ -890,6 +892,12 @@ export function TrialGame(props: TrialGameProps) {
   }, []);
 
   useEffect(() => {
+    return () => {
+      if (animTimerRef.current !== null) window.clearTimeout(animTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -1004,6 +1012,7 @@ export function TrialGame(props: TrialGameProps) {
         paintBattle(ctx, {
           battle: session.battle,
           time,
+          nowMs,
           target: focusTarget,
           animation: modeRef.current.anim,
           view: viewRef.current,
@@ -1241,7 +1250,9 @@ export function TrialGame(props: TrialGameProps) {
       const events = next.battle.lastEvents;
       setAnim({ events, startedAt: performance.now(), stepMs: 460 });
       playBattleSfx(events, 460);
-      window.setTimeout(() => {
+      if (animTimerRef.current !== null) window.clearTimeout(animTimerRef.current);
+      animTimerRef.current = window.setTimeout(() => {
+        animTimerRef.current = null;
         setAnim(null);
         if (next.battle.phase !== "select") {
           commitBattle(next);
@@ -1343,8 +1354,8 @@ export function TrialGame(props: TrialGameProps) {
     void buyItem(
       SAGA_INN_ITEM_ID,
       revive
-        ? `用 ${SAGA_INN_PRICE_TICKETS} 张试炼券住店，全军重整旗鼓`
-        : `用 ${SAGA_INN_PRICE_TICKETS} 张试炼券歇脚，上阵武将兵力补满`,
+        ? `用 ${SAGA_INN_PRICE_TICKETS} 张活动券住店，全军重整旗鼓`
+        : `用 ${SAGA_INN_PRICE_TICKETS} 张活动券歇脚，上阵武将兵力补满`,
       "heal",
     );
   }, [buyItem, run, state]);
@@ -1414,8 +1425,8 @@ export function TrialGame(props: TrialGameProps) {
           战力 {partyPower(save)}
         </span>
         <span className={HUD_CELL}>
-          <Ticket className="h-3.5 w-3.5 text-violet-400" />
-          {tickets} 张试炼券
+          <CouponIcon kind="trial" className="h-3.5 w-3.5" />
+          {tickets} 张活动券
         </span>
         {run && nextQuest ? (
           <span className={HUD_CELL} title={nextQuest.desc}>
@@ -1838,9 +1849,9 @@ export function TrialGame(props: TrialGameProps) {
                 <div className="space-y-3">
                   <NpcIntro npcId={panel === "forge" ? "blacksmith" : "herbalist"} />
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>城内买卖一律用试炼券，金币在钱庄可存成 tcr，也可直接换成试炼券。</span>
+                    <span>城内买卖一律用活动券，金币在钱庄可存成 tcr，也可直接换成活动券。</span>
                     <span className="flex items-center gap-1">
-                      <Ticket className="h-3.5 w-3.5 text-violet-400" />
+                      <CouponIcon kind="trial" className="h-3.5 w-3.5" />
                       {tickets} 张
                     </span>
                   </div>
@@ -1856,7 +1867,7 @@ export function TrialGame(props: TrialGameProps) {
                           <div className="flex items-center justify-between text-sm">
                             <span className="font-medium">{item.name}</span>
                             <span className="flex items-center gap-1 tabular-nums text-muted-foreground">
-                              <Ticket className="h-3 w-3 text-violet-400" />
+                              <CouponIcon kind="trial" className="h-3 w-3" />
                               {price} 张
                             </span>
                           </div>
@@ -1865,7 +1876,7 @@ export function TrialGame(props: TrialGameProps) {
                             size="sm"
                             variant="outline"
                             className="mt-1.5"
-                            disabled={!run || tickets < price || busy === `buy:${item.id}`}
+                            disabled={!run || tickets < price || Boolean(busy)}
                             onClick={() => void buyItem(item.id)}
                           >
                             {busy === `buy:${item.id}` ? "购买中…" : "用券购买"}
@@ -1912,7 +1923,7 @@ export function TrialGame(props: TrialGameProps) {
                                       "已满级"
                                     ) : (
                                       <>
-                                        <Ticket className="h-3 w-3 text-violet-400" />
+                                        <CouponIcon kind="trial" className="h-3 w-3" />
                                         {cost} 张
                                       </>
                                     )}
@@ -1920,7 +1931,7 @@ export function TrialGame(props: TrialGameProps) {
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    disabled={!run || maxed || tickets < cost || working}
+                                    disabled={!run || maxed || tickets < cost || Boolean(busy)}
                                     onClick={() => void forgeGear(gearId)}
                                   >
                                     {maxed ? "满级" : working ? "强化中…" : "强化"}
@@ -1943,9 +1954,9 @@ export function TrialGame(props: TrialGameProps) {
                 <div className="space-y-3">
                   <NpcIntro npcId="quartermaster" />
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>用试炼券购买，只在这次行军中生效；被动军需每次限一份。</span>
+                    <span>用活动券购买，只在这次行军中生效；被动军需每次限一份。</span>
                     <span className="flex items-center gap-1">
-                      <Ticket className="h-3.5 w-3.5 text-violet-400" />
+                      <CouponIcon kind="trial" className="h-3.5 w-3.5" />
                       {tickets} 张
                     </span>
                   </div>
@@ -1959,7 +1970,7 @@ export function TrialGame(props: TrialGameProps) {
                           <div className="flex items-center justify-between text-sm">
                             <span className="font-medium">{item.name}</span>
                             <span className="flex items-center gap-1 tabular-nums text-muted-foreground">
-                              <Ticket className="h-3 w-3 text-violet-400" />
+                              <CouponIcon kind="trial" className="h-3 w-3" />
                               {item.priceTickets} 张
                             </span>
                           </div>
@@ -1970,7 +1981,7 @@ export function TrialGame(props: TrialGameProps) {
                             size="sm"
                             variant="outline"
                             className="mt-1.5"
-                            disabled={maxed || tickets < item.priceTickets || busy === `buy:${item.id}`}
+                            disabled={maxed || tickets < item.priceTickets || Boolean(busy)}
                             onClick={() => void buyItem(item.id)}
                           >
                             {maxed ? "此行已备" : busy === `buy:${item.id}` ? "购买中…" : "用券购买"}
@@ -1989,7 +2000,7 @@ export function TrialGame(props: TrialGameProps) {
                 <div className="space-y-3">
                   <NpcIntro npcId="banker" />
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>钱庄两桩生意：金币存成 tcr 等平定到账，也可以直接换成试炼券当场用。</span>
+                    <span>钱庄两桩生意：金币存成 tcr 等平定到账，也可以直接换成活动券当场用。</span>
                     <span className="flex items-center gap-1 tabular-nums">
                       <Coins className="h-3.5 w-3.5 text-amber-500" />
                       {formatCredits(save.gold)} 金
@@ -2021,7 +2032,8 @@ export function TrialGame(props: TrialGameProps) {
                           !run ||
                           depositTcr < 1 ||
                           depositGoldAmount > bankRoom ||
-                          save.gold < depositGoldAmount
+                          save.gold < depositGoldAmount ||
+                          Boolean(busy)
                         }
                         onClick={() => bankGold(depositGoldAmount)}
                       >
@@ -2047,9 +2059,9 @@ export function TrialGame(props: TrialGameProps) {
 
                   <section className="space-y-2 rounded-lg border border-border p-2.5">
                     <p className="flex items-center justify-between gap-2 text-sm font-medium">
-                      <span>金币 → 试炼券</span>
+                      <span>金币 → 活动券</span>
                       <span className="flex items-center gap-1 text-xs font-normal tabular-nums text-muted-foreground">
-                        <Ticket className="h-3.5 w-3.5 text-violet-400" />
+                        <CouponIcon kind="trial" className="h-3.5 w-3.5" />
                         {tickets} 张
                       </span>
                     </p>
@@ -2079,7 +2091,7 @@ export function TrialGame(props: TrialGameProps) {
                           goldPerTicket <= 0 ||
                           exchangeCount < 1 ||
                           exchangeCost > save.gold ||
-                          busy === "bank:coupon"
+                          Boolean(busy)
                         }
                         onClick={() => void exchangeCoupons(exchangeCount)}
                       >
@@ -2092,7 +2104,7 @@ export function TrialGame(props: TrialGameProps) {
                       <Button
                         size="sm"
                         variant="ghost"
-                        disabled={!run || goldPerTicket <= 0 || exchangeMax < 1 || busy === "bank:coupon"}
+                        disabled={!run || goldPerTicket <= 0 || exchangeMax < 1 || Boolean(busy)}
                         onClick={() => setExchangeTickets(String(exchangeMax))}
                       >
                         全部
@@ -2106,7 +2118,7 @@ export function TrialGame(props: TrialGameProps) {
                   </section>
 
                   <p className="text-xs text-muted-foreground">
-                    金币存成 tcr 在平定此地时结算；换成试炼券则立刻到账，用来买装备、伤药、军需、住店或训练。
+                    金币存成 tcr 在平定此地时结算；换成活动券则立刻到账，用来买装备、伤药、军需、住店或训练。
                   </p>
                 </div>
               ) : null}
@@ -2115,9 +2127,9 @@ export function TrialGame(props: TrialGameProps) {
                 <div className="space-y-3">
                   <NpcIntro npcId="innkeeper" />
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>住一次收 {SAGA_INN_PRICE_TICKETS} 张试炼券，住下就把上阵武将的兵力补满。</span>
+                    <span>住一次收 {SAGA_INN_PRICE_TICKETS} 张活动券，住下就把上阵武将的兵力补满。</span>
                     <span className="flex items-center gap-1 tabular-nums">
-                      <Ticket className="h-3.5 w-3.5 text-violet-400" />
+                      <CouponIcon kind="trial" className="h-3.5 w-3.5" />
                       每次 {SAGA_INN_PRICE_TICKETS} 张券
                     </span>
                   </div>
@@ -2144,7 +2156,7 @@ export function TrialGame(props: TrialGameProps) {
                   </div>
                   <Button
                     size="sm"
-                    disabled={innBlocked !== null || busy === `buy:${SAGA_INN_ITEM_ID}`}
+                    disabled={innBlocked !== null || Boolean(busy)}
                     onClick={stayAtInn}
                   >
                     {busy === `buy:${SAGA_INN_ITEM_ID}` ? "住店中…" : innLabel}
@@ -2315,11 +2327,11 @@ export function TrialGame(props: TrialGameProps) {
                   <NpcIntro npcId="trainer" />
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>
-                      每级 {SAGA_TRAINING_TICKETS_PER_LEVEL} 张试炼券，一次练到目标等级；
+                      每级 {SAGA_TRAINING_TICKETS_PER_LEVEL} 张活动券，一次练到目标等级；
                       训练场上限 {trainingLevelCap(save)} 级（每平定一处地方 +3，最高 30 级）。
                     </span>
                     <span className="flex items-center gap-1 tabular-nums">
-                      <Ticket className="h-3.5 w-3.5 text-violet-400" />
+                      <CouponIcon kind="trial" className="h-3.5 w-3.5" />
                       {tickets} 张
                     </span>
                   </div>
@@ -2359,7 +2371,7 @@ export function TrialGame(props: TrialGameProps) {
                             />
                             <span className="text-muted-foreground">级 ·</span>
                             <span className="flex items-center gap-1 tabular-nums text-muted-foreground">
-                              <Ticket className="h-3 w-3 text-violet-400" />
+                              <CouponIcon kind="trial" className="h-3 w-3" />
                               {targetValid ? `${cost} 张` : "—"}
                             </span>
                             <Button
@@ -2386,9 +2398,9 @@ export function TrialGame(props: TrialGameProps) {
                 <div className="space-y-3">
                   <NpcIntro npcId="couponkeeper" />
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>兑换活动券或买珍宝礼包，到账后右上角的试炼券数量实时刷新。</span>
+                    <span>兑换活动券或买珍宝礼包，到账后右上角的活动券数量实时刷新。</span>
                     <span className="flex items-center gap-1 tabular-nums">
-                      <Ticket className="h-3.5 w-3.5 text-violet-400" />
+                      <CouponIcon kind="trial" className="h-3.5 w-3.5" />
                       {props.coupon.tickets} 张
                     </span>
                   </div>
@@ -2511,7 +2523,7 @@ export function TrialGame(props: TrialGameProps) {
 
         {!run && !settlement ? (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-xl border border-border bg-card p-5 shadow-2xl">
+            <div className="max-h-full w-full max-w-lg overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-5 shadow-2xl">
               <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">三国讨逆传</p>
               <h3 className="mt-1 text-xl font-semibold">
                 {chapter.town} · {chapter.name}
@@ -2538,11 +2550,11 @@ export function TrialGame(props: TrialGameProps) {
                     <span className={HUD_CELL}>{save.party.length} 将上阵</span>
                     <span className={HUD_CELL}>{formatCredits(save.gold)} 金</span>
                     <span className={HUD_CELL}>战力 {partyPower(save)}</span>
-                    <span className={HUD_CELL}>{tickets} 张试炼券</span>
+                    <span className={HUD_CELL}>{tickets} 张活动券</span>
                   </div>
                   <p className="mt-3 text-xs text-muted-foreground">
                     从{chapter.town}出城免费。出城前可在城中街景里逛铁匠铺、药铺、军需帐、客栈、钱庄、
-                    酒馆、营帐、训练场、活动券与桃园碑，铺子里都有掌柜招呼，买卖仍用试炼券。
+                    酒馆、营帐、训练场、活动券与桃园碑，铺子里都有掌柜招呼，买卖仍用活动券。
                     出城后是张俯视大地图，方向键/WASD 自由行走，沿官道会路过村庄、祠堂与渡口，
                     走过去能听一段本地故事、记一条军令；走到哪座营跟前就打哪座，
                     主帅本阵要先拔尽其余 {props.nodeCount - 1} 座营。营寨全部攻破、剧情才会推进到下一处地方。

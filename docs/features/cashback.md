@@ -41,6 +41,8 @@
 - 当期活动结束即作废，下一轮 `activityKey` 变化后自然换名；旧券行保留但不再参与支付。
 - 获取方式：按活动单价整张兑换（1 张 = `couponUnitCredits` cr，默认 1，先tcr 余额、再cr 余额）、
   珍宝礼包、消费返利 / 活跃度奖励。
+- 礼包按钮只负责选中，下方确认条核对「实付 cr / 到账张数」后才调用
+  `buyCouponPackAction`，取消不扣款（v0.60.0）。
 - 珍宝礼包档位在后台「珍宝礼包（活动券通用）」卡片增删配置（1–6 档），存
   `option.coupon_pack_config` 的 `{ packs: [...] }`：每档 `name`、`tickets`（**整数张数**）、
   `ratioPercent`（%）、`dailyLimit` / `totalLimit`（份，0 = 不限）、`bonusTickets`（赠券张数）、

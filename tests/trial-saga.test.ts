@@ -19,6 +19,7 @@ import {
   SAGA_TILE_ROAD,
   SAGA_TILE_WALL,
   SAGA_TILE_YARD,
+  type SagaBattleState,
   type SagaCommand,
   type SagaRun,
 } from "../lib/trial/saga/types";
@@ -82,6 +83,7 @@ import {
   normalizeTrialSave,
 } from "../lib/trial/saga/state";
 import { startBattle } from "../lib/trial/saga/battle";
+import { battleEnemyAtPoint, makeSagaView } from "../components/trial/renderer";
 import {
   SAGA_TRAINING_ITEM_ID,
   SAGA_TRAINING_TICKETS_PER_LEVEL,
@@ -1318,4 +1320,13 @@ test("训练购买记录：解析留档，重放按购买位置抬到目标等�
   );
   assert.ok(dropped);
   assert.equal(dropped.purchases.length, 0, "查无此人的训练记录被丢弃");
+});
+
+test("战斗点选：人多时命中框重叠，按距离取最近的敌将", () => {
+  const view = makeSagaView(540);
+  // 5 个敌将时 slot 间距只有 29，横向错位 40，命中框必然互相覆盖。
+  const battle = { enemies: Array.from({ length: 5 }, () => ({})) } as unknown as SagaBattleState;
+  assert.equal(battleEnemyAtPoint(view, battle, 722, 190), 0, "点第 1 个敌将");
+  assert.equal(battleEnemyAtPoint(view, battle, 682, 277), 3, "点第 4 个敌将，不能被前面的框截走");
+  assert.equal(battleEnemyAtPoint(view, battle, 20, 20), -1, "点空地不选人");
 });

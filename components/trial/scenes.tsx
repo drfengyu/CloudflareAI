@@ -951,7 +951,7 @@ export function TownScene({
           {chapter.town} · 城中整备
         </span>
         <span className="rounded-lg border border-amber-900/40 bg-black/55 px-2.5 py-1 text-xs tabular-nums text-amber-100/80 backdrop-blur">
-          {tickets} 张试炼券
+          {tickets} 张活动券
         </span>
       </div>
 
