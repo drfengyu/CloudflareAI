@@ -117,10 +117,10 @@ export function fieldEncounterChanceAt(field: SagaField, x: number, y: number): 
     return 0;
   }
   const kind = fieldTileAt(field, tx, ty);
-  // v0.68.0 起整体为原来的 4 倍：树林、草地、滩涂与官道都可能遇敌。
-  if (kind === SAGA_TILE_FOREST) return 0.4;
-  if (kind === SAGA_TILE_GRASS) return fieldShoreAt(field, tx, ty) ? 0.18 : 0.22;
-  if (kind === SAGA_TILE_ROAD) return 0.12;
+  // v0.69.1 起整体为原来的 3 倍：树林、草地、滩涂与官道都可能遇敌。
+  if (kind === SAGA_TILE_FOREST) return 0.3;
+  if (kind === SAGA_TILE_GRASS) return fieldShoreAt(field, tx, ty) ? 0.135 : 0.165;
+  if (kind === SAGA_TILE_ROAD) return 0.09;
   return 0;
 }
 

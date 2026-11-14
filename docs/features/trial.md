@@ -197,7 +197,7 @@
 `lib/trial/saga/encounter.ts` + `components/trial/game.tsx` 的逐格判定。
 
 - **触发**：行走时每跨入一个新格子判定一次（`fieldEncounterChanceAt`）：
-  官道 12%、草地 22%、海边滩涂 18%、树林 40%（v0.68.0 起为原概率的 4 倍）；
+  官道 9%、草地 16.5%、海边滩涂 13.5%、树林 30%（v0.69.1 起为原概率的 3 倍）；
   城门洞、城墙与城内校场为 0。不设战后冷却，跨入新格子就会判定，
   边按键边走、点击寻路都会触发；触发即停下当前寻路，开遭遇战面板。
 - **编成**：`sagaEncounterFor(run, ordinal, rules)` 只读 `run.seed` 与「本趟第几场」：
