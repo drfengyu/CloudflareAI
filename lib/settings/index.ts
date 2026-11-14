@@ -47,6 +47,34 @@ export async function getSettingsMap<
 }
 
 /**
+ * 一次 `IN` 查读取多个 JSON 配置并解析好。
+ *
+ * 活动券这类配置是整块 JSON（`trial_config` 等），缺失或解析失败都回 null，
+ * 交给各自的 `sanitize*` 兜默认值；读失败只记日志，不把整页拖垮。
+ */
+export async function getJsonSettings(keys: string[]): Promise<Map<string, unknown>> {
+  const out = new Map<string, unknown>();
+  if (keys.length === 0) return out;
+  try {
+    const rows = await db
+      .select({ key: options.key, value: options.value })
+      .from(options)
+      .where(inArray(options.key, keys));
+    for (const row of rows) {
+      if (row.value === null || row.value === undefined) continue;
+      try {
+        out.set(row.key, JSON.parse(row.value));
+      } catch {
+        out.set(row.key, null);
+      }
+    }
+  } catch (err) {
+    console.error(`[getJsonSettings] Failed to get ${keys.join(", ")}:`, err);
+  }
+  return out;
+}
+
+/**
  * 获取系统设置值
  * @param key 设置键名
  * @param defaultValue 默认值

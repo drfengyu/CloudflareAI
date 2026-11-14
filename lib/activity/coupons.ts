@@ -11,19 +11,48 @@ import {
 import { spendCredits, refundPermanentCredits } from "@/lib/billing/spend";
 import { formatAmount, formatTickets } from "@/lib/billing/units";
 import { cnStartOfToday } from "@/lib/date";
-import { activityWindow, currentActivityKey } from "@/lib/lottery/prize-math";
-import { getLotteryConfig } from "@/lib/lottery/config";
-import { flipActivityKey, flipActivityWindow } from "@/lib/flip/config";
-import { getFlipConfig } from "@/lib/flip/settings";
-import { raidenActivityKey, raidenActivityWindow } from "@/lib/raiden/config";
-import { getRaidenConfig } from "@/lib/raiden/settings";
-import { trialActivityKey, trialActivityWindow } from "@/lib/trial/config";
-import { getTrialConfig } from "@/lib/trial/settings";
-import { workshopActivityKey, workshopActivityWindow } from "@/lib/workshop/config";
-import { getWorkshopConfig } from "@/lib/workshop/settings";
-import { collectionActivityKey, collectionActivityWindow } from "@/lib/collection/config";
-import { getCollectionConfig } from "@/lib/collection/settings";
-import { getCouponPackConfig, type CouponPackConfig } from "./pack-config";
+import { getJsonSettings } from "@/lib/settings";
+import {
+  LOTTERY_CONFIG_KEY,
+  activityWindow,
+  currentActivityKey,
+  sanitizeLotteryConfig,
+} from "@/lib/lottery/prize-math";
+import {
+  FLIP_CONFIG_KEY,
+  flipActivityKey,
+  flipActivityWindow,
+  sanitizeFlipConfig,
+} from "@/lib/flip/config";
+import {
+  RAIDEN_CONFIG_KEY,
+  raidenActivityKey,
+  raidenActivityWindow,
+  sanitizeRaidenConfig,
+} from "@/lib/raiden/config";
+import {
+  TRIAL_CONFIG_KEY,
+  trialActivityKey,
+  trialActivityWindow,
+  sanitizeTrialConfig,
+} from "@/lib/trial/config";
+import {
+  WORKSHOP_CONFIG_KEY,
+  workshopActivityKey,
+  workshopActivityWindow,
+  sanitizeWorkshopConfig,
+} from "@/lib/workshop/config";
+import {
+  COLLECTION_CONFIG_KEY,
+  collectionActivityKey,
+  collectionActivityWindow,
+  sanitizeCollectionConfig,
+} from "@/lib/collection/config";
+import {
+  COUPON_PACK_CONFIG_KEY,
+  sanitizeCouponPackConfig,
+  type CouponPackConfig,
+} from "./pack-config";
 import { packGrant } from "./pack-grant";
 import { couponTickets, creditsForTickets, ticketsForCost } from "./ticket-math";
 
@@ -198,81 +227,127 @@ interface ResolvedActivity {
   endMs: number | null;
 }
 
-async function resolveActivity(kind: ActivityKind): Promise<ResolvedActivity> {
+/** 各玩法配置在 option 表里的键；批量读配置时一次 IN 查完。 */
+const ACTIVITY_CONFIG_KEYS: Record<ActivityKind, string> = {
+  lottery: LOTTERY_CONFIG_KEY,
+  flip: FLIP_CONFIG_KEY,
+  raiden: RAIDEN_CONFIG_KEY,
+  trial: TRIAL_CONFIG_KEY,
+  workshop: WORKSHOP_CONFIG_KEY,
+  collection: COLLECTION_CONFIG_KEY,
+};
+
+interface ActivityWindowInfo {
+  status: ActivityStatus;
+  activityKey: string | null;
+  unitCredits: number;
+  startMs: number | null;
+  endMs: number | null;
+}
+
+/** 纯函数：把库里那块 JSON 配置解析成活动窗口与券面；脏值由 sanitize 兜住。 */
+function resolveActivityFromConfig(kind: ActivityKind, raw: unknown): ResolvedActivity {
   const meta = ACTIVITY_META[kind];
-  let status: ActivityStatus;
-  let activityKey: string | null;
-  let unitCredits = 1;
-  let startMs: number | null = null;
-  let endMs: number | null = null;
+  let info: ActivityWindowInfo;
   if (kind === "lottery") {
-    const config = await getLotteryConfig();
+    const config = sanitizeLotteryConfig(raw);
     const win = activityWindow(config);
-    status = win.status;
-    startMs = win.startMs;
-    endMs = win.endMs;
-    activityKey = currentActivityKey(config);
-    unitCredits = config.couponUnitCredits;
+    info = {
+      status: win.status,
+      startMs: win.startMs,
+      endMs: win.endMs,
+      activityKey: currentActivityKey(config),
+      unitCredits: config.couponUnitCredits,
+    };
   } else if (kind === "flip") {
-    const config = await getFlipConfig();
+    const config = sanitizeFlipConfig(raw);
     const win = flipActivityWindow(config);
-    status = win.status;
-    startMs = win.startMs;
-    endMs = win.endMs;
-    activityKey = flipActivityKey(config);
-    unitCredits = config.couponUnitCredits;
+    info = {
+      status: win.status,
+      startMs: win.startMs,
+      endMs: win.endMs,
+      activityKey: flipActivityKey(config),
+      unitCredits: config.couponUnitCredits,
+    };
   } else if (kind === "raiden") {
-    const config = await getRaidenConfig();
+    const config = sanitizeRaidenConfig(raw);
     const win = raidenActivityWindow(config);
-    status = win.status;
-    startMs = win.startMs;
-    endMs = win.endMs;
-    activityKey = raidenActivityKey(config);
-    unitCredits = config.couponUnitCredits;
+    info = {
+      status: win.status,
+      startMs: win.startMs,
+      endMs: win.endMs,
+      activityKey: raidenActivityKey(config),
+      unitCredits: config.couponUnitCredits,
+    };
   } else if (kind === "trial") {
-    const config = await getTrialConfig();
+    const config = sanitizeTrialConfig(raw);
     const win = trialActivityWindow(config);
-    status = win.status;
-    startMs = win.startMs;
-    endMs = win.endMs;
-    activityKey = trialActivityKey(config);
-    unitCredits = config.couponUnitCredits;
+    info = {
+      status: win.status,
+      startMs: win.startMs,
+      endMs: win.endMs,
+      activityKey: trialActivityKey(config),
+      unitCredits: config.couponUnitCredits,
+    };
   } else if (kind === "workshop") {
-    const config = await getWorkshopConfig();
+    const config = sanitizeWorkshopConfig(raw);
     const win = workshopActivityWindow(config);
-    status = win.status;
-    startMs = win.startMs;
-    endMs = win.endMs;
-    activityKey = workshopActivityKey(config);
-    unitCredits = config.couponUnitCredits;
+    info = {
+      status: win.status,
+      startMs: win.startMs,
+      endMs: win.endMs,
+      activityKey: workshopActivityKey(config),
+      unitCredits: config.couponUnitCredits,
+    };
   } else {
-    const config = await getCollectionConfig();
+    const config = sanitizeCollectionConfig(raw);
     const win = collectionActivityWindow(config);
-    status = win.status;
-    startMs = win.startMs;
-    endMs = win.endMs;
-    activityKey = collectionActivityKey(config);
-    unitCredits = config.couponUnitCredits;
+    info = {
+      status: win.status,
+      startMs: win.startMs,
+      endMs: win.endMs,
+      activityKey: collectionActivityKey(config),
+      unitCredits: config.couponUnitCredits,
+    };
   }
-  return {
-    ...meta,
-    status,
-    activityKey,
-    couponName: couponNameFor(kind, activityKey),
-    unitCredits,
-    startMs,
-    endMs,
-  };
+  return { ...meta, ...info, couponName: couponNameFor(kind, info.activityKey) };
+}
+
+/**
+ * 一次 `IN` 查询读齐若干玩法的配置再解析。
+ * 2026-11-14 性能：顶栏货币条原先按玩法各查一条（三种 + 礼包 = 4 跳），
+ * 现在是 1 跳；活动中心一次列六个玩法时也只付这 1 跳。
+ */
+async function resolveActivitiesByKind(
+  kinds: ActivityKind[],
+): Promise<Map<ActivityKind, ResolvedActivity>> {
+  const unique = [...new Set(kinds)];
+  const raw = await getJsonSettings(unique.map((kind) => ACTIVITY_CONFIG_KEYS[kind]));
+  return new Map(
+    unique.map((kind) => [
+      kind,
+      resolveActivityFromConfig(
+        kind,
+        raw.get(ACTIVITY_CONFIG_KEYS[kind]) ?? null,
+      ),
+    ]),
+  );
+}
+
+async function resolveActivity(kind: ActivityKind): Promise<ResolvedActivity> {
+  return (await resolveActivitiesByKind([kind])).get(kind)!;
 }
 
 /** 当前上线玩法的券与状态。 */
 export async function resolveActivities(): Promise<ResolvedActivity[]> {
-  return Promise.all(LIVE_ACTIVITY_KINDS.map((kind) => resolveActivity(kind)));
+  const resolved = await resolveActivitiesByKind(LIVE_ACTIVITY_KINDS);
+  return LIVE_ACTIVITY_KINDS.map((kind) => resolved.get(kind)!);
 }
 
 /** 经典玩法的券与状态；只在活动中心与各自玩法页用到。 */
 export async function resolveLegacyActivities(): Promise<ResolvedActivity[]> {
-  return Promise.all(LEGACY_ACTIVITY_KINDS.map((kind) => resolveActivity(kind)));
+  const resolved = await resolveActivitiesByKind(LEGACY_ACTIVITY_KINDS);
+  return LEGACY_ACTIVITY_KINDS.map((kind) => resolved.get(kind)!);
 }
 
 export interface ActivityCouponView extends ResolvedActivity {
@@ -320,22 +395,35 @@ async function readCouponRows(
 
 /**
  * 一次取齐若干种券的余额；默认只取当前上线的三个玩法。
- * `resolveActivity` 要逐个读活动配置，与余额查询并发。
+ * 玩法配置与礼包配置在一条 `IN` 查询里读，随后券行与礼包用量并发。
  */
 export async function listActivityCoupons(
   userId: string,
   kinds: ActivityKind[] = LIVE_ACTIVITY_KINDS,
 ): Promise<ActivityCouponView[]> {
-  const activities = await Promise.all(kinds.map((kind) => resolveActivity(kind)));
-  const [balances, usage, packConfig] = await Promise.all([
+  const unique = [...new Set(kinds)];
+  const raw = await getJsonSettings([
+    ...unique.map((kind) => ACTIVITY_CONFIG_KEYS[kind]),
+    COUPON_PACK_CONFIG_KEY,
+  ]);
+  const activityByKind = new Map(
+    unique.map((kind) => [
+      kind,
+      resolveActivityFromConfig(kind, raw.get(ACTIVITY_CONFIG_KEYS[kind]) ?? null),
+    ]),
+  );
+  const packConfig = sanitizeCouponPackConfig(raw.get(COUPON_PACK_CONFIG_KEY));
+  const activities = unique.map((kind) => activityByKind.get(kind)!);
+
+  const [balances, usage] = await Promise.all([
     readCouponRows(
       userId,
       activities.map((item) => ({ kind: item.kind, activityKey: item.activityKey })),
     ),
     readPackUsage(userId),
-    getCouponPackConfig(),
   ]);
-  return activities.map((item) => {
+  return kinds.map((kind) => {
+    const item = activityByKind.get(kind)!;
     const credits = item.activityKey
       ? round2(balances.get(`${item.kind}|${item.activityKey}`) ?? 0)
       : 0;
@@ -381,13 +469,18 @@ export async function getActivityCouponView(
   userId: string,
   kind: ActivityKind,
 ): Promise<ActivityCouponView> {
-  const activity = await resolveActivity(kind);
-  const [balances, usage, packConfig] = await Promise.all([
+  // 活动配置与礼包配置合并成一条查询；玩法页原先要为此多付一跳
+  const raw = await getJsonSettings([ACTIVITY_CONFIG_KEYS[kind], COUPON_PACK_CONFIG_KEY]);
+  const activity = resolveActivityFromConfig(
+    kind,
+    raw.get(ACTIVITY_CONFIG_KEYS[kind]) ?? null,
+  );
+  const packConfig = sanitizeCouponPackConfig(raw.get(COUPON_PACK_CONFIG_KEY));
+  const [balances, usage] = await Promise.all([
     activity.activityKey
       ? readCouponRows(userId, [{ kind, activityKey: activity.activityKey }])
       : Promise.resolve(new Map<string, number>()),
     readPackUsage(userId),
-    getCouponPackConfig(),
   ]);
   const credits = activity.activityKey
     ? round2(balances.get(`${kind}|${activity.activityKey}`) ?? 0)
@@ -485,13 +578,19 @@ export async function buyCouponPack(
   price: number;
   couponName: string;
 }> {
-  const packConfig = await getCouponPackConfig();
+  // 礼包配置、活动配置、限购用量互不依赖，配置合并成一条查询
+  const [raw, usage] = await Promise.all([
+    getJsonSettings([COUPON_PACK_CONFIG_KEY, ACTIVITY_CONFIG_KEYS[kind]]),
+    readPackUsage(userId),
+  ]);
+  const packConfig = sanitizeCouponPackConfig(raw.get(COUPON_PACK_CONFIG_KEY));
   const pack = buildCouponPacks(packConfig).find((item) => item.key === packKey);
   if (!pack) throw new Error("礼包不存在");
-  const activity = await resolveActivity(kind);
+  const activity = resolveActivityFromConfig(
+    kind,
+    raw.get(ACTIVITY_CONFIG_KEYS[kind]) ?? null,
+  );
   const activityKey = assertActive(activity);
-
-  const usage = await readPackUsage(userId);
   const used = usage.get(pack.key) ?? { today: 0, total: 0 };
   if (pack.dailyLimit !== null && used.today >= pack.dailyLimit) {
     throw new Error(`${pack.name}今日限购 ${pack.dailyLimit} 份，今天已买满，明天再来`);

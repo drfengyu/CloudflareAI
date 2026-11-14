@@ -704,10 +704,12 @@ async function buildPeriodView(
   rewardClaims: Map<string, RewardClaimRow>,
 ): Promise<TaskPeriodView> {
   const window = periodWindow(period);
+  // 每项统计独立降级：某张表查询超时只让对应任务显示 0 进度，
+  // 不能把整块任务板（乃至整页）一起拖进错误边界。
   const [claimed, initialPoints, progress] = await Promise.all([
-    readPeriodClaims(userId, period, window.key),
-    periodPoints(userId, period, window.key),
-    Promise.all(defs.map((task) => task.measure(userId, window))),
+    readPeriodClaims(userId, period, window.key).catch(() => new Map<string, number>()),
+    periodPoints(userId, period, window.key).catch(() => 0),
+    Promise.all(defs.map((task) => task.measure(userId, window).catch(() => 0))),
   ]);
 
   const sentLabels = await ensureMilestoneRewards(
@@ -739,7 +741,10 @@ async function buildPeriodView(
 
 /** 一次读两个周期的任务与活跃度；达到里程碑时顺手补发站内信（唯一索引挡重复）。 */
 export async function listTaskBoard(userId: string, settings: TaskSettings): Promise<TaskBoard> {
-  const rewardClaims = await listRewardClaims(userId, "activity");
+  // 领取记录读失败只影响「已领」标记，不该让整块任务板报错
+  const rewardClaims = await listRewardClaims(userId, "activity").catch(
+    () => new Map<string, RewardClaimRow>(),
+  );
   const [daily, weekly] = await Promise.all([
     buildPeriodView(userId, "daily", DAILY_TASKS, DAILY_TARGET, settings, rewardClaims),
     buildPeriodView(userId, "weekly", WEEKLY_TASKS, WEEKLY_TARGET, settings, rewardClaims),

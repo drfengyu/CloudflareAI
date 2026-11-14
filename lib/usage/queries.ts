@@ -1,6 +1,6 @@
 import { db } from "@/lib/db/d1-http";
 import { usageLogs, users, apiKeys, channels, type UsageLog } from "@/lib/db/schema";
-import { desc, eq, gte, lt, and, sql } from "drizzle-orm";
+import { desc, eq, gte, inArray, lt, and, sql } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 import type { BucketGranularity } from "@/lib/date";
 
@@ -120,18 +120,21 @@ export async function getUsageByModel(
   return rows;
 }
 
-/** 按渠道统计用量（渠道分布饼图） */
+/**
+ * 按渠道统计用量（渠道分布饼图）。
+ *
+ * drizzle-orm 0.45.2 的 `leftJoin` 会串列（docs/fixes/2026-06-25-drizzle-leftjoin-bug.md），
+ * 渠道名单独查一次：分组结果最多 8 行，第二跳只按这几个 id 取，代价很小。
+ */
 export async function getUsageByChannel(userId: string, win: UsageWindow) {
   const rows = await db
     .select({
       channelId: usageLogs.channelId,
       channel: usageLogs.channel,
-      channelName: channels.name,
       calls: sql<number>`COUNT(*)`,
       credits: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`,
     })
     .from(usageLogs)
-    .leftJoin(channels, eq(usageLogs.channelId, channels.id))
     .where(
       and(
         eq(usageLogs.userId, userId),
@@ -143,9 +146,24 @@ export async function getUsageByChannel(userId: string, win: UsageWindow) {
     .orderBy(desc(sql`COALESCE(SUM(${usageLogs.creditsUsed}), 0)`))
     .limit(8);
 
+  const channelIds = [
+    ...new Set(rows.map((row) => row.channelId).filter((id): id is string => Boolean(id))),
+  ];
+  const channelNames = new Map<string, string>();
+  if (channelIds.length > 0) {
+    const channelRows = await db
+      .select({ id: channels.id, name: channels.name })
+      .from(channels)
+      .where(inArray(channels.id, channelIds))
+      .catch(() => []);
+    for (const row of channelRows) {
+      if (row.name) channelNames.set(row.id, row.name);
+    }
+  }
+
   return rows.map((r) => {
     const name =
-      r.channelName ??
+      (r.channelId ? channelNames.get(r.channelId) : null) ??
       (r.channel === "web"
         ? "站内 Playground"
         : r.channel === "openai"

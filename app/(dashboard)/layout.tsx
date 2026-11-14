@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { AppHeader } from "@/components/dashboard/app-header";
 import { ModuleNav } from "@/components/dashboard/module-nav";
 import { MobileNav } from "@/components/dashboard/mobile-nav";
@@ -27,6 +28,44 @@ const getCachedSiteName = unstable_cache(
   { revalidate: 3600 },
 );
 
+type HeaderUser = React.ComponentProps<typeof AppHeader>["user"];
+
+/**
+ * 顶栏的未读数 / 最近站内信 / 货币条要打 7 次 D1，原先在布局里直接 await，
+ * 整页首字节都要等它们。放进 Suspense 后先发一个同样高度的顶栏骨架，
+ * 页面正文可以立刻开始流式输出；数据回来再把余额与铃铛补上。
+ */
+async function HeaderData({
+  user,
+  userId,
+  siteName,
+  signOutAction,
+}: {
+  user?: HeaderUser;
+  userId?: string;
+  siteName: string;
+  signOutAction: () => void;
+}) {
+  const [unreadCount, recentMessages, currency] = userId
+    ? await Promise.all([
+        countUnread(userId).catch(() => 0),
+        listRecentMessages(userId, 5).catch(() => []),
+        getCurrencySnapshot(userId).catch(() => null),
+      ])
+    : [0, [] as MessagePreview[], null as CurrencySnapshot | null];
+
+  return (
+    <AppHeader
+      user={user}
+      signOutAction={signOutAction}
+      siteName={siteName}
+      unreadCount={unreadCount}
+      recentMessages={recentMessages}
+      currency={currency}
+    />
+  );
+}
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -40,15 +79,6 @@ export default async function DashboardLayout({
 
   const siteName = await getCachedSiteName();
   const userId = session?.user?.id;
-  // 铃铛要的是「几封没读 + 最近几封」，顶栏货币条要余额与三种活动券；
-  // 都是走索引的小查询，并发发出去，不串行等。
-  const [unreadCount, recentMessages, currency] = userId
-    ? await Promise.all([
-        countUnread(userId).catch(() => 0),
-        listRecentMessages(userId, 5).catch(() => []),
-        getCurrencySnapshot(userId).catch(() => null),
-      ])
-    : [0, [] as MessagePreview[], null as CurrencySnapshot | null];
 
   async function signOutAction() {
     "use server";
@@ -57,14 +87,25 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <AppHeader
-        user={session?.user}
-        signOutAction={signOutAction}
-        siteName={siteName}
-        unreadCount={unreadCount}
-        recentMessages={recentMessages}
-        currency={currency}
-      />
+      <Suspense
+        fallback={
+          <AppHeader
+            user={session?.user}
+            signOutAction={signOutAction}
+            siteName={siteName}
+            unreadCount={0}
+            recentMessages={[]}
+            currency={null}
+          />
+        }
+      >
+        <HeaderData
+          user={session?.user}
+          userId={userId}
+          siteName={siteName}
+          signOutAction={signOutAction}
+        />
+      </Suspense>
       {/* 桌面端顶部模块导航取代了原来的左侧栏 */}
       <ModuleNav userRole={userRole} />
       {/* 窄屏下底部标签栏会盖住内容，给 main 留出它的高度 */}

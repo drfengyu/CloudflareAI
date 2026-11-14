@@ -534,9 +534,16 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.76.7（2026-11-15，每日任务改考模型种类与调用量）
+**当前版本**：v0.76.8（2026-11-16，加载性能修补）
 **下一版本**：待定
 
+- v0.76.8 加载性能修补：顶栏未读 / 最近站内信 / 货币条移进 Suspense，正文不再等顶栏的
+  D1 查询；活动券配置与珍宝礼包由逐玩法一条查询合并成一次 `IN`（`getJsonSettings`），
+  货币条 8 → 5 跳；任务成就每项统计独立 catch，单项超时只显示 0 进度；`cfRequest`
+  读超时不再重试（连接失败 / 429 / 5xx 仍重试一次）；看板「按渠道」统计改掉 drizzle 0.45.2
+  的 `leftJoin` 串列，渠道名单单独查一次。`tsc` 0 错误、改动文件 ESLint 0/0、
+  可加载单测 173/173；未在真实浏览器复测登录后的首屏。
+  详见 `docs/fixes/2026-11-14-load-performance.md`。
 - v0.76.7 任务成就每日清单调整：移除 `daily_image` / `daily_translate` /
   `daily_embeddings` 三项单项体验，新增 `daily_models`「使用 2 种不同模型」
   （15 活跃度，与 `weekly_models` 共用 `modelVariety`）与 `daily_ai_calls`

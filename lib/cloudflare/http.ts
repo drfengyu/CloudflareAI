@@ -15,8 +15,9 @@ const READ_TIMEOUT_MS = 5_000;
 const WRITE_TIMEOUT_MS = 20_000;
 
 /**
- * 读重试 1 次：最坏 5 + 0.2 + 5 ≈ 10s。重试次数是乘法——一条页面里 9 个并发查询各自
- * 重试两次的话，首屏能挂到半分钟，那正是「首次进入加载失败」的形态，所以只给一次机会。
+ * 读重试 1 次：只给连接失败与 429/5xx；超时不重试（5s 都没回来，再等 5s 只会让首屏更慢）。
+ * 重试次数是乘法——一条页面里 9 个并发查询各自重试两次的话，首屏能挂到半分钟，
+ * 那正是「首次进入加载失败」的形态，所以只给一次机会。
  */
 const READ_RETRIES = 1;
 const WRITE_RETRIES = 0;
@@ -38,7 +39,10 @@ async function once(url: string, init: CfRequestInit, timeoutMs: number): Promis
     return await fetch(url, { ...rest, signal: controller.signal });
   } catch (error) {
     if (controller.signal.aborted) {
-      throw new Error(`${label} 请求超时（${timeoutMs}ms 未响应）`);
+      const timeout = new Error(`${label} 请求超时（${timeoutMs}ms 未响应）`);
+      // 标出来给 cfRequest 判断：超时重试几乎不会成功，只会把等待翻倍
+      timeout.name = "TimeoutError";
+      throw timeout;
     }
     // undici 只会说 "fetch failed"，真正的原因在 cause 里，不带上就无法从日志定位
     const cause = (error as { cause?: { message?: string } })?.cause?.message;
@@ -68,8 +72,10 @@ export async function cfRequest(
       error = e;
     }
 
+    // 超时不再重试：5s 都没回来，第二条 5s 大概率也一样，只会让首屏多等一倍
+    const timedOut = (error as Error | null)?.name === "TimeoutError";
     const retryable =
-      res !== null ? RETRYABLE_STATUS.has(res.status) : true;
+      res !== null ? RETRYABLE_STATUS.has(res.status) : !timedOut;
     if (!retryable || attempt >= retries) {
       if (error) throw error;
       if (!res) throw new Error("Cloudflare 请求未产生响应");
