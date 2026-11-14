@@ -117,9 +117,10 @@ export function fieldEncounterChanceAt(field: SagaField, x: number, y: number): 
     return 0;
   }
   const kind = fieldTileAt(field, tx, ty);
-  if (kind === SAGA_TILE_FOREST) return 0.1;
-  if (kind === SAGA_TILE_GRASS) return fieldShoreAt(field, tx, ty) ? 0.045 : 0.055;
-  if (kind === SAGA_TILE_ROAD) return 0.03;
+  // v0.68.0 起整体为原来的 5 倍：树林一半的格子会遇敌，草地、滩涂与官道也大幅提高。
+  if (kind === SAGA_TILE_FOREST) return 0.5;
+  if (kind === SAGA_TILE_GRASS) return fieldShoreAt(field, tx, ty) ? 0.225 : 0.275;
+  if (kind === SAGA_TILE_ROAD) return 0.15;
   return 0;
 }
 

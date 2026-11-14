@@ -1172,18 +1172,18 @@ test("野外遇敌概率：官道、草地、海边与树林都遇敌，城墙�
         continue;
       }
       if (kind === SAGA_TILE_FOREST) {
-        assert.equal(chance, 0.1);
+        assert.equal(chance, 0.5);
         forest += 1;
       } else if (kind === SAGA_TILE_GRASS) {
         if (fieldShoreAt(field, tx, ty)) {
-          assert.equal(chance, 0.045, "海边滩涂也会遇敌");
+          assert.equal(chance, 0.225, "海边滩涂也会遇敌");
           shore += 1;
         } else {
-          assert.equal(chance, 0.055);
+          assert.equal(chance, 0.275);
           grass += 1;
         }
       } else if (kind === SAGA_TILE_ROAD) {
-        assert.equal(chance, 0.03, "官道也会遇敌");
+        assert.equal(chance, 0.15, "官道也会遇敌");
         road += 1;
       } else {
         assert.equal(chance, 0, `城墙与城内校场不遇敌（tile=${kind}）`);
