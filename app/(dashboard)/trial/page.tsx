@@ -126,7 +126,8 @@ export default async function TrialPage() {
           <li>
             出城<b>不花券</b>。铁匠铺、药铺、客栈、军需帐与<b>训练场</b>全部用<b>活动券</b>标价（1 张 ={" "}
             {formatCredits(config.couponUnitCredits)} cr 券面），买装备、伤药、军需、住店与逐级训练都在购买时实时扣券；
-            城中还有<b>活动券礼包</b>入口，可当场兑换或购买。战斗缴获的金币只能在钱庄存成 tcr，不能反过来换金币。
+            城中还有<b>活动券礼包</b>入口，可当场兑换或购买。战斗缴获的金币可在钱庄存成 tcr，
+            也能按同一券面价（1 张 = {formatCredits(config.couponUnitCredits)} cr ≈ 同等金币）换成活动券当场使用。
           </li>
           <li>
             平定一处地方就<b>自动结算</b>并发通关奖励（不用再手动收兵）：
@@ -136,8 +137,9 @@ export default async function TrialPage() {
             ；按达到的最高档发放，奖励 tcr {config.rewardValidDays} 天内有效。未平定不发。
           </li>
           <li>
-            城镇钱庄<b>只收金币、只发 tcr</b>：每 {config.bankGoldPerTcr} 金存成 1 tcr（每趟最多存{" "}
-            {config.bankMaxGoldPerRun} 金，平定此地时自动到账）。客栈每次住店花{" "}
+            城镇钱庄两条路：每 {config.bankGoldPerTcr} 金存成 1 tcr（每趟最多存{" "}
+            {config.bankMaxGoldPerRun} 金，平定此地时自动到账），或每 {config.couponUnitCredits} 金换 1 张活动券
+            （不限量，兑换后立即到账）。客栈每次住店花{" "}
             {SAGA_INN_PRICE_TICKETS} 张券，把上阵武将的兵力补满，残兵也能接着推下一处。
           </li>
           <li>

@@ -274,6 +274,9 @@ export interface SagaPurchase {
   tickets: number;
   /** 旧版 tcr 换金币的购买记录：这一笔换进游戏的金币数（`itemId` 为 `bank_gold`）。 */
   gold?: number;
+  /** 钱庄金币换券：这一笔扣掉的行军金币与到账的试炼券张数（`itemId` 为 `coupon`）。 */
+  goldCost?: number;
+  coupons?: number;
   /** 训练场：受训武将与该次训练的目标等级。 */
   generalId?: string;
   targetLevel?: number;

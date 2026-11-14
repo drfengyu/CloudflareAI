@@ -66,7 +66,11 @@ import {
 } from "../lib/trial/saga/encounter";
 import {
   DEFAULT_SAGA_BANK,
+  SAGA_COUPON_ITEM_ID,
+  SAGA_MAX_COUPON_TICKETS,
   bankCreditsForGold,
+  couponGoldCost,
+  couponsForGold,
   sanitizeSagaBank,
 } from "../lib/trial/saga/bank";
 import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "../lib/trial/saga/inn";
@@ -537,6 +541,90 @@ test("钱庄换金（旧记录）：历史兑换仍在对应指令位置加金�
     }),
   );
   assert.equal(offPrice?.purchases.length, 0, "不在换金价整档上的记录被丢掉");
+});
+
+test("钱庄换券：按券面单价折算金币，重放扣金、记录可读回", () => {
+  assert.equal(couponGoldCost(0, 5), 0);
+  assert.equal(couponGoldCost(-3, 5), 0);
+  assert.equal(couponGoldCost(3, 0), 0);
+  assert.equal(couponGoldCost(1, 5), 5);
+  assert.equal(couponGoldCost(3, 5), 15);
+  assert.equal(couponGoldCost(3, 2.5), 8, "金币取整，不足 1 金进位");
+  assert.equal(couponGoldCost(1_000_000, 100), 9_999_999, "单笔金币有上限");
+
+  assert.equal(couponsForGold(0, 5), 0);
+  assert.equal(couponsForGold(4, 5), 0);
+  assert.equal(couponsForGold(5, 5), 1);
+  assert.equal(couponsForGold(12, 5), 2);
+  assert.equal(couponsForGold(100, 0), 0);
+
+  const startSave = initialTrialSave();
+  startSave.gold = 100;
+  const run = { ...freshRun(71, 2), startSave };
+  const purchased: SagaRun = {
+    ...run,
+    purchases: [
+      {
+        id: "coupon1",
+        itemId: SAGA_COUPON_ITEM_ID,
+        tickets: 0,
+        coupons: 10,
+        goldCost: 50,
+        at: 1,
+        cmdIndex: 0,
+      },
+    ],
+  };
+  const state = replaySagaRun(purchased, [{ k: "leave" }]).state;
+  assert.equal(state.save.gold, 50, "换券扣金");
+  assert.equal(state.bankedGold, 0, "换券不占存金额度");
+
+  // 金币不会被扣成负数：旧记录里金币不够时只扣到 0。
+  const poorSave = initialTrialSave();
+  poorSave.gold = 20;
+  const poor = replaySagaRun({ ...purchased, startSave: poorSave }, [{ k: "leave" }]).state;
+  assert.equal(poor.save.gold, 0);
+
+  const parsed = parseSagaRun(JSON.stringify(purchased));
+  assert.ok(parsed);
+  assert.equal(parsed.purchases[0]?.coupons, 10);
+  assert.equal(parsed.purchases[0]?.goldCost, 50);
+
+  const tampered = parseSagaRun(
+    JSON.stringify({
+      ...purchased,
+      purchases: [
+        { id: "coupon2", itemId: SAGA_COUPON_ITEM_ID, coupons: 9_999_999, goldCost: 9_999_999, at: 1, cmdIndex: 0 },
+        { id: "coupon3", itemId: SAGA_COUPON_ITEM_ID, coupons: 0, goldCost: 0, at: 1, cmdIndex: 0 },
+        { id: "coupon4", itemId: SAGA_COUPON_ITEM_ID, coupons: -5, goldCost: 10, at: 1, cmdIndex: 0 },
+      ],
+    }),
+  );
+  assert.equal(tampered?.purchases.length, 1, "无效兑换记录被丢掉");
+  assert.equal(tampered?.purchases[0]?.coupons, SAGA_MAX_COUPON_TICKETS, "张数按上限截断");
+});
+
+test("钱庄换券：结算时扣掉兑换金币，战斗缴获照常入账", () => {
+  const startSave = initialTrialSave();
+  startSave.gold = 100;
+  const run = easyRun(startSave);
+  const purchased: SagaRun = {
+    ...run,
+    purchases: [
+      {
+        id: "coupon9",
+        itemId: SAGA_COUPON_ITEM_ID,
+        tickets: 0,
+        coupons: 10,
+        goldCost: 50,
+        at: 1,
+        cmdIndex: 0,
+      },
+    ],
+  };
+  const settled = settleSagaRun(purchased, winCommands);
+  assert.equal(settled.endSave.gold, 80, "100 − 50 换券 + 30 战利品");
+  assert.equal(settled.result.goldGained, 30, "换券不算战斗战利品");
 });
 
 test("攻克章节：发金币经验、进下一章并解锁武将写进存档", () => {

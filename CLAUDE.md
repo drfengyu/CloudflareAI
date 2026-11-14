@@ -534,8 +534,22 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.57.2（2026-11-14，讨逆传战斗排版与野外遇敌规则修正）
+**当前版本**：v0.58.0（2026-11-14，活动中心 2.0 与钱庄金币换券）
 **下一版本**：待定
+
+- v0.58.0 活动中心 2.0 与钱庄金币换券：
+  活动中心 `/cashback` 顶部改为实时进度卡 —— `lib/activity/hub.ts` 的 `loadActivityHub`
+  一次聚合三种玩法的券视图与快照，卡片展示活动窗口 / 券面单价 / 结束日期 / 券数 /
+  进度条 / 继续入口 / 临期提醒；`lib/activity/window.ts` 提供纯函数倒计时
+  （`formatRemaining` / `countdownTone` / `activityCountdown`，2 天内转琥珀、6 小时内转红），
+  `components/activity/countdown.tsx` 每 30 秒在前端刷新；新增「今日日程」直达条。
+  `ResolvedActivity` 补 `startMs` / `endMs`，读侧不再重复解析活动配置。
+  钱庄新增「金币 → 试炼券」：汇率复用券面单价 `couponUnitCredits`（1 张 = X 金），
+  不限量，兑换即到账；`lib/trial/saga/bank.ts` 的 `couponGoldCost` / `couponsForGold`
+  负责取整，`buyTrialCoupons`（`lib/trial/store.ts`）重放核对金币后发券，
+  购买记录 `{ itemId: "coupon", coupons, goldCost, cmdIndex }` 只用于重放扣金，
+  整段 JSON 乐观锁失败会 `revokeCouponCredits` 撤回，同一 `purchaseId` 幂等。
+  新增 `tests/activity-window.test.ts`（5 项）与钱庄换券用例；`tsc`、ESLint 通过。
 
 - v0.57.2 三国讨逆传战斗排版与遇敌规则修正：
   `components/trial/game.tsx` 的战斗指挥区从画布底部浮层改为画布下方独立区块，

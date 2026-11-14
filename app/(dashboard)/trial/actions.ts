@@ -5,10 +5,12 @@ import { requireUser } from "@/lib/usage/meter";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getTrialConfig } from "@/lib/trial/settings";
 import {
+  buyTrialCoupons,
   buyTrialItem,
   saveTrialRunProgress,
   startTrialRun,
   submitTrialRun,
+  type CouponPurchaseResult,
   type ItemPurchaseResult,
   type StartedTrial,
   type TrialProgressResult,
@@ -119,5 +121,35 @@ export async function buyTrialItemAction(input: {
     return { success: true, data };
   } catch (error) {
     return fail(error, "购买失败");
+  }
+}
+
+/** 钱庄换券：行军金币按「1 张券 = 券面单价」折成试炼券，兑换后立刻到账。 */
+export async function buyTrialCouponsAction(input: {
+  runId: string;
+  tickets: number;
+  purchaseId: string;
+  cmdIndex: number;
+  commands?: unknown[];
+}): Promise<ActionResult<CouponPurchaseResult>> {
+  try {
+    const userId = await requireUser();
+    if (!(await checkRateLimit(`trial-bank:${userId}`, { window: 60_000, limit: 40 }))) {
+      return { success: false, error: "兑换太频繁，请稍后再试" };
+    }
+    const config = await getTrialConfig();
+    const data = await buyTrialCoupons({
+      userId,
+      runId: String(input.runId ?? ""),
+      tickets: Number(input.tickets) || 0,
+      purchaseId: String(input.purchaseId ?? ""),
+      cmdIndex: Number(input.cmdIndex) || 0,
+      commands: Array.isArray(input.commands) ? input.commands : [],
+      config,
+    });
+    revalidatePath("/trial");
+    return { success: true, data };
+  } catch (error) {
+    return fail(error, "兑换失败");
   }
 }

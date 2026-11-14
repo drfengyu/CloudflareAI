@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Coins, Gift, Inbox, Ticket, Trophy } from "lucide-react";
+import { ArrowRight, CalendarDays, Coins, Gift, Inbox, Trophy } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CashbackTierPanel } from "@/components/cashback/cashback-tier-panel";
@@ -7,7 +7,8 @@ import { RechargeTierPanel } from "@/components/cashback/recharge-panel";
 import { PageBody } from "@/components/dashboard/section";
 import { formatCredits } from "@/lib/billing/credits";
 import { couponTickets } from "@/lib/activity/ticket-math";
-import { CouponCount } from "@/components/activity/coupon-badge";
+import { CouponCount, CouponIcon } from "@/components/activity/coupon-badge";
+import { HubCard } from "@/components/activity/hub-card";
 import {
   getCashbackActivity,
   getUsageLeaderboard,
@@ -16,8 +17,8 @@ import {
 } from "@/lib/cashback/claims";
 import { getRechargeActivity, type RechargeActivityStatus } from "@/lib/rewards/claims";
 import { getCashbackSettings } from "@/lib/settings";
+import { loadActivityHub } from "@/lib/activity/hub";
 import {
-  listActivityCoupons,
   listLegacyActivityCoupons,
   type ActivityStatus,
 } from "@/lib/activity/coupons";
@@ -47,10 +48,10 @@ export default async function CashbackPage() {
   const userId = await requireUser();
   const settings = await getCashbackSettings();
 
-  const [recharge, cashback, coupons, legacyCoupons, leaderboard, windowCredits] = await Promise.all([
+  const [recharge, cashback, hub, legacyCoupons, leaderboard, windowCredits] = await Promise.all([
     getRechargeActivity(userId),
     getCashbackActivity(userId),
-    listActivityCoupons(userId),
+    loadActivityHub(userId),
     listLegacyActivityCoupons(userId),
     getUsageLeaderboard(settings, userId),
     sumCreditsSince(userId, leaderboardStartMs(settings)),
@@ -68,7 +69,7 @@ export default async function CashbackPage() {
     <>
       <PageHeader
         title="活动中心"
-        description={`限时充值、消费返利与三种新玩法券 · 经典玩法保留入口 · 奖励统一发到站内信领取 · 消费榜近 ${settings.leaderboardDays} 天`}
+        description={`三种在线玩法的进度与倒计时 · 限时充值、消费返利与活动券 · 经典玩法保留入口 · 奖励统一发到站内信领取 · 消费榜近 ${settings.leaderboardDays} 天`}
       />
       <PageBody className="space-y-4">
         <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
@@ -80,49 +81,51 @@ export default async function CashbackPage() {
         </div>
 
         <section className="space-y-2">
-          <h2 className="text-sm font-medium text-muted-foreground">玩法入口与活动券</h2>
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-medium text-muted-foreground">本期活动</h2>
+            <span className="text-[11px] text-muted-foreground">
+              按北京时间计 · 结束当期券作废 · 三种玩法各自独立
+            </span>
+          </div>
           <div className="grid gap-4 md:grid-cols-3">
-            {coupons.map((item) => (
+            {hub.activities.map((card) => (
+              <HubCard key={card.kind} card={card} />
+            ))}
+          </div>
+        </section>
+
+        <section className="space-y-2">
+          <h2 className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <CalendarDays className="h-4 w-4" />
+            今日日程
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-3">
+            {hub.daily.map((item) => (
               <Link
                 key={item.kind}
                 href={item.href}
-                className="group rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/40 hover:bg-primary/5"
+                className={`group rounded-xl border border-border bg-card px-4 py-3 transition-colors hover:border-primary/40 hover:bg-primary/5 ${
+                  item.status === "active" ? "" : "opacity-70"
+                }`}
               >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2 text-sm font-medium">
-                    <Ticket className="h-4 w-4 text-[color:var(--primary)]" />
+                <span className="flex items-center justify-between gap-2 text-sm font-medium">
+                  <span className="flex items-center gap-2">
+                    <CouponIcon kind={item.kind} className="h-4 w-4" />
                     {item.label}
                   </span>
-                  <span className="text-[11px] text-muted-foreground">
-                    {couponStatusLabel(item.status)}
-                  </span>
-                </div>
-                <div className="mt-3 flex items-end justify-between gap-2">
-                  <div>
-                    <p className="text-[11px] text-muted-foreground">{item.couponName}余额</p>
-                    <p className="text-xl font-semibold">
-                      <CouponCount
-                        kind={item.kind}
-                        count={couponTickets(item.credits, item.unitCredits)}
-                        iconClassName="h-5 w-5"
-                      />
-                      <span className="ml-1 text-xs font-normal text-muted-foreground">张</span>
-                    </p>
-                  </div>
-                  <span className="flex items-center gap-1 text-xs text-[color:var(--primary)]">
-                    进入玩法
-                    <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-                  </span>
-                </div>
-                <p className="mt-3 text-[11px] text-muted-foreground">
-                  1 张 = {formatCredits(item.unitCredits)} cr · 当期结束后作废
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  珍宝礼包按玩法页档位出售
-                </p>
+                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" />
+                </span>
+                <span className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] tabular-nums text-muted-foreground">
+                  {item.items.map((text) => (
+                    <span key={text}>{text}</span>
+                  ))}
+                </span>
               </Link>
             ))}
           </div>
+          <p className="text-[11px] text-muted-foreground">
+            每日 0 点（北京时间）重置；三国讨逆传不限次数，走到哪算哪，关掉页面进度也留着。
+          </p>
         </section>
 
         <section className="space-y-2">

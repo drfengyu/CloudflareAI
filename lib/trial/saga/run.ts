@@ -13,6 +13,8 @@ import { SAGA_MAX_ENCOUNTERS } from "./encounter";
 import {
   DEFAULT_SAGA_BANK,
   sanitizeSagaBank,
+  SAGA_COUPON_ITEM_ID,
+  SAGA_MAX_COUPON_TICKETS,
   type SagaBankPolicy,
 } from "./bank";
 import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "./inn";
@@ -345,6 +347,15 @@ function parsePurchases(raw: unknown, bank: SagaBankPolicy): SagaPurchase[] {
       out.push({ id, itemId, tickets: SAGA_INN_PRICE_TICKETS, at, cmdIndex });
       continue;
     }
+    // 钱庄金币换券：记录扣掉多少金币、换到多少张券；券已在服务端入账，重放只扣金币。
+    if (itemId === SAGA_COUPON_ITEM_ID) {
+      const coupons = clampInt(Number(it.coupons) || 0, 0, SAGA_MAX_COUPON_TICKETS);
+      const goldCost = clampInt(Number(it.goldCost) || 0, 0, 9_999_999);
+      if (coupons <= 0 || goldCost <= 0) continue;
+      ids.add(id);
+      out.push({ id, itemId, tickets: 0, coupons, goldCost, at, cmdIndex });
+      continue;
+    }
     // 训练场：记录受训武将与目标等级，重放时按购买位置直接抬等级。
     if (itemId === SAGA_TRAINING_ITEM_ID) {
       const generalId = String(it.generalId ?? "").slice(0, 32);
@@ -624,6 +635,11 @@ export function restAtInn(state: SagaReplayState): boolean {
 
 /** 购买记录从购买发生的指令位置起生效，已经打过的仗不会被回溯加强。 */
 function applyPurchase(state: SagaReplayState, purchase: SagaPurchase): void {
+  if (typeof purchase.goldCost === "number" && purchase.goldCost > 0) {
+    // 钱庄金币换券：金币在购买时扣，活动券由服务端即时入账，重放只负责把金币减掉。
+    state.save.gold = Math.max(0, state.save.gold - Math.trunc(purchase.goldCost));
+    return;
+  }
   if (typeof purchase.gold === "number" && purchase.gold > 0) {
     state.save.gold = Math.min(9_999_999, state.save.gold + Math.trunc(purchase.gold));
   }

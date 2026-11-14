@@ -2,9 +2,12 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { d1Run, db } from "@/lib/db/d1-http";
 import { trialRuns } from "@/lib/db/schema";
 import {
+  couponNameFor,
   couponTicketBalance,
+  grantCouponToRound,
   payWithCoupon,
   refundCouponPayment,
+  revokeCouponCredits,
 } from "@/lib/activity/coupons";
 import { grantTempCredits } from "@/lib/activity/rewards";
 import {
@@ -15,7 +18,13 @@ import {
   type TrialConfig,
 } from "./config";
 import { SAGA_CHAPTERS, SAGA_ITEM_BY_ID } from "./saga/data";
-import { bankCreditsForGold, sanitizeSagaBank } from "./saga/bank";
+import {
+  SAGA_COUPON_ITEM_ID,
+  SAGA_MAX_COUPON_TICKETS,
+  bankCreditsForGold,
+  couponGoldCost,
+  sanitizeSagaBank,
+} from "./saga/bank";
 import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "./saga/inn";
 import {
   generateSagaRun,
@@ -606,6 +615,116 @@ export async function buyTrialItem(input: {
   return {
     purchases: next.purchases,
     tickets: await couponTicketBalance(input.userId, "trial", activityKey, input.config.couponUnitCredits),
+  };
+}
+
+export interface CouponPurchaseResult {
+  purchases: SagaPurchase[];
+  /** 换完这一笔后，本活动一共还有多少张券。 */
+  tickets: number;
+  /** 扣完这一笔之后行军里还剩多少金币。 */
+  gold: number;
+}
+
+/**
+ * 钱庄换券：行军金币按「1 张券 = couponUnitCredits 金」折成试炼券，兑换后立刻入账，
+ * 同一趟行军里马上能拿去城里花。金币扣减写进购买记录，重放时按 cmdIndex 扣；
+ * 券是账外资产，同一 purchaseId 重复提交直接返回当前状态，不会二次发券。
+ */
+export async function buyTrialCoupons(input: {
+  userId: string;
+  runId: string;
+  /** 想换的张数。 */
+  tickets: number;
+  purchaseId: string;
+  cmdIndex: number;
+  commands?: unknown[];
+  config: TrialConfig;
+}): Promise<CouponPurchaseResult> {
+  const activityKey = assertActiveWindow(input.config);
+  const purchaseId = String(input.purchaseId ?? "");
+  if (!PURCHASE_ID_PATTERN.test(purchaseId)) throw new TrialError("兑换凭据无效");
+  const wanted = Math.trunc(Number(input.tickets) || 0);
+  if (wanted < 1) throw new TrialError("兑换张数至少为 1 张");
+  if (wanted > SAGA_MAX_COUPON_TICKETS) {
+    throw new TrialError(`单次最多换 ${SAGA_MAX_COUPON_TICKETS} 张`);
+  }
+  const goldPerTicket = input.config.couponUnitCredits;
+  if (!(goldPerTicket > 0)) throw new TrialError("钱庄未开放金币换券");
+
+  const rows = await db
+    .select({
+      id: trialRuns.id,
+      status: trialRuns.status,
+      questions: trialRuns.questions,
+      activityKey: trialRuns.activityKey,
+    })
+    .from(trialRuns)
+    .where(and(eq(trialRuns.id, input.runId), eq(trialRuns.userId, input.userId)))
+    .limit(1);
+  const row = rows[0];
+  if (!row) throw new TrialError("行军不存在");
+  if (row.activityKey !== activityKey) throw new TrialError("这次行军不属于当前活动");
+  if (row.status !== "active") throw new TrialError("这次行军已经结束");
+  const run = parseSagaRun(row.questions);
+  if (!run) throw new TrialError("行军数据异常，请重新出发");
+
+  const commands = sanitizeSagaCommands(input.commands ?? []);
+  const gold = replaySagaRun(run, commands).state.save.gold;
+  if (run.purchases.some((purchase) => purchase.id === purchaseId)) {
+    return {
+      purchases: run.purchases,
+      tickets: await couponTicketBalance(input.userId, "trial", activityKey, goldPerTicket),
+      gold,
+    };
+  }
+  if (run.purchases.length >= SAGA_MAX_PURCHASES) throw new TrialError("这次行军买得够多了");
+
+  const goldCost = couponGoldCost(wanted, goldPerTicket);
+  if (goldCost <= 0) throw new TrialError("兑换张数无效");
+  if (gold < goldCost) throw new TrialError(`金币不足，还差 ${goldCost - gold} 金`);
+
+  const cmdIndex = Math.max(0, Math.min(SAGA_MAX_COMMANDS, Math.trunc(Number(input.cmdIndex) || 0)));
+  const credits = Math.round(wanted * goldPerTicket * 100) / 100;
+  await grantCouponToRound(
+    input.userId,
+    "trial",
+    activityKey,
+    couponNameFor("trial", activityKey),
+    credits,
+  );
+
+  const next: SagaRun = {
+    ...run,
+    purchases: [
+      ...run.purchases,
+      {
+        id: purchaseId,
+        itemId: SAGA_COUPON_ITEM_ID,
+        tickets: 0,
+        coupons: wanted,
+        goldCost,
+        at: Date.now(),
+        cmdIndex,
+      },
+    ],
+    shopSeq: run.shopSeq + 1,
+    ...(commands.length > 0 ? { commands } : {}),
+  };
+  const updated = await d1Run(
+    `UPDATE trial_run SET questions = ?
+      WHERE id = ? AND userId = ? AND status = 'active' AND questions = ?`,
+    [JSON.stringify(next), input.runId, input.userId, row.questions],
+  );
+  if (updated.changes !== 1) {
+    await revokeCouponCredits(input.userId, "trial", activityKey, credits);
+    throw new TrialError("行军状态已变化，请刷新页面后重试");
+  }
+
+  return {
+    purchases: next.purchases,
+    tickets: await couponTicketBalance(input.userId, "trial", activityKey, goldPerTicket),
+    gold: gold - goldCost,
   };
 }
 

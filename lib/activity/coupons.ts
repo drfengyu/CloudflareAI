@@ -193,6 +193,9 @@ interface ResolvedActivity {
   couponName: string;
   /** 1 张活动券 = 多少 cr；兑换与张数展示都按它折算。 */
   unitCredits: number;
+  /** 活动窗口：活动中心据此画倒计时与进度，未配置时为 null。 */
+  startMs: number | null;
+  endMs: number | null;
 }
 
 async function resolveActivity(kind: ActivityKind): Promise<ResolvedActivity> {
@@ -200,34 +203,54 @@ async function resolveActivity(kind: ActivityKind): Promise<ResolvedActivity> {
   let status: ActivityStatus;
   let activityKey: string | null;
   let unitCredits = 1;
+  let startMs: number | null = null;
+  let endMs: number | null = null;
   if (kind === "lottery") {
     const config = await getLotteryConfig();
-    status = activityWindow(config).status;
+    const win = activityWindow(config);
+    status = win.status;
+    startMs = win.startMs;
+    endMs = win.endMs;
     activityKey = currentActivityKey(config);
     unitCredits = config.couponUnitCredits;
   } else if (kind === "flip") {
     const config = await getFlipConfig();
-    status = flipActivityWindow(config).status;
+    const win = flipActivityWindow(config);
+    status = win.status;
+    startMs = win.startMs;
+    endMs = win.endMs;
     activityKey = flipActivityKey(config);
     unitCredits = config.couponUnitCredits;
   } else if (kind === "raiden") {
     const config = await getRaidenConfig();
-    status = raidenActivityWindow(config).status;
+    const win = raidenActivityWindow(config);
+    status = win.status;
+    startMs = win.startMs;
+    endMs = win.endMs;
     activityKey = raidenActivityKey(config);
     unitCredits = config.couponUnitCredits;
   } else if (kind === "trial") {
     const config = await getTrialConfig();
-    status = trialActivityWindow(config).status;
+    const win = trialActivityWindow(config);
+    status = win.status;
+    startMs = win.startMs;
+    endMs = win.endMs;
     activityKey = trialActivityKey(config);
     unitCredits = config.couponUnitCredits;
   } else if (kind === "workshop") {
     const config = await getWorkshopConfig();
-    status = workshopActivityWindow(config).status;
+    const win = workshopActivityWindow(config);
+    status = win.status;
+    startMs = win.startMs;
+    endMs = win.endMs;
     activityKey = workshopActivityKey(config);
     unitCredits = config.couponUnitCredits;
   } else {
     const config = await getCollectionConfig();
-    status = collectionActivityWindow(config).status;
+    const win = collectionActivityWindow(config);
+    status = win.status;
+    startMs = win.startMs;
+    endMs = win.endMs;
     activityKey = collectionActivityKey(config);
     unitCredits = config.couponUnitCredits;
   }
@@ -237,6 +260,8 @@ async function resolveActivity(kind: ActivityKind): Promise<ResolvedActivity> {
     activityKey,
     couponName: couponNameFor(kind, activityKey),
     unitCredits,
+    startMs,
+    endMs,
   };
 }
 

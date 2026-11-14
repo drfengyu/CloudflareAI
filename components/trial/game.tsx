@@ -55,7 +55,7 @@ import {
   type FieldHotspot,
 } from "@/lib/trial/saga/map";
 import { expToNext, generalStats, partyPower } from "@/lib/trial/saga/state";
-import { bankCreditsForGold, type SagaBankPolicy } from "@/lib/trial/saga/bank";
+import { SAGA_COUPON_ITEM_ID, bankCreditsForGold, couponGoldCost, couponsForGold, type SagaBankPolicy } from "@/lib/trial/saga/bank";
 import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "@/lib/trial/saga/inn";
 import {
   SAGA_TRAINING_ITEM_ID,
@@ -95,6 +95,7 @@ import type { ActiveTrialRun, TrialSettlement } from "@/lib/trial/store";
 import type { ActivityCouponView } from "@/lib/activity/coupons";
 import {
   autoSaveTrialAction,
+  buyTrialCouponsAction,
   buyTrialItemAction,
   startTrialAction,
 } from "@/app/(dashboard)/trial/actions";
@@ -272,6 +273,8 @@ export function TrialGame(props: TrialGameProps) {
   }
   const [panel, setPanel] = useState<PanelId>(null);
   const [depositGold, setDepositGold] = useState("");
+  /** 钱庄换券：想换多少张试炼券。 */
+  const [exchangeTickets, setExchangeTickets] = useState("");
   const [hallTab, setHallTab] = useState<"party" | "gear" | "formation">("party");
   const [dexTab, setDexTab] = useState<"save" | "dex">("save");
   const [campNode, setCampNode] = useState<number | null>(null);
@@ -317,6 +320,15 @@ export function TrialGame(props: TrialGameProps) {
   const depositGoldValue = Math.trunc(Number(depositGold) || 0);
   const depositTcr = Math.floor(depositGoldValue / bank.goldPerTcr);
   const depositGoldAmount = depositTcr * bank.goldPerTcr;
+  /** 金币换券汇率与「tcr 换券」一致：1 张券 = couponUnitCredits 金。 */
+  const goldPerTicket = props.coupon.unitCredits;
+  const exchangeCount = Math.trunc(Number(exchangeTickets) || 0);
+  const exchangeCost = couponGoldCost(exchangeCount, goldPerTicket);
+  const exchangeMax = couponsForGold(save.gold, goldPerTicket);
+  const exchangedTickets = (run?.purchases ?? []).reduce(
+    (sum, purchase) => (purchase.itemId === SAGA_COUPON_ITEM_ID ? sum + (purchase.coupons ?? 0) : sum),
+    0,
+  );
 
   /** 上阵武将当前兵力：没出城时就是满编；行军中的残兵来自重放状态。 */
   const troopRows = save.party.map((general) => {
@@ -606,6 +618,49 @@ export function TrialGame(props: TrialGameProps) {
       toast.success(`已存 ${gold} 金，平定此地时到账 ${bankCreditsForGold(gold, bank)} tcr`);
     },
     [appendCommand, bank, bankRoom, run, save.gold],
+  );
+
+  /** 钱庄换券：金币按券面单价折成试炼券，服务端即时入账，本趟行军马上能用。 */
+  const exchangeCoupons = useCallback(
+    async (count: number) => {
+      if (!runId || !run || busy) return;
+      if (count < 1) {
+        toast.error("至少换 1 张");
+        return;
+      }
+      if (!(goldPerTicket > 0)) {
+        toast.error("钱庄未开放金币换券");
+        return;
+      }
+      const cost = couponGoldCost(count, goldPerTicket);
+      if (save.gold < cost) {
+        toast.error(`金币不足（要 ${cost} 金）`);
+        return;
+      }
+      setBusy("bank:coupon");
+      try {
+        const purchaseId = crypto.randomUUID().replace(/-/g, "").slice(0, 32);
+        const result = await buyTrialCouponsAction({
+          runId,
+          tickets: count,
+          purchaseId,
+          cmdIndex: commands.length,
+          commands,
+        });
+        if (!result.success) {
+          toast.error(result.error);
+          return;
+        }
+        setRun((prev) => (prev ? { ...prev, purchases: result.data.purchases } : prev));
+        setTickets(result.data.tickets);
+        setExchangeTickets("");
+        gameAudio.play("coin");
+        toast.success(`换到 ${count} 张试炼券，花了 ${cost} 金`);
+      } finally {
+        setBusy(null);
+      }
+    },
+    [busy, commands, goldPerTicket, run, runId, save.gold],
   );
 
   // ---- 大地图行走与画布 ----
@@ -1724,7 +1779,7 @@ export function TrialGame(props: TrialGameProps) {
                 <div className="space-y-3">
                   <NpcIntro npcId={panel === "forge" ? "blacksmith" : "herbalist"} />
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>城内买卖一律用试炼券，金币只在钱庄存成 tcr。</span>
+                    <span>城内买卖一律用试炼券，金币在钱庄可存成 tcr，也可直接换成试炼券。</span>
                     <span className="flex items-center gap-1">
                       <Ticket className="h-3.5 w-3.5 text-violet-400" />
                       {tickets} 张
@@ -1816,7 +1871,7 @@ export function TrialGame(props: TrialGameProps) {
                 <div className="space-y-3">
                   <NpcIntro npcId="banker" />
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span>钱庄只存不换：把这次行军打来的金币存成 tcr，自动结算时到账，数量自己填。</span>
+                    <span>钱庄两桩生意：金币存成 tcr 等平定到账，也可以直接换成试炼券当场用。</span>
                     <span className="flex items-center gap-1 tabular-nums">
                       <Coins className="h-3.5 w-3.5 text-amber-500" />
                       {formatCredits(save.gold)} 金
@@ -1872,9 +1927,68 @@ export function TrialGame(props: TrialGameProps) {
                     </p>
                   </section>
 
+                  <section className="space-y-2 rounded-lg border border-border p-2.5">
+                    <p className="flex items-center justify-between gap-2 text-sm font-medium">
+                      <span>金币 → 试炼券</span>
+                      <span className="flex items-center gap-1 text-xs font-normal tabular-nums text-muted-foreground">
+                        <Ticket className="h-3.5 w-3.5 text-violet-400" />
+                        {tickets} 张
+                      </span>
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {goldPerTicket > 0
+                        ? `每 ${goldPerTicket} 金换 1 张 ${props.coupon.couponName}，兑换后立刻到账，本趟行军就能在城里花。`
+                        : "当前活动未开放金币换券。"}
+                      {exchangedTickets > 0 ? `本次已换 ${exchangedTickets} 张。` : ""}
+                    </p>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                        兑换张数
+                        <Input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={exchangeTickets}
+                          onChange={(event) => setExchangeTickets(event.target.value)}
+                          className="w-32 tabular-nums"
+                        />
+                      </label>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={
+                          !run ||
+                          goldPerTicket <= 0 ||
+                          exchangeCount < 1 ||
+                          exchangeCost > save.gold ||
+                          busy === "bank:coupon"
+                        }
+                        onClick={() => void exchangeCoupons(exchangeCount)}
+                      >
+                        {busy === "bank:coupon"
+                          ? "兑换中…"
+                          : exchangeCount < 1
+                            ? "至少换 1 张"
+                            : `换 ${exchangeCount} 张（${exchangeCost} 金）`}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={!run || goldPerTicket <= 0 || exchangeMax < 1 || busy === "bank:coupon"}
+                        onClick={() => setExchangeTickets(String(exchangeMax))}
+                      >
+                        全部
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {exchangeMax > 0
+                        ? `现有金币最多换 ${exchangeMax} 张；兑换不限量，打完仗再来换也行。`
+                        : `金币不足 ${goldPerTicket} 金，打几仗再来。`}
+                    </p>
+                  </section>
+
                   <p className="text-xs text-muted-foreground">
-                    金币买不到城里的东西，只能在钱庄按 {bank.goldPerTcr} 金 = 1 tcr 存起来；
-                    存金在平定此地自动结算时到账。
+                    金币存成 tcr 在平定此地时结算；换成试炼券则立刻到账，用来买装备、伤药、军需、住店或训练。
                   </p>
                 </div>
               ) : null}

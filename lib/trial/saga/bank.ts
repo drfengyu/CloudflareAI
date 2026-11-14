@@ -51,3 +51,30 @@ export function bankCreditsForGold(gold: number, bank: SagaBankPolicy = DEFAULT_
   const cap = Math.floor(bank.maxGoldPerRun / bank.goldPerTcr);
   return Math.min(cap, Math.floor(safe / bank.goldPerTcr));
 }
+
+/**
+ * 钱庄金币换活动券：虚拟商品 ID。
+ *
+ * 汇率与「1 张 = X cr」一致，也就是 1 张试炼券 = X 金；
+ * 记录写进行军的 purchases，重放时按 `goldCost` 扣金币，券本身在服务端即时入账。
+ */
+export const SAGA_COUPON_ITEM_ID = "coupon";
+
+/** 单笔最多换多少张，与活动券兑换接口的上限一致。 */
+export const SAGA_MAX_COUPON_TICKETS = 100_000;
+
+/** 换券要花的金币；金币是整数，券价有小数时向上取整到整金。 */
+export function couponGoldCost(tickets: number, goldPerTicket: number): number {
+  const count = Math.max(0, Math.trunc(Number(tickets) || 0));
+  const unit = Math.max(0, Number(goldPerTicket) || 0);
+  if (count <= 0 || unit <= 0) return 0;
+  return Math.min(9_999_999, Math.ceil(count * unit - 1e-9));
+}
+
+/** 手上金币最多能换多少张券。 */
+export function couponsForGold(gold: number, goldPerTicket: number): number {
+  const unit = Math.max(0, Number(goldPerTicket) || 0);
+  if (unit <= 0) return 0;
+  const safe = Math.max(0, Math.trunc(Number(gold) || 0));
+  return Math.min(SAGA_MAX_COUPON_TICKETS, Math.floor(safe / unit + 1e-9));
+}

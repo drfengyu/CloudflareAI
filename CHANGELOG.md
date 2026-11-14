@@ -5,6 +5,44 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.58.0] - 2026-11-14
+
+### 新增
+
+- 活动中心 2.0：`/cashback` 顶部改为实时进度卡。
+  - `lib/activity/hub.ts` 的 `loadActivityHub` 一次聚合三种新玩法的券视图与玩法快照，
+    卡片展示活动窗口、券面单价、结束日期、当前券数、进度条、继续入口与临期提醒；
+    三国讨逆传看平定地方与武将图鉴、灵宠工坊看今日进图 / 道馆 / 徽章、
+    星图共鸣看今日观星与已点亮星位。
+  - `lib/activity/window.ts` 抽出纯函数倒计时（`formatRemaining` / `countdownTone` /
+    `activityCountdown` / `activityElapsedRatio`），服务器算首屏，`components/activity/countdown.tsx`
+    每 30 秒在前端刷新；剩余 2 天内转琥珀、6 小时内转红。
+  - 券仍有余额且进入临期时，卡片提示「活动结束后作废」。
+  - 新增「今日日程」直达条：按玩法汇总今日状态与入口，未开启标注「未开启」。
+- 三国讨逆传钱庄新增「金币 → 试炼券」：汇率与 cr 换券一致
+  （1 张 = `couponUnitCredits` 金，默认 5 金/张），不限量，只受手头金币与单笔
+  100,000 张上限约束；兑换后立即到账，本趟行军马上能在城里花。
+  - `lib/trial/saga/bank.ts` 新增 `SAGA_COUPON_ITEM_ID`、`SAGA_MAX_COUPON_TICKETS`、
+    `couponGoldCost`（金币取整进位）与 `couponsForGold`（按金币反算最多能换几张）。
+  - `buyTrialCoupons`（`lib/trial/store.ts`）先按客户端指令重放核对手头金币，
+    再发券并把 `{ itemId: "coupon", coupons, goldCost, cmdIndex }` 写进购买记录；
+    重放侧只扣金币，券不入存档。整段 JSON 乐观锁失败时 `revokeCouponCredits` 撤回，
+    同一 `purchaseId` 重复提交直接返回当前状态。
+  - 钱庄面板新增「金币 → 试炼券」一栏（张数输入 +「全部」），试炼页规则同步说明。
+
+### 变更
+
+- `ResolvedActivity` 补 `startMs` / `endMs`，各活动窗口统一由 `*ActivityWindow` 提供，
+  活动中心不再重复解析配置。
+- 城里铺面与试炼页规则文案：「金币只能存 tcr」改为「金币可存 tcr 或换试炼券」。
+
+### 测试
+
+- 新增 `tests/activity-window.test.ts`（5 项）：剩余时间文案边界、2 天 / 6 小时档位、
+  非进行中或无结束时间返回 null、进度比例与阶段文案。
+- `tests/trial-saga.test.ts` 新增钱庄换券用例：金币折算边界、重放扣金、金币不足不为负、
+  篡改张数与金币截断 / 丢弃、结算时换券金币与战斗缴获分开计算（共 41 项）。
+
 ## [0.57.2] - 2026-11-14
 
 ### 变更

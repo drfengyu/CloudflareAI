@@ -1,6 +1,6 @@
 # 限时消费返利、活动券与用量冲榜
 
-**版本**：v0.32.0 · **状态**：代码已上线，**默认关闭**，开关在「后台 → 系统设置 → 消费返利」
+**版本**：v0.58.0 · **状态**：代码已上线，**默认关闭**，开关在「后台 → 系统设置 → 消费返利」
 
 ## 为什么要它
 
@@ -61,6 +61,25 @@
   不再接受余额直付，也不能用其他活动的券顶替。券在兑换 / 买礼包时已经作为
   `topup type=15` 记过支出，所以账本合计与余额下降保持一致。
 
+## 活动中心 2.0（v0.58.0）
+
+`/cashback` 顶部从「三张静态入口卡」升级为**实时进度 + 倒计时**：
+
+- **本期活动**（`lib/activity/hub.ts` → `loadActivityHub`）：三种新玩法各一张卡，
+  一次 `Promise.all` 读取券视图 + 玩法快照，卡片展示活动窗口、券面单价与结束日期、
+  当前券数、进度条、继续入口与临期提醒。
+  - 三国讨逆传：平定地方 `wins / 8`、武将图鉴 `met ∪ recruited`；进行中行军提示「未收兵」。
+  - 灵宠工坊：今日进图、今日道馆、道馆徽章；进行中的探险 / 遭遇 / 全员倒地分别提醒。
+  - 星图共鸣：今日观星、已点亮星位；进度取当前星座。
+- **倒计时**：`lib/activity/window.ts` 是纯函数（`formatRemaining` / `countdownTone` /
+  `activityCountdown`），服务器先算首屏文案，`components/activity/countdown.tsx`
+  每 30 秒在浏览器里刷新；剩余 2 天内转琥珀色、6 小时内转红色。
+- **券临期提醒**：仍有券且倒计时进入「soon / urgent」时，卡片提示「活动结束后作废」。
+- **今日日程**：按活动给出一行日程摘要与直达链接；未开启的玩法标注「未开启」。
+- 服务端聚合只读，不写库；`ResolvedActivity` 新增 `startMs` / `endMs`，
+  由各活动的 `*ActivityWindow` 统一提供，读侧无需重复解析配置。
+- 倒计时纯函数有单测：`tests/activity-window.test.ts`。
+
 ## 发放与到账
 
 1. 用户在「活动中心」页（`/cashback`）的消费返利卡片里，对已达标的档位点「发放到站内信」；
@@ -94,6 +113,7 @@ SQL 只做 `GROUP BY`——D1 上 `ORDER BY` 聚合表达式或 SELECT 别名会
 | 表 / 迁移 | `lib/db/schema.ts`（`rewardClaims` / `activityCoupons`）、`migrations/022_reward_claim.sql`、`migrations/023_activity_currency.sql` |
 | 返利逻辑 | `lib/cashback/{config,claims}.ts` |
 | 活动券 | `lib/activity/coupons.ts`（兑换、礼包、支付与退款） |
+| 活动中心 | `lib/activity/{hub,window}.ts`、`components/activity/{hub-card,countdown}.tsx` |
 | 站内信 | `lib/message/messages.ts`（`temp_credits` / `credits` / `coupon` / `tickets` 附件） |
 | 配置 | `lib/settings/index.ts` → `getCashbackSettings()`，键前缀 `cashback_*`；活动时间复用 `recharge_bonus_*` |
 | 页面 | `app/(dashboard)/cashback/{page,actions,coupon-actions}.tsx`、`components/cashback/{cashback-tier-panel,recharge-panel}.tsx`、`components/activity/coupon-shop.tsx` |
