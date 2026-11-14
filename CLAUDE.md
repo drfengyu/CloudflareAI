@@ -534,8 +534,16 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.72.0（2026-11-14，三国讨逆传战斗界面与演出修补）
+**当前版本**：v0.73.0（2026-11-14，三国讨逆传城中行走与店铺内景）
 **下一版本**：待定
+
+- v0.73.0 三国讨逆传城中行走与店铺内景：进城后改为可横向走动的长街（方向键 / WASD /
+  点击地面，镜头跟随），十三处铺面与城门、皇宫沿街排布，走到门口按 E 进店；街上另有
+  里正 / 卖花女 / 小童三名走动 NPC 与告示牌 / 水井。进店切内景，走到柜台按 E 与实体掌柜
+  对话，可打开原铺子面板；皇宫按章节换州牧，可对话 / 议事 / 看军情；手机补方向键盘与
+  交互键，Esc 逐层退回。新增 `components/trial/town.tsx`，`paintHeroSprite` 由
+  `renderer.ts` 导出复用；删除旧静态 `TownScene`。`tsc` 0 错误、改动文件 ESLint 0/0、
+  `tests/trial-saga.test.ts` 51/51，未在真实浏览器逐帧核对碰撞与触屏。
 
 - v0.72.0 三国讨逆传战斗界面与演出修补：伤害飘字按目标错列并钳制在兵力面板下方；
   指令区显示阵型对抗（克制 / 被克 / 均势）与当前指挥目标；新增按有效速度排序的「行动顺序」条，
@@ -702,7 +710,7 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   `lib/trial/saga/quests.ts`（2 主线 + 6 支线，进度由 `SagaReplayState` 与本地
   走访数推出，不入存档）；`components/trial/portraits.ts` 用 FNV 哈希生成武将立绘，
   武器 / 护甲分四档换甲色、盔饰与兵器剪影；`components/trial/scenes.tsx` 新增
-  街景 `TownScene`、`NpcIntro`、`QuestBoard`、`PartyStrip`、`CampBanner`、
+  街景 `TownScene`（v0.73.0 起换成 `town.tsx` 的 `WalkTown`）、`NpcIntro`、`QuestBoard`、`PartyStrip`、`CampBanner`、
   打字机 `DialogueOverlay`；`components/trial/game.tsx` 进城改为街景 + 铺子面板，
   补酒馆 / 营帐页签、军令 HUD、回城 / 出城切换，看过的场景与走访点记在
   `localStorage` 的 `trial-saga-town:${runId}:${seed}`；刷新不重播、走访只影响支线。

@@ -130,8 +130,8 @@ import {
   QuestBoard,
   SagaPortrait,
   SceneCanvas,
-  TownScene,
 } from "./scenes";
+import { WalkTown } from "./town";
 
 type PanelId = FieldFacilityId | "camp" | "army" | "status" | "dex" | null;
 type BattleAction = "attack" | "guard" | "tactic" | "item" | "recruit";
@@ -1571,17 +1571,20 @@ export function TrialGame(props: TrialGameProps) {
         />
 
         {inTown && run ? (
-          <TownScene
-            chapterIndex={run.startSave.chapter}
+          <WalkTown
+            chapterIndex={chapter.index}
+            townName={chapter.town}
             tickets={tickets}
-            onPick={(spot) => {
-              if (spot === "gate") {
-                setPanel(null);
-                setInTown(false);
-                return;
-              }
-              setPanel(spot);
+            active={!panel && !dialogue}
+            partyColor={heroDef?.color ?? "#3f6212"}
+            partyAccent={heroDef?.accent ?? "#bef264"}
+            onFacility={(spot) => setPanel(spot)}
+            onLeave={() => {
+              setPanel(null);
+              setInTown(false);
             }}
+            onCouncil={() => setDialogue(councilScene(chapter.index, save.party.map((member) => member.id)))}
+            onArmy={() => setPanel("army")}
           />
         ) : null}
 
@@ -2932,8 +2935,9 @@ export function TrialGame(props: TrialGameProps) {
           </Button>
           <p className="max-w-md text-xs text-muted-foreground">
             操作：方向键 / WASD 或左侧摇杆四向行走，走到城门口、敌营、乡野点位旁按 E / 回车（或点「交互」）；
-            也可以直接点击地图上的城池、营寨、村庄与渡口。点城池进城中街景，从街景点铺子办事、
-            从城门出城。战斗为回合制：逐将选择攻击 / 计策 / 防守 / 道具 / 招降，或按「总攻击」「自动战斗」速战。
+            也可以直接点击地图上的城池、营寨、村庄与渡口。点城池走进城中街道，在街上四向走动，
+            走到铺子门口按 E 进店，柜台前按 E 与掌柜说话、办正事；皇宫里可以面见主公议事；从城门出城。
+            战斗为回合制：逐将选择攻击 / 计策 / 防守 / 道具 / 招降，或按「总攻击」「自动战斗」速战。
             野外草地、树林会随机遇敌，敌军编成由种子与第几场遭遇推出。
             走位本身不影响任何数值：战报只上传编制、购物与「打哪座营、打不打这场遭遇、怎么打」的指令，
             服务端按种子重放判定；战斗指令存在本机，刷新页面可以接着打。剧情对话、军令与走访记录只在本机，

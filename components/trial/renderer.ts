@@ -908,15 +908,22 @@ function paintCityGate(
   ctx.fillRect(gx - 44, gy - 34, 88, 80);
 }
 
-function paintFieldHero(
+/** 主角小人：大地图和城中街景共用，坐标是脚底。 */
+export interface HeroSpriteOptions {
+  time: number;
+  facing: FieldFacing;
+  moving: boolean;
+  partyColor: string;
+  partyAccent: string;
+}
+
+export function paintHeroSprite(
   ctx: CanvasRenderingContext2D,
-  options: FieldPaintOptions,
-  camX: number,
-  camY: number,
+  x: number,
+  y: number,
+  options: HeroSpriteOptions,
 ): void {
   const { time, facing, moving, partyColor, partyAccent } = options;
-  const x = options.x - camX;
-  const y = options.y - camY;
   const bob = moving ? Math.abs(Math.sin(time * 10)) * 2 : Math.sin(time * 2) * 0.8;
   const step = moving ? Math.sin(time * 10) * 3 : 0;
   ctx.save();
@@ -1005,6 +1012,15 @@ function paintFieldHero(
   ctx.closePath();
   ctx.fill();
   ctx.restore();
+}
+
+function paintFieldHero(
+  ctx: CanvasRenderingContext2D,
+  options: FieldPaintOptions,
+  camX: number,
+  camY: number,
+): void {
+  paintHeroSprite(ctx, options.x - camX, options.y - camY, options);
 }
 
 function drawMinimap(
