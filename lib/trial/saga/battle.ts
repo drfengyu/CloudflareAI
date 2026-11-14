@@ -459,6 +459,7 @@ function dealDamage(
     actor: actor.name,
     target: target.name,
     amount: damage,
+    crit,
     text: `${actor.name} 攻击 ${target.name}，-${damage} 兵力${suffix}`,
   });
   // 会心之外的第二段：无双 / 神速可按概率追击，追击按七成伤害结算。

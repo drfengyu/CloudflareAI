@@ -109,6 +109,7 @@ import {
   DEFAULT_VIEW,
   FIELD_FACILITIES,
   battleEnemyAtPoint,
+  BATTLE_FLOAT_MS,
   makeSagaView,
   paintBattle,
   paintField,
@@ -290,6 +291,8 @@ export function TrialGame(props: TrialGameProps) {
   /** 敌情面板：战斗中查看敌将四维、装备、计策与特性。 */
   const [showEnemyInfo, setShowEnemyInfo] = useState(false);
   const [anim, setAnim] = useState<BattleAnimation | null>(null);
+  /** 战斗演出倍速：只改动画节拍与配音间隔，结算结果不受影响。 */
+  const [battleSpeed, setBattleSpeed] = useState<1 | 2>(1);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [settlement, setSettlement] = useState<TrialSettlement | null>(null);
@@ -1014,6 +1017,7 @@ export function TrialGame(props: TrialGameProps) {
           nowMs,
           target: focusTarget,
           animation: modeRef.current.anim,
+          chapterIndex: hud.chapterIndex,
           view: viewRef.current,
         });
       } else if (map) {
@@ -1248,8 +1252,9 @@ export function TrialGame(props: TrialGameProps) {
       resolveBattleRound(next.battle, round, next.scratch);
       setBattle(next);
       const events = next.battle.lastEvents;
-      setAnim({ events, startedAt: performance.now(), stepMs: 460 });
-      playBattleSfx(events, 460);
+      const stepMs = Math.round(460 / battleSpeed);
+      setAnim({ events, startedAt: performance.now(), stepMs });
+      playBattleSfx(events, stepMs);
       if (animTimerRef.current !== null) window.clearTimeout(animTimerRef.current);
       animTimerRef.current = window.setTimeout(() => {
         animTimerRef.current = null;
@@ -1260,9 +1265,9 @@ export function TrialGame(props: TrialGameProps) {
           setBattle((prev) => (prev ? { ...prev, picks: defaultPicks(prev.battle) } : prev));
           setFocusId(next.battle.party.find((unit) => !unit.downed)?.id ?? null);
         }
-      }, Math.max(1200, events.length * 460 + 260));
+      }, Math.max(1200, (events.length - 1) * stepMs + BATTLE_FLOAT_MS + 120));
     },
-    [commitBattle],
+    [commitBattle, battleSpeed],
   );
 
   const executeRound = useCallback(() => {
@@ -1554,7 +1559,24 @@ export function TrialGame(props: TrialGameProps) {
                     {battle.encounter ? "队" : "将"}
                   </span>
                 </span>
-                <span className="flex shrink-0 gap-2">
+                <span className="flex shrink-0 items-center gap-2">
+                  <span className="flex overflow-hidden rounded-md border border-white/15">
+                    {([1, 2] as const).map((speed) => (
+                      <button
+                        key={speed}
+                        type="button"
+                        onClick={() => setBattleSpeed(speed)}
+                        className={cn(
+                          "h-7 px-2 text-[11px] tabular-nums transition-colors",
+                          battleSpeed === speed
+                            ? "bg-amber-400/85 font-semibold text-[#20160c]"
+                            : "text-white/60 hover:bg-white/10",
+                        )}
+                      >
+                        {speed}×
+                      </button>
+                    ))}
+                  </span>
                   <Button
                     size="sm"
                     variant={showEnemyInfo ? "primary" : "outline"}
@@ -2588,16 +2610,58 @@ export function TrialGame(props: TrialGameProps) {
         ) : null}
 
         {banner ? (
-          <div className="absolute inset-x-3 top-3 z-30 flex items-center justify-between gap-2 rounded-lg border border-border bg-card/95 px-3 py-2 text-sm shadow-lg">
-            <span>
-              {banner.kind === "won" ? "战斗胜利" : "战斗失利"} · {banner.name}
-              {banner.kind === "won"
-                ? ` · +${banner.gold} 金 / +${banner.exp} 经验`
-                : " · 回城住店可重整旗鼓"}
-            </span>
-            <button type="button" onClick={() => setBanner(null)} className="rounded p-1 hover:bg-muted">
-              <X className="h-4 w-4" />
-            </button>
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-30 flex justify-center px-3 pt-3">
+            <div
+              className={cn(
+                "trial-banner-in pointer-events-auto flex w-full max-w-md items-center gap-3 rounded-xl border px-3 py-2.5 shadow-2xl backdrop-blur",
+                banner.kind === "won"
+                  ? "border-amber-400/45 bg-[#1d160c]/95"
+                  : "border-rose-500/40 bg-[#1a1010]/95",
+              )}
+            >
+              <span
+                className={cn(
+                  "trial-seal-drop flex h-14 w-14 shrink-0 items-center justify-center rounded-lg border-2 text-2xl font-semibold",
+                  banner.kind === "won"
+                    ? "border-amber-300/80 bg-amber-400/15 text-amber-200"
+                    : "border-rose-400/70 bg-rose-500/15 text-rose-200",
+                )}
+                style={{ fontFamily: '"Noto Serif SC", "Songti SC", "STSong", serif' }}
+              >
+                {banner.kind === "won" ? "捷" : "败"}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p
+                  className={cn(
+                    "truncate text-sm font-semibold",
+                    banner.kind === "won" ? "text-amber-100" : "text-rose-100",
+                  )}
+                >
+                  {banner.kind === "won" ? "战斗胜利" : "战斗失利"} · {banner.name}
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                  {banner.kind === "won" ? (
+                    <>
+                      <span className="rounded border border-amber-300/30 bg-amber-300/10 px-1.5 py-0.5 tabular-nums text-amber-200">
+                        +{formatCredits(banner.gold)} 金
+                      </span>
+                      <span className="rounded border border-sky-300/25 bg-sky-300/10 px-1.5 py-0.5 tabular-nums text-sky-200">
+                        +{banner.exp} 经验
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-rose-200/80">回城住店可重整旗鼓</span>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setBanner(null)}
+                className="rounded p-1 text-white/60 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         ) : null}
 

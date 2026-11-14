@@ -418,6 +418,8 @@ export interface SagaBattleEvent {
   actor: string;
   target?: string;
   amount?: number;
+  /** 这次普攻触发了暴击，动画用它加重飘字与震屏。 */
+  crit?: boolean;
   text: string;
 }
 

@@ -102,29 +102,171 @@ function roundRect(
   ctx.closePath();
 }
 
-function paintBackdrop(ctx: CanvasRenderingContext2D, time: number, view: SagaView): void {
+/**
+ * 每章一套天候：天空、远山、薄雾、地面与官道各取一组色，
+ * 大地图再罩一层很淡的环境色。八章循环使用，章节再多也不会缺色。
+ */
+interface SkyMood {
+  sky: [number, string][];
+  sun: [string, string, string];
+  hills: [string, string, string];
+  mist: string;
+  dust: string;
+  ground: [string, string, string];
+  road: string;
+  roadEdge: string;
+  roadGlow: string;
+  /** 震屏时露出的画布底色，取天空最深的一档。 */
+  base: string;
+  fieldTint: string;
+}
+
+const SKY_MOODS: SkyMood[] = [
+  {
+    // 0 桃园起兵：黄昏暖调
+    sky: [[0, "#141d33"], [0.34, "#2d3350"], [0.62, "#7a4a4a"], [0.8, "#d08a58"], [1, "#e8b57a"]],
+    sun: ["rgba(255,226,170,0.9)", "rgba(255,190,120,0.35)", "rgba(255,170,90,0)"],
+    hills: ["#2a3345", "#232c3c", "#1c2431"],
+    mist: "rgba(226,196,160,0.16)",
+    dust: "rgba(255,220,180,0.09)",
+    ground: ["#4a4433", "#3a3729", "#23231c"],
+    road: "#5c5341",
+    roadEdge: "rgba(24,22,18,0.5)",
+    roadGlow: "rgba(255,214,150,0.05)",
+    base: "#141d33",
+    fieldTint: "rgba(255,196,120,0.05)",
+  },
+  {
+    // 1 汜水关：铁灰寒日
+    sky: [[0, "#0e1620"], [0.34, "#25303b"], [0.62, "#4d5a63"], [0.8, "#97a0a0"], [1, "#cdc7b2"]],
+    sun: ["rgba(232,240,240,0.75)", "rgba(200,215,220,0.25)", "rgba(190,210,220,0)"],
+    hills: ["#232c33", "#1b2329", "#141a1f"],
+    mist: "rgba(200,215,220,0.14)",
+    dust: "rgba(220,230,235,0.07)",
+    ground: ["#3f4038", "#2f3029", "#1f201b"],
+    road: "#4c4d44",
+    roadEdge: "rgba(18,20,18,0.55)",
+    roadGlow: "rgba(210,220,210,0.05)",
+    base: "#0e1620",
+    fieldTint: "rgba(120,145,165,0.1)",
+  },
+  {
+    // 2 徐州风云：秋林金
+    sky: [[0, "#1a2233"], [0.34, "#3a3f4a"], [0.62, "#8a6a48"], [0.8, "#c99155"], [1, "#e0b070"]],
+    sun: ["rgba(255,224,160,0.85)", "rgba(240,190,110,0.3)", "rgba(230,180,100,0)"],
+    hills: ["#2a3030", "#222827", "#1a1f1e"],
+    mist: "rgba(230,200,150,0.16)",
+    dust: "rgba(255,220,160,0.08)",
+    ground: ["#4b412e", "#3a3327", "#252219"],
+    road: "#5d5138",
+    roadEdge: "rgba(24,20,14,0.5)",
+    roadGlow: "rgba(255,214,150,0.05)",
+    base: "#1a2233",
+    fieldTint: "rgba(210,160,80,0.08)",
+  },
+  {
+    // 3 白门楼：雨泽青灰
+    sky: [[0, "#0d1520"], [0.34, "#1d2b36"], [0.62, "#33484f"], [0.8, "#5b7370"], [1, "#8aa095"]],
+    sun: ["rgba(200,235,230,0.55)", "rgba(150,200,195,0.2)", "rgba(140,190,185,0)"],
+    hills: ["#1c2a2c", "#162121", "#111a1a"],
+    mist: "rgba(190,220,215,0.18)",
+    dust: "rgba(210,235,230,0.07)",
+    ground: ["#343a33", "#272d28", "#191e1a"],
+    road: "#46514a",
+    roadEdge: "rgba(14,20,18,0.55)",
+    roadGlow: "rgba(190,225,215,0.06)",
+    base: "#0d1520",
+    fieldTint: "rgba(70,130,120,0.13)",
+  },
+  {
+    // 4 官渡之战：烽烟赤霞
+    sky: [[0, "#1a1420"], [0.34, "#3a2130"], [0.62, "#75343a"], [0.8, "#b05e42"], [1, "#d99a5c"]],
+    sun: ["rgba(255,190,130,0.85)", "rgba(230,110,70,0.3)", "rgba(210,90,60,0)"],
+    hills: ["#2d2228", "#241a20", "#1b1318"],
+    mist: "rgba(220,150,120,0.15)",
+    dust: "rgba(255,180,130,0.09)",
+    ground: ["#47382b", "#352a21", "#211a15"],
+    road: "#57452f",
+    roadEdge: "rgba(22,16,12,0.55)",
+    roadGlow: "rgba(255,180,110,0.05)",
+    base: "#1a1420",
+    fieldTint: "rgba(200,100,60,0.1)",
+  },
+  {
+    // 5 赤壁之战：火夜赤红
+    sky: [[0, "#080d18"], [0.34, "#151a2b"], [0.62, "#3a1f2b"], [0.8, "#8a3a2c"], [1, "#d4713a"]],
+    sun: ["rgba(255,150,80,0.9)", "rgba(230,80,40,0.32)", "rgba(210,60,30,0)"],
+    hills: ["#171526", "#121020", "#0d0b16"],
+    mist: "rgba(220,110,70,0.14)",
+    dust: "rgba(255,150,90,0.1)",
+    ground: ["#2c2420", "#211b18", "#141110"],
+    road: "#3d322a",
+    roadEdge: "rgba(10,8,8,0.6)",
+    roadGlow: "rgba(255,140,80,0.06)",
+    base: "#080d18",
+    fieldTint: "rgba(220,90,50,0.13)",
+  },
+  {
+    // 6 入蜀之路：苍翠山岚
+    sky: [[0, "#0e1a1c"], [0.34, "#1c3034"], [0.62, "#33515a"], [0.8, "#5f7f7c"], [1, "#9bb3a3"]],
+    sun: ["rgba(210,245,220,0.7)", "rgba(150,210,180,0.24)", "rgba(140,200,170,0)"],
+    hills: ["#1b2f2c", "#152623", "#0f1d1b"],
+    mist: "rgba(190,225,205,0.17)",
+    dust: "rgba(200,240,215,0.07)",
+    ground: ["#3a4634", "#2b3629", "#1a211a"],
+    road: "#4f5743",
+    roadEdge: "rgba(12,18,12,0.55)",
+    roadGlow: "rgba(200,235,200,0.05)",
+    base: "#0e1a1c",
+    fieldTint: "rgba(80,150,120,0.12)",
+  },
+  {
+    // 7 五丈原：秋风素金
+    sky: [[0, "#161a22"], [0.34, "#2c3038"], [0.62, "#5a5148"], [0.8, "#94805e"], [1, "#c4a878"]],
+    sun: ["rgba(250,226,180,0.7)", "rgba(220,190,140,0.24)", "rgba(210,180,130,0)"],
+    hills: ["#2a2a2c", "#212124", "#18181a"],
+    mist: "rgba(215,205,185,0.16)",
+    dust: "rgba(230,215,190,0.07)",
+    ground: ["#453d2f", "#342f26", "#201d17"],
+    road: "#554b38",
+    roadEdge: "rgba(20,18,14,0.55)",
+    roadGlow: "rgba(230,210,170,0.05)",
+    base: "#161a22",
+    fieldTint: "rgba(190,170,120,0.1)",
+  },
+];
+
+function skyMoodFor(chapterIndex: number): SkyMood {
+  const index = ((Math.round(chapterIndex) % SKY_MOODS.length) + SKY_MOODS.length) % SKY_MOODS.length;
+  return SKY_MOODS[index];
+}
+
+const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
+
+function paintBackdrop(
+  ctx: CanvasRenderingContext2D,
+  time: number,
+  view: SagaView,
+  mood: SkyMood,
+): void {
   const k = view.k;
   const sky = ctx.createLinearGradient(0, 0, 0, view.h);
-  sky.addColorStop(0, "#141d33");
-  sky.addColorStop(0.34, "#2d3350");
-  sky.addColorStop(0.62, "#7a4a4a");
-  sky.addColorStop(0.8, "#d08a58");
-  sky.addColorStop(1, "#e8b57a");
+  for (const [stop, color] of mood.sky) sky.addColorStop(stop, color);
   ctx.fillStyle = sky;
   ctx.fillRect(0, 0, view.w, view.h);
 
   const sun = ctx.createRadialGradient(760, 300 * k, 10, 760, 300 * k, 220);
-  sun.addColorStop(0, "rgba(255,226,170,0.9)");
-  sun.addColorStop(0.3, "rgba(255,190,120,0.35)");
-  sun.addColorStop(1, "rgba(255,170,90,0)");
+  sun.addColorStop(0, mood.sun[0]);
+  sun.addColorStop(0.3, mood.sun[1]);
+  sun.addColorStop(1, mood.sun[2]);
   ctx.fillStyle = sun;
   ctx.fillRect(520, 120 * k, 440, 360 * k);
 
   // 远山：三层墨色剪影
   const layers: { base: number; amp: number; color: string; phase: number }[] = [
-    { base: 316, amp: 42, color: "#2a3345", phase: 0.4 },
-    { base: 344, amp: 34, color: "#232c3c", phase: 1.7 },
-    { base: 372, amp: 26, color: "#1c2431", phase: 3.1 },
+    { base: 316, amp: 42, color: mood.hills[0], phase: 0.4 },
+    { base: 344, amp: 34, color: mood.hills[1], phase: 1.7 },
+    { base: 372, amp: 26, color: mood.hills[2], phase: 3.1 },
   ];
   for (const layer of layers) {
     ctx.fillStyle = layer.color;
@@ -146,12 +288,12 @@ function paintBackdrop(ctx: CanvasRenderingContext2D, time: number, view: SagaVi
   // 薄雾
   const mist = ctx.createLinearGradient(0, 300 * k, 0, 420 * k);
   mist.addColorStop(0, "rgba(226,196,160,0)");
-  mist.addColorStop(1, "rgba(226,196,160,0.16)");
+  mist.addColorStop(1, mood.mist);
   ctx.fillStyle = mist;
   ctx.fillRect(0, 300 * k, view.w, 140 * k);
 
   // 飘动的云/尘
-  ctx.fillStyle = "rgba(255,220,180,0.09)";
+  ctx.fillStyle = mood.dust;
   for (let i = 0; i < 5; i++) {
     const x = ((time * (8 + i * 3) + i * 240) % (view.w + 240)) - 120;
     const y = (120 + i * 34 + Math.sin(time + i) * 6) * k;
@@ -161,26 +303,31 @@ function paintBackdrop(ctx: CanvasRenderingContext2D, time: number, view: SagaVi
   }
 }
 
-function paintGround(ctx: CanvasRenderingContext2D, camera: number, view: SagaView): void {
+function paintGround(
+  ctx: CanvasRenderingContext2D,
+  camera: number,
+  view: SagaView,
+  mood: SkyMood,
+): void {
   const gy = view.groundY;
   const ground = ctx.createLinearGradient(0, gy - 26, 0, view.h);
-  ground.addColorStop(0, "#4a4433");
-  ground.addColorStop(0.4, "#3a3729");
-  ground.addColorStop(1, "#23231c");
+  ground.addColorStop(0, mood.ground[0]);
+  ground.addColorStop(0.4, mood.ground[1]);
+  ground.addColorStop(1, mood.ground[2]);
   ctx.fillStyle = ground;
   ctx.fillRect(0, gy - 26, view.w, view.h - gy + 26);
 
   // 石板路
-  ctx.fillStyle = "#5c5341";
+  ctx.fillStyle = mood.road;
   ctx.fillRect(0, gy + 6, view.w, 76);
-  ctx.strokeStyle = "rgba(24,22,18,0.5)";
+  ctx.strokeStyle = mood.roadEdge;
   ctx.lineWidth = 1;
   const offset = camera % 96;
   for (let x = -offset - 96; x < view.w + 96; x += 96) {
     ctx.strokeRect(x, gy + 6, 96, 38);
     ctx.strokeRect(x + 48, gy + 44, 96, 38);
   }
-  ctx.fillStyle = "rgba(255,214,150,0.05)";
+  ctx.fillStyle = mood.roadGlow;
   ctx.fillRect(0, gy + 6, view.w, 3);
 }
 
@@ -1008,6 +1155,11 @@ export function paintField(ctx: CanvasRenderingContext2D, options: FieldPaintOpt
   sprites.sort((a, b) => a.y - b.y);
   for (const sprite of sprites) sprite.draw();
 
+  // 环境色：同一张地图在不同章节里分出晨昏寒暑，不额外做贴图。
+  const mood = skyMoodFor(options.chapterIndex);
+  ctx.fillStyle = mood.fieldTint;
+  ctx.fillRect(0, 0, view.w, view.h);
+
   // 交互气泡
   if (options.prompt) {
     const px = options.x - camX;
@@ -1078,6 +1230,8 @@ export interface BattlePaintOptions {
   nowMs?: number;
   target: number;
   animation?: BattleAnimation | null;
+  /** 当前章节，用来选战场天候；省略按第 0 章画。 */
+  chapterIndex?: number;
   /** 逻辑视野；省略则按 960×540（16:9）画。 */
   view?: SagaView;
 }
@@ -1502,21 +1656,181 @@ export function battleEnemyAtPoint(
   return best;
 }
 
+/** 伤害飘字的存活时长：比一条事件节拍长，连击时前几行还挂在空中。 */
+export const BATTLE_FLOAT_MS = 900;
+const DOWN_STAMP_MS = 760;
+
+/** 把动画窗口内的伤害/回复数字逐条画出来，而不是只画当前那一条。 */
+function paintBattleFloats(
+  ctx: CanvasRenderingContext2D,
+  battle: SagaBattleState,
+  anim: BattleAnimation,
+  elapsed: number,
+  k: number,
+): void {
+  for (let i = 0; i < anim.events.length; i++) {
+    const event = anim.events[i];
+    if (event.kind !== "attack" && event.kind !== "tactic" && event.kind !== "heal") continue;
+    if (typeof event.amount !== "number" || event.amount <= 0 || !event.target) continue;
+    const age = elapsed - i * anim.stepMs;
+    // 留一点延迟给刀光先行；飘字有自己的寿命，不受单条节拍限制。
+    if (age < 90 || age > BATTLE_FLOAT_MS) continue;
+    const anchor = findUnit(battle, event.target, k);
+    if (!anchor) continue;
+    const progress = clamp01((age - 90) / (BATTLE_FLOAT_MS - 90));
+    const crit = Boolean(event.crit) && event.kind === "attack";
+    const color =
+      event.kind === "heal"
+        ? "#8ef0b0"
+        : event.kind === "tactic"
+          ? "#d8b4fe"
+          : crit
+            ? "#ffd166"
+            : "#ffe3b0";
+    const size = crit ? 27 : event.kind === "tactic" ? 22 : 20;
+    const text = `${event.kind === "heal" ? "+" : "-"}${event.amount}`;
+    const x = anchor.slot.x + (crit ? 0 : 26) + Math.sin(progress * 5) * 2;
+    const y = anchor.slot.y - 96 - progress * 48;
+    ctx.save();
+    ctx.globalAlpha = 1 - progress * progress;
+    ctx.textAlign = "center";
+    ctx.font = uiFont(size);
+    // 深色描边保证在火焰、旗帜与云层上都看得清。
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(10,8,6,0.85)";
+    ctx.strokeText(text, x, y);
+    ctx.fillStyle = color;
+    ctx.fillText(text, x, y);
+    if (crit) {
+      ctx.font = uiFont(11);
+      ctx.fillStyle = "#ffcf5a";
+      ctx.fillText("暴击", x, y - 24);
+    }
+    ctx.restore();
+  }
+}
+
+/** 败退章：红印砸落 + 脚下扬尘，比静态「败」字更有结算感。 */
+function paintDownStamps(
+  ctx: CanvasRenderingContext2D,
+  battle: SagaBattleState,
+  anim: BattleAnimation,
+  elapsed: number,
+  k: number,
+): void {
+  for (let i = 0; i < anim.events.length; i++) {
+    const event = anim.events[i];
+    if (event.kind !== "down" || !event.target) continue;
+    const age = elapsed - i * anim.stepMs;
+    if (age < 0 || age > DOWN_STAMP_MS) continue;
+    const anchor = findUnit(battle, event.target, k);
+    if (!anchor) continue;
+    const grow = age < 170 ? 1.8 - (age / 170) * 0.8 : 1;
+    const alpha = age > DOWN_STAMP_MS - 180 ? (DOWN_STAMP_MS - age) / 180 : 1;
+    const y = anchor.slot.y - 74 * Math.max(0.7, anchor.slot.scale);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.translate(anchor.slot.x, y);
+    ctx.rotate(-0.1);
+    ctx.scale(grow, grow);
+    ctx.fillStyle = "rgba(150,38,30,0.22)";
+    roundRect(ctx, -26, -26, 52, 52, 9);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(224,86,68,0.92)";
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = uiFont(30);
+    ctx.fillStyle = "#f2bdb0";
+    ctx.fillText("败", 0, 2);
+    ctx.restore();
+
+    const dust = clamp01(age / 420);
+    ctx.save();
+    ctx.globalAlpha = (1 - dust) * 0.6;
+    ctx.fillStyle = "rgba(214,196,166,0.6)";
+    for (let d = 0; d < 3; d++) {
+      const angle = Math.PI + (d - 1) * 0.55;
+      ctx.beginPath();
+      ctx.ellipse(
+        anchor.slot.x + Math.cos(angle) * (16 + dust * 30),
+        anchor.slot.y + 4 - dust * 8,
+        12 + dust * 10,
+        5 + dust * 4,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+
 export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintOptions): void {
   const { battle, time, target } = options;
   const view = options.view ?? DEFAULT_VIEW;
   const gy = view.groundY;
+  const mood = skyMoodFor(options.chapterIndex ?? 0);
   const anim = options.animation;
   // time 是秒（环境动画用），动画节拍是毫秒：统一到毫秒再算已播时长。
   const elapsed = anim ? Math.max(0, (options.nowMs ?? time * 1000) - anim.startedAt) : 0;
   const eventIndex = anim ? Math.floor(elapsed / anim.stepMs) : -1;
-  const currentEvent = anim && eventIndex >= 0 && eventIndex < anim.events.length ? anim.events[eventIndex] : null;
+  const currentEvent =
+    anim && eventIndex >= 0 && eventIndex < anim.events.length ? anim.events[eventIndex] : null;
   const eventProgress = anim
     ? Math.min(1, Math.max(0, (elapsed - eventIndex * anim.stepMs) / anim.stepMs))
     : 0;
 
-  paintBackdrop(ctx, time + 4, view);
-  paintGround(ctx, 0, view);
+  // 震屏与冲击白闪都由当前事件的类型与进度推出来，不掷随机数，回放才稳定。
+  let shakeX = 0;
+  let shakeY = 0;
+  if (currentEvent && eventProgress < 0.6) {
+    const power =
+      currentEvent.kind === "down"
+        ? 9
+        : currentEvent.crit
+          ? 8
+          : currentEvent.kind === "tactic"
+            ? 5
+            : currentEvent.kind === "attack"
+              ? 3
+              : 0;
+    if (power > 0) {
+      const damp = 1 - eventProgress / 0.6;
+      shakeX = Math.sin(elapsed * 0.085) * power * damp;
+      shakeY = Math.cos(elapsed * 0.12) * power * 0.7 * damp;
+    }
+  }
+  const impact =
+    currentEvent &&
+    currentEvent.kind === "attack" &&
+    eventProgress < 0.45 &&
+    (currentEvent.crit || (currentEvent.amount ?? 0) >= 60)
+      ? (1 - eventProgress / 0.45) * (currentEvent.crit ? 0.28 : 0.18)
+      : 0;
+
+  // 正在落章的败将用动态印章，静态「败」字先让位，避免两行字叠在一起。
+  const stamping = new Set<string>();
+  if (anim) {
+    for (let i = 0; i < anim.events.length; i++) {
+      const event = anim.events[i];
+      if (event.kind !== "down" || !event.target) continue;
+      const age = elapsed - i * anim.stepMs;
+      if (age >= 0 && age <= DOWN_STAMP_MS) stamping.add(event.target);
+    }
+  }
+
+  // 震屏会露出画布边缘，先铺一层同色底，抖起来像暗边而不是空白。
+  ctx.fillStyle = mood.base;
+  ctx.fillRect(0, 0, view.w, view.h);
+
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
+  paintBackdrop(ctx, time + 4, view, mood);
+  paintGround(ctx, 0, view, mood);
 
   // 战场土坡与军旗
   const field = ctx.createLinearGradient(0, gy - 40, 0, view.h);
@@ -1546,8 +1860,7 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     ctx.fill();
   }
 
-  // 顶部两军兵力面板（左右各半边）
-  paintBattleTeams(ctx, battle, target, view);
+  // 顶部两军兵力面板放在震屏之外：抖的是战场，不是 HUD。
 
   const playerSlots = unitSlots(battle.party.length, "player", view.k);
   const enemySlots = unitSlots(battle.enemies.length, "enemy", view.k);
@@ -1594,7 +1907,7 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     ctx.filter = "none";
     ctx.restore();
 
-    if (unit.downed) {
+    if (unit.downed && !stamping.has(unit.name)) {
       ctx.fillStyle = "rgba(230,200,180,0.7)";
       ctx.font = uiFont(12);
       ctx.textAlign = "center";
@@ -1633,23 +1946,49 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
       const progress = Math.min(1, eventProgress / 0.6);
       ctx.save();
       ctx.globalAlpha = 1 - progress;
-      ctx.strokeStyle = "#ffe9b8";
-      ctx.lineWidth = 5;
+      ctx.strokeStyle = currentEvent.crit ? "#fff1c4" : "#ffe9b8";
+      ctx.lineWidth = currentEvent.crit ? 7 : 5;
       ctx.beginPath();
-      ctx.arc(victim.slot.x, victim.slot.y - 46, 30 + progress * 26, -1.2, 0.9);
+      ctx.arc(
+        victim.slot.x,
+        victim.slot.y - 46,
+        30 + progress * (currentEvent.crit ? 40 : 26),
+        -1.2,
+        0.9,
+      );
       ctx.stroke();
       ctx.restore();
     }
     if (currentEvent.kind === "tactic" && victim) {
-      for (let i = 0; i < 10; i++) {
-        const angle = (i / 10) * Math.PI * 2;
-        const radius = 10 + eventProgress * 46;
-        ctx.fillStyle = `rgba(255,${120 + i * 4},60,${1 - eventProgress})`;
+      // 计策：紫气扩散环 + 火星，和普攻的刀光区分开。
+      ctx.save();
+      ctx.globalAlpha = 1 - eventProgress;
+      ctx.strokeStyle = "rgba(190,130,255,0.9)";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(
+        victim.slot.x,
+        victim.slot.y - 26,
+        18 + eventProgress * 66,
+        (18 + eventProgress * 66) * 0.55,
+        0,
+        0,
+        Math.PI * 2,
+      );
+      ctx.stroke();
+      ctx.restore();
+      for (let i = 0; i < 12; i++) {
+        const angle = (i / 12) * Math.PI * 2;
+        const radius = 10 + eventProgress * 50;
+        const purple = i % 3 === 0;
+        ctx.fillStyle = purple
+          ? `rgba(196,140,255,${1 - eventProgress})`
+          : `rgba(255,${120 + i * 4},60,${1 - eventProgress})`;
         ctx.beginPath();
         ctx.arc(
           victim.slot.x + Math.cos(angle) * radius,
           victim.slot.y - 30 + Math.sin(angle) * radius * 0.6,
-          4 + (i % 3),
+          purple ? 3 : 4 + (i % 3),
           0,
           Math.PI * 2,
         );
@@ -1657,6 +1996,20 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
       }
     }
     if (currentEvent.kind === "heal" && victim) {
+      // 回复：绿色光点绕着身体往上飘。
+      for (let i = 0; i < 6; i++) {
+        const angle = (i / 6) * Math.PI * 2;
+        ctx.fillStyle = `rgba(126,230,160,${0.8 * (1 - eventProgress)})`;
+        ctx.beginPath();
+        ctx.arc(
+          victim.slot.x + Math.cos(angle) * (12 + i * 2),
+          victim.slot.y - 40 - eventProgress * 44 + Math.sin(angle) * 10,
+          2.2 + (i % 2),
+          0,
+          Math.PI * 2,
+        );
+        ctx.fill();
+      }
       ctx.fillStyle = `rgba(126,230,160,${1 - eventProgress})`;
       ctx.font = uiFont(22);
       ctx.textAlign = "center";
@@ -1668,27 +2021,40 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
       ctx.textAlign = "center";
       ctx.fillText("？", victim.slot.x, victim.slot.y - 78 - eventProgress * 18);
     }
+    if (currentEvent.kind === "miss" && victim) {
+      ctx.fillStyle = `rgba(220,214,200,${1 - eventProgress})`;
+      ctx.font = uiFont(16);
+      ctx.textAlign = "center";
+      ctx.fillText("落空", victim.slot.x, victim.slot.y - 74 - eventProgress * 20);
+    }
     if (currentEvent.kind === "recruit" && victim) {
       ctx.fillStyle = `rgba(240,210,130,${1 - eventProgress})`;
       ctx.font = uiFont(16);
       ctx.textAlign = "center";
       ctx.fillText("归顺", victim.slot.x, victim.slot.y - 70 - eventProgress * 20);
     }
-    if (typeof currentEvent.amount === "number" && currentEvent.amount > 0 && victim) {
-      ctx.save();
-      ctx.globalAlpha = 1 - Math.max(0, eventProgress - 0.5);
-      ctx.fillStyle = currentEvent.kind === "heal" ? "#8ef0b0" : "#ffd9a0";
-      ctx.font = uiFont(20);
+    if (currentEvent.kind === "level" && actor) {
+      ctx.fillStyle = `rgba(255,214,102,${1 - eventProgress})`;
+      ctx.font = uiFont(17);
       ctx.textAlign = "center";
-      ctx.fillText(
-        `${currentEvent.kind === "heal" ? "+" : "-"}${currentEvent.amount}`,
-        victim.slot.x + 24,
-        victim.slot.y - 92 - eventProgress * 24,
-      );
-      ctx.restore();
+      ctx.fillText("升级！", actor.slot.x, actor.slot.y - 96 - eventProgress * 24);
     }
-    void actor;
   }
+
+  if (anim) paintDownStamps(ctx, battle, anim, elapsed, view.k);
+
+  ctx.restore();
+
+  // 飘字画在震屏之外，数字不跟着战场抖，连击时也读得清。
+  if (anim) paintBattleFloats(ctx, battle, anim, elapsed, view.k);
+
+  if (impact > 0) {
+    ctx.fillStyle = `rgba(255,244,220,${impact})`;
+    ctx.fillRect(0, 0, view.w, view.h);
+  }
+
+  // 顶部两军兵力面板（左右各半边）
+  paintBattleTeams(ctx, battle, target, view);
 
   const vignette = ctx.createRadialGradient(
     view.w / 2,
