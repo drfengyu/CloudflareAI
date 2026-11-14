@@ -11,10 +11,11 @@ export const SAGA_RUN_VERSION = 7;
 export const SAGA_SAVE_VERSION = 1;
 
 /**
- * 战斗规则版本：v2 起武将固有特性、按等级成长策略点与领悟计策生效。
+ * 战斗规则版本：v2 起武将固有特性、按等级成长策略点与领悟计策生效；
+ * v3 起营寨随机增兵、敌将带装备、命中与伤害按智力 / 等级浮动。
  * 旧行军没有这个字段，重放时按 v1 走，避免改版把还没收兵的对局打乱。
  */
-export const SAGA_RULESET = 2;
+export const SAGA_RULESET = 3;
 
 export const SAGA_PARTY_SIZE = 5;
 export const SAGA_RESERVE_SIZE = 12;
@@ -410,6 +411,8 @@ export interface SagaBattleState {
   nodeIndex: number;
   nodeName: string;
   boss: boolean;
+  /** 本场适用的战斗规则版本（见 `SAGA_RULESET`）。 */
+  rules: number;
   round: number;
   phase: "select" | "won" | "lost";
   party: SagaBattleGeneral[];

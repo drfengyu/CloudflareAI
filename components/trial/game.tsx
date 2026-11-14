@@ -286,6 +286,8 @@ export function TrialGame(props: TrialGameProps) {
   const [dexTab, setDexTab] = useState<"save" | "dex">("save");
   const [campNode, setCampNode] = useState<number | null>(null);
   const [battle, setBattle] = useState<BattleSession | null>(null);
+  /** 敌情面板：战斗中查看敌将四维、装备、计策与特性。 */
+  const [showEnemyInfo, setShowEnemyInfo] = useState(false);
   const [anim, setAnim] = useState<BattleAnimation | null>(null);
   const [focusId, setFocusId] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -1168,6 +1170,7 @@ export function TrialGame(props: TrialGameProps) {
       setAnim(null);
       setBanner(null);
       setPanel(null);
+      setShowEnemyInfo(false);
       gameAudio.play("encounter");
     },
     [run, state],
@@ -1199,6 +1202,7 @@ export function TrialGame(props: TrialGameProps) {
     setFocusId(Object.keys(session.picks)[0] ?? null);
     setAnim(null);
     setBanner(null);
+    setShowEnemyInfo(false);
     gameAudio.play("encounter");
     toast(`野外遇敌 · ${battleState.nodeName}`);
   }, [battle, panel, run, settlement, state]);
@@ -1237,6 +1241,7 @@ export function TrialGame(props: TrialGameProps) {
       setBattle(null);
       setAnim(null);
       setFocusId(null);
+      setShowEnemyInfo(false);
     },
     [appendCommand, markSceneSeen, run],
   );
@@ -1337,6 +1342,7 @@ export function TrialGame(props: TrialGameProps) {
     setBattle(null);
     setAnim(null);
     setPanel(null);
+    setShowEnemyInfo(false);
     if (replayed?.state.scene === "lost") {
       setBanner({ kind: "lost", name: battle.battle.nodeName, gold: 0, exp: 0 });
       toast.error("全军败退，回城住店重整后再战");
@@ -1537,6 +1543,14 @@ export function TrialGame(props: TrialGameProps) {
                   </span>
                 </span>
                 <span className="flex shrink-0 gap-2">
+                  <Button
+                    size="sm"
+                    variant={showEnemyInfo ? "primary" : "outline"}
+                    className="h-7 px-2.5 text-xs"
+                    onClick={() => setShowEnemyInfo((value) => !value)}
+                  >
+                    敌情
+                  </Button>
                   <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={allAttack} disabled={battleLocked}>
                     总攻击
                   </Button>
@@ -1548,6 +1562,54 @@ export function TrialGame(props: TrialGameProps) {
                   </Button>
                 </span>
               </div>
+
+              {showEnemyInfo ? (
+                <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                  {battle.battle.enemies.map((enemy, index) => {
+                    const weapon = enemy.weapon ? SAGA_ITEM_BY_ID.get(enemy.weapon) : null;
+                    const armor = enemy.armor ? SAGA_ITEM_BY_ID.get(enemy.armor) : null;
+                    return (
+                      <div
+                        key={`${enemy.id}-${index}`}
+                        className={cn(
+                          "rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5",
+                          enemy.downed && "opacity-45",
+                        )}
+                      >
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="text-[12px] font-medium text-amber-100">{enemy.name}</span>
+                          <span className="text-[10px] text-white/45">
+                            {enemy.title} · Lv{enemy.level}
+                          </span>
+                          <span className="ml-auto text-[10px] tabular-nums text-white/65">
+                            兵 {Math.max(0, enemy.troops)}/{enemy.maxTroops}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[10px] tabular-nums text-white/65">
+                          武 {enemy.force} · 智 {enemy.intellect} · 防 {enemy.defense} · 速 {enemy.speed} · 策 {enemy.tacticPoints}
+                        </p>
+                        <p className="text-[10px] text-white/55">
+                          兵器 {weapon ? `${weapon.name}（+${enemy.weaponAtk}）` : "无"} · 甲胄{" "}
+                          {armor ? `${armor.name}（+${enemy.armorDef}）` : "无"}
+                        </p>
+                        <p className="text-[10px] text-white/55">
+                          计策{" "}
+                          {enemy.tactics.length > 0
+                            ? enemy.tactics
+                                .map((tactic) => SAGA_TACTIC_BY_ID.get(tactic)?.name ?? tactic)
+                                .join(" / ")
+                            : "无"}
+                          {enemy.traits && enemy.traits.length > 0
+                            ? ` · 特性 ${enemy.traits
+                                .map((id) => SAGA_TRAIT_BY_ID.get(id)?.name ?? id)
+                                .join(" / ")}`
+                            : ""}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
 
               {/* 战报：动画中的事件优先，平时留最近三条 */}
               <div className="mt-2 min-h-[30px] rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-amber-100/80">

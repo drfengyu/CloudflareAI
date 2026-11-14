@@ -9,6 +9,7 @@ import {
 import { sagaEncounterFor } from "./encounter";
 import { generalStats, grantGeneralExp, recruitToSave } from "./state";
 import {
+  SAGA_PARTY_SIZE,
   type SagaBattleEvent,
   type SagaBattleGeneral,
   type SagaBattleState,
@@ -86,6 +87,108 @@ function tacticName(id: TacticId): string {
   return SAGA_TACTIC_BY_ID.get(id)?.name ?? id;
 }
 
+/** 敌军按等级发装备：同一档兵器 / 甲胄，让敌情面板里看得到、打起来也算数。 */
+const GEAR_TIERS = {
+  weapon: ["iron_sword", "spear", "blade", "guandao"],
+  armor: ["cloth", "leather", "iron_armor", "heavy_armor"],
+} as const;
+
+function gearTierFor(level: number, shift = 0): number {
+  return clamp(Math.floor((level - 1) / 8) + shift, 0, GEAR_TIERS.weapon.length - 1);
+}
+
+function tierGear(tier: number): {
+  weapon: string;
+  armor: string;
+  weaponAtk: number;
+  armorDef: number;
+} {
+  const weapon = GEAR_TIERS.weapon[clamp(tier, 0, GEAR_TIERS.weapon.length - 1)];
+  const armor = GEAR_TIERS.armor[clamp(tier, 0, GEAR_TIERS.armor.length - 1)];
+  return {
+    weapon,
+    armor,
+    weaponAtk: SAGA_ITEM_BY_ID.get(weapon)?.atk ?? 0,
+    armorDef: SAGA_ITEM_BY_ID.get(armor)?.def ?? 0,
+  };
+}
+
+function seedRng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** 营地 / 攻城战按种子补进来的士兵位；人数由上层按双方 5 人上限算好。 */
+const SOLDIER_NAMES = ["步卒", "刀盾兵", "长矛兵", "弓手", "轻骑"];
+const SOLDIER_MARKS = ["甲", "乙", "丙", "丁", "戊"];
+
+function buildSoldier(
+  node: SagaNode,
+  nodeIndex: number,
+  slot: number,
+  rules: number,
+  rng: () => number,
+): SagaBattleGeneral {
+  const chapter = Math.max(0, node.chapter);
+  const level =
+    1 +
+    chapter * 4 +
+    nodeIndex +
+    (node.kind === "boss" ? 2 : node.kind === "elite" ? 1 : 0);
+  const jitter = 0.9 + rng() * 0.2;
+  const troops = Math.max(60, Math.round((90 + level * 9) * (1 + chapter * 0.05) * jitter));
+  const intellect = Math.max(12, Math.round(20 + level * 0.5));
+  const gear = tierGear(gearTierFor(level, -1));
+  return {
+    id: `guard_${nodeIndex}_${slot}`,
+    name: `${SOLDIER_NAMES[slot % SOLDIER_NAMES.length]}${SOLDIER_MARKS[slot] ?? slot + 1}`,
+    title: node.kind === "boss" ? "守城亲兵" : "营中步卒",
+    side: "enemy",
+    level,
+    troops,
+    maxTroops: troops,
+    force: Math.round((52 + level * 1.2) * jitter),
+    intellect,
+    defense: Math.round((50 + level * 1.1) * jitter),
+    speed: Math.round((44 + level * 0.6) * jitter),
+    tactics: [],
+    traits: [],
+    tacticPoints:
+      rules >= 3
+        ? Math.max(1, 2 + Math.floor(intellect / 20) + Math.floor(level / 6))
+        : Math.max(1, 2 + Math.floor(intellect / 30)),
+    weaponAtk: gear.weaponAtk,
+    armorDef: gear.armorDef,
+    weapon: gear.weapon,
+    armor: gear.armor,
+    color: "#57534e",
+    accent: "#e7e5e4",
+    guard: false,
+    confused: 0,
+    buff: 0,
+    downed: false,
+    recruitable: false,
+    recruitHard: false,
+    boss: false,
+  };
+}
+
+/** 等级越高出手越重：1 级为基准，30 级约 +29%。 */
+function skillFactor(level: number): number {
+  return 1 + clamp(level - 1, 0, 29) * 0.01;
+}
+
+/** 命中率按双方智力差浮动：智力压制最多九成八，被压制至少六成五。 */
+function hitChance(actor: SagaBattleGeneral, target: SagaBattleGeneral): number {
+  return clamp(0.9 + (actor.intellect - target.intellect) / 400, 0.65, 0.98);
+}
+
 export function startBattle(run: SagaRun, nodeIndex: number, state: SagaReplayState): SagaBattleState {
   return buildBattle(
     run.nodes[nodeIndex],
@@ -140,18 +243,27 @@ function buildBattle(
       speed: stats.speed + buffs.speed,
       tactics: rules >= 2 ? tacticsFor(def, saved.level) : def?.tactics ?? [],
       traits: rules >= 2 ? def?.traits ?? [] : [],
-      // v2 起策略点随等级增长：每 3 级 +1，智将再按智力多吃几点，上限 12。
+      // v3 起策略点主要看智力：每 20 点智力 +1，等级每 4 级再 +1，封顶 12。
       tacticPoints:
-        rules >= 2
+        rules >= 3
           ? Math.min(
               12,
               2 +
-                Math.floor(stats.intellect / 30) +
-                Math.floor((saved.level - 1) / 3) +
+                Math.floor(stats.intellect / 20) +
+                Math.floor((saved.level - 1) / 4) +
                 buffs.tacticPoints +
                 traitTotalOf(def?.traits, "tacticPoints"),
             )
-          : Math.min(9, 2 + Math.floor(stats.intellect / 30) + buffs.tacticPoints),
+          : rules >= 2
+            ? Math.min(
+                12,
+                2 +
+                  Math.floor(stats.intellect / 30) +
+                  Math.floor((saved.level - 1) / 3) +
+                  buffs.tacticPoints +
+                  traitTotalOf(def?.traits, "tacticPoints"),
+              )
+            : Math.min(9, 2 + Math.floor(stats.intellect / 30) + buffs.tacticPoints),
       weaponAtk: stats.weaponAtk,
       armorDef: stats.armorDef,
       weapon: saved.weapon,
@@ -167,42 +279,59 @@ function buildBattle(
       boss: false,
     };
   });
-  const enemies: SagaBattleGeneral[] = node.enemies.map((enemy) => ({
-    id: enemy.id,
-    name: enemy.name,
-    title: enemy.title,
-    side: "enemy",
-    level: enemy.level,
-    troops: enemy.troops,
-    maxTroops: enemy.maxTroops,
-    force: enemy.force,
-    intellect: enemy.intellect,
-    defense: enemy.defense,
-    speed: enemy.speed,
-    tactics: enemy.tactics,
-    traits: enemy.traits ?? [],
-    tacticPoints:
-      rules >= 2
-        ? Math.max(2, 2 + Math.floor(enemy.intellect / 30) + Math.floor(enemy.level / 6))
-        : Math.max(2, 2 + Math.floor(enemy.intellect / 30)),
-    weaponAtk: 0,
-    armorDef: 0,
-    weapon: null,
-    armor: null,
-    color: enemy.color,
-    accent: enemy.accent,
-    guard: false,
-    confused: 0,
-    buff: 0,
-    downed: false,
-    recruitable: enemy.recruitable,
-    recruitHard: enemy.recruitHard,
-    boss: enemy.boss,
-  }));
+  const enemies: SagaBattleGeneral[] = node.enemies.slice(0, SAGA_PARTY_SIZE).map((enemy) => {
+    const gear = rules >= 3 ? tierGear(gearTierFor(enemy.level)) : null;
+    return {
+      id: enemy.id,
+      name: enemy.name,
+      title: enemy.title,
+      side: "enemy",
+      level: enemy.level,
+      troops: enemy.troops,
+      maxTroops: enemy.maxTroops,
+      force: enemy.force,
+      intellect: enemy.intellect,
+      defense: enemy.defense,
+      speed: enemy.speed,
+      tactics: enemy.tactics,
+      traits: enemy.traits ?? [],
+      tacticPoints:
+        rules >= 3
+          ? Math.max(2, 2 + Math.floor(enemy.intellect / 20) + Math.floor(enemy.level / 6))
+          : rules >= 2
+            ? Math.max(2, 2 + Math.floor(enemy.intellect / 30) + Math.floor(enemy.level / 6))
+            : Math.max(2, 2 + Math.floor(enemy.intellect / 30)),
+      weaponAtk: gear?.weaponAtk ?? 0,
+      armorDef: gear?.armorDef ?? 0,
+      weapon: gear?.weapon ?? null,
+      armor: gear?.armor ?? null,
+      color: enemy.color,
+      accent: enemy.accent,
+      guard: false,
+      confused: 0,
+      buff: 0,
+      downed: false,
+      recruitable: enemy.recruitable,
+      recruitHard: enemy.recruitHard,
+      boss: enemy.boss,
+    };
+  });
+  // 营寨与攻城战：按种子给敌方补 1~N 个士兵位，连同武将最多 5 人上场。
+  if (rules >= 3 && nodeIndex >= 0) {
+    const room = SAGA_PARTY_SIZE - enemies.length;
+    if (room > 0) {
+      const rng = seedRng((rngState ^ Math.imul(nodeIndex + 17, 0x27d4eb2f)) >>> 0);
+      const count = 1 + Math.floor(rng() * room);
+      for (let slot = 0; slot < count; slot++) {
+        enemies.push(buildSoldier(node, nodeIndex, slot, rules, rng));
+      }
+    }
+  }
   return {
     nodeIndex,
     nodeName: node.name,
     boss: node.kind === "boss",
+    rules,
     round: 1,
     phase: "select",
     party,
@@ -237,7 +366,7 @@ function attackerAtk(actor: SagaBattleGeneral): number {
   if (actor.side === "player") {
     return actor.force + actor.weaponAtk + actor.level * 2;
   }
-  return Math.round(actor.force * 1.15) + actor.level * 3;
+  return Math.round(actor.force * 1.15) + actor.level * 3 + actor.weaponAtk;
 }
 
 function defenderDef(target: SagaBattleGeneral): number {
@@ -252,6 +381,17 @@ function dealDamage(
 ): void {
   const attackerFormation = actor.side === "player" ? battle.playerFormation : battle.enemyFormation;
   const defenderFormation = actor.side === "player" ? battle.enemyFormation : battle.playerFormation;
+  // v3 起普攻先判定命中：智力被压制的一方更容易被闪开。
+  if (battle.rules >= 3 && roll(battle) > hitChance(actor, target)) {
+    events.push({
+      kind: "miss",
+      side: actor.side,
+      actor: actor.name,
+      target: target.name,
+      text: `${target.name} 看破攻势，${actor.name} 这一击落空`,
+    });
+    return;
+  }
   const base = Math.max(
     8,
     attackerAtk(actor) - Math.round(defenderDef(target) * 0.65),
@@ -261,6 +401,7 @@ function dealDamage(
   const guarded = target.guard ? 0.5 : 1;
   const attackPct = 1 + traitTotal(actor, "attackPct");
   const cut = 1 - Math.min(0.5, traitTotal(target, "damageCut"));
+  const skill = battle.rules >= 3 ? skillFactor(actor.level) : 1;
   let damage = Math.max(
     4,
     Math.round(
@@ -272,6 +413,7 @@ function dealDamage(
         guarded *
         attackPct *
         cut *
+        skill *
         variance,
     ),
   );
@@ -329,11 +471,26 @@ function executeTactic(
   switch (tactic) {
     case "huoji": {
       const power = actor.intellect * 0.6 + actor.level * 2;
+      const skill = battle.rules >= 3 ? skillFactor(actor.level) : 1;
       for (const foe of living(foes)) {
+        // 火计也要看智力：智力差太大时，敌将能抢先避开火势。
+        if (battle.rules >= 3 && roll(battle) > hitChance(actor, foe)) {
+          events.push({
+            kind: "miss",
+            side: actor.side,
+            actor: actor.name,
+            target: foe.name,
+            text: `${foe.name} 避开火势，未受火计所伤`,
+          });
+          continue;
+        }
         const resist = foe.intellect * 0.4;
         const variance = 0.85 + roll(battle) * 0.3;
         const countered = counterMod(allyFormation, foeFormation);
-        let damage = Math.max(6, Math.round((power - resist) * variance * countered * tacticPct));
+        let damage = Math.max(
+          6,
+          Math.round((power - resist) * variance * countered * tacticPct * skill),
+        );
         if (roll(battle) < 0.22) damage = Math.round(damage * 0.5);
         foe.troops = Math.max(0, foe.troops - damage);
         events.push({
@@ -619,6 +776,8 @@ function finishBattle(
       }
     }
     for (const enemy of battle.enemies) {
+      // 杂兵与临时士兵位不在武将表里，图鉴只收真正的武将。
+      if (!SAGA_GENERAL_BY_ID.has(enemy.id)) continue;
       state.save.met = [...new Set([...state.save.met, enemy.id])];
     }
     for (const id of battle.pendingRecruits) {

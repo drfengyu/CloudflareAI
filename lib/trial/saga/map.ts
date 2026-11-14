@@ -117,9 +117,9 @@ export function fieldEncounterChanceAt(field: SagaField, x: number, y: number): 
     return 0;
   }
   const kind = fieldTileAt(field, tx, ty);
-  if (kind === SAGA_TILE_FOREST) return 0.05;
-  if (kind === SAGA_TILE_GRASS) return fieldShoreAt(field, tx, ty) ? 0.02 : 0.024;
-  if (kind === SAGA_TILE_ROAD) return 0.012;
+  if (kind === SAGA_TILE_FOREST) return 0.1;
+  if (kind === SAGA_TILE_GRASS) return fieldShoreAt(field, tx, ty) ? 0.045 : 0.055;
+  if (kind === SAGA_TILE_ROAD) return 0.03;
   return 0;
 }
 

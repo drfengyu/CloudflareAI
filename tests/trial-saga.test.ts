@@ -82,7 +82,7 @@ import {
   initialTrialSave,
   normalizeTrialSave,
 } from "../lib/trial/saga/state";
-import { startBattle } from "../lib/trial/saga/battle";
+import { resolveBattleRound, startBattle } from "../lib/trial/saga/battle";
 import { battleEnemyAtPoint, makeSagaView } from "../components/trial/renderer";
 import {
   SAGA_TRAINING_ITEM_ID,
@@ -1071,18 +1071,18 @@ test("野外遇敌概率：官道、草地、海边与树林都遇敌，城墙�
         continue;
       }
       if (kind === SAGA_TILE_FOREST) {
-        assert.equal(chance, 0.05);
+        assert.equal(chance, 0.1);
         forest += 1;
       } else if (kind === SAGA_TILE_GRASS) {
         if (fieldShoreAt(field, tx, ty)) {
-          assert.equal(chance, 0.02, "海边滩涂也会遇敌");
+          assert.equal(chance, 0.045, "海边滩涂也会遇敌");
           shore += 1;
         } else {
-          assert.equal(chance, 0.024);
+          assert.equal(chance, 0.055);
           grass += 1;
         }
       } else if (kind === SAGA_TILE_ROAD) {
-        assert.equal(chance, 0.012, "官道也会遇敌");
+        assert.equal(chance, 0.03, "官道也会遇敌");
         road += 1;
       } else {
         assert.equal(chance, 0, `城墙与城内校场不遇敌（tile=${kind}）`);
@@ -1221,7 +1221,7 @@ test("战斗规则：新行军启用特性与成长计策，旧行军 rules=1 �
   assert.deepEqual(lv10.tactics, ["huoji", "guwu"], "10 级领悟鼓舞");
 });
 
-test("策略点：升级增长，智将额外吃智力，封顶 12 点", () => {
+test("策略点：主要随智力浮动，等级再补几点，封顶 12 点", () => {
   assert.deepEqual(tacticsFor(SAGA_GENERAL_BY_ID.get("pangtong"), 7), ["huoji", "hunluan"]);
   assert.deepEqual(tacticsFor(SAGA_GENERAL_BY_ID.get("pangtong"), 8), ["huoji", "hunluan", "guwu"]);
 
@@ -1233,9 +1233,95 @@ test("策略点：升级增长，智将额外吃智力，封顶 12 点", () => {
   save.party[0].level = 30;
   const atLv30 = startBattle(run, 0, createReplayState(run)).party[0];
   assert.equal(atLv10.tacticPoints > atLv1.tacticPoints, true, "升级增加策略点");
-  assert.equal(atLv1.tacticPoints, 5, "刘备 1 级：基础 2 + 智力 2 + 仁德 1");
+  assert.equal(atLv1.tacticPoints, 6, "刘备 1 级：基础 2 + 智力 72/20=3 + 仁德 1");
   assert.equal(atLv30.tacticPoints, 12, "策略点封顶 12");
   assert.equal(atLv1.tactics.includes("huifu"), true, "仁德之主自带回复");
+
+  const zhangfeiRun = {
+    ...easyRun({ ...save, party: [createGeneralState("zhangfei", 1)] }),
+    rules: SAGA_RULESET,
+  };
+  const zhugeRun = {
+    ...easyRun({ ...save, party: [createGeneralState("zhugeliang", 1)] }),
+    rules: SAGA_RULESET,
+  };
+  const lowBattle = startBattle(zhangfeiRun, 0, createReplayState(zhangfeiRun));
+  const highBattle = startBattle(zhugeRun, 0, createReplayState(zhugeRun));
+  assert.equal(
+    highBattle.party[0].tacticPoints > lowBattle.party[0].tacticPoints,
+    true,
+    "同等级下智力越高计策点越多",
+  );
+});
+
+test("营寨增兵：按种子补士兵位，双方最多 5 人，敌将带装备", () => {
+  const run = freshRun(23, 5);
+  assert.equal(run.rules, SAGA_RULESET);
+  for (let node = 0; node < run.nodes.length; node++) {
+    const battle = startBattle(run, node, createReplayState(run));
+    assert.equal(battle.rules, SAGA_RULESET);
+    assert.equal(battle.enemies.length <= 5, true, "敌军连同士兵最多 5 人");
+    assert.equal(battle.enemies.length >= run.nodes[node].enemies.length, true, "原有敌将一个不少");
+    assert.equal(battle.party.length <= 5, true, "我军最多 5 人");
+    const again = startBattle(run, node, createReplayState(run));
+    assert.deepEqual(
+      again.enemies.map((enemy) => `${enemy.name}:${enemy.troops}:${enemy.intellect}`),
+      battle.enemies.map((enemy) => `${enemy.name}:${enemy.troops}:${enemy.intellect}`),
+      "同种子、同营地的增兵结果固定",
+    );
+    for (const enemy of battle.enemies) {
+      assert.equal(Boolean(enemy.weapon && enemy.armor), true, "敌将带兵器与甲胄");
+      assert.equal((enemy.weaponAtk ?? 0) > 0 && (enemy.armorDef ?? 0) > 0, true);
+    }
+  }
+
+  const legacy = parseSagaRun(JSON.stringify({ ...run, rules: 2 }));
+  assert.ok(legacy);
+  const legacyBattle = startBattle(legacy, 0, createReplayState(legacy));
+  assert.equal(legacyBattle.enemies.length, run.nodes[0].enemies.length, "旧规则不补士兵位");
+  assert.equal(legacyBattle.enemies.every((enemy) => enemy.weapon === null), true, "旧规则敌军不带装备");
+});
+
+test("命中：智力被压制会落空，旧规则仍按原公式必中", () => {
+  const run = { ...easyRun(), rules: SAGA_RULESET };
+  const state = createReplayState(run);
+  const battle = startBattle(run, 0, state);
+  for (const unit of battle.party) {
+    unit.troops = 99_999;
+    unit.maxTroops = 99_999;
+  }
+  const target = battle.enemies[0];
+  target.troops = 99_999;
+  target.maxTroops = 99_999;
+  target.intellect = 999;
+  target.defense = 0;
+  target.force = 0;
+  for (let round = 0; round < 12; round++) {
+    const commands = battle.party
+      .filter((unit) => !unit.downed)
+      .map((unit) => ({ g: unit.id, a: "attack" as const, target: 0 }));
+    resolveBattleRound(battle, commands, state);
+  }
+  assert.equal(battle.log.some((event) => event.text.includes("落空")), true, "智力差过大时会打空");
+
+  const legacyRun = { ...easyRun(), rules: 1 };
+  const legacyState = createReplayState(legacyRun);
+  const legacyBattle = startBattle(legacyRun, 0, legacyState);
+  for (const unit of legacyBattle.party) {
+    unit.troops = 99_999;
+    unit.maxTroops = 99_999;
+  }
+  const legacyTarget = legacyBattle.enemies[0];
+  legacyTarget.troops = 99_999;
+  legacyTarget.maxTroops = 99_999;
+  legacyTarget.intellect = 999;
+  for (let round = 0; round < 5; round++) {
+    const commands = legacyBattle.party
+      .filter((unit) => !unit.downed)
+      .map((unit) => ({ g: unit.id, a: "attack" as const, target: 0 }));
+    resolveBattleRound(legacyBattle, commands, legacyState);
+  }
+  assert.equal(legacyBattle.log.some((event) => event.text.includes("落空")), false, "旧规则不改命中");
 });
 
 // ---------------------------------------------------------------- 撤退 / 训练
