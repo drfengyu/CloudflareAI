@@ -4,7 +4,6 @@ import { PageBody } from "@/components/dashboard/section";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrialGame } from "@/components/trial/game";
 import { CouponCount } from "@/components/activity/coupon-badge";
-import { CouponShop } from "@/components/activity/coupon-shop";
 import { ActivityWindowBadge } from "@/components/activity/activity-window-badge";
 import { formatCredits } from "@/lib/billing/credits";
 import { getActivityCouponView } from "@/lib/activity/coupons";
@@ -92,17 +91,6 @@ export default async function TrialPage() {
   const place = `${chapter.town} · ${chapter.name}`;
   const dexCount = new Set([...save.met, ...save.recruited]).size;
   const finished = campaignComplete(save);
-
-  const couponCard = (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">活动券与珍宝礼包</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <CouponShop activities={[coupon]} />
-      </CardContent>
-    </Card>
-  );
 
   const rulesCard = (
     <Card>
@@ -240,7 +228,6 @@ export default async function TrialPage() {
         <PageHeader title="三国讨逆传" description={place} />
         <PageBody className="space-y-4">
           <Notice title={notice.title} hint={notice.hint} />
-          {couponCard}
           {track ? historyCard : null}
           {rulesCard}
         </PageBody>
@@ -336,7 +323,6 @@ export default async function TrialPage() {
         </div>
 
         {progressCard}
-        {couponCard}
         {historyCard}
         {rulesCard}
       </PageBody>

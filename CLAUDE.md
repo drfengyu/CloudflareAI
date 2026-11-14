@@ -534,9 +534,20 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.60.0（2026-11-14，画面与交互修复）
+**当前版本**：v0.61.0（2026-11-14，活动券内置与全站补偿）
 **下一版本**：待定
 
+- v0.61.0 活动券内置与全站补偿：
+  五个玩法页撤掉页面级 `CouponShop` 卡片，券余额与兑换 / 礼包入口进画面：
+  试炼沿用城内活动券铺子；工坊 HUD 显示券数并新增「券包」页签；
+  星图 / 翻牌 / 转盘新增 `components/activity/coupon-entry.tsx`（点余额展开 `CouponShop`，
+  `tone="dark"` 适配转盘盘面）。钱包页保留全站券商店。
+  存档回档补偿改为全站：`scripts/send-trial-coupon-compensation.mjs` 给所有 `status <> 3`
+  用户各发一封站内信，附件 4 张当期试炼券（`activityKey` = `trial_config.startAt`，
+  券名 `couponNameFor("trial", activityKey)`，券面 `4 × couponUnitCredits`，线上为 200 cr/张、共 800 cr），
+  消息 id 为 `trial-save-fix-20261114:<userId>`，`INSERT OR IGNORE` 幂等，默认 dry-run。
+  `parseAttachment` 的 coupon 分支改按 `ACTIVITY_KINDS` 校验，试炼 / 工坊 / 星图券信可正常领取。
+  线上已执行：7 名用户各 1 封，重跑仍为 7 封。
 - v0.60.0 画面与交互修复：
   `paintBattle` 增加 `nowMs` 毫秒时间轴：帧循环里的 `time` 是秒、`BattleAnimation.startedAt`
   是毫秒，原 `elapsed = time - startedAt` 恒为负，所有战斗动画不画但按钮仍锁 1.2 秒以上；
@@ -587,8 +598,9 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   `tests/trial-saga.test.ts` 遇敌概率用例改为四类野外地形正概率 + 城内与城门洞为 0，
   新增「出城即入遇敌范围」，共 162 项全过；`tsc`、ESLint、`npm run build` 通过；
   本机无 `.env.local`，页面未实测。
-  运维：向受存档回档影响的用户发送站内信补偿 800 cr（`topupType = 13`，
-  幂等 id `trial-save-fix-20261114-5c7dcb78`）。
+  运维：存档回档补偿最早给受影响用户发过 800 cr（`topupType = 13`，
+  id `trial-save-fix-20261114-5c7dcb78`）；v0.61.0 起改为全站每人 4 张当期试炼券
+  （约合 800 cr）的站内信，旧那封已领取的 800 cr 不回滚。
 
 - v0.57.1 三国讨逆传存档与地形修复：
   `lib/trial/store.ts` 新增 `startedAtDesc`：`typeof(startedAt) = 'text'` 时用

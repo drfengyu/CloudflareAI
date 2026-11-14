@@ -4,7 +4,6 @@ import { PageBody } from "@/components/dashboard/section";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CollectionSky } from "@/components/collection/sky";
 import { CouponCount } from "@/components/activity/coupon-badge";
-import { CouponShop } from "@/components/activity/coupon-shop";
 import { ActivityWindowBadge } from "@/components/activity/activity-window-badge";
 import { formatCredits } from "@/lib/billing/credits";
 import { getActivityCouponView } from "@/lib/activity/coupons";
@@ -126,17 +125,6 @@ export default async function CollectionPage() {
     (item) => item.key,
   );
 
-  const couponCard = (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">活动券与星图礼包</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <CouponShop activities={[coupon]} />
-      </CardContent>
-    </Card>
-  );
-
   if (windowInfo.status !== "active") {
     const notice =
       windowInfo.status === "disabled"
@@ -149,7 +137,6 @@ export default async function CollectionPage() {
         <PageHeader title="星图共鸣" description="观星得石 · 点亮星座 · 每日共鸣" />
         <PageBody className="space-y-4">
           <Notice title={notice.title} hint={notice.hint} />
-          {couponCard}
           {rulesCard(config, priceTickets)}
         </PageBody>
       </>
@@ -207,7 +194,7 @@ export default async function CollectionPage() {
               constellations={CONSTELLATIONS}
               dailyObserves={config.dailyObserves}
               priceTickets={priceTickets}
-              couponTickets={coupon.tickets}
+              coupon={coupon}
               setRewards={config.setRewards}
               grantedSets={grantedSets}
               resonanceReward={config.resonanceReward}
@@ -216,7 +203,6 @@ export default async function CollectionPage() {
           </CardContent>
         </Card>
 
-        {couponCard}
         {rulesCard(config, priceTickets)}
       </PageBody>
     </>

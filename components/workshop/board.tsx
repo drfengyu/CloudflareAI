@@ -22,7 +22,9 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CouponCount } from "@/components/activity/coupon-badge";
+import { CouponShop } from "@/components/activity/coupon-shop";
 import { SoundToggle } from "@/components/activity/sound-toggle";
+import type { ActivityCouponView } from "@/lib/activity/coupons";
 import { gameAudio } from "@/lib/game/audio";
 import { formatCredits } from "@/lib/billing/credits";
 import { cnDateString } from "@/lib/date";
@@ -93,9 +95,11 @@ interface WorkshopBoardProps {
   /** 免费休息用完后，再休息一次要花的券数。 */
   restTickets: number;
   couponTickets: number;
+  /** 画面内「券包」页签用：余额与兑换 / 礼包都在工坊里完成。 */
+  coupon: ActivityCouponView;
 }
 
-type TabKey = "adventure" | "team" | "dex";
+type TabKey = "adventure" | "team" | "dex" | "coupon";
 type BattleStatus = "ongoing" | "won" | "lost" | "captured" | "fled" | "ended";
 
 interface BattleFx {
@@ -110,6 +114,7 @@ const TAB_LABEL: Record<TabKey, string> = {
   adventure: "冒险",
   team: "队伍",
   dex: "图鉴",
+  coupon: "券包",
 };
 
 const LINE_BLURB: Record<string, string> = {
@@ -544,6 +549,9 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
         <span className="flex items-center gap-1.5">
           <Coins className="h-4 w-4 text-amber-500" /> 金币 {state.gold}
         </span>
+        <span className="flex items-center gap-1.5">
+          <CouponCount kind="workshop" count={props.coupon.tickets} /> 活动券
+        </span>
         <span className="flex items-center gap-1.5 text-muted-foreground">
           <Map className="h-4 w-4" /> 进图 {state.entersToday}/{props.dailyExplores}
         </span>
@@ -574,7 +582,7 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        {(["adventure", "team", "dex"] as TabKey[]).map((key) => (
+        {(["adventure", "team", "dex", "coupon"] as TabKey[]).map((key) => (
           <button
             key={key}
             type="button"
@@ -656,6 +664,16 @@ export function WorkshopBoard(props: WorkshopBoardProps) {
       ) : null}
 
       {tab === "dex" ? <DexPanel state={state} lines={props.lines} /> : null}
+
+      {tab === "coupon" ? (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            工坊券包：活动券是工坊里唯一的通用货币，进图、道馆与付费休息都按整张扣。
+            兑换或买礼包后本页余额立即刷新。
+          </p>
+          <CouponShop activities={[props.coupon]} />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -13,7 +13,9 @@ import {
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CouponCount } from "@/components/activity/coupon-badge";
+import { CouponEntry } from "@/components/activity/coupon-entry";
 import { formatCredits } from "@/lib/billing/credits";
+import type { ActivityCouponView } from "@/lib/activity/coupons";
 import { cn } from "@/lib/utils";
 import {
   CRAFT_SHARDS,
@@ -41,7 +43,8 @@ interface SkyProps {
   constellations: Constellation[];
   dailyObserves: number;
   priceTickets: number;
-  couponTickets: number;
+  /** 活动券按画面内货币处理：余额与兑换入口都在星图里。 */
+  coupon: ActivityCouponView;
   setRewards: { set: string; reward: number }[];
   grantedSets: string[];
   resonanceReward: number;
@@ -196,7 +199,7 @@ export function CollectionSky(props: SkyProps) {
   const resonanceValue = completedKeys.length * props.resonanceReward;
   const craftCost = CRAFT_SHARDS[craftBrightness];
   const canObserve =
-    state.observesToday < props.dailyObserves && props.couponTickets >= props.priceTickets;
+    state.observesToday < props.dailyObserves && props.coupon.tickets >= props.priceTickets;
 
   function applyState(next: CollectionState) {
     setState(next);
@@ -337,8 +340,9 @@ export function CollectionSky(props: SkyProps) {
             </button>
           );
         })}
-        <span className="ml-auto text-xs text-muted-foreground tabular-nums">
-          星辉 {state.shards} · 今日观星 {state.observesToday} / {props.dailyObserves}
+        <span className="ml-auto flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
+          <CouponCount kind="collection" count={props.coupon.tickets} /> 活动券 · 星辉 {state.shards} ·
+          今日观星 {state.observesToday} / {props.dailyObserves}
         </span>
       </div>
 
@@ -355,14 +359,16 @@ export function CollectionSky(props: SkyProps) {
             </Button>
             <span className="text-sm text-muted-foreground">
               花 <CouponCount kind="collection" count={props.priceTickets} /> 观星一次；可用{" "}
-              {props.couponTickets} 张
+              {props.coupon.tickets} 张
             </span>
             {!canObserve ? (
               <span className="text-xs text-destructive">
-                {state.observesToday >= props.dailyObserves ? "今日观星次数已用完" : "星图券不足，请先兑换"}
+                {state.observesToday >= props.dailyObserves ? "今日观星次数已用完" : "活动券不足，打开下方券包兑换"}
               </span>
             ) : null}
           </div>
+
+          <CouponEntry activity={props.coupon} label="打开券包" />
 
           {active ? (
             <div>

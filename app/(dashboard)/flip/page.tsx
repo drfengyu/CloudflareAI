@@ -12,7 +12,6 @@ import { flipGlobalStats, flipSummary, listMyRounds, FLIP_ROUND_PAGE_SIZE, type 
 import { getActivityCouponView } from "@/lib/activity/coupons";
 import { couponTickets, ticketsForCost } from "@/lib/activity/ticket-math";
 import { CouponCount } from "@/components/activity/coupon-badge";
-import { CouponShop } from "@/components/activity/coupon-shop";
 
 import { PageBody } from "@/components/dashboard/section";
 
@@ -126,17 +125,6 @@ export default async function FlipPage() {
     </Card>
   );
 
-  const couponCard = (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">活动券与珍宝礼包</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <CouponShop activities={[coupon]} />
-      </CardContent>
-    </Card>
-  );
-
   const rulesCard = (
     <Card>
       <CardHeader>
@@ -179,7 +167,6 @@ export default async function FlipPage() {
         <PageHeader title="翻牌夺宝" description="12 张牌一桌 · 翻开一张就结算" />
         <PageBody className="space-y-4">
           <Notice title={notice.title} hint={notice.hint} />
-          {couponCard}
           {trackRounds ? recordsCard : null}
           {rulesCard}
         </PageBody>
@@ -252,7 +239,7 @@ export default async function FlipPage() {
               rewardValidDays={config.rewardValidDays}
               dailyRounds={config.dailyRounds}
               roundsLeft={Math.max(0, config.dailyRounds - roundsToday)}
-              couponTickets={coupon.tickets}
+              coupon={coupon}
               boardTotal={expectation.boardTotal}
               expectedPerRound={expectation.expectedPerRound}
               hitChancePercent={expectation.hitChancePercent}
@@ -261,7 +248,6 @@ export default async function FlipPage() {
           </CardContent>
         </Card>
 
-        {couponCard}
         {recordsCard}
         {rulesCard}
       </PageBody>

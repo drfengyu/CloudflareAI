@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/dashboard/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { requireUser } from "@/lib/usage/meter";
 import { getLotteryConfig } from "@/lib/lottery/config";
 import {
@@ -26,7 +26,6 @@ import {
 import { LotteryRecords } from "./lottery-records";
 import { LotteryWheel, type WheelOuter, type WheelSector } from "./lottery-wheel";
 import { getActivityCouponView } from "@/lib/activity/coupons";
-import { CouponShop } from "@/components/activity/coupon-shop";
 
 import { PageBody } from "@/components/dashboard/section";
 
@@ -146,17 +145,6 @@ export default async function LotteryPage() {
     />
   );
 
-  const couponCard = (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">活动券与珍宝礼包</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <CouponShop activities={[coupon]} />
-      </CardContent>
-    </Card>
-  );
-
   if (windowInfo.status !== "active") {
     const notice =
       windowInfo.status === "disabled"
@@ -172,7 +160,6 @@ export default async function LotteryPage() {
         <PageHeader title="幸运转盘" description="活动券与累抽奖励" />
         <PageBody className="space-y-6">
           <Notice title={notice.title} hint={notice.hint} />
-          {couponCard}
           {recordsCard}
         </PageBody>
       </>
@@ -193,7 +180,7 @@ export default async function LotteryPage() {
           prizeValidDays={config.prizeValidDays}
           milestones={config.milestones}
           totalDraws={myStats.draws}
-          couponTickets={coupon.tickets}
+          coupon={coupon}
           couponUnitCredits={coupon.unitCredits}
           status={windowInfo.status}
           startAtMs={windowInfo.startMs}
@@ -203,7 +190,6 @@ export default async function LotteryPage() {
           luckyThreshold={LUCKY_MISS_THRESHOLD}
           bigWins={bigWins}
         />
-        {couponCard}
         {recordsCard}
       </PageBody>
     </>

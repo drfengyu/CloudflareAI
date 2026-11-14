@@ -3,7 +3,7 @@
 ## 用途
 
 - 系统 / 管理员给单个用户发通知（维护公告、补偿说明等）。
-- 带附件的奖励信：cr 余额、tcr 余额（限时返利 / 充值奖励）、转盘活动券、兑换码、自定义物品 / 凭证。
+- 带附件的奖励信：cr 余额、tcr 余额（限时返利 / 充值奖励）、活动券、兑换码、自定义物品 / 凭证。
   附件不会在发信时入账，用户点「领取」才真正发放。
 - 安全提示：管理员重置密码、用户自助改密、首次设置密码时自动发一封 `security` 信留痕。
 
@@ -18,7 +18,7 @@
 | `kind` | `notice` / `reward` / `security` |
 | `title` / `body` | 主题与正文（列表简述由正文压平后截 60 字生成，不单独存） |
 | `attachmentKind` | `credits` / `temp_credits` / `tickets` / `coupon` / `redemption` / `item`，可空 |
-| `attachment` | JSON：`{"credits":50}`、`{"credits":50,"validDays":30,"topupType":10,"rewardClaimId":"..."}`、`{"count":2}`、`{"kind":"lottery","activityKey":"...","couponName":"...","unitCredits":2000,"tickets":2}`、`{"code":"..."}`、`{"label":"..."}` |
+| `attachment` | JSON：`{"credits":50}`、`{"credits":50,"validDays":30,"topupType":10,"rewardClaimId":"..."}`、`{"count":2}`、`{"activityKind":"trial","activityKey":"...","couponName":"...","unitCredits":200,"tickets":4,"credits":800}`、`{"code":"..."}`、`{"label":"..."}` |
 | `sentBy` | 发信管理员，系统信为 null，`ON DELETE SET NULL` |
 | `readAt` | 第一次打开的毫秒时间戳；清理的起算点 |
 | `claimedAt` | 领取时间；无附件的信恒为 null |
@@ -49,6 +49,8 @@ WHERE id = ? AND userId = ? AND claimedAt IS NULL AND attachmentKind IS NOT NULL
   `tickets` 必须是**正整数**（旧附件没有该字段时按 0 处理并回退到 cr 文案），
   `grantCouponToRound` 按 `tickets × unitCredits` 记券面；领取提示只显示「券名 × N 张」。
   收件箱对 `coupon` 附件有独立渲染分支（v0.38.0 修复此前缺分支导致只显示空白奖励行）。
+  v0.61.0 起 `parseAttachment` 按 `ACTIVITY_KINDS` 校验，六个玩法（含试炼 / 工坊 / 星图）的券信
+  都能正常解析与领取；此前只认转盘 / 翻牌 / 雷电。
 - **兑换码 / 自定义物品**：领取前 `readMessage` 返回空内容，领取后才返回明文，
   避免不点领取也能把码抄走。
 

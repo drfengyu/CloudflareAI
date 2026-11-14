@@ -4,7 +4,6 @@ import { PageBody } from "@/components/dashboard/section";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { WorkshopBoard } from "@/components/workshop/board";
 import { CouponCount } from "@/components/activity/coupon-badge";
-import { CouponShop } from "@/components/activity/coupon-shop";
 import { ActivityWindowBadge } from "@/components/activity/activity-window-badge";
 import { formatCredits } from "@/lib/billing/credits";
 import { getActivityCouponView } from "@/lib/activity/coupons";
@@ -114,17 +113,6 @@ export default async function WorkshopPage() {
     .filter((item) => granted.has(`tier:${item.tier}`))
     .map((item) => item.tier);
 
-  const couponCard = (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">活动券与珍宝礼包</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <CouponShop activities={[coupon]} />
-      </CardContent>
-    </Card>
-  );
-
   if (windowInfo.status !== "active") {
     const notice =
       windowInfo.status === "disabled"
@@ -137,7 +125,6 @@ export default async function WorkshopPage() {
         <PageHeader title="灵宠工坊" description="三选一 · 进图捕捉 · 道馆徽章" />
         <PageBody className="space-y-4">
           <Notice title={notice.title} hint={notice.hint} />
-          {couponCard}
           {rulesCard(config, exploreTickets, gymTickets)}
         </PageBody>
       </>
@@ -242,11 +229,11 @@ export default async function WorkshopPage() {
               gymTickets={gymTickets}
               restTickets={ticketsForCost(config.restCostCredits, config.couponUnitCredits)}
               couponTickets={ownTickets}
+              coupon={coupon}
             />
           </CardContent>
         </Card>
 
-        {couponCard}
         {rulesCard(config, exploreTickets, gymTickets)}
       </PageBody>
     </>

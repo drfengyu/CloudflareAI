@@ -5,6 +5,34 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.61.0] - 2026-11-14
+
+### 变更
+
+- 活动券改为玩法画面内的内置货币：`/trial`、`/workshop`、`/collection`、`/lottery`、
+  `/flip` 五个玩法页撤掉页面级的券商店卡片，券余额与「兑换 / 礼包」入口搬进游戏画面：
+  - 试炼继续用城内的活动券铺子（原有入口），页面不再另挂券商店；
+  - 工坊在 HUD 显示券数，并新增「券包」页签（`components/workshop/board.tsx`）；
+  - 星图 / 翻牌 / 转盘复用新的画面内券包组件 `components/activity/coupon-entry.tsx`，
+    点余额按钮展开 `CouponShop`，转盘为深色盘面单独配色。
+  - 钱包页保留全站券商店，活动中心仍只做进度展示。
+- 存档回档补偿改为全站发放：给所有未删除用户发一封站内信，附件为 4 张当期试炼活动券
+  （`activityKey = 2026-11-12 04:00`，券名「明镜券」，券面 200 cr/张，合计约 800 cr），
+  替代 v0.57.2 按受影响用户发放的 800 cr。消息 id 固定为 `trial-save-fix-20261114:<userId>`，
+  重复执行由 `INSERT OR IGNORE` 丢弃，不会重复发券；
+  脚本 `scripts/send-trial-coupon-compensation.mjs` 默认只统计，`--apply` 才写库。
+
+### 修复
+
+- 站内信附件支持每日试炼 / 灵宠工坊 / 星图共鸣的活动券：`parseAttachment` 原来只认
+  `lottery` / `flip` / `raiden`，试炼券信会被解析成 `null`，用户点领取只会拿到「附件异常」。
+  现在按 `ACTIVITY_KINDS` 校验，与发券侧的 `grantCouponToRound` 口径一致。
+
+### 验证
+
+- `tsc --noEmit`、ESLint 通过（10 个改动文件 0 error / 0 warning）；补偿脚本已 dry-run
+  核对轮次与人数（7 人）后 `--apply` 写入，复查 7 封、重跑仍为 7 封。
+
 ## [0.60.0] - 2026-11-14
 
 ### 修复

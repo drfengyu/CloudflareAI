@@ -9,6 +9,8 @@ import { openFlipRound, revealFlipCard } from "@/app/(dashboard)/flip/actions";
 import { formatCredits } from "@/lib/billing/credits";
 import type { FlipOutcome } from "@/lib/flip/store";
 import { CouponCount } from "@/components/activity/coupon-badge";
+import { CouponEntry } from "@/components/activity/coupon-entry";
+import type { ActivityCouponView } from "@/lib/activity/coupons";
 import { Money } from "@/components/currency/money";
 import { FlipCard } from "./flip-card";
 
@@ -24,8 +26,8 @@ export interface FlipBoardProps {
   /** 今日还能开几局。 */
   roundsLeft: number;
   dailyRounds: number;
-  /** 当期活动券可用整张数，开局只扣对应活动券。 */
-  couponTickets: number;
+  /** 当期活动券视图：牌桌内的券包入口直接复用，余额与兑换都在画面里。 */
+  coupon: ActivityCouponView;
   /** 12 格金额合计，用来解释「期望 = 合计 / 张数」。 */
   boardTotal: number;
   expectedPerRound: number;
@@ -81,7 +83,8 @@ export function FlipBoard(props: FlipBoardProps) {
     router.refresh();
   }
 
-  const insufficient = props.couponTickets < props.priceTickets;
+  const couponTickets = props.coupon.tickets;
+  const insufficient = couponTickets < props.priceTickets;
 
   return (
     <div className="space-y-4">
@@ -121,11 +124,13 @@ export function FlipBoard(props: FlipBoardProps) {
         </div>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground tabular-nums">
           <span className="inline-flex items-center gap-1">
-            活动券 <CouponCount kind="flip" count={props.couponTickets} />
+            活动券 <CouponCount kind="flip" count={couponTickets} />
           </span>
           <span>· 今日剩余 {props.roundsLeft} / {props.dailyRounds} 局</span>
         </div>
       </div>
+
+      <CouponEntry activity={props.coupon} />
 
       {/* 12 张排成 2 行 6 列：牌桌要一眼看全，不该被拉成占满整屏的大卡片。 */}
       <div className="mx-auto grid w-full max-w-2xl grid-cols-4 gap-2 sm:grid-cols-6">
@@ -161,7 +166,7 @@ export function FlipBoard(props: FlipBoardProps) {
         ) : null}
         {insufficient && props.roundsLeft > 0 ? (
           <span className="text-xs text-muted-foreground">
-            活动券不足，还差 {props.priceTickets - props.couponTickets} 张，请在上方先兑换。
+            活动券不足，还差 {props.priceTickets - couponTickets} 张，先在下方券包兑换。
           </span>
         ) : null}
       </div>

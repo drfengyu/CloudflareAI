@@ -11,7 +11,7 @@ import {
 } from "@/lib/db/schema";
 import { getLotteryConfig } from "@/lib/lottery/config";
 import { currentActivityKey } from "@/lib/lottery/prize-math";
-import { couponNameFor, grantCouponToRound } from "@/lib/activity/coupons";
+import { ACTIVITY_KINDS, couponNameFor, grantCouponToRound } from "@/lib/activity/coupons";
 
 export type MessageKind = "notice" | "reward" | "security";
 export type AttachmentKind =
@@ -144,8 +144,8 @@ function parseAttachment(row: {
         rewardClaimId: typeof data.rewardClaimId === "string" ? data.rewardClaimId : undefined,
       };
     case "coupon": {
-      const kind = String(data.activityKind ?? "");
-      if (kind !== "lottery" && kind !== "flip" && kind !== "raiden") return null;
+      const kind = String(data.activityKind ?? "") as ActivityKind;
+      if (!ACTIVITY_KINDS.includes(kind)) return null;
       return {
         kind: "coupon",
         activityKind: kind,

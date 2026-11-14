@@ -13,6 +13,8 @@ import { calculateLuckyChance, LUCKY_CHANCE_CAP_PERCENT, LUCKY_CHANCE_STEP_PERCE
 import type { BigWinRecord } from "@/lib/lottery/records";
 import { ticketsForCost } from "@/lib/activity/ticket-math";
 import { CouponCount } from "@/components/activity/coupon-badge";
+import { CouponEntry } from "@/components/activity/coupon-entry";
+import type { ActivityCouponView } from "@/lib/activity/coupons";
 
 /** 外沿还有两道发光环，viewBox 要比最大半径留出这点余量，否则环带会被裁掉。 */
 const SIZE = 400;
@@ -81,8 +83,8 @@ export interface LotteryWheelProps {
   /** 累抽档位；`tickets` 是抽奖等价（1 = 一次抽奖价值），展示时折算成活动券张数。 */
   milestones: { draws: number; tickets: number }[];
   totalDraws: number;
-  /** 当期活动券可用整张数；抽奖全部按整张扣它。 */
-  couponTickets: number;
+  /** 当期活动券视图：余额、扣费与画面内券包入口都从这里取。 */
+  coupon: ActivityCouponView;
   /** 1 张活动券 = 多少 cr（活动设置里的兑换单价）。 */
   couponUnitCredits: number;
   status: ActivityStatus;
@@ -332,12 +334,13 @@ export function LotteryWheel(props: LotteryWheelProps) {
   const [firstNeedleAnimated, setFirstNeedleAnimated] = useState(true);
   const [firstNeedleMs, setFirstNeedleMs] = useState(SPIN_OUTER_MS);
   const [phase, setPhase] = useState<"idle" | "inner" | "outer" | "done">("idle");
-  const [couponTickets, setCouponTickets] = useState(props.couponTickets);
+  const ticketBalance = props.coupon.tickets;
+  const [couponTickets, setCouponTickets] = useState(ticketBalance);
   /** revalidate 后 props 带服务端最新余量（如刚买完礼包），渲染期对齐一次，不放进 effect。 */
-  const [syncedCouponTickets, setSyncedCouponTickets] = useState(props.couponTickets);
-  if (props.couponTickets !== syncedCouponTickets) {
-    setSyncedCouponTickets(props.couponTickets);
-    setCouponTickets(props.couponTickets);
+  const [syncedCouponTickets, setSyncedCouponTickets] = useState(ticketBalance);
+  if (ticketBalance !== syncedCouponTickets) {
+    setSyncedCouponTickets(ticketBalance);
+    setCouponTickets(ticketBalance);
   }
   const [spokes, setSpokes] = useState<DrawOutcome[]>([]);
   const [results, setResults] = useState<DrawOutcome[] | null>(null);
@@ -789,6 +792,8 @@ export function LotteryWheel(props: LotteryWheelProps) {
             </button>
           </div>
 
+          <CouponEntry activity={props.coupon} tone="dark" label="兑换活动券" className="mt-2" />
+
           {/* 保底进度条：连续未中达阈值后外圈概率线性提升（每多1次+0.5%，上限35%） */}
           <div className="mt-3 rounded-lg border border-white/10 bg-white/5 p-3">
             <div className="flex items-center justify-between text-[11px]">
@@ -1025,7 +1030,7 @@ export function LotteryWheel(props: LotteryWheelProps) {
               <li>转到倒扣时按 cr 扣除，本金可能因此扣成负数。</li>
               <li>
                 抽奖按整张扣当期活动券（单抽 {couponCostFor(1)} 张、10 连 {couponCostFor(10)} 张）；
-                外圈活动券档与累抽档位发的是同一种活动券。活动券在下方「活动券与珍宝礼包」按 1 张 ={" "}
+                外圈活动券档与累抽档位发的是同一种活动券。活动券在盘面下的券包里按 1 张 ={" "}
                 {formatCredits(props.couponUnitCredits)} cr 兑换，仅限本轮活动使用，不折算回货币。
               </li>
             </ul>
