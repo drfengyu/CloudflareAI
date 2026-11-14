@@ -21,7 +21,7 @@ export const TRIAL_MAX_FLOORS = 7;
 export interface TrialTier {
   /** 攻克多少处节点起；同节点数取最高档。 */
   correct: number;
-  /** 该档 tcr。 */
+  /** 该档发放的游戏金币。 */
   reward: number;
 }
 
@@ -34,13 +34,13 @@ export interface TrialConfig {
   questionCount: number;
   /** 1 张活动券兑换所需的 cr（券面单价）。 */
   couponUnitCredits: number;
-  /** 剧情通关奖励 tcr 的有效天数。 */
+  /** 钱庄存金折成 tcr 的有效天数。 */
   rewardValidDays: number;
   /** 钱庄存金：多少行军金币折 1 tcr。 */
   bankGoldPerTcr: number;
   /** 每次行军最多存多少金币（按存金价向下取整）。 */
   bankMaxGoldPerRun: number;
-  /** 攻克节点数 → tcr 档位（只有走完当前剧情才发）。 */
+  /** 攻克节点数 → 游戏金币档位（只有走完当前剧情才发）。 */
   tiers: TrialTier[];
 }
 
@@ -54,10 +54,10 @@ export const DEFAULT_TRIAL_CONFIG: TrialConfig = {
   bankGoldPerTcr: 100,
   bankMaxGoldPerRun: 600,
   tiers: [
-    { correct: 2, reward: 1 },
-    { correct: 3, reward: 2 },
-    { correct: 4, reward: 4 },
-    { correct: 5, reward: 8 },
+    { correct: 2, reward: 100 },
+    { correct: 3, reward: 200 },
+    { correct: 4, reward: 400 },
+    { correct: 5, reward: 800 },
   ],
 };
 
@@ -82,7 +82,7 @@ export function sanitizeTrialTiers(raw: unknown, questionCount: number): TrialTi
       const row = (item && typeof item === "object" ? item : {}) as Partial<TrialTier>;
       return {
         correct: Math.trunc(Number(row.correct)),
-        reward: round2(Math.max(0, Number(row.reward) || 0)),
+        reward: Math.min(9_999_999, Math.trunc(Math.max(0, Number(row.reward) || 0))),
       };
     })
     .filter((row) => {
@@ -149,12 +149,12 @@ export function trialActivityKey(config: TrialConfig): string | null {
   return config.startAt.trim();
 }
 
-/** 命中档位：通关节点数达到的最高一档；调用方只在走完当前剧情时使用。 */
-export function trialRewardFor(config: TrialConfig, correct: number): number {
+/** 命中档位：通关节点数达到的最高一档，返回应发放的游戏金币；调用方只在走完当前剧情时使用。 */
+export function trialGoldFor(config: TrialConfig, correct: number): number {
   const safe = Math.max(0, Math.trunc(Number(correct) || 0));
-  let reward = 0;
+  let gold = 0;
   for (const tier of config.tiers) {
-    if (safe >= tier.correct) reward = tier.reward;
+    if (safe >= tier.correct) gold = tier.reward;
   }
-  return round2(reward);
+  return gold;
 }

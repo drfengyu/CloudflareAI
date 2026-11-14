@@ -1038,7 +1038,7 @@ export async function updateTrialSettings(formData: {
     correct: Math.trunc(
       requireNumber(tier?.correct, `平定奖励第 ${index + 1} 行的节点数`, 1, questionCount),
     ),
-    reward: requireNumber(tier?.reward, `平定奖励第 ${index + 1} 行的 tcr`, 0, 1_000_000),
+    reward: Math.trunc(requireNumber(tier?.reward, `平定奖励第 ${index + 1} 行的金币`, 0, 1_000_000)),
   }));
   if (tiers.length === 0) throw new Error("至少要配一个平定奖励档位");
 

@@ -11,7 +11,7 @@ import { requireUser } from "@/lib/usage/meter";
 import {
   trialActivityKey,
   trialActivityWindow,
-  trialRewardFor,
+  trialGoldFor,
 } from "@/lib/trial/config";
 import { getTrialConfig } from "@/lib/trial/settings";
 import {
@@ -121,11 +121,11 @@ export default async function TrialPage() {
             也能按同一券面价（1 张 = {formatCredits(config.couponUnitCredits)} cr ≈ 同等金币）换成活动券当场使用。
           </li>
           <li>
-            平定一处地方就<b>自动结算</b>并发通关奖励（不用再手动收兵）：
+            平定一处地方就<b>自动结算</b>并发平定奖励（不用再手动收兵）：
             {config.tiers
-              .map((tier) => ` 攻破 ${tier.correct} 座营寨 ${formatCredits(trialRewardFor(config, tier.correct))} tcr`)
+              .map((tier) => ` 攻破 ${tier.correct} 座营寨 ${formatCredits(trialGoldFor(config, tier.correct))} 金`)
               .join("，")}
-            ；按达到的最高档发放，奖励 tcr {config.rewardValidDays} 天内有效。未平定不发。
+            ；按达到的最高档发放，金币直接进剧情存档，未平定不发。
           </li>
           <li>
             城镇钱庄两条路：每 {config.bankGoldPerTcr} 金存成 1 tcr（每趟最多存{" "}
@@ -165,8 +165,15 @@ export default async function TrialPage() {
                   <span>
                     {row.status === "active" ? "行军中" : `攻破 ${row.correct}/${row.questionCount} 座营寨`}
                   </span>
-                  <span className={row.reward > 0 ? "font-medium text-success" : "text-muted-foreground"}>
-                    {row.reward > 0 ? `+${formatCredits(row.reward)} tcr` : "无奖励"}
+                  <span className="flex items-center gap-2">
+                    {row.clearGold > 0 ? (
+                      <span className="font-medium text-success">+{formatCredits(row.clearGold)} 金</span>
+                    ) : null}
+                    {row.reward > 0 ? (
+                      <span className="font-medium text-success">+{formatCredits(row.reward)} tcr</span>
+                    ) : row.clearGold > 0 ? null : (
+                      <span className="text-muted-foreground">无奖励</span>
+                    )}
                   </span>
                 </span>
               </div>
@@ -295,7 +302,7 @@ export default async function TrialPage() {
                 maxGoldPerRun: config.bankMaxGoldPerRun,
               }}
               nodeCount={config.questionCount}
-              maxReward={trialRewardFor(config, config.questionCount)}
+              maxReward={trialGoldFor(config, config.questionCount)}
               rewardValidDays={config.rewardValidDays}
             />
           </CardContent>

@@ -14,7 +14,7 @@ import {
   TOPUP_TYPE_TRIAL,
   trialActivityKey,
   trialActivityWindow,
-  trialRewardFor,
+  trialGoldFor,
   type TrialConfig,
 } from "./config";
 import { SAGA_CHAPTERS, SAGA_ITEM_BY_ID } from "./saga/data";
@@ -318,10 +318,10 @@ export interface TrialSettlement {
   already: boolean;
   cleared: number;
   total: number;
-  /** 本次到账的 tcr 合计 = 通关奖励 + 钱庄存金。 */
+  /** 本次到账的 tcr 合计（只有钱庄存金折成的部分会进钱包）。 */
   reward: number;
-  /** 其中平定此处的通关奖励。 */
-  clearReward: number;
+  /** 其中平定此处的奖励，直接写进剧情存档的金币。 */
+  clearGold: number;
   /** 收兵时存进钱庄、已经折成 tcr 的金币。 */
   bankGold: number;
   /** 钱庄存金换到的 tcr。 */
@@ -339,7 +339,7 @@ function settlementFromStored(run: SagaRun, cleared: number, total: number): Tri
     cleared,
     total,
     reward: 0,
-    clearReward: 0,
+    clearGold: result?.clearGold ?? 0,
     bankGold,
     bankTcr: bankCreditsForGold(bankGold, run.bank),
     durationMs: 0,
@@ -350,7 +350,7 @@ function settlementFromStored(run: SagaRun, cleared: number, total: number): Tri
 
 /**
  * 收兵：先条件更新占住这次行军，再发奖；发奖失败把状态改回 active 让用户能重试。
- * tcr 只在平定此处（攻克全章、推进剧情）时发放，且主线走完后不再重复发。
+ * 平定奖励直接加进存档金币；钱庄存金才折成 tcr 发到钱包，且主线走完后不再重复发。
  */
 export async function submitTrialRun(input: {
   userId: string;
@@ -374,11 +374,9 @@ export async function submitTrialRun(input: {
 
   if (row.status !== "active") {
     const stored = settlementFromStored(run, Number(row.correct), Number(row.questionCount));
-    const total = Number(row.rewardCredits ?? 0);
     return {
       ...stored,
-      reward: total,
-      clearReward: Math.max(0, Math.round((total - stored.bankTcr) * 100) / 100),
+      reward: Number(row.rewardCredits ?? 0),
       durationMs: Number(row.durationMs ?? 0),
     };
   }
@@ -389,13 +387,18 @@ export async function submitTrialRun(input: {
   const commands = sanitizeSagaCommands(input.commands.slice(0, SAGA_MAX_COMMANDS));
   const settled = settleSagaRun(run, commands);
   const cleared = settled.cleared;
-  const clearReward =
+  const clearGold =
     settled.victory && run.startSave.stats.wins < SAGA_CHAPTERS.length
-      ? trialRewardFor(input.config, cleared)
+      ? trialGoldFor(input.config, cleared)
       : 0;
+  // 平定奖励直接落进剧情存档，下一处地方买装备 / 换券都能用，不按有效期作废。
+  if (clearGold > 0) {
+    settled.endSave.gold = Math.min(9_999_999, settled.endSave.gold + clearGold);
+    settled.result.clearGold = clearGold;
+  }
   const bankGold = settled.result.bankedGold;
   const bankTcr = bankCreditsForGold(bankGold, run.bank);
-  const reward = Math.round((clearReward + bankTcr) * 100) / 100;
+  const reward = bankTcr;
   const status = "scored";
   const storedRun: SagaRun = {
     ...run,
@@ -444,7 +447,7 @@ export async function submitTrialRun(input: {
           cleared: 0,
           total: run.nodes.length,
           reward: 0,
-          clearReward: 0,
+          clearGold: 0,
           bankGold: 0,
           bankTcr: 0,
           durationMs: 0,
@@ -455,22 +458,17 @@ export async function submitTrialRun(input: {
     return {
       ...fallback,
       reward: totalReward,
-      // 合计里先扣掉钱庄那部分，剩下的才是通关奖励；旧数据没有 bankTcr，正好全额算通关。
-      clearReward: Math.max(0, Math.round((totalReward - fallback.bankTcr) * 100) / 100),
       durationMs: Number(stored?.durationMs ?? 0),
     };
   }
 
-  if (reward > 0) {
+  if (bankTcr > 0) {
     try {
-      const parts: string[] = [];
-      if (clearReward > 0) parts.push(`平定${settled.result.chapterName || "此地"}奖励`);
-      if (bankTcr > 0) parts.push(`钱庄存金 ${bankGold} 金`);
       await grantTempCredits({
         userId: input.userId,
-        amount: reward,
+        amount: bankTcr,
         topupType: TOPUP_TYPE_TRIAL,
-        description: `三国讨逆传 ${parts.join(" + ")}`,
+        description: `三国讨逆传 钱庄存金 ${bankGold} 金`,
         validDays: input.config.rewardValidDays,
       });
     } catch (error) {
@@ -487,7 +485,7 @@ export async function submitTrialRun(input: {
     cleared,
     total: run.nodes.length,
     reward,
-    clearReward,
+    clearGold,
     bankGold,
     bankTcr,
     durationMs,
@@ -857,7 +855,10 @@ export interface TrialHistoryRow {
   correct: number;
   /** 这趟行军的总节点数。 */
   questionCount: number;
+  /** 钱庄存金折成的 tcr。 */
   reward: number;
+  /** 平定奖励金币（已进存档）。 */
+  clearGold: number;
   startedAt: Date;
   status: string;
 }
@@ -875,6 +876,7 @@ export async function listTrialRuns(
       correct: trialRuns.correct,
       questionCount: trialRuns.questionCount,
       rewardCredits: trialRuns.rewardCredits,
+      questions: trialRuns.questions,
       startedAt: trialRuns.startedAt,
       status: trialRuns.status,
     })
@@ -887,6 +889,7 @@ export async function listTrialRuns(
     correct: Number(row.correct),
     questionCount: Number(row.questionCount),
     reward: Number(row.rewardCredits),
+    clearGold: Number(parseSagaRun(row.questions)?.result?.clearGold ?? 0),
     startedAt: new Date(row.startedAt),
     status: row.status,
   }));

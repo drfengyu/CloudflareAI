@@ -159,7 +159,9 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
             onChange={(e) => setValidDays(e.target.value)}
             className={FIELD_CLASS}
           />
-          <p className="mt-1 text-xs text-muted-foreground">奖励发 tcr，到期作废</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            钱庄存金折成的 tcr 到期作废；平定奖励发游戏金币，不过期
+          </p>
         </div>
       </div>
 
@@ -192,12 +194,12 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
 
       <div>
         <div className="flex items-center justify-between gap-2">
-          <label className="block text-sm font-medium">平定一处地方的奖励档位（tcr）</label>
+          <label className="block text-sm font-medium">平定一处地方的奖励档位（金）</label>
           <Button
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => setTiers((prev) => [...prev, { correct: "1", reward: "1" }])}
+            onClick={() => setTiers((prev) => [...prev, { correct: "1", reward: "100" }])}
           >
             <Plus className="h-3.5 w-3.5" />
             加一档
@@ -227,7 +229,7 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
                 step="1"
                 value={row.reward}
                 onChange={(e) => patchTier(index, "reward", e.target.value)}
-                placeholder="tcr"
+                placeholder="金"
                 className={FIELD_CLASS}
               />
               <Button
@@ -251,9 +253,9 @@ export function TrialForm({ initialConfig }: { initialConfig: TrialConfig }) {
         </p>
         <p className="mt-1 text-muted-foreground">
           {preview.tiers
-            .map((tier) => `攻克 ${tier.correct} 处 ${formatCredits(tier.reward)} tcr`)
+            .map((tier) => `攻克 ${tier.correct} 处 ${formatCredits(tier.reward)} 金`)
             .join(" · ")}
-          ；平定一处地方的奖励 {formatCredits(preview.tiers[preview.tiers.length - 1]?.reward ?? 0)} tcr。
+          ；平定一处地方的奖励 {formatCredits(preview.tiers[preview.tiers.length - 1]?.reward ?? 0)} 金。
         </p>
         <p className="mt-1 text-muted-foreground">
           钱庄：{preview.bankGoldPerTcr} 金 = 1 tcr，每趟最多存 {preview.bankMaxGoldPerRun} 金；

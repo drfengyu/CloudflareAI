@@ -5,6 +5,22 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.63.0] - 2026-11-14
+
+### 变更
+
+- 平定一处地方的档位奖励从 tcr 改为游戏金币：`TrialTier.reward` 与 `trialGoldFor`
+  改按金币解释，结算时直接加进剧情存档 `endSave.gold`（上限 9,999,999），
+  随存档带进下一处地方，不再过期；默认档位 2/3/4/5 座营 → 100/200/400/800 金。
+- 钱庄存金仍在平定结算时折成 tcr 进钱包（`topup.type = 17`），
+  `rewardValidDays` 只作用于这部分；战报拆成「平定奖励 +X 金」与「钱庄存金 X 金 → +Y tcr」。
+- 行军录同时展示本趟的金币平定奖励与 tcr 存金到账；后台档位、试炼规则与面板文案统一改为「金」。
+
+### 验证
+
+- `tests/trial-saga.test.ts` 更新档位断言（100 / 400 / 800 金）并新增金币按整数截断用例；
+  `tsc --noEmit`、ESLint 通过。
+
 ## [0.62.0] - 2026-11-14
 
 ### 变更

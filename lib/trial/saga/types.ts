@@ -297,6 +297,8 @@ export interface SagaRunResult {
   chapterAfter: number;
   chapterName: string;
   goldGained: number;
+  /** 平定此处额外加进存档的金币；存档里已含这笔，战报单独展示用。 */
+  clearGold?: number;
   expGained: number;
   /** 本次行军在钱庄存下的金币；收兵时按 bank.ts 的汇率折成 tcr。 */
   bankedGold: number;

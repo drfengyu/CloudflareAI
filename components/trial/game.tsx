@@ -2010,7 +2010,7 @@ export function TrialGame(props: TrialGameProps) {
                   <section className="space-y-2 rounded-lg border border-border p-2.5">
                     <p className="text-sm font-medium">金币 → tcr</p>
                     <p className="text-xs text-muted-foreground">
-                      每 {bank.goldPerTcr} 金换 1 tcr（按整档收），平定此地时与通关奖励一起到账；
+                      每 {bank.goldPerTcr} 金换 1 tcr（按整档收），平定此地自动结算时折成 tcr 进钱包；
                       每次行军最多存 {bank.maxGoldPerRun} 金，本次还可存 {bankRoom} 金。
                     </p>
                     <div className="flex flex-wrap items-end gap-2">
@@ -3062,7 +3062,7 @@ function CampPanel({
           敌将：{target.enemies.map((enemy) => `${enemy.name}（Lv${enemy.level}，兵力 ${enemy.troops}）`).join("、")}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          战利品约 {target.rewardGold} 金 / {target.rewardExp} 经验；平定此处最高 {formatCredits(maxReward)} tcr（未平定不发）。
+          战利品约 {target.rewardGold} 金 / {target.rewardExp} 经验；平定此处最高 {formatCredits(maxReward)} 金（未平定不发）。
         </p>
         {cleared ? (
           <p className="mt-2 text-xs text-success">此营已破，无需再攻。</p>
@@ -3169,7 +3169,7 @@ function ArmyPanel({
         <p className="mt-1 text-xs text-muted-foreground">{chapter?.blurb}</p>
         <p className="mt-2 text-xs text-muted-foreground">
           行军大地图上可自由走位，先打哪座营由你决定 · 已破 {cleared.length}/{total} 座，
-          当前可攻 {open.length} 座 · 平定此地最高 {formatCredits(maxReward)} tcr
+          当前可攻 {open.length} 座 · 平定此地最高 {formatCredits(maxReward)} 金
         </p>
       </div>
 
@@ -3296,8 +3296,8 @@ function SettlementCard({
             <p className="tabular-nums font-medium">+{result?.expGained ?? 0}</p>
           </div>
           <div className="rounded-lg border border-border p-2">
-            <p className="text-xs text-muted-foreground">通关奖励</p>
-            <p className="tabular-nums font-medium">{formatCredits(settlement.clearReward)} tcr</p>
+            <p className="text-xs text-muted-foreground">平定奖励</p>
+            <p className="tabular-nums font-medium">+{formatCredits(settlement.clearGold)} 金</p>
           </div>
         </div>
         {settlement.bankTcr > 0 ? (
@@ -3306,7 +3306,7 @@ function SettlementCard({
             <span className="font-medium text-primary">
               {settlement.bankGold} 金 → +{formatCredits(settlement.bankTcr)} tcr
             </span>
-            <span className="ml-2 text-xs text-muted-foreground">与通关奖励一起到账</span>
+            <span className="ml-2 text-xs text-muted-foreground">折成 tcr 进钱包，按有效期到账</span>
           </p>
         ) : null}
         {result && result.encounters > 0 ? (
@@ -3350,7 +3350,7 @@ function SettlementCard({
         ) : null}
         {retry ? (
           <p className="mt-2 text-xs text-muted-foreground">
-            未平定此处不发通关奖励；钱庄存金仍会到账。等级、金币、装备与招降武将都保留，整备后可再走一遍。
+            未平定此处不发平定金币；钱庄存金折成的 tcr 仍会到账。等级、金币、装备与招降武将都保留，整备后可再走一遍。
           </p>
         ) : null}
         <div className="mt-4 flex flex-wrap gap-2">

@@ -4,7 +4,7 @@ import {
   DEFAULT_TRIAL_CONFIG,
   TRIAL_MAX_FLOORS,
   sanitizeTrialConfig,
-  trialRewardFor,
+  trialGoldFor,
   type TrialConfig,
 } from "../lib/trial/config";
 import { SAGA_CHAPTERS, SAGA_GENERAL_BY_ID, SAGA_TRAITS, SAGA_TRAIT_BY_ID, tacticsFor, traitStats } from "../lib/trial/saga/data";
@@ -760,16 +760,21 @@ test("讨逆配置：节点数与档位互相约束，脏值退回可用默认",
   const fallback = sanitizeTrialConfig(null);
   assert.equal(fallback.questionCount, DEFAULT_TRIAL_CONFIG.questionCount);
   assert.equal(sanitizeTrialConfig({ questionCount: 1 }).questionCount, 2);
+  // 金币按整数发，小数向下截断。
+  assert.deepEqual(
+    sanitizeTrialConfig({ tiers: [{ correct: 3, reward: 2.9 }] }).tiers,
+    [{ correct: 3, reward: 2 }],
+  );
 });
 
-test("平定奖励取攻破营寨数的最高一档", () => {
+test("平定奖励按攻破营寨数的最高一档发金币", () => {
   const config = trial();
-  assert.equal(trialRewardFor(config, 0), 0);
-  assert.equal(trialRewardFor(config, 1), 0);
-  assert.equal(trialRewardFor(config, 2), 1);
-  assert.equal(trialRewardFor(config, 4), 4);
-  assert.equal(trialRewardFor(config, 5), 8);
-  assert.equal(trialRewardFor(config, 99), 8);
+  assert.equal(trialGoldFor(config, 0), 0);
+  assert.equal(trialGoldFor(config, 1), 0);
+  assert.equal(trialGoldFor(config, 2), 100);
+  assert.equal(trialGoldFor(config, 4), 400);
+  assert.equal(trialGoldFor(config, 5), 800);
+  assert.equal(trialGoldFor(config, 99), 800);
 });
 
 test("平定最后一处地方：剧情停在终点，不越界到不存在的下一处", () => {
