@@ -534,8 +534,18 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.76.3（2026-11-15，战斗 HUD 与操作提示）
+**当前版本**：v0.76.4（2026-11-15，战斗 HUD 精简与整轮战报）
 **下一版本**：待定
+
+- v0.76.4 三国讨逆传战斗界面收口：`paintBattleTeams`（顶部两军面板与回合窄条）整体移除，
+  兵力数字并入每名武将头顶小签「名字[·守/鼓/乱] 攻N 兵x/y」，`unitSlots` 纵向范围
+  上移到 152~390，飘字上边界改为常量 58；战斗栏加宽到 `max-w-6xl`，战报改为整轮展示
+  （动画期 `anim.events`，结束后 `battle.lastEvents`，长回合滚动）。另新增幂等脚本
+  `scripts/send-trial-save-loss-coupon-20261115.mjs`，给活跃用户发 4 张当期明镜券
+  （800 cr）的存档丢失补偿站内信；生产 D1 已写入 8 封、重复执行 changes=0。
+  `tests/trial-saga.test.ts` 点选用例随队列上移更新坐标，55/55 通过；
+  `tsc` 0 错误、改动文件 ESLint 0/0、`npm run build` 通过。
+  本机无 `.env.local`，页面未实测。
 
 - v0.76.3 三国讨逆传战斗 HUD 与操作提示：行军大地图与城中街景撤掉屏幕方向键与
   「交互」按钮，统一方向键 / WASD 行走 + 回车交互（触屏仍可点地面）；战斗兵力条从

@@ -1444,6 +1444,14 @@ export function TrialGame(props: TrialGameProps) {
         : "even";
     return { turnOrder, focusUnit, actionText, targetName, playerFormation, enemyFormation, counter };
   })();
+  // 战报按「一轮次」完整展示：动画期间是这一轮全部事件，结束后沿用上一轮。
+  const battleRoundEvents = battle
+    ? anim && anim.events.length > 0
+      ? anim.events
+      : battle.battle.lastEvents.length > 0
+        ? battle.battle.lastEvents
+        : battle.battle.log.slice(-3)
+    : [];
   const panelTitle =
     panel === "dex"
       ? "武将图鉴"
@@ -1602,7 +1610,7 @@ export function TrialGame(props: TrialGameProps) {
 
         {battle && battleView ? (
           <div className="border-t border-amber-200/20 bg-[#14110d] px-2 py-2 sm:px-3">
-            <div className="mx-auto w-full max-w-5xl text-xs text-amber-50">
+            <div className="mx-auto w-full max-w-6xl text-xs text-amber-50">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 px-0.5 pb-2">
                 <span className="flex min-w-0 items-center gap-2">
                   <span className="truncate text-sm font-medium">{battle.battle.nodeName}</span>
@@ -1767,18 +1775,27 @@ export function TrialGame(props: TrialGameProps) {
                 </div>
               ) : null}
 
-              {/* 战报：动画中的事件优先，平时留最近三条 */}
-              <div className="mt-2 min-h-[30px] rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-amber-100/80">
-                {(anim && anim.events.length > 0 ? anim.events.slice(-3) : battle.battle.log.slice(-3)).map(
-                  (event, index) => (
-                    <p key={index} className="truncate">
+              {/* 战报：一整轮的出招逐条列出，不再只留最近三条 */}
+              <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 font-mono text-[11px] leading-relaxed text-amber-100/80">
+                <p className="text-[10px] text-white/40">
+                  {anim
+                    ? "本轮战报 · 逐条播报中"
+                    : battleRoundEvents.length > 0
+                      ? `上一回合 · ${battleRoundEvents.length} 条`
+                      : ""}
+                </p>
+                <div className="max-h-44 space-y-0.5 overflow-y-auto overscroll-contain pr-1">
+                  {battleRoundEvents.map((event, index) => (
+                    <p key={index} className="whitespace-pre-wrap">
                       {event.text}
                     </p>
-                  ),
-                )}
-                {battle.battle.log.length === 0 && !anim ? (
-                  <p className="text-white/45">点画布上的敌将可设为目标；逐将选好战术后执行，撤退只退出这一场。</p>
-                ) : null}
+                  ))}
+                  {battle.battle.log.length === 0 && !anim ? (
+                    <p className="text-white/45">
+                      点画布上的敌将可设为目标；逐将选好战术后执行，撤退只退出这一场。
+                    </p>
+                  ) : null}
+                </div>
               </div>
 
               <div className="mt-2 space-y-1.5">

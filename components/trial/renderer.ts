@@ -1330,9 +1330,9 @@ function unitSlots(count: number, side: "player" | "enemy", k = 1, seed = 0): Un
   const scale =
     count >= 5 ? 0.52 : count === 4 ? 0.58 : count === 3 ? 0.66 : count === 2 ? 0.76 : 0.86;
   const rand = battleRandom(seed ^ (side === "player" ? 0x9e3779b9 : 0x85ebca6b));
-  // 队伍从上往下排，给顶部两军面板、头顶血条和底部战报浮层都留出空档。
-  const top = 232;
-  const bottom = 356;
+  // 顶部不再挂两军面板，队列整体上移，给头顶血条与名字签留出空档。
+  const top = 152;
+  const bottom = 390;
   const step = count > 1 ? Math.min(56, (bottom - top) / (count - 1)) : 0;
   const start = top + ((bottom - top) - step * (count - 1)) / 2;
   for (let i = 0; i < count; i++) {
@@ -1632,104 +1632,6 @@ function findUnit(
   return null;
 }
 
-/**
- * 顶部两军兵力面板：左右各占半边，名字、状态、攻击力与残兵数逐行排开。
- * 兵力条已经搬到每名武将头顶，面板只留数字，免得同一份血量画两遍。
- */
-function paintBattleTeams(
-  ctx: CanvasRenderingContext2D,
-  battle: SagaBattleState,
-  target: number,
-  view: SagaView,
-): void {
-  const panelW = view.w / 2 - 64;
-  const leftX = 12;
-  const rightX = view.w / 2 + 52;
-  const top = 12;
-  const rows = Math.max(battle.party.length, battle.enemies.length);
-  const panelH = 32 + rows * 22;
-  const paintSide = (
-    units: typeof battle.party,
-    side: "player" | "enemy",
-    x: number,
-  ): void => {
-    ctx.fillStyle = "rgba(14,13,11,0.8)";
-    roundRect(ctx, x, top, panelW, panelH, 6);
-    ctx.fill();
-    ctx.strokeStyle = side === "player" ? "rgba(202,161,90,0.65)" : "rgba(190,110,90,0.65)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-    const total = units.reduce((sum, unit) => sum + Math.max(0, unit.troops), 0);
-    ctx.textAlign = "left";
-    ctx.font = uiFont(13);
-    ctx.fillStyle = side === "player" ? "#ecd39a" : "#f0c9b4";
-    const title =
-      side === "player"
-        ? `我军 · ${battle.nodeName}`
-        : `敌军${battle.boss ? " · 主将" : ""}`;
-    ctx.fillText(title.slice(0, 22), x + 12, top + 20);
-    ctx.textAlign = "right";
-    ctx.font = uiFont(11);
-    ctx.fillStyle = "rgba(236,213,171,0.62)";
-    ctx.fillText(`总兵力 ${Math.round(total)}`, x + panelW - 12, top + 20);
-
-    units.forEach((unit, index) => {
-      const rowY = top + 30 + index * 22;
-      if (side === "enemy" && index === target && !unit.downed) {
-        ctx.fillStyle = "rgba(240,190,110,0.16)";
-        roundRect(ctx, x + 6, rowY, panelW - 12, 19, 3);
-        ctx.fill();
-      }
-      ctx.textAlign = "left";
-      ctx.font = uiFont(11);
-      ctx.fillStyle = unit.downed ? "rgba(180,170,155,0.55)" : "#f0e2c4";
-      const marks = `${unit.downed ? "败 " : ""}${unit.guard ? "守" : ""}${unit.buff > 0 ? "鼓" : ""}${unit.confused > 0 ? "乱" : ""}`;
-      const name = `${unit.name} Lv${unit.level}${unit.boss ? "（主将）" : ""}`;
-      ctx.fillText(name.slice(0, 16), x + 12, rowY + 13);
-      if (marks) {
-        ctx.fillStyle = unit.downed ? "#8a8378" : unit.confused > 0 ? "#c9b2ff" : unit.guard ? "#78b4e6" : "#e7a15a";
-        ctx.fillText(marks, x + 130, rowY + 13);
-      }
-      if (side === "player") {
-        ctx.fillStyle = "rgba(150,200,240,0.85)";
-        ctx.fillText(`策 ${unit.tacticPoints}`, x + 164, rowY + 13);
-      }
-      // 攻击力搬到面板里：血条已经画在每名武将头顶，这里只留数字。
-      ctx.textAlign = "left";
-      ctx.font = uiFont(10);
-      ctx.fillStyle = unit.downed
-        ? "rgba(180,170,155,0.5)"
-        : side === "player"
-          ? "rgba(236,211,154,0.9)"
-          : "rgba(240,201,180,0.88)";
-      ctx.fillText(`攻 ${battleAttackPower(unit)}`, x + (side === "player" ? 194 : 160), rowY + 13);
-      ctx.textAlign = "right";
-      ctx.fillStyle = "rgba(240,226,196,0.82)";
-      ctx.font = uiFont(10);
-      ctx.fillText(
-        `${Math.max(0, Math.round(unit.troops))}/${unit.maxTroops}`,
-        x + panelW - 12,
-        rowY + 13,
-      );
-    });
-  };
-  paintSide(battle.party, "player", leftX);
-  paintSide(battle.enemies, "enemy", rightX);
-
-  // 中间窄条：回合数与目标提示
-  const chipW = 92;
-  ctx.fillStyle = "rgba(16,14,11,0.82)";
-  roundRect(ctx, view.w / 2 - chipW / 2, top, chipW, 34, 6);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(202,161,90,0.7)";
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.textAlign = "center";
-  ctx.font = uiFont(15);
-  ctx.fillStyle = "#ecd39a";
-  ctx.fillText(`第 ${battle.round} 回合`, view.w / 2, top + 22);
-}
-
 /** 画布点击：命中框内取离触点最近的敌将，没点中返回 -1。人多时框会重叠，不能按顺序取第一个。 */
 export function battleEnemyAtPoint(
   view: SagaView,
@@ -1756,10 +1658,8 @@ export function battleEnemyAtPoint(
 export const BATTLE_FLOAT_MS = 900;
 const DOWN_STAMP_MS = 760;
 
-/** 顶部兵力面板的底边：飘字钳制在它下面，不然会被面板盖住。 */
-function battlePanelBottom(battle: SagaBattleState): number {
-  return 12 + 32 + Math.max(battle.party.length, battle.enemies.length) * 22;
-}
+/** 顶部不再挂两军面板，飘字可以一直飘到画面上沿附近。 */
+const BATTLE_FLOAT_TOP = 58;
 
 /** 把动画窗口内的伤害/回复数字逐条画出来，而不是只画当前那一条。 */
 function paintBattleFloats(
@@ -1797,7 +1697,7 @@ function paintBattleFloats(
     const text = `${event.kind === "heal" ? "+" : "-"}${event.amount}`;
     const x = anchor.slot.x + (crit ? 0 : 26) + [0, 18, -18][lane % 3] + Math.sin(progress * 5) * 2;
     const y = Math.max(
-      battlePanelBottom(battle) + 26,
+      BATTLE_FLOAT_TOP,
       anchor.slot.y - 96 - progress * 48 - Math.floor(lane / 3) * 18,
     );
     ctx.save();
@@ -2480,7 +2380,7 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
   const layoutSeed = options.layoutSeed ?? battleLayoutSeed(battle);
   paintBattleVenue(ctx, time, view, mood, layoutSeed, battle.boss ? "city" : "camp");
 
-  // 顶部两军兵力面板在震屏之外绘制：抖的是战场，不是 HUD。
+  // 阵位只跟内景种子有关；名字签、兵力条都画在各自头顶，不再需要顶部面板。
   const playerSlots = unitSlots(battle.party.length, "player", view.k, layoutSeed);
   const enemySlots = unitSlots(battle.enemies.length, "enemy", view.k, layoutSeed);
 
@@ -2591,7 +2491,9 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     }
     ctx.textAlign = "center";
     ctx.font = uiFont(10);
-    const label = `${unit.name} 攻${battleAttackPower(unit)}`;
+    const marks = `${unit.guard ? "守" : ""}${unit.buff > 0 ? "鼓" : ""}${unit.confused > 0 ? "乱" : ""}`;
+    const troops = Math.max(0, Math.round(unit.troops));
+    const label = `${unit.name}${marks ? `·${marks}` : ""} 攻${battleAttackPower(unit)} 兵${troops}/${unit.maxTroops}`;
     const textW = ctx.measureText(label).width;
     ctx.fillStyle = "rgba(12,10,8,0.66)";
     roundRect(ctx, slot.x - textW / 2 - 4, barY - 15, textW + 8, 13, 3);
@@ -2716,10 +2618,7 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     ctx.fillRect(0, 0, view.w, view.h);
   }
 
-  // 顶部两军兵力面板（左右各半边）
-  paintBattleTeams(ctx, battle, target, view);
-
-  // 飘字画在面板之后：位置已钳制在面板下方，既不会被兵力条盖掉，也不遮挡面板。
+  // 飘字画在最后：位置已钳制在画面上沿之内，不会压住名字签。
   if (anim) paintBattleFloats(ctx, battle, anim, elapsed, view.k, layoutSeed);
 
   const vignette = ctx.createRadialGradient(

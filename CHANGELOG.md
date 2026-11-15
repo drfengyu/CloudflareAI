@@ -5,6 +5,31 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.76.4] - 2026-11-15
+
+### 变更
+
+- 三国讨逆传战斗画布移除顶部两军兵力面板与中间回合窄条，不再重复展示；
+  当前兵力 / 总兵力并入每名武将头顶小签，格式为「名字[·守/鼓/乱] 攻N 兵x/y」，
+  兵力条仍按 `maxTroops` 占全场上限换算长度。队列纵向范围上移到 152~390。
+- 战斗栏加宽到 `max-w-6xl`；战报从「最近三条」改为按一轮次完整展示：
+  动画期间列出 `anim.events` 全部事件，结束后沿用 `battle.lastEvents` 显示上一回合，
+  长回合可在面板内滚动查看。
+- 伤害飘字上边界改为固定 58 px，不再按已移除的面板高度钳制。
+
+### 运维
+
+- 新增 `scripts/send-trial-save-loss-coupon-20261115.mjs`（幂等、默认只统计）：
+  给活跃用户发站内信「存档丢失补偿：4 张活动券」，附件为当期 4 张明镜券
+  （券面单价 200 cr，共 800 cr）。生产 D1 已按 `trial-save-fix-20261115:<userId>`
+  写入 8 封、0 重复，全部处于未领取状态。
+
+### 验证
+
+- `tsc` 全量 0 错误；`components/trial/renderer.ts` / `components/trial/game.tsx` /
+  `tests/trial-saga.test.ts` ESLint 0 错误；`tests/trial-saga.test.ts` 55/55 通过；
+  `npm run build` 通过。本机无 `.env.local`，页面未实测。
+
 ## [0.76.3] - 2026-11-15
 
 ### 变更
