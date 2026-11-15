@@ -5,6 +5,24 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.76.7] - 2026-11-15
+
+### 变更
+
+- 任务成就每日清单移除「文生图 1 次」「翻译 1 次」「嵌入 1 次」三项，
+  `daily_image` / `daily_translate` / `daily_embeddings` 不再下发。
+- 新增「使用 2 种不同模型」（`daily_models`，15 活跃度，与每周模型任务共用
+  `COUNT(DISTINCT model)` 口径）与「AI 成功调用 10 次」（`daily_ai_calls`，15 活跃度，
+  统计 `usage_log` 中站内对话与网关的 `status=ok` 调用）。
+- 每日任务仍为 8 项合计 120 活跃度、目标 100，保留 20 点可跳过空间；
+  每周「体验 3 种 AI 能力」保持不变。
+
+### 验证
+
+- `tsc` 全量 0 错误；`lib/tasks/tasks.ts` / `tests/activity-currency.test.ts`
+  ESLint 0 错误；`tests/activity-currency.test.ts` 14/14 通过（新增每日任务替换回归）；
+  `npm run build` 通过。本机无 `.env.local`，页面未实测。
+
 ## [0.76.6] - 2026-11-15
 
 ### 变更

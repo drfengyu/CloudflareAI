@@ -130,8 +130,8 @@ const apiSuccessCount = async (userId: string, w: PeriodWindow) =>
       ),
   );
 
-/** 按 usage_log.task 统计某个 AI 能力的成功调用（站内 playgound 与网关共用这一列）。 */
-const aiTaskCount = (tasks: string[]) => async (userId: string, w: PeriodWindow) =>
+/** 当日所有 AI 成功调用：站内对话（channel=web）与网关都记在 usage_log，不含限时玩法。 */
+const aiSuccessTotal = async (userId: string, w: PeriodWindow) =>
   countFrom(
     await db
       .select({ n: sql<number>`count(*)` })
@@ -140,15 +140,10 @@ const aiTaskCount = (tasks: string[]) => async (userId: string, w: PeriodWindow)
         and(
           eq(usageLogs.userId, userId),
           eq(usageLogs.status, "ok"),
-          inArray(usageLogs.task, tasks),
           ...inWindow(usageLogs.createdAt, w),
         ),
       ),
   );
-
-const imageCount = aiTaskCount(["Text-to-Image"]);
-const translateCount = aiTaskCount(["Translation"]);
-const embeddingCount = aiTaskCount(["Embeddings", "Text Embeddings"]);
 
 /** 五种能力算「多方向」体验；站内与网关写的 task 串不一致，两种拼法都收。 */
 const AI_SKILL_TASKS = [
@@ -319,31 +314,22 @@ export const DAILY_TASKS: TaskDef[] = [
     measure: chatPromptCount,
   },
   {
-    key: "daily_image",
-    title: "文生图 1 次",
-    hint: "在文生图里生成 1 张图片",
-    href: "/playground/image",
-    target: 1,
-    points: 10,
-    measure: imageCount,
+    key: "daily_models",
+    title: "使用 2 种不同模型",
+    hint: "今天用 2 个不同的模型完成调用（对话 / API 均可）",
+    href: "/models",
+    target: 2,
+    points: 15,
+    measure: modelVariety,
   },
   {
-    key: "daily_translate",
-    title: "翻译 1 次",
-    hint: "用翻译助手译一段文本",
-    href: "/playground/translate",
-    target: 1,
-    points: 10,
-    measure: translateCount,
-  },
-  {
-    key: "daily_embeddings",
-    title: "嵌入 1 次",
-    hint: "把一段文本向量化",
-    href: "/playground/embeddings",
-    target: 1,
-    points: 10,
-    measure: embeddingCount,
+    key: "daily_ai_calls",
+    title: "AI 成功调用 10 次",
+    hint: "站内对话与 API 网关合计成功调用 10 次",
+    href: "/dashboard",
+    target: 10,
+    points: 15,
+    measure: aiSuccessTotal,
   },
   {
     key: "daily_api",

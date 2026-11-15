@@ -287,7 +287,7 @@ test("任务：每日任务合计 120、每周合计 360，均略高于目标 10
   assert.equal(weeklyPoints, 360);
   assert.ok(dailyPoints > 100);
   assert.ok(weeklyPoints > 300);
-  // 多方向：每日至少覆盖签到 / 对话 / 图像 / 翻译 / 嵌入 / API / 消费 / 玩法 / 站内信。
+  // 多方向：每日覆盖签到 / 对话 / 模型 / 调用量 / API / 消费 / 玩法 / 站内信。
   assert.ok(new Set(DAILY_TASKS.map((task) => task.key)).size === DAILY_TASKS.length);
   assert.ok(new Set(WEEKLY_TASKS.map((task) => task.key)).size === WEEKLY_TASKS.length);
   assert.equal(DAILY_MILESTONES.at(-1)?.points, 100);
@@ -295,6 +295,20 @@ test("任务：每日任务合计 120、每周合计 360，均略高于目标 10
   assert.deepEqual(
     DAILY_MILESTONES.map((item) => item.points),
     [25, 50, 75, 100],
+  );
+});
+
+test("任务：每日不再考文生图 / 翻译 / 嵌入，改考模型种类与调用量", () => {
+  const keys = new Set(DAILY_TASKS.map((task) => task.key));
+  for (const removed of ["daily_image", "daily_translate", "daily_embeddings"]) {
+    assert.ok(!keys.has(removed), `${removed} 已从每日任务移除`);
+  }
+  assert.ok(keys.has("daily_models"));
+  assert.ok(keys.has("daily_ai_calls"));
+  assert.equal(
+    DAILY_TASKS.find((task) => task.key === "daily_models")?.measure,
+    WEEKLY_TASKS.find((task) => task.key === "weekly_models")?.measure,
+    "每日 / 每周模型种类任务必须共用同一个口径",
   );
 });
 

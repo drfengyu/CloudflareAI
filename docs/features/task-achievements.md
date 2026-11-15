@@ -1,6 +1,6 @@
 # 每日 / 每周任务与活跃度里程碑
 
-**版本**：v0.32.0（v0.40.0 调整消费门槛单位与里程碑奖励口径；v0.76.5 补齐消费任务口径） · **状态**：代码已上线，**默认关闭**，开关在「后台 → 系统设置 → 任务成就奖励」
+**版本**：v0.32.0（v0.40.0 调整消费门槛单位与里程碑奖励口径；v0.76.5 补齐消费任务口径；v0.76.7 每日任务改考模型种类与调用量） · **状态**：代码已上线，**默认关闭**，开关在「后台 → 系统设置 → 任务成就奖励」
 
 ## 设计取舍
 
@@ -19,9 +19,8 @@
 | --- | --- | --- | --- |
 | `daily_checkin` | 每日签到 | 今天签到 1 次 | 10 |
 | `daily_chat` | 站内对话 3 次 | `chat_message.role=user`（按会话归属）≥ 3 | 15 |
-| `daily_image` | 文生图 1 次 | `usage_log.task = Text-to-Image` 且 `status=ok` ≥ 1 | 10 |
-| `daily_translate` | 翻译 1 次 | `usage_log.task = Translation` 且 `status=ok` ≥ 1 | 10 |
-| `daily_embeddings` | 嵌入 1 次 | `usage_log.task ∈ {Embeddings, Text Embeddings}` 且 `status=ok` ≥ 1 | 10 |
+| `daily_models` | 使用 2 种不同模型 | `COUNT(DISTINCT usage_log.model)` ≥ 2（仅成功调用，对话 / 网关均计） | 15 |
+| `daily_ai_calls` | AI 成功调用 10 次 | `usage_log` 中 `status=ok` ≥ 10（站内对话与网关合计） | 15 |
 | `daily_api` | API 成功调用 3 次 | 网关渠道（`channel ∈ {openai, anthropic}`）`status=ok` ≥ 3；站内对话不计入 | 15 |
 | `daily_spend` | 消费满 50 tcr | 当日 AI 调用 `usage_log.creditsUsed` + 账本 `type=15` 负数流水（活动券 / 礼包实付）合计 ≥ 50 | 20 |
 | `daily_activity` | 参与限时玩法 | 试炼 / 工坊 / 星图 / 转盘 / 翻牌 / 雷电任一；工坊 / 星图按当期存档本日是否写入算 1 局 | 15 |
@@ -44,6 +43,13 @@
 | `weekly_models` | 使用 5 种不同模型 | `COUNT(DISTINCT usage_log.model)` ≥ 5（仅成功调用） | 30 |
 
 周期按北京时间：每日 0 点重置；每周一 0 点重置（`weeklyStartDate` 用纯墙钟日期运算，跨年也正确）。
+
+## 每日任务口径（v0.76.7）
+
+每日任务不再要求文生图 / 翻译 / 嵌入三次单项体验（`daily_image` / `daily_translate` /
+`daily_embeddings` 移除），改为两项更通用的任务：「使用 2 种不同模型」（15 活跃度）与
+「AI 成功调用 10 次」（15 活跃度）。每日仍为 8 项合计 120 活跃度、目标 100，保留 20 点
+可跳过空间；周任务的「体验 3 种 AI 能力」不变。
 
 ## 消费口径（v0.76.5）
 
@@ -88,6 +94,7 @@ v0.33.0 起限时玩法只扣活动券、不再直接扣货币，所以消费返
 ## 验证
 
 `tests/activity-currency.test.ts` 覆盖：每日任务合计 120、每周合计 360（均高于目标 100 / 300）、
-任务 key 不重复、周一起算日期、里程碑区间边界，以及随机奖励只发 tcr（`kind=temp_credits`、label 以 tcr 结尾）。
+任务 key 不重复、每日已移除文生图 / 翻译 / 嵌入且模型任务与周任务共用口径、周一起算日期、
+里程碑区间边界，以及随机奖励只发 tcr（`kind=temp_credits`、label 以 tcr 结尾）。
 `npm run typecheck`、`npm run build` 通过。
 生产迁移 023 只新增两张空表与两个带默认值的 `reward_claim` 列，不回填、不改历史数据。

@@ -534,8 +534,16 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.76.6（2026-11-15，野外杂兵等级与装备下调）
+**当前版本**：v0.76.7（2026-11-15，每日任务改考模型种类与调用量）
 **下一版本**：待定
+
+- v0.76.7 任务成就每日清单调整：移除 `daily_image` / `daily_translate` /
+  `daily_embeddings` 三项单项体验，新增 `daily_models`「使用 2 种不同模型」
+  （15 活跃度，与 `weekly_models` 共用 `modelVariety`）与 `daily_ai_calls`
+  「AI 成功调用 10 次」（15 活跃度，`usage_log.status=ok` 合计，含站内对话与网关）。
+  每日 8 项合计 120、目标 100，周任务不变。`tests/activity-currency.test.ts` 新增
+  替换回归，14/14 通过；`tsc` 0 错误、改动文件 ESLint 0/0、`npm run build` 通过。
+  本机无 `.env.local`，页面未实测。
 
 - v0.76.6 三国讨逆传野外杂兵减负：`SAGA_RULESET` 5 → 6。杂兵（兵士 / 山贼 / 海贼 /
   盗贼）兵器甲胄由比同级敌将低一档改为**低两档**（`gearTierFor` 传 -2，营寨
