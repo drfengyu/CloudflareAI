@@ -534,8 +534,19 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.76.2（2026-11-15，存档完整性修复）
+**当前版本**：v0.76.3（2026-11-15，战斗 HUD 与操作提示）
 **下一版本**：待定
+
+- v0.76.3 三国讨逆传战斗 HUD 与操作提示：行军大地图与城中街景撤掉屏幕方向键与
+  「交互」按钮，统一方向键 / WASD 行走 + 回车交互（触屏仍可点地面）；战斗兵力条从
+  顶部面板搬到每名武将头顶，`battleHpBarWidth = 30 + 46 × maxTroops / 全场上限`
+  （30~76 px，开场即分长短），条上小签写「名字 攻N」，击退不出条；
+  `battleAttackPower` 从普攻结算提炼为共用口径（我方 `force + weaponAtk + level × 2`，
+  敌方 `round(force × 1.15) + level × 3 + weaponAtk`），面板 / 小签 / 指令区 / 编成 /
+  队伍 / 图鉴共用；敌情、指令行、编成、队伍、军中一览与图鉴显示特性名 + 描述。
+  测试新增 `battleHpBarWidth` 与攻击口径用例，`tests/trial-saga.test.ts` 55/55 通过；
+  `tsc` 0 错误、5 个改动文件 ESLint 0/0、`npm run build` 通过。
+  本机无 `.env.local`，页面未实测。
 
 - v0.76.2 三国讨逆传存档完整性修复（拔第二座营后进度 / 金币经验丢失、战败撤退后
   兵器与等级丢失）：根因是 `sanitizeSagaCommands` 把一回合没打就撤退的

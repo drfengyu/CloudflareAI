@@ -34,6 +34,7 @@ import {
   tacticsFor,
 } from "@/lib/trial/saga/data";
 import {
+  battleAttackPower,
   battleTurnOrder,
   resolveBattleRound,
   startBattle,
@@ -1443,13 +1444,6 @@ export function TrialGame(props: TrialGameProps) {
         : "even";
     return { turnOrder, focusUnit, actionText, targetName, playerFormation, enemyFormation, counter };
   })();
-  const pressKey = useCallback(
-    (dir: "up" | "down" | "left" | "right", pressed: boolean) => {
-      if (inTownRef.current) return;
-      keysRef.current[dir] = pressed;
-    },
-    [],
-  );
   const panelTitle =
     panel === "dex"
       ? "武将图鉴"
@@ -1736,7 +1730,8 @@ export function TrialGame(props: TrialGameProps) {
                           </span>
                         </div>
                         <p className="mt-0.5 text-[10px] tabular-nums text-white/65">
-                          武 {enemy.force} · 智 {enemy.intellect} · 防 {enemy.defense} · 速 {enemy.speed} · 策 {enemy.tacticPoints}
+                          武 {enemy.force} · 智 {enemy.intellect} · 防 {enemy.defense} · 速 {enemy.speed} · 攻{" "}
+                          {battleAttackPower(enemy)} · 策 {enemy.tacticPoints}
                         </p>
                         <p className="text-[10px] text-white/55">
                           兵器{" "}
@@ -1755,12 +1750,17 @@ export function TrialGame(props: TrialGameProps) {
                                 .map((tactic) => SAGA_TACTIC_BY_ID.get(tactic)?.name ?? tactic)
                                 .join(" / ")
                             : "无"}
-                          {enemy.traits && enemy.traits.length > 0
-                            ? ` · 特性 ${enemy.traits
-                                .map((id) => SAGA_TRAIT_BY_ID.get(id)?.name ?? id)
-                                .join(" / ")}`
-                            : ""}
                         </p>
+                        {enemy.traits.length > 0 ? (
+                          <p className="text-[10px] text-amber-100/60">
+                            {enemy.traits
+                              .map((id) => {
+                                const trait = SAGA_TRAIT_BY_ID.get(id);
+                                return `${trait?.name ?? id}：${trait?.desc ?? ""}`;
+                              })
+                              .join("；")}
+                          </p>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -1818,11 +1818,24 @@ export function TrialGame(props: TrialGameProps) {
                         <span className="text-[11px] tabular-nums text-white/65">
                           兵 {Math.max(0, unit.troops)}/{unit.maxTroops}
                         </span>
+                        <span className="text-[11px] tabular-nums text-amber-100/80">
+                          攻 {battleAttackPower(unit)}
+                        </span>
                         <span className="text-[11px] tabular-nums text-sky-200/80">
                           策 {unit.tacticPoints}
                         </span>
                         <span className="ml-auto text-[11px] text-amber-100/55">{order}</span>
                       </div>
+                      {unit.traits.length > 0 ? (
+                        <p className="mt-0.5 text-[10px] text-amber-100/55">
+                          {unit.traits
+                            .map((id) => {
+                              const trait = SAGA_TRAIT_BY_ID.get(id);
+                              return `${trait?.name ?? id}：${trait?.desc ?? ""}`;
+                            })
+                            .join("；")}
+                        </p>
+                      ) : null}
                       {alive && pick ? (
                         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                           {(
@@ -2423,11 +2436,22 @@ export function TrialGame(props: TrialGameProps) {
                                     </Button>
                                   </div>
                                   <p className="mt-0.5 text-xs text-muted-foreground">
-                                    武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 兵力 {stats.maxTroops}
+                                    武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 攻{" "}
+                                    {stats.force + stats.weaponAtk + member.level * 2} · 兵力 {stats.maxTroops}
                                   </p>
                                   <p className="mt-0.5 text-xs text-muted-foreground">
                                     {def?.title} · {def?.tactics.map((tactic) => SAGA_TACTIC_BY_ID.get(tactic)?.name).join(" / ") || "无计策"}
                                   </p>
+                                  {(def?.traits?.length ?? 0) > 0 ? (
+                                    <p className="mt-0.5 text-xs text-primary/90">
+                                      {(def?.traits ?? [])
+                                        .map((traitId) => {
+                                          const trait = SAGA_TRAIT_BY_ID.get(traitId);
+                                          return `${trait?.name ?? traitId}：${trait?.desc ?? ""}`;
+                                        })
+                                        .join("；")}
+                                    </p>
+                                  ) : null}
                                   <p className="mt-0.5 text-xs text-muted-foreground">
                                     武器 {member.weapon ? itemName(member.weapon) : "无"} · 防具 {member.armor ? itemName(member.armor) : "无"}
                                   </p>
@@ -2910,67 +2934,17 @@ export function TrialGame(props: TrialGameProps) {
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-start gap-4">
-        <div className="grid grid-cols-3 gap-1">
-          <span />
-          <PadButton label="↑" dir="up" onKey={pressKey} />
-          <span />
-          <PadButton label="←" dir="left" onKey={pressKey} />
-          <PadButton label="↓" dir="down" onKey={pressKey} />
-          <PadButton label="→" dir="right" onKey={pressKey} />
-        </div>
-        <div className="space-y-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!run || Boolean(battle) || Boolean(settlement) || inTown}
-            onClick={() => {
-              const spot = hotspotRef.current;
-              if (spot) interactRef.current(spot);
-            }}
-          >
-            交互
-          </Button>
-          <p className="max-w-md text-xs text-muted-foreground">
-            操作：方向键 / WASD 或左侧摇杆四向行走，走到城门口、敌营、乡野点位旁按 E / 回车（或点「交互」）；
-            也可以直接点击地图上的城池、营寨、村庄与渡口。点城池走进城中街道，在街上四向走动，
-            走到铺子 / 皇宫门口会自动进门，柜台前按 E 与掌柜说话、办正事；皇宫里可以面见主公议事；从城门出城。
-            战斗为回合制：逐将选择攻击 / 计策 / 防守 / 道具 / 招降，或按「总攻击」「自动战斗」速战。
-            野外草地、树林会随机遇敌，敌军编成由种子与第几场遭遇推出。
-            走位本身不影响任何数值：战报只上传编制、购物与「打哪座营、打不打这场遭遇、怎么打」的指令，
-            服务端按种子重放判定；战斗指令存在本机，刷新页面可以接着打。剧情对话、军令与走访记录只在本机，
-            不参与结算。
-          </p>
-        </div>
-      </div>
+      <p className="max-w-3xl text-xs text-muted-foreground">
+        操作：方向键 / WASD 四向行走，走到城门口、敌营或乡野点位旁按回车交互；
+        也可以直接点击地图上的城池、营寨、村庄与渡口。点城池走进城中街道，在街上四向走动，
+        走到铺子 / 皇宫门口会自动进门，柜台前按回车与掌柜说话、办正事；皇宫里可以面见主公议事；从城门出城。
+        战斗为回合制：逐将选择攻击 / 计策 / 防守 / 道具 / 招降，或按「总攻击」「自动战斗」速战。
+        野外草地、树林会随机遇敌，敌军编成由种子与第几场遭遇推出。
+        走位本身不影响任何数值：战报只上传编制、购物与「打哪座营、打不打这场遭遇、怎么打」的指令，
+        服务端按种子重放判定；战斗指令存在本机，刷新页面可以接着打。剧情对话、军令与走访记录只在本机，
+        不参与结算。
+      </p>
     </div>
-  );
-}
-
-function PadButton({
-  label,
-  dir,
-  onKey,
-}: {
-  label: string;
-  dir: "up" | "down" | "left" | "right";
-  onKey: (dir: "up" | "down" | "left" | "right", pressed: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={dir}
-      onPointerDown={(event) => {
-        event.preventDefault();
-        onKey(dir, true);
-      }}
-      onPointerUp={() => onKey(dir, false)}
-      onPointerLeave={() => onKey(dir, false)}
-      onPointerCancel={() => onKey(dir, false)}
-      className="h-11 w-11 rounded-lg border border-border bg-card text-lg leading-none select-none active:bg-muted"
-    >
-      {label}
-    </button>
   );
 }
 
@@ -3080,6 +3054,7 @@ function StatusRoster({
         const current = Math.min(max, state?.partyTroops[member.id] ?? max);
         const ratio = max > 0 ? current / max : 1;
         const tactics = def ? (rules >= 2 ? tacticsFor(def, member.level) : def.tactics) : [];
+        const attack = stats.force + stats.weaponAtk + member.level * 2;
         return (
           <div key={member.id} className="rounded-lg border border-border p-2.5 text-sm">
             <div className="flex gap-2.5">
@@ -3098,7 +3073,7 @@ function StatusRoster({
                   <span className="text-[11px] text-muted-foreground">{active ? "上阵" : "后备"}</span>
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed}
+                  武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 攻 {attack}
                 </p>
                 <div className="mt-1 h-1.5 overflow-hidden rounded bg-muted">
                   <div
@@ -3110,17 +3085,19 @@ function StatusRoster({
                   兵力 {current}/{max} · 经验 {member.exp}/{expToNext(member.level)}
                 </p>
                 {rules >= 2 && (def?.traits?.length ?? 0) > 0 ? (
-                  <p className="mt-0.5 flex flex-wrap gap-1 text-[11px]">
-                    <span className="text-muted-foreground">特性</span>
+                  <div className="mt-0.5 space-y-0.5 text-[11px]">
                     {(def?.traits ?? []).map((traitId) => {
                       const trait = SAGA_TRAIT_BY_ID.get(traitId);
                       return (
-                        <span key={traitId} title={trait?.desc} className="rounded bg-primary/10 px-1 text-primary">
-                          {trait?.name ?? traitId}
-                        </span>
+                        <p key={traitId}>
+                          <span className="rounded bg-primary/10 px-1 text-primary">
+                            {trait?.name ?? traitId}
+                          </span>
+                          <span className="ml-1 text-muted-foreground">{trait?.desc}</span>
+                        </p>
                       );
                     })}
-                  </p>
+                  </div>
                 ) : null}
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
                   计策 {tactics.length > 0 ? tactics.map((tactic) => SAGA_TACTIC_BY_ID.get(tactic)?.name).join(" / ") : "无"}
@@ -3144,6 +3121,7 @@ function PartyList({ save }: { save: TrialSave }) {
         const def = SAGA_GENERAL_BY_ID.get(member.id);
         const stats = generalStats(member);
         const active = save.party.some((row) => row.id === member.id);
+        const attack = stats.force + stats.weaponAtk + member.level * 2;
         return (
           <div key={member.id} className="rounded-lg border border-border p-2 text-xs">
             <div className="flex gap-2">
@@ -3161,11 +3139,22 @@ function PartyList({ save }: { save: TrialSave }) {
                   <span className="text-[11px] text-muted-foreground">{active ? "上阵" : "后备"}</span>
                 </p>
                 <p className="mt-0.5 text-muted-foreground">
-                  武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 兵力 {stats.maxTroops}
+                  武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 攻 {attack} · 兵力{" "}
+                  {stats.maxTroops}
                 </p>
                 <p className="mt-0.5 text-muted-foreground">
                   经验 {member.exp}/{expToNext(member.level)} · {def?.title}
                 </p>
+                {(def?.traits?.length ?? 0) > 0 ? (
+                  <p className="mt-0.5 text-primary/90">
+                    {(def?.traits ?? [])
+                      .map((traitId) => {
+                        const trait = SAGA_TRAIT_BY_ID.get(traitId);
+                        return `${trait?.name ?? traitId}：${trait?.desc ?? ""}`;
+                      })
+                      .join("；")}
+                  </p>
+                ) : null}
                 <p className="mt-0.5 text-muted-foreground">
                   武器 {member.weapon ? itemName(member.weapon) : "无"} · 防具 {member.armor ? itemName(member.armor) : "无"}
                 </p>
@@ -3232,6 +3221,16 @@ function DexGrid({
                           ? def.tactics.map((tactic) => SAGA_TACTIC_BY_ID.get(tactic)?.name).join(" / ")
                           : "无计策"}
                       </p>
+                      {(def.traits?.length ?? 0) > 0 ? (
+                        <p className="mt-0.5 text-primary/90">
+                          {(def.traits ?? [])
+                            .map((traitId) => {
+                              const trait = SAGA_TRAIT_BY_ID.get(traitId);
+                              return `${trait?.name ?? traitId}：${trait?.desc ?? ""}`;
+                            })
+                            .join("；")}
+                        </p>
+                      ) : null}
                     </>
                   ) : (
                     <p className="mt-0.5 text-muted-foreground">在战场或招降中遇见后解锁。</p>

@@ -79,8 +79,8 @@ import {
   initialTrialSave,
   normalizeTrialSave,
 } from "../lib/trial/saga/state";
-import { battleTurnOrder, resolveBattleRound, startBattle, startEncounterBattle } from "../lib/trial/saga/battle";
-import { battleEnemyAtPoint, makeSagaView } from "../components/trial/renderer";
+import { battleAttackPower, battleTurnOrder, resolveBattleRound, startBattle, startEncounterBattle } from "../lib/trial/saga/battle";
+import { battleEnemyAtPoint, battleHpBarWidth, makeSagaView } from "../components/trial/renderer";
 import {
   SAGA_TRAINING_ITEM_ID,
   SAGA_TRAINING_TICKETS_PER_LEVEL,
@@ -1136,6 +1136,31 @@ test("敌方装备强化：按种子固定、加成按铁匠铺口径，旧规�
     legacyBattle.enemies.every((enemy) => (enemy.weaponPlus ?? 0) === 0 && (enemy.armorPlus ?? 0) === 0),
     true,
     "v4 不强化",
+  );
+});
+
+test("战斗内景：头顶血条按兵力上限分长短，攻击力与普攻结算同口径", () => {
+  const run = easyRun();
+  const battle = startBattle(run, 0, createReplayState(run));
+  const widest = Math.max(
+    1,
+    ...battle.party.map((unit) => unit.maxTroops),
+    ...battle.enemies.map((unit) => unit.maxTroops),
+  );
+  const widths = battle.party.map((unit) => battleHpBarWidth(unit.maxTroops, widest));
+  assert.equal(new Set(widths).size > 1, true, "不同兵力上限的武将初始血条长度不同");
+  for (const width of widths) {
+    assert.equal(width >= 30 && width <= 76, true, "条长落在 30~76px");
+  }
+  assert.equal(battleHpBarWidth(widest, widest), 76);
+  assert.equal(battleHpBarWidth(0, widest), 30);
+  const hero = battle.party[0];
+  assert.equal(battleAttackPower(hero), hero.force + hero.weaponAtk + hero.level * 2, "我方攻击力口径");
+  const foe = battle.enemies[0];
+  assert.equal(
+    battleAttackPower(foe),
+    Math.round(foe.force * 1.15) + foe.level * 3 + foe.weaponAtk,
+    "敌方攻击力口径",
   );
 });
 

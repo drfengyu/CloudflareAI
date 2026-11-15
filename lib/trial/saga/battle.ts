@@ -406,7 +406,11 @@ function consumeItem(state: SagaReplayState, itemId: string): boolean {
   return false;
 }
 
-function attackerAtk(actor: SagaBattleGeneral): number {
+/**
+ * 攻击力口径：普攻结算、战斗面板与头顶标签共用一份，
+ * 免得界面上标的攻和实际打出来的伤害对不上。
+ */
+export function battleAttackPower(actor: SagaBattleGeneral): number {
   if (actor.side === "player") {
     return actor.force + actor.weaponAtk + actor.level * 2;
   }
@@ -438,7 +442,7 @@ function dealDamage(
   }
   const base = Math.max(
     8,
-    attackerAtk(actor) - Math.round(defenderDef(target) * 0.65),
+    battleAttackPower(actor) - Math.round(defenderDef(target) * 0.65),
   );
   const variance = 0.85 + roll(battle) * 0.3;
   const buffed = actor.buff > 0 ? 1.2 : 1;

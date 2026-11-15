@@ -2558,10 +2558,6 @@ export function WalkTown({
 
   const speechLine = speech ? speech.lines[speech.index % speech.lines.length] : "";
 
-  const padKey = (dir: "up" | "down" | "left" | "right", pressed: boolean) => {
-    keysRef.current[dir] = pressed;
-  };
-
   return (
     <div className={cn("relative overflow-hidden bg-black", className)}>
       <canvas
@@ -2570,7 +2566,7 @@ export function WalkTown({
         height={VIEW_H * 2}
         className="block aspect-[16/9] w-full cursor-pointer touch-none"
         onClick={handleCanvasClick}
-        aria-label="城中街景：方向键或 WASD 行走，铺子与皇宫走到门口自动进门，E / 回车与街坊交谈"
+        aria-label="城中街景：方向键或 WASD 行走，铺子与皇宫走到门口自动进门，回车与街坊交谈"
       />
 
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-2 p-3">
@@ -2595,7 +2591,7 @@ export function WalkTown({
       {!speech && prompt ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-16 z-10 flex justify-center px-3">
           <span className="rounded-full border border-amber-300/30 bg-black/70 px-3 py-1 text-[11px] text-amber-100/90 backdrop-blur">
-            <kbd className="mr-1 rounded border border-amber-200/40 px-1 text-[10px]">E</kbd>
+            <kbd className="mr-1 rounded border border-amber-200/40 px-1 text-[10px]">回车</kbd>
             {prompt}
           </span>
         </div>
@@ -2646,54 +2642,9 @@ export function WalkTown({
         </div>
       ) : null}
 
-      {!speech && active ? (
-        <>
-          <div className="absolute bottom-3 left-2 z-20 grid grid-cols-3 gap-1 sm:hidden">
-            <span />
-            <TownPad label="↑" onPress={(pressed) => padKey("up", pressed)} />
-            <span />
-            <TownPad label="←" onPress={(pressed) => padKey("left", pressed)} />
-            <TownPad label="↓" onPress={(pressed) => padKey("down", pressed)} />
-            <TownPad label="→" onPress={(pressed) => padKey("right", pressed)} />
-          </div>
-          <Button
-            size="sm"
-            className="absolute bottom-3 right-2 z-20 sm:hidden"
-            onClick={interactNow}
-          >
-            交互
-          </Button>
-        </>
-      ) : null}
-
       <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 hidden -translate-x-1/2 rounded-full border border-amber-900/40 bg-black/55 px-3 py-1 text-[11px] text-amber-100/60 backdrop-blur sm:block">
-        方向键 / WASD 或点击地面走动 · 走到铺子 / 皇宫门口直接进门 · 柜台前按 E 与掌柜交谈
+        方向键 / WASD 或点击地面走动 · 走到铺子 / 皇宫门口直接进门 · 柜台前按回车与掌柜交谈
       </p>
     </div>
-  );
-}
-
-function TownPad({
-  label,
-  onPress,
-}: {
-  label: string;
-  onPress: (pressed: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onPointerDown={(event) => {
-        event.preventDefault();
-        onPress(true);
-      }}
-      onPointerUp={() => onPress(false)}
-      onPointerLeave={() => onPress(false)}
-      onPointerCancel={() => onPress(false)}
-      className="flex h-9 w-9 select-none items-center justify-center rounded-md border border-white/15 bg-black/55 text-sm text-amber-100/85 backdrop-blur active:bg-amber-400/30"
-    >
-      {label}
-    </button>
   );
 }
