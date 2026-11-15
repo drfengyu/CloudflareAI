@@ -534,8 +534,15 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.76.4（2026-11-15，战斗 HUD 精简与整轮战报）
+**当前版本**：v0.76.5（2026-11-15，任务成就消费口径补齐）
 **下一版本**：待定
+
+- v0.76.5 任务成就消费口径补齐：`daily_spend` / `weekly_spend` 原先只读
+  `usage_log.creditsUsed`，在消费返利页兑换活动券 / 珍宝礼包、游戏内用 tcr 买礼包时
+  进度不动。改为共用 `spendTotal`：AI 消费 + 账本 `type=15`（活动券兑换）负数流水，
+  过期作废（14）与管理员调整（2）不计入。任务提示同步写明。新增
+  `tests/activity-currency.test.ts` 消费口径回归；`tsc` 0 错误、两个改动文件 ESLint
+  0/0、13/13 通过、`npm run build` 通过。本机无 `.env.local`，页面未实测。
 
 - v0.76.4 三国讨逆传战斗界面收口：`paintBattleTeams`（顶部两军面板与回合窄条）整体移除，
   兵力数字并入每名武将头顶小签「名字[·守/鼓/乱] 攻N 兵x/y」，`unitSlots` 纵向范围

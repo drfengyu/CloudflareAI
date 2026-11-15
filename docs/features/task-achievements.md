@@ -1,6 +1,6 @@
 # 每日 / 每周任务与活跃度里程碑
 
-**版本**：v0.32.0（v0.40.0 调整消费门槛单位与里程碑奖励口径） · **状态**：代码已上线，**默认关闭**，开关在「后台 → 系统设置 → 任务成就奖励」
+**版本**：v0.32.0（v0.40.0 调整消费门槛单位与里程碑奖励口径；v0.76.5 补齐消费任务口径） · **状态**：代码已上线，**默认关闭**，开关在「后台 → 系统设置 → 任务成就奖励」
 
 ## 设计取舍
 
@@ -23,7 +23,7 @@
 | `daily_translate` | 翻译 1 次 | `usage_log.task = Translation` 且 `status=ok` ≥ 1 | 10 |
 | `daily_embeddings` | 嵌入 1 次 | `usage_log.task ∈ {Embeddings, Text Embeddings}` 且 `status=ok` ≥ 1 | 10 |
 | `daily_api` | API 成功调用 3 次 | 网关渠道（`channel ∈ {openai, anthropic}`）`status=ok` ≥ 3；站内对话不计入 | 15 |
-| `daily_spend` | 消费满 50 tcr | 当日 `usage_log.creditsUsed` 合计 ≥ 50（tcr 消费计入） | 20 |
+| `daily_spend` | 消费满 50 tcr | 当日 AI 调用 `usage_log.creditsUsed` + 账本 `type=15` 负数流水（活动券 / 礼包实付）合计 ≥ 50 | 20 |
 | `daily_activity` | 参与限时玩法 | 试炼 / 工坊 / 星图 / 转盘 / 翻牌 / 雷电任一；工坊 / 星图按当期存档本日是否写入算 1 局 | 15 |
 | `daily_inbox` | 领取站内信奖励 | 当日领取任意带附件站内信 | 15 |
 
@@ -37,13 +37,25 @@
 | `weekly_chat` | 站内对话 20 次 | 本周提问 ≥ 20 | 40 |
 | `weekly_ai_skills` | 体验 3 种 AI 能力 | `COUNT(DISTINCT usage_log.task)` ≥ 3（对话 / 文生图 / 翻译 / 嵌入 / 图像理解） | 35 |
 | `weekly_api` | API 成功调用 50 次 | 网关渠道 `status=ok` ≥ 50 | 45 |
-| `weekly_spend` | 本周消费满 500 tcr | 本周消耗 ≥ 500 tcr | 55 |
+| `weekly_spend` | 本周消费满 500 tcr | 本周 AI 调用 + 活动券 / 礼包实付合计 ≥ 500 tcr | 55 |
 | `weekly_activity` | 参与限时玩法 10 局 | 六个玩法合计 ≥ 10 局（工坊 / 星图每次进入算 1 局） | 45 |
 | `weekly_topup` | 本周充值到账 500 cr | 兑换码 + 在线充值 ≥ 500 cr | 40 |
 | `weekly_inbox` | 领取 3 封奖励信 | 本周领取 ≥ 3 封带附件站内信 | 30 |
 | `weekly_models` | 使用 5 种不同模型 | `COUNT(DISTINCT usage_log.model)` ≥ 5（仅成功调用） | 30 |
 
 周期按北京时间：每日 0 点重置；每周一 0 点重置（`weeklyStartDate` 用纯墙钟日期运算，跨年也正确）。
+
+## 消费口径（v0.76.5）
+
+`daily_spend` / `weekly_spend` 共用 `spendTotal`，两段相加：
+
+1. **AI 调用**：`usage_log.creditsUsed` 在周期内的合计（失败调用记 0，不影响）。
+2. **活动券 / 礼包实付**：`topup` 中 `type=15`（活动券兑换）且 `amount < 0` 的绝对值合计。
+
+v0.33.0 起限时玩法只扣活动券、不再直接扣货币，所以消费返利页兑换活动券、兑换珍宝礼包，
+以及游戏内用 tcr 买礼包，资金支出都只落在 `type=15` 的负数流水上；只读 `usage_log`
+会让这些购买不计入消费任务。AI 消费只记 `usage_log`、不写 `topup`，两段不会重复。
+过期作废（`type=14`）与管理员调整（`type=2`）不是用户主动消费，不计入。
 
 ## 领取与里程碑
 

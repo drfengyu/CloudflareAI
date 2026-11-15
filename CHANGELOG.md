@@ -5,6 +5,22 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.76.5] - 2026-11-15
+
+### 修复
+
+- 每日「消费满 50 tcr」与每周「消费满 500 tcr」原先只统计 AI 调用的
+  `usage_log.creditsUsed`，在消费返利页兑换活动券、兑换珍宝礼包，以及游戏内用 tcr
+  购买礼包时进度不动。现改为「AI 消费 + 账本 `type=15` 负数流水」合并计算，
+  两个任务共用 `spendTotal`；过期作废（14）与管理员调整（2）仍不计入消费。
+- 两个消费任务的提示同步写明「AI 调用与活动券 / 礼包合计」。
+
+### 验证
+
+- `tsc` 全量 0 错误；`lib/tasks/tasks.ts` / `tests/activity-currency.test.ts`
+  ESLint 0 错误；`tests/activity-currency.test.ts` 13/13 通过（新增消费口径回归）；
+  `npm run build` 通过。本机无 `.env.local`，页面未实测。
+
 ## [0.76.4] - 2026-11-15
 
 ### 变更

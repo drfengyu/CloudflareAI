@@ -16,6 +16,7 @@ import {
   workshopStates,
 } from "@/lib/db/schema";
 import { cnDateString, cnStartOfToday, parseCnWallClock, shiftDateString } from "@/lib/date";
+import { COUPON_TOPUP_TYPE } from "@/lib/activity/coupons";
 import type { getTaskSettings } from "@/lib/settings";
 import { normalizeCurrencyText } from "@/lib/billing/units";
 import {
@@ -185,15 +186,35 @@ const modelVariety = async (userId: string, w: PeriodWindow) =>
       ),
   );
 
-const apiSpend = async (userId: string, w: PeriodWindow) =>
-  round2(
-    sumFrom(
-      await db
-        .select({ n: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)` })
-        .from(usageLogs)
-        .where(and(eq(usageLogs.userId, userId), ...inWindow(usageLogs.createdAt, w))),
-    ),
-  );
+/**
+ * 消费口径 = AI 调用（usage_log.creditsUsed）+ 活动券 / 礼包实付（账本 type=15 的负数流水）。
+ *
+ * v0.33.0 起玩法只扣活动券、不再直接扣货币，因此限时活动的 tcr 支出全部落在 type=15 上：
+ * 消费返利页兑换活动券、兑换礼包，以及游戏内用 tcr 买礼包走的都是 `exchangeCoupon` /
+ * `buyCouponPack`。AI 消费只记 usage_log、不写 topup，两段相加不会重复。
+ * 过期作废（14）与管理员调整（2）不是用户主动消费，别顺手并进来。
+ */
+const spendTotal = async (userId: string, w: PeriodWindow) => {
+  const [ai, activity] = await Promise.all([
+    db
+      .select({ n: sql<number>`COALESCE(SUM(${usageLogs.creditsUsed}), 0)` })
+      .from(usageLogs)
+      .where(and(eq(usageLogs.userId, userId), ...inWindow(usageLogs.createdAt, w))),
+    db
+      .select({
+        n: sql<number>`COALESCE(SUM(CASE WHEN ${topups.amount} < 0 THEN -${topups.amount} ELSE 0 END), 0)`,
+      })
+      .from(topups)
+      .where(
+        and(
+          eq(topups.userId, userId),
+          eq(topups.type, COUPON_TOPUP_TYPE),
+          ...inWindow(topups.createdAt, w),
+        ),
+      ),
+  ]);
+  return round2(sumFrom(ai) + sumFrom(activity));
+};
 
 const activityRuns = async (userId: string, w: PeriodWindow) => {
   const [draws, flips, runs, trials, workshops, collections] = await Promise.all([
@@ -336,11 +357,11 @@ export const DAILY_TASKS: TaskDef[] = [
   {
     key: "daily_spend",
     title: "消费满 50 tcr",
-    hint: "今天累计消耗 50 tcr",
+    hint: "今天 AI 调用与活动券 / 礼包合计消耗 50 tcr",
     href: "/wallet",
     target: 50,
     points: 20,
-    measure: apiSpend,
+    measure: spendTotal,
   },
   {
     key: "daily_activity",
@@ -402,11 +423,11 @@ export const WEEKLY_TASKS: TaskDef[] = [
   {
     key: "weekly_spend",
     title: "本周消费满 500 tcr",
-    hint: "本周累计消耗 500 tcr",
+    hint: "本周 AI 调用与活动券 / 礼包合计消耗 500 tcr",
     href: "/wallet",
     target: 500,
     points: 55,
-    measure: apiSpend,
+    measure: spendTotal,
   },
   {
     key: "weekly_activity",

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import {
   cashbackTierKey,
@@ -294,6 +295,28 @@ test("任务：每日任务合计 120、每周合计 360，均略高于目标 10
   assert.deepEqual(
     DAILY_MILESTONES.map((item) => item.points),
     [25, 50, 75, 100],
+  );
+});
+
+test("任务：消费口径合并 AI 调用与活动券 / 礼包实付", () => {
+  // 活动券与礼包（含游戏内用 tcr 买的礼包）只在账本 type=15 的负数流水上留痕；
+  // 消费任务若只读 usage_log，就会出现「买了礼包消费进度不动」。
+  const source = readFileSync(new URL("../lib/tasks/tasks.ts", import.meta.url), "utf8");
+  assert.ok(
+    source.includes("CASE WHEN ${topups.amount} < 0 THEN -${topups.amount} ELSE 0 END"),
+    "消费任务必须把 type=15 的负数流水按支出计入",
+  );
+  assert.ok(
+    source.includes("eq(topups.type, COUPON_TOPUP_TYPE)"),
+    "只统计活动券 / 礼包实付，不能把过期作废和管理员调整算进消费",
+  );
+
+  const spendTasks = [...DAILY_TASKS, ...WEEKLY_TASKS].filter((task) => task.key.endsWith("_spend"));
+  assert.equal(spendTasks.length, 2);
+  assert.equal(
+    spendTasks[0].measure,
+    spendTasks[1].measure,
+    "每日 / 每周消费任务必须共用同一个口径",
   );
 });
 
