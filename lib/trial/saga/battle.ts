@@ -107,7 +107,7 @@ const GEAR_TIERS = {
   armor: ["cloth", "leather", "iron_armor", "heavy_armor"],
 } as const;
 
-/** 每 `step` 级升一档；杂兵传 -1 拿低一档的旧兵器。v5 起改成 5 级一档。 */
+/** 每 `step` 级升一档；杂兵传 -2 拿低两档的旧兵器（v4/v5 传 -1）。v5 起改成 5 级一档。 */
 function gearTierFor(level: number, shift = 0, step = 8): number {
   return clamp(Math.floor((level - 1) / step) + shift, 0, GEAR_TIERS.weapon.length - 1);
 }
@@ -173,7 +173,12 @@ function buildSoldier(
   // v5 起 5 级一档并可能带随机强化；旧规则不多抽随机数，重放结果不变。
   const weaponPlus = rules >= 5 ? gearPlusFor(rng, level, true) : 0;
   const armorPlus = rules >= 5 ? gearPlusFor(rng, level, true) : 0;
-  const gear = tierGear(gearTierFor(level, -1, rules >= 5 ? 5 : 8), weaponPlus, armorPlus);
+  // v6 起营中杂兵也比敌将低两档，装备差距与野外杂兵保持一致。
+  const gear = tierGear(
+    gearTierFor(level, rules >= 6 ? -2 : -1, rules >= 5 ? 5 : 8),
+    weaponPlus,
+    armorPlus,
+  );
   return {
     id: `guard_${nodeIndex}_${slot}`,
     name: `${SOLDIER_NAMES[slot % SOLDIER_NAMES.length]}${SOLDIER_MARKS[slot] ?? slot + 1}`,
@@ -312,14 +317,15 @@ function buildBattle(
   });
   // v5 起敌方装备每 5 级升一档，并按种子滚一次强化；旧规则沿用 8 级一档、不强化。
   const gearStep = rules >= 5 ? 5 : 8;
+  const poorShift = rules >= 6 ? -2 : -1;
   const gearRng = rules >= 5 ? seedRng((rngState ^ 0x2545f491) >>> 0) : null;
   const enemies: SagaBattleGeneral[] = node.enemies.slice(0, SAGA_PARTY_SIZE).map((enemy) => {
-    // v4 起杂兵也带装备，但比同级敌将低一档；v3 只有敌将带装备。
+    // v4 起杂兵也带装备，但比同级敌将低档：v6 起低两档，v4/v5 低一档；v3 只有敌将带装备。
     const gear =
       rules < 3 || (rules < 4 && enemy.poor)
         ? null
         : tierGear(
-            gearTierFor(enemy.level, enemy.poor ? -1 : 0, gearStep),
+            gearTierFor(enemy.level, enemy.poor ? poorShift : 0, gearStep),
             gearRng ? gearPlusFor(gearRng, enemy.level, Boolean(enemy.poor)) : 0,
             gearRng ? gearPlusFor(gearRng, enemy.level, Boolean(enemy.poor)) : 0,
           );

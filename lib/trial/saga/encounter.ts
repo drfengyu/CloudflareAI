@@ -157,8 +157,13 @@ function squadEnemy(
   ordinal: number,
   slot: number,
   withLeader: boolean,
+  rules: number,
 ): SagaEnemy {
-  const level = 1 + chapterIndex * 3 + Math.floor(ordinal / 2);
+  // v6 起野外杂兵整体降到「章节 × 2 + 场次 / 3」，比旧规则的「章节 × 3 + 场次 / 2」低一截。
+  const level =
+    rules >= 6
+      ? 1 + chapterIndex * 2 + Math.floor(ordinal / 3)
+      : 1 + chapterIndex * 3 + Math.floor(ordinal / 2);
   const troops = Math.max(
     40,
     Math.round(
@@ -179,7 +184,7 @@ function squadEnemy(
     defense: foe.defense + Math.floor(level * 1),
     speed: foe.speed + Math.floor(level * 0.5),
     tactics: [],
-    // 杂兵的兵器甲胄比同级敌将低一档，见 `buildBattle` 的装备档位。
+    // 杂兵的兵器甲胄比同级敌将低两档（v6 起；v4/v5 低一档），见 `buildBattle` 的装备档位。
     poor: true,
     color: foe.color,
     accent: foe.accent,
@@ -192,7 +197,8 @@ function squadEnemy(
 /**
  * 第 ordinal 场野外遭遇（从 0 起）的敌军编成；同种子同序号结果固定。
  * 1~4 队：可能全是兵士 / 山贼 / 海贼 / 盗贼，也可能由一名本章敌将领头。
- * v4 之前只有前三种杂兵，旧行军按原编成重放。
+ * v4 之前只有前三种杂兵，旧行军按原编成重放；
+ * v6 起杂兵等级降为「章节 × 2 + 场次 / 3」，v5 及更早仍按原等级重放。
  */
 export function sagaEncounterFor(run: SagaRun, ordinal: number, rules: number): SagaNode {
   const index = clampInt(ordinal, 0, SAGA_MAX_COMMANDS - 1);
@@ -210,7 +216,7 @@ export function sagaEncounterFor(run: SagaRun, ordinal: number, rules: number): 
     enemies.push(leader);
   }
   for (let slot = 0; slot < squad; slot++) {
-    enemies.push(squadEnemy(foe, chapter.index, index, slot, hasLeader));
+    enemies.push(squadEnemy(foe, chapter.index, index, slot, hasLeader, rules));
   }
   const rewardGold =
     8 + chapter.index * 4 + enemies.length * 4 + (hasLeader ? 12 : 0) + Math.floor(index / 2) * 2;

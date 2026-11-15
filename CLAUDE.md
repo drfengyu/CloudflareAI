@@ -534,8 +534,17 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.76.5（2026-11-15，任务成就消费口径补齐）
+**当前版本**：v0.76.6（2026-11-15，野外杂兵等级与装备下调）
 **下一版本**：待定
+
+- v0.76.6 三国讨逆传野外杂兵减负：`SAGA_RULESET` 5 → 6。杂兵（兵士 / 山贼 / 海贼 /
+  盗贼）兵器甲胄由比同级敌将低一档改为**低两档**（`gearTierFor` 传 -2，营寨
+  `buildSoldier` 同步），野外杂兵等级由「章节 × 3 + 场次 / 2」下调为
+  「章节 × 2 + 场次 / 3」（`squadEnemy` 按 rules 分支）。敌将等级、编成人数与遭遇
+  种类不受影响；旧行军 `legacyRules = 5` 重放已落指令、战报不变。测试更新为 v6 低两档 /
+  v5 低一档 / v3 空手，并新增 v5 vs v6 杂兵等级对比；`tests/trial-saga.test.ts`
+  56/56 通过，`tsc` 0 错误，改动文件 ESLint 0/0，`npm run build` 通过。
+  本机无 `.env.local`，页面未实测。
 
 - v0.76.5 任务成就消费口径补齐：`daily_spend` / `weekly_spend` 原先只读
   `usage_log.creditsUsed`，在消费返利页兑换活动券 / 珍宝礼包、游戏内用 tcr 买礼包时

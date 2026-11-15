@@ -14,10 +14,11 @@ export const SAGA_SAVE_VERSION = 1;
  * 战斗规则版本：v2 起武将固有特性、按等级成长策略点与领悟计策生效；
  * v3 起营寨随机增兵、敌将带装备、命中与伤害按智力 / 等级浮动；
  * v4 起杂兵（兵士 / 山贼 / 海贼 / 盗贼）也按等级带装备，但比同级敌将低一档；
- * v5 起敌方装备每 5 级升一档并带随机强化，招降只收人、不带随身装备。
+ * v5 起敌方装备每 5 级升一档并带随机强化，招降只收人、不带随身装备；
+ * v6 起杂兵装备比同级敌将低两档（v4/v5 低一档），野外杂兵等级也整体下调。
  * 旧行军没有这个字段，重放时按 v1 走，避免改版把还没收兵的对局打乱。
  */
-export const SAGA_RULESET = 5;
+export const SAGA_RULESET = 6;
 
 export const SAGA_PARTY_SIZE = 5;
 export const SAGA_RESERVE_SIZE = 12;
@@ -252,7 +253,7 @@ export interface SagaEnemy {
   tactics: TacticId[];
   /** 敌将若在武将表里有固有特性，出阵时一并带上。 */
   traits?: SagaTraitId[];
-  /** 杂兵（兵士 / 山贼 / 海贼 / 盗贼）：装备比同级敌将低一档。 */
+  /** 杂兵（兵士 / 山贼 / 海贼 / 盗贼）：v6 起装备比同级敌将低两档，v4/v5 低一档。 */
   poor?: boolean;
   color: string;
   accent: string;

@@ -1026,7 +1026,7 @@ test("野外遭遇兵种：兵士、山贼、海贼、盗贼都可能出现，�
   assert.equal(withLeader && withoutLeader, true, "有将领与纯杂兵两种编成都出现");
 });
 
-test("杂兵装备：v5 按等级发兵甲但比敌将低一档，旧规则杂兵仍空手", () => {
+test("杂兵装备：v6 比敌将低两档，v5 低一档、v3 空手", () => {
   const weapons = ["iron_sword", "spear", "blade", "guandao"];
   const armors = ["cloth", "leather", "iron_armor", "heavy_armor"];
   const expectedTier = (level: number, shift: number) =>
@@ -1039,8 +1039,8 @@ test("杂兵装备：v5 按等级发兵甲但比敌将低一档，旧规则杂�
     const squads = battle.enemies.filter((enemy) => enemy.id.startsWith("foe_"));
     assert.equal(squads.length >= 1, true, `第 ${ordinal} 场有杂兵`);
     for (const foe of squads) {
-      const tier = expectedTier(foe.level, -1);
-      assert.equal(foe.weapon, weapons[tier], "杂兵兵器比同级敌将低一档");
+      const tier = expectedTier(foe.level, -2);
+      assert.equal(foe.weapon, weapons[tier], "杂兵兵器比同级敌将低两档");
       assert.equal(foe.armor, armors[tier]);
       assert.equal(foe.weaponAtk > 0 && foe.armorDef > 0, true, "杂兵装备计入攻防");
       assert.equal((foe.weaponPlus ?? 0) <= 1 && (foe.armorPlus ?? 0) <= 1, true, "杂兵强化最多 +1");
@@ -1048,6 +1048,12 @@ test("杂兵装备：v5 按等级发兵甲但比敌将低一档，旧规则杂�
     for (const leader of battle.enemies.filter((enemy) => !enemy.id.startsWith("foe_"))) {
       assert.equal(leader.weapon, weapons[expectedTier(leader.level, 0)], "领头敌将按本级发装备");
     }
+  }
+
+  const legacy5 = { ...run, rules: 5 };
+  const legacy5Battle = startEncounterBattle(legacy5, 0, createReplayState(legacy5));
+  for (const foe of legacy5Battle.enemies.filter((enemy) => enemy.id.startsWith("foe_"))) {
+    assert.equal(foe.weapon, weapons[expectedTier(foe.level, -1)], "v5 杂兵只比敌将低一档");
   }
 
   const legacy = { ...run, rules: 3 };
@@ -1059,6 +1065,28 @@ test("杂兵装备：v5 按等级发兵甲但比敌将低一档，旧规则杂�
     true,
     "v3 杂兵不带装备",
   );
+});
+
+test("野外杂兵等级：v6 整体下调，v5 旧行军保留原等级", () => {
+  const save = { ...initialTrialSave(), chapter: 4 };
+  const run = generateSagaRun({ activityKey: "trial-test", save, nodeCount: 5, seed: 77 });
+  const squadsOf = (rules: number) =>
+    sagaEncounterFor(run, 8, rules).enemies.filter((enemy) => enemy.id.startsWith("foe_"));
+
+  const before = squadsOf(5);
+  const after = squadsOf(6);
+  assert.equal(after.length, before.length, "调等级不影响编成人数");
+  assert.deepEqual(
+    before.map((enemy) => enemy.level),
+    before.map(() => 1 + 4 * 3 + Math.floor(8 / 2)),
+  );
+  assert.deepEqual(
+    after.map((enemy) => enemy.level),
+    after.map(() => 1 + 4 * 2 + Math.floor(8 / 3)),
+  );
+  after.forEach((enemy, index) => {
+    assert.ok(enemy.level < before[index].level, "v6 杂兵等级低于 v5");
+  });
 });
 
 test("行动顺序按有效速度排：阵型加成计入，同速玩家先手", () => {
