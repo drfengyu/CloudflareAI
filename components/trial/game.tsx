@@ -504,6 +504,16 @@ export function TrialGame(props: TrialGameProps) {
           setSaveState("error");
           return;
         }
+        // 乐观锁冲突时服务端会把已落库的指令回传；清洗后比本地长就对齐过去，
+        // 不然下一次存档可能拿短的一截把别处已经写进去的进度盖掉。
+        // 先清洗再比长度：旧版页面的清洗规则与服务器不一致时也不会来回覆盖。
+        if (!result.data.settled) {
+          const serverCommands = sanitizeSagaCommands(result.data.commands);
+          if (serverCommands.length > commands.length) {
+            setCommands(serverCommands);
+            return;
+          }
+        }
         setSaveState("saved");
         if (result.data.settled) {
           if (result.data.settlement) finishRun(result.data.settlement);
@@ -529,7 +539,9 @@ export function TrialGame(props: TrialGameProps) {
       const data = result.data;
       setRunId(data.runId);
       setRun(data.run);
-      setCommands([]);
+      // 服务端可能直接复用还没收兵的那次行军，本地缓存里也可能有更长的进度；
+      // 一律从两者中取更长的一份，不能拿空数组把服务端的进度盖掉。
+      setCommands(initialCommands(data));
       setSettlement(null);
       setPanel(null);
       setCampNode(null);
@@ -1334,12 +1346,18 @@ export function TrialGame(props: TrialGameProps) {
   const retreatBattle = useCallback(() => {
     if (!battle) return;
     if (!window.confirm("撤退只结束当前这场战斗，之前的战果与指令都已自动存档，行军不会中断。确定撤退？")) return;
-    const block: SagaCommand = battle.encounter
-      ? { k: "skirmish", rounds: battle.rounds }
-      : { k: "battle", node: battle.node, rounds: battle.rounds };
+    // 一回合没打就退的遭遇不落指令：遭遇按「第几场」复现，平白多记一场会让
+    // 之后的野外战斗与服务端序号错位。营地战不受影响，空回合也照常留档。
+    const block: SagaCommand | null =
+      battle.rounds.length === 0
+        ? null
+        : battle.encounter
+          ? { k: "skirmish", rounds: battle.rounds }
+          : { k: "battle", node: battle.node, rounds: battle.rounds };
     const retreat: SagaCommand = { k: "retreat" };
-    const replayed = run ? replaySagaRun(run, [...commands, block, retreat]) : null;
-    appendCommand(block);
+    const next = block ? [...commands, block, retreat] : [...commands, retreat];
+    const replayed = run ? replaySagaRun(run, next) : null;
+    if (block) appendCommand(block);
     appendCommand(retreat);
     setBattle(null);
     setAnim(null);

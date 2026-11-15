@@ -593,8 +593,8 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
           rounds.push(sanitizeRoundCommands(round));
           totalRounds += 1;
         }
-        // 空指令打不完一场遭遇，重放只会把行军锁在战斗里，直接丢掉。
-        if (rounds.length === 0) break;
+        // 一回合没打就撤退的遭遇也要留档：遭遇编成按「第几场」复现，
+        // 丢掉空格会让人物端的场次序号整体错位，后面的遭遇战全部对不上。
         out.push({ k: "skirmish", rounds });
         break;
       }
@@ -775,9 +775,11 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
     if (state.scene === "won") break;
     const command = commands[index];
     if (state.scene === "battle") {
-      // 战斗没打完时只有撤退能生效：把当前兵力记回队伍，接着行军，进度不会丢。
-      if (command.k === "retreat") retreatFromBattle(state);
-      continue;
+      // 上一段战报没有打完（旧客户端撤退、遭遇场次错位）：按撤退把兵力记回队伍，
+      // 后面的营地、购买与剧情照常重放，不再把整条行军锁死在战斗里。
+      const retreating = command.k === "retreat";
+      const done = retreatFromBattle(state);
+      if (!done || retreating) continue;
     }
     switch (command.k) {
       case "formation":
@@ -799,7 +801,7 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
         // 败退回城后必须先住店重整，零兵力再出兵只会白送一场。
         if (state.scene === "lost") break;
         if (!canEngageNode(run, state, command.node)) break;
-        // 战斗指令必须一次打完：中途停下就锁在本场，不能靠重开指令反复刷新兵力。
+        // 一场仗的回合必须一次给完；没打完的回放按撤退收尾，不能靠重开指令反复刷新兵力。
         state.scene = "battle";
         const battle = startBattle(run, command.node, state);
         for (const round of command.rounds) {

@@ -215,6 +215,25 @@ const winCommands: SagaCommand[] = [
   },
 ];
 
+const campWinRounds = Array.from({ length: 5 }, () => [
+  { g: "liubei", a: "attack" as const, target: 0 },
+  { g: "guanyu", a: "attack" as const, target: 0 },
+  { g: "zhangfei", a: "attack" as const, target: 0 },
+]);
+
+/** 两座一碰就碎的营地：用来验证遭遇/战报中断之后，后面的营地与奖励还能接着结算。 */
+function easyCampsRun(): SagaRun {
+  const base = easyRun();
+  const camp = (index: number) => ({
+    ...base.nodes[0],
+    kind: "battle" as const,
+    name: `测试营 ${index + 1}`,
+    rewardGold: 20 + index * 10,
+    rewardExp: index === 0 ? 30 : 60,
+  });
+  return { ...base, nodes: [camp(0), camp(1)] };
+}
+
 // ---------------------------------------------------------------- 每日试炼
 
 test("讨逆传生成：同种子同一局，节点按章节地名推进并以首领收尾", () => {
@@ -313,7 +332,7 @@ test("指令清洗：未知字段、旧金币商店与错槽装备都被丢弃",
   assert.deepEqual(sanitizeSagaCommands("nope"), []);
 });
 
-test("指令重放是纯函数；战斗没打完会锁住本场，不能反复重开", () => {
+test("指令重放是纯函数；没打完的战斗不会锁死后面的行军", () => {
   const run = freshRun(21, 3);
   const idle = replaySagaRun(run, []);
   assert.equal(idle.state.scene, "field");
@@ -325,13 +344,22 @@ test("指令重放是纯函数；战斗没打完会锁住本场，不能反复�
     { k: "battle", node: 0, rounds: [] },
   ];
   const first = replaySagaRun(run, commands);
-  assert.equal(first.state.scene, "battle");
-  assert.equal(first.state.battle?.nodeName, run.nodes[0].name);
+  assert.equal(first.state.scene, "battle", "最后一段战报没打完，停在战场上等撤退或续战");
+  assert.equal(first.state.battle?.nodeIndex, 0);
+  assert.equal(first.state.save.formation, "fengshi", "战前变更的阵型保留");
+  assert.equal(first.cleared, 0);
   assert.deepEqual(replaySagaRun(run, commands), first);
 
-  const withLeave = replaySagaRun(run, [...commands, { k: "leave" }]);
-  assert.equal(withLeave.state.scene, "battle");
-  assert.equal(withLeave.cleared, 0);
+  const bailed = replaySagaRun(run, [...commands, { k: "retreat" }]);
+  assert.equal(bailed.state.scene, "field", "撤退后回到大地图");
+  assert.equal(bailed.state.battle, null);
+  assert.equal(bailed.state.save.formation, "fengshi");
+
+  // 后面的指令照常生效：不会因为上一场没打完就把整条行军锁在战斗里。
+  const withFormation = replaySagaRun(run, [...commands, { k: "formation", f: "changshe" }]);
+  assert.equal(withFormation.state.scene, "field");
+  assert.equal(withFormation.state.save.formation, "changshe");
+  assert.equal(withFormation.cleared, 0);
 });
 
 test("攻打顺序由大地图走位决定：首领本阵要先拔尽其余营寨", () => {
@@ -374,7 +402,7 @@ test("军需购买从 cmdIndex 起生效，不会回溯加强已经开打的战�
 
   const baseline = troops(replaySagaRun(run, [battle]));
   const applied = troops(replaySagaRun(purchased(0), [battle]));
-  const late = troops(replaySagaRun(purchased(1), [battle, { k: "leave" }]));
+  const late = troops(replaySagaRun(purchased(1), [battle]));
   assert.ok(applied > baseline, "开战前买虎符，全队兵力上限提高");
   assert.equal(late, baseline, "打完第一场再买，本场不会被加强");
 });
@@ -1167,8 +1195,17 @@ test("野外遭遇战：不占营地进度，打赢照常得金币经验并继�
   assert.equal(settled.result.goldGained, result.state.goldGained);
 });
 
-test("野外遭遇指令：空指令被丢弃，遭遇场次不设上限", () => {
-  assert.deepEqual(sanitizeSagaCommands([{ k: "skirmish", rounds: [] }]), []);
+test("野外遭遇指令：空遭遇也留档以对齐场次，遭遇场次不设上限", () => {
+  assert.deepEqual(sanitizeSagaCommands([{ k: "skirmish", rounds: [] }]), [
+    { k: "skirmish", rounds: [] },
+  ]);
+  const run = easyRun();
+  const empty = replaySagaRun(run, [{ k: "skirmish", rounds: [] }]);
+  assert.equal(empty.state.encounters, 1, "空遭遇也占一个场次，后面的战斗序号才不会错位");
+  const bailed = replaySagaRun(run, [{ k: "skirmish", rounds: [] }, { k: "retreat" }]);
+  assert.equal(bailed.state.scene, "field", "没打完的遭遇按撤退收尾");
+  assert.equal(bailed.state.battle, null);
+
   const many = 30;
   const spam = Array.from({ length: many }, () => ({
     k: "skirmish" as const,
@@ -1177,6 +1214,80 @@ test("野外遭遇指令：空指令被丢弃，遭遇场次不设上限", () =>
   const cleaned = sanitizeSagaCommands(spam);
   assert.equal(cleaned.length, many);
   assert.equal(cleaned.every((command) => command.k === "skirmish"), true);
+});
+
+test("空遭遇撤退后，后面的营地、金币与经验照常结算", () => {
+  const run = easyCampsRun();
+  const commands: SagaCommand[] = [
+    { k: "skirmish", rounds: [] },
+    { k: "retreat" },
+    { k: "battle", node: 0, rounds: campWinRounds },
+    { k: "battle", node: 1, rounds: campWinRounds },
+  ];
+  assert.deepEqual(sanitizeSagaCommands(commands), commands, "每段指令都保留，不能丢段错位");
+  const result = replaySagaRun(run, sanitizeSagaCommands(commands));
+  assert.equal(result.state.encounters, 1);
+  assert.deepEqual(result.state.clearedNodes, [0, 1], "两座营地都平定");
+  assert.equal(result.state.scene, "won");
+  assert.equal(result.state.goldGained, 50, "两座营地的金币都进账");
+  assert.equal(result.state.expGained, 90, "经验照常累计");
+  assert.equal(result.state.save.gold, run.startSave.gold + 50);
+  const hero = result.state.save.party.find((general) => general.id === "liubei");
+  assert.equal(hero?.level, 2, "经验够升级，等级没有丢");
+});
+
+test("战报没打完：按撤退收尾，下一座营地照常开打，不会锁死整条行军", () => {
+  const run = easyCampsRun();
+  const result = replaySagaRun(run, [
+    { k: "battle", node: 0, rounds: [] },
+    { k: "battle", node: 0, rounds: campWinRounds },
+    { k: "battle", node: 1, rounds: campWinRounds },
+  ]);
+  assert.deepEqual(result.state.clearedNodes, [0, 1]);
+  assert.equal(result.state.scene, "won");
+  assert.equal(result.state.goldGained, 50);
+
+  const trailing = replaySagaRun(run, [{ k: "battle", node: 0, rounds: [] }]);
+  assert.equal(trailing.state.scene, "battle", "最后一段没打完就停在战场上，下次接着收尾");
+  assert.equal(trailing.state.battle?.nodeIndex, 0);
+  assert.equal(trailing.state.clearedNodes.length, 0);
+});
+
+test("战败住店重整：练出的等级、买来的兵器与强化等级都留在存档里", () => {
+  const camps = easyCampsRun();
+  const brutal = wreckedRun().nodes[0];
+  const run: SagaRun = {
+    ...camps,
+    nodes: [
+      { ...camps.nodes[0], rewardExp: 60 },
+      { ...brutal, chapter: camps.startSave.chapter },
+    ],
+    purchases: [
+      { id: "buy-sword", itemId: "iron_sword", tickets: 1, at: 0, cmdIndex: 0 },
+      {
+        id: "forge-sword",
+        itemId: SAGA_FORGE_ITEM_ID,
+        tickets: 3,
+        gearId: "iron_sword",
+        targetLevel: 2,
+        at: 3,
+        cmdIndex: 3,
+      },
+      { id: "inn-after-lost", itemId: SAGA_INN_ITEM_ID, tickets: 1, at: 3, cmdIndex: 3 },
+    ],
+  };
+  const settled = settleSagaRun(run, [
+    { k: "equip", g: "liubei", slot: "weapon", i: "iron_sword" },
+    { k: "battle", node: 0, rounds: campWinRounds },
+    { k: "battle", node: 1, rounds: campWinRounds },
+  ]);
+  assert.equal(settled.state.scene, "field", "住店后从兵败状态里拉回来");
+  assert.deepEqual(settled.state.clearedNodes, [0], "只有打得过的营地算平定");
+  const hero = settled.endSave.party.find((general) => general.id === "liubei");
+  assert.equal(hero?.weapon, "iron_sword", "买来并换上的兵器还在");
+  assert.equal(hero?.level, 2, "打完营地练出的等级还在");
+  assert.equal(settled.endSave.gearLevels?.iron_sword, 2, "铁匠铺的强化等级还在");
+  assert.equal(settled.endSave.gold, run.startSave.gold + 20, "营地的金币也进账");
 });
 
 test("野外遭遇只在行军途中发生：兵败后不再受理遭遇指令", () => {

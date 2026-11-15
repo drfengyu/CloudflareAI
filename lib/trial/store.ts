@@ -68,6 +68,17 @@ import {
 export class TrialError extends Error {}
 
 /**
+ * 商店写入时客户端顺手带回的指令段：只接受不短于已存进度的版本。
+ * 刷新、多端并发或本地缓存滞后时，短的一截会把已经打过的仗从存档里抹掉。
+ */
+function mergeRunCommands(run: SagaRun, raw: unknown): SagaCommand[] | null {
+  const incoming = sanitizeSagaCommands(raw);
+  const stored = run.commands ?? [];
+  if (incoming.length === 0 || incoming.length < stored.length) return null;
+  return incoming;
+}
+
+/**
  * 历史上有几条行军把 startedAt 写成了 ISO 文本（旧路径直接绑 Date），
  * SQLite 排序时 TEXT 恒大于 INTEGER，按原列排序会把旧行当成最新。
  * 统一折算成毫秒再排，文本行与整数行都能按真实时间先后排对。
@@ -150,6 +161,24 @@ export async function findActiveTrialRun(
   if (!row) return null;
   const run = parseSagaRun(row.questions);
   if (!run) return null;
+  // 旧规则行军读取时会把规则版本补到当前；立刻把分界写回存档。
+  // 否则客户端与服务端在不同时刻解析同一行，会得出两个不同的 `rulesFrom`，
+  // 同一段战报一边判赢、一边判输，后面的营地与购买就全被跳过。
+  if (run.legacyRules !== undefined) {
+    let storedFrom: unknown;
+    try {
+      storedFrom = (JSON.parse(row.questions) as { rulesFrom?: unknown }).rulesFrom;
+    } catch {
+      storedFrom = undefined;
+    }
+    if (storedFrom === undefined) {
+      await d1Run(
+        `UPDATE trial_run SET questions = ?
+          WHERE id = ? AND userId = ? AND status = 'active' AND questions = ?`,
+        [JSON.stringify(run), row.id, userId, row.questions],
+      );
+    }
+  }
   // 出城后没落过指令、没买过东西的空壳行军（刷新 / 误关页面留下）不算进度：
   // 直接当作没有进行中的行军，让下一次出发按最新存档重开。
   if (sagaRunUntouched(run)) return null;
@@ -198,6 +227,12 @@ export async function saveTrialRunProgress(input: {
   }
 
   const commands = sanitizeSagaCommands(input.commands.slice(0, SAGA_MAX_COMMANDS));
+  // 旧页面 / 多端并发传来更短的一截时，别拿它覆盖服务端更长的自动存档；
+  // 把已存进度回传给客户端，下一次存档自然对齐。
+  const stored = run.commands ?? [];
+  if (commands.length < stored.length) {
+    return { commands: stored, settled: false, settlement: null };
+  }
   const replay = replaySagaRun(run, commands);
   const next: SagaRun = { ...run, commands };
   const updated = await d1Run(
@@ -564,7 +599,8 @@ export async function buyTrialItem(input: {
   }
 
   const cmdIndex = Math.max(0, Math.min(SAGA_MAX_COMMANDS, Math.trunc(Number(input.cmdIndex) || 0)));
-  const commands = sanitizeSagaCommands((input.commands ?? []).slice(0, SAGA_MAX_COMMANDS));
+  const incomingCommands = mergeRunCommands(run, input.commands);
+  const commands = incomingCommands ?? run.commands ?? [];
   let tickets = priceTickets;
   let training: { generalId: string; targetLevel: number } | null = null;
   if (isTraining) {
@@ -604,7 +640,7 @@ export async function buyTrialItem(input: {
       },
     ],
     shopSeq: run.shopSeq + 1,
-    ...(commands.length > 0 ? { commands } : {}),
+    ...(incomingCommands ? { commands: incomingCommands } : {}),
   };
   const updated = await d1Run(
     `UPDATE trial_run SET questions = ?
@@ -669,7 +705,8 @@ export async function upgradeTrialGear(input: {
   const run = parseSagaRun(row.questions);
   if (!run) throw new TrialError("行军数据异常，请重新出发");
 
-  const cmds = sanitizeSagaCommands((input.commands ?? []).slice(0, SAGA_MAX_COMMANDS));
+  const incomingCommands = mergeRunCommands(run, input.commands);
+  const cmds = incomingCommands ?? run.commands ?? [];
   const progress = replaySagaRun({ ...run, commands: cmds }, cmds).state.save;
   const current = gearLevel(progress, gearId);
 
@@ -720,7 +757,7 @@ export async function upgradeTrialGear(input: {
       },
     ],
     shopSeq: run.shopSeq + 1,
-    ...(cmds.length > 0 ? { commands: cmds } : {}),
+    ...(incomingCommands ? { commands: incomingCommands } : {}),
   };
   const updated = await d1Run(
     `UPDATE trial_run SET questions = ?
@@ -790,7 +827,8 @@ export async function buyTrialCoupons(input: {
   const run = parseSagaRun(row.questions);
   if (!run) throw new TrialError("行军数据异常，请重新出发");
 
-  const commands = sanitizeSagaCommands(input.commands ?? []);
+  const incomingCommands = mergeRunCommands(run, input.commands);
+  const commands = incomingCommands ?? run.commands ?? [];
   const gold = replaySagaRun(run, commands).state.save.gold;
   if (run.purchases.some((purchase) => purchase.id === purchaseId)) {
     return {
@@ -830,7 +868,7 @@ export async function buyTrialCoupons(input: {
       },
     ],
     shopSeq: run.shopSeq + 1,
-    ...(commands.length > 0 ? { commands } : {}),
+    ...(incomingCommands ? { commands: incomingCommands } : {}),
   };
   const updated = await d1Run(
     `UPDATE trial_run SET questions = ?
