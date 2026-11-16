@@ -8,7 +8,7 @@ import {
   type TrialConfig,
 } from "../lib/trial/config";
 import { SAGA_CHAPTERS, SAGA_GENERAL_BY_ID, SAGA_TRAITS, SAGA_TRAIT_BY_ID, sagaBondsFor, sagaCorpsOf, tacticsFor, traitStats } from "../lib/trial/saga/data";
-import { SAGA_NOTICES, latestNoticeId, maintenanceActiveAt, maintenancePhaseAt } from "../lib/trial/saga/notice";
+import { SAGA_NOTICES, SAGA_NOTICE_VERSION, latestNoticeId, maintenanceActiveAt, maintenancePhaseAt } from "../lib/trial/saga/notice";
 import {
   SAGA_FIELD_COLS,
   SAGA_FIELD_ROWS,
@@ -2138,7 +2138,7 @@ const NOTICE_WINDOW = { start: "2026-11-18T02:00:00+08:00", end: "2026-11-18T04:
 test("公告与维护窗口判定", () => {
   // 公告按版本从新到旧，最新一条的 id 就是红点比对的基准。
   assert.ok(SAGA_NOTICES.length >= 5);
-  assert.equal(SAGA_NOTICES[0].version, "0.82.0");
+  assert.equal(SAGA_NOTICES[0].version, SAGA_NOTICE_VERSION, "最新公告与版本号一致");
   assert.equal(latestNoticeId(), SAGA_NOTICES[0].id);
   assert.equal(new Set(SAGA_NOTICES.map((row) => row.id)).size, SAGA_NOTICES.length, "公告 id 不能重复");
   assert.ok(SAGA_NOTICES.every((row) => row.lines.length > 0 && row.version && row.date));

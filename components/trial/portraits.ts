@@ -205,6 +205,15 @@ function drawWeapon(traits: PortraitTraits, weapon: string | null | undefined): 
   }
 }
 
+
+/** 吞食天地那种粗墨线：填充完的路径再描一圈深色边，远看轮廓成立。 */
+function ink(width = 2): void {
+  c.strokeStyle = "#17130f";
+  c.lineWidth = width;
+  c.lineJoin = "round";
+  c.stroke();
+}
+
 let c: CanvasRenderingContext2D;
 
 function ctxFill(color: string, path: () => void): void {
@@ -254,6 +263,7 @@ function drawFace(traits: PortraitTraits): void {
   c.beginPath();
   c.ellipse(60, 64, 23, 28, 0, 0, Math.PI * 2);
   c.fill();
+  ink(1.8);
 
   if (traits.bigEars) {
     c.fillStyle = traits.skin;
@@ -393,8 +403,12 @@ function drawHat(traits: PortraitTraits): void {
     c.fill();
     c.fillStyle = "#2b2620";
     c.fillRect(34, 38, 52, 9);
+    c.strokeStyle = "#17130f";
+    c.lineWidth = 1.8;
+    c.strokeRect(34, 38, 52, 9);
     c.fillStyle = "#1b1814";
     c.fillRect(38, 24, 44, 6);
+    c.strokeRect(38, 24, 44, 6);
     c.fillStyle = accent;
     for (let i = 0; i < 5; i++) {
       c.beginPath();
@@ -439,6 +453,7 @@ function drawHat(traits: PortraitTraits): void {
     c.quadraticCurveTo(44, 34, 42, 46);
     c.closePath();
     c.fill();
+    ink(2);
     c.fillStyle = accent;
     c.fillRect(38, 44, 44, 3);
     c.fillStyle = "#2f3a45";
@@ -504,6 +519,7 @@ function drawHat(traits: PortraitTraits): void {
   c.lineTo(35, 48);
   c.closePath();
   c.fill();
+  ink(2.2);
   c.fillStyle = "#2b2822";
   c.fillRect(35, 46, 50, 5);
   c.fillStyle = accent;
@@ -545,6 +561,7 @@ function drawArmor(traits: PortraitTraits, tier: 0 | 1 | 2 | 3): void {
   c.lineTo(104, 150);
   c.closePath();
   c.fill();
+  ink(2.2);
 
   // 衣襟
   c.fillStyle = "rgba(255,255,255,0.14)";
@@ -688,6 +705,52 @@ function shade(hex: string, delta: number): string {
   return `rgb(${r},${g},${b})`;
 }
 
+
+/** 一张胸像的主体：兵器、甲胄、脸、冠盔、羽扇。立绘与战斗大立绘共用。 */
+function paintBustCore(traits: PortraitTraits, gear: PortraitGear): void {
+  drawWeapon(traits, gear.weapon);
+  drawArmor(traits, armorTier(gear.armor));
+  drawFace(traits);
+  drawHat(traits);
+  drawFan(traits);
+}
+
+export interface BattleBustOptions {
+  facing?: 1 | -1;
+  /** 整体透明度：出场淡入 / 退场淡出用。 */
+  alpha?: number;
+}
+
+/**
+ * 战斗中的武将大立绘：透明底、带墨线，直接叠在战场两侧。
+ * 坐标沿用立绘的 120×150 内部空间，只是不画背景与边框。
+ */
+export function paintBattleBust(
+  ctx: CanvasRenderingContext2D,
+  traits: PortraitTraits,
+  gear: PortraitGear,
+  x: number,
+  y: number,
+  height: number,
+  options: BattleBustOptions = {},
+): void {
+  c = ctx;
+  const scale = height / 150;
+  ctx.save();
+  ctx.globalAlpha *= options.alpha ?? 1;
+  ctx.translate(x, y);
+  ctx.scale((options.facing ?? 1) * scale, scale);
+  ctx.translate(-60, -150);
+
+  ctx.fillStyle = "rgba(0,0,0,0.32)";
+  ctx.beginPath();
+  ctx.ellipse(60, 148, 42, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  paintBustCore(traits, gear);
+  ctx.restore();
+}
+
 /** 在给定矩形里画一张胸像；所有立绘共用 120×150 的内部坐标。 */
 export function paintTraitsPortrait(
   ctx: CanvasRenderingContext2D,
@@ -717,6 +780,19 @@ export function paintTraitsPortrait(
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, 120, 150);
 
+  // 背后的放射线：吞食天地立绘那种从人物身后炸开的阵仗感
+  ctx.save();
+  ctx.translate(60, 58);
+  for (let i = 0; i < 16; i += 1) {
+    if (i % 2 === 0) continue;
+    ctx.fillStyle = `${traits.accent}12`;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, 190, (i / 16) * Math.PI * 2, ((i + 1) / 16) * Math.PI * 2);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.restore();
   // 背后的淡墨圆与山影
   ctx.strokeStyle = "rgba(232,213,171,0.14)";
   ctx.lineWidth = 1.2;
@@ -733,11 +809,7 @@ export function paintTraitsPortrait(
   ctx.closePath();
   ctx.fill();
 
-  drawWeapon(traits, gear.weapon);
-  drawArmor(traits, armorTier(gear.armor));
-  drawFace(traits);
-  drawHat(traits);
-  drawFan(traits);
+  paintBustCore(traits, gear);
 
   ctx.strokeStyle = "rgba(202,161,90,0.55)";
   ctx.lineWidth = 1.5;

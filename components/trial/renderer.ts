@@ -19,7 +19,8 @@ import {
 } from "@/lib/trial/saga/types";
 import type { FieldHotspot } from "@/lib/trial/saga/map";
 import { battleAttackPower } from "@/lib/trial/saga/battle";
-import { SAGA_CORPS_LABEL } from "@/lib/trial/saga/data";
+import { SAGA_CORPS_LABEL, SAGA_GENERAL_BY_ID } from "@/lib/trial/saga/data";
+import { paintBattleBust, portraitTraitsFor } from "@/components/trial/portraits";
 
 /**
  * 三国讨逆传的 Canvas 美术：俯视行军大地图与回合战斗两张场景。
@@ -2546,6 +2547,53 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
   battle.enemies.forEach((unit, index) => {
     drawUnit(unit, enemySlots[index], "enemy", index);
   });
+
+  // 出手武将的大立绘：吞食天地那种「一出招就把人怼到镜头前」的演出。
+  // 只在普攻 / 计策的动画窗口里出现，用事件进度淡入、再淡出，不挡血条。
+  const actorUnit = currentEvent
+    ? [...battle.party, ...battle.enemies].find((unit) => unit.name === currentEvent?.actor)
+    : undefined;
+  if (
+    anim &&
+    currentEvent &&
+    actorUnit &&
+    (currentEvent.kind === "attack" || currentEvent.kind === "tactic") &&
+    eventProgress < 0.72
+  ) {
+    const def = SAGA_GENERAL_BY_ID.get(actorUnit.id);
+    if (def) {
+      const alpha = Math.max(
+        0,
+        Math.min(1, eventProgress / 0.14) - Math.max(0, (eventProgress - 0.46) / 0.24),
+      );
+      if (alpha > 0) {
+        const tall = 248;
+        const baseY = 486;
+        const x = currentEvent.side === "player" ? 104 : 856;
+        const warm = currentEvent.side === "player" ? "240,208,150" : "226,124,96";
+        ctx.save();
+        ctx.globalAlpha = alpha * 0.55;
+        const glow = ctx.createRadialGradient(x, baseY - tall * 0.46, 6, x, baseY - tall * 0.46, tall * 0.7);
+        glow.addColorStop(0, `rgba(${warm},0.55)`);
+        glow.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(x, baseY - tall * 0.46, tall * 0.7, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        paintBattleBust(
+          ctx,
+          portraitTraitsFor(def),
+          { weapon: actorUnit.weapon, armor: actorUnit.armor },
+          x,
+          baseY,
+          tall,
+          { facing: currentEvent.side === "player" ? 1 : -1, alpha },
+        );
+      }
+    }
+  }
 
   // 每名武将头顶一条兵力条：条长按兵力上限在全场里的占比定，
   // 起手就能看出谁兵多、谁不经打；兵力变化只改填充比例，条长不变。

@@ -3225,8 +3225,8 @@ function StatusRoster({
               <SagaPortrait
                 generalId={member.id}
                 gear={{ weapon: member.weapon, armor: member.armor }}
-                width={44}
-                height={55}
+                width={56}
+                height={70}
               />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between">
@@ -3292,8 +3292,8 @@ function PartyList({ save, rules = SAGA_RULESET }: { save: TrialSave; rules?: nu
               <SagaPortrait
                 generalId={member.id}
                 gear={{ weapon: member.weapon, armor: member.armor }}
-                width={38}
-                height={48}
+                width={48}
+                height={60}
               />
               <div className="min-w-0 flex-1">
                 <p className="flex items-center justify-between text-sm font-medium">
@@ -3366,11 +3366,11 @@ function DexGrid({
                   <SagaPortrait
                     generalId={def.id}
                     gear={gearById[def.id]}
-                    width={42}
-                    height={52}
+                    width={48}
+                    height={60}
                   />
                 ) : (
-                  <span className="flex h-[52px] w-[42px] shrink-0 items-center justify-center rounded-md border border-border/40 bg-muted/20 text-lg text-muted-foreground">
+                  <span className="flex h-[60px] w-[48px] shrink-0 items-center justify-center rounded-md border border-border/40 bg-muted/20 text-lg text-muted-foreground">
                     ？
                   </span>
                 )}

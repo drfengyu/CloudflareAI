@@ -28,10 +28,22 @@ export interface SagaMaintenanceWindow {
 }
 
 /** 游戏内公告版本号（与站点版本对齐）。 */
-export const SAGA_NOTICE_VERSION = "0.82.0";
+export const SAGA_NOTICE_VERSION = "0.83.0";
 
 /** 最新公告：按版本从新到旧。 */
 export const SAGA_NOTICES: SagaNoticeEntry[] = [
+  {
+    id: "notice-0.83.0",
+    version: "0.83.0",
+    date: "2026-11-16",
+    kind: "update",
+    title: "立绘与战斗演出重做",
+    lines: [
+      "武将立绘按吞食天地那种路子重画：粗墨线轮廓、平涂色块、背后放射线，头像更大更清楚。",
+      "战斗里出手的普攻 / 计策会弹出一张半身大立绘，从自己一侧淡入再淡出，不挡血条与名字签。",
+      "图鉴、军中一览、队伍与敌情卡的立绘同步放大，武器与甲胄照样会改变立绘。",
+    ],
+  },
   {
     id: "notice-0.82.0",
     version: "0.82.0",
