@@ -7,7 +7,7 @@ import {
   trialGoldFor,
   type TrialConfig,
 } from "../lib/trial/config";
-import { SAGA_CHAPTERS, SAGA_GENERAL_BY_ID, SAGA_TRAITS, SAGA_TRAIT_BY_ID, tacticsFor, traitStats } from "../lib/trial/saga/data";
+import { SAGA_CHAPTERS, SAGA_GENERAL_BY_ID, SAGA_TRAITS, SAGA_TRAIT_BY_ID, sagaBondsFor, sagaCorpsOf, tacticsFor, traitStats } from "../lib/trial/saga/data";
 import { SAGA_NOTICES, latestNoticeId, maintenanceActiveAt, maintenancePhaseAt } from "../lib/trial/saga/notice";
 import {
   SAGA_FIELD_COLS,
@@ -82,7 +82,7 @@ import {
   initialTrialSave,
   normalizeTrialSave,
 } from "../lib/trial/saga/state";
-import { battleAttackPower, battleTurnOrder, resolveBattleRound, startBattle, startEncounterBattle } from "../lib/trial/saga/battle";
+import { battleAttackPower, battleTurnOrder, corpsCounterFactor, resolveBattleRound, startBattle, startEncounterBattle } from "../lib/trial/saga/battle";
 import { battleEnemyAtPoint, battleHpBarWidth, makeSagaView } from "../components/trial/renderer";
 import {
   SAGA_TRAINING_ITEM_ID,
@@ -2138,7 +2138,7 @@ const NOTICE_WINDOW = { start: "2026-11-18T02:00:00+08:00", end: "2026-11-18T04:
 test("公告与维护窗口判定", () => {
   // 公告按版本从新到旧，最新一条的 id 就是红点比对的基准。
   assert.ok(SAGA_NOTICES.length >= 5);
-  assert.equal(SAGA_NOTICES[0].version, "0.81.0");
+  assert.equal(SAGA_NOTICES[0].version, "0.82.0");
   assert.equal(latestNoticeId(), SAGA_NOTICES[0].id);
   assert.equal(new Set(SAGA_NOTICES.map((row) => row.id)).size, SAGA_NOTICES.length, "公告 id 不能重复");
   assert.ok(SAGA_NOTICES.every((row) => row.lines.length > 0 && row.version && row.date));
@@ -2154,5 +2154,49 @@ test("公告与维护窗口判定", () => {
   assert.equal(maintenancePhaseAt(at("2026-11-18T03:00:00+08:00"), NOTICE_WINDOW), "active");
   assert.equal(maintenancePhaseAt(at("2026-11-18T05:00:00+08:00"), NOTICE_WINDOW), "done");
   assert.equal(maintenancePhaseAt(at("2026-11-18T03:00:00+08:00"), null), null);
+});
+
+test("兵种相克与名将连携只在 v10 起生效", () => {
+  assert.equal(SAGA_RULESET, 10, "规则档升到 v10");
+
+  // 兵种按底子推：猛将骑、谋士弓、其余枪。
+  assert.equal(sagaCorpsOf(SAGA_GENERAL_BY_ID.get("lvbu")), "cavalry");
+  assert.equal(sagaCorpsOf(SAGA_GENERAL_BY_ID.get("zhugeliang")), "bow");
+  assert.equal(sagaCorpsOf(SAGA_GENERAL_BY_ID.get("guanyu")), "cavalry");
+  assert.equal(sagaCorpsOf(SAGA_GENERAL_BY_ID.get("liubei")), "spear");
+  assert.equal(sagaCorpsOf(undefined), "spear");
+
+  // 骑 > 弓 > 枪 > 骑；同兵种与旧规则不偏不倚。
+  assert.equal(corpsCounterFactor(10, "cavalry", "bow"), 1.15);
+  assert.equal(corpsCounterFactor(10, "bow", "spear"), 1.15);
+  assert.equal(corpsCounterFactor(10, "spear", "cavalry"), 1.15);
+  assert.equal(corpsCounterFactor(10, "bow", "cavalry"), 0.85);
+  assert.equal(corpsCounterFactor(10, "spear", "bow"), 0.85);
+  assert.equal(corpsCounterFactor(10, "cavalry", "cavalry"), 1);
+  assert.equal(corpsCounterFactor(9, "cavalry", "bow"), 1);
+
+  // 连携：同侧凑够 need 才生效，重复 id 不重复计数。
+  assert.deepEqual(sagaBondsFor(["liubei", "guanyu"]).map((bond) => bond.id), ["taoyuan"]);
+  assert.deepEqual(sagaBondsFor(["liubei"]), []);
+  assert.deepEqual(sagaBondsFor(["guanyu", "zhangfei", "zhaoyun"]).map((bond) => bond.id), ["taoyuan", "wuhu"]);
+  assert.deepEqual(sagaBondsFor(["yanliang", "wenchou"]).map((bond) => bond.id), ["hebei"]);
+
+  const run = { ...easyRun(), rules: SAGA_RULESET };
+  const battle = startBattle(run, 0, createReplayState(run));
+  assert.equal(battle.rules, 10);
+  const partyIds = battle.party.map((unit) => unit.id);
+  const bonds = sagaBondsFor(partyIds);
+  assert.equal(battle.party.every((unit) => unit.bonds.length === bonds.length), true, "连携按全队生效");
+  if (bonds.some((bond) => bond.id === "taoyuan")) {
+    const hero = battle.party.find((unit) => unit.id === "liubei");
+    assert.ok(hero && hero.bondAtk >= 0.1, "桃园结义给刘备加攻");
+  }
+
+  // 旧规则行军（v9 及以前）没有兵种与连携，重放结果不翻盘。
+  const legacy = { ...run, rules: 9 };
+  const oldBattle = startBattle(legacy, 0, createReplayState(legacy));
+  assert.equal(oldBattle.party.every((unit) => unit.corps === "spear" && unit.bonds.length === 0), true);
+  assert.equal(oldBattle.enemies.every((unit) => unit.corps === "spear" && unit.bonds.length === 0), true);
+  assert.equal(oldBattle.log.some((event) => event.text.includes("生效")), false, "旧规则不出连携战报");
 });
 

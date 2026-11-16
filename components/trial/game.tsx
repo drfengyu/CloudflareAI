@@ -32,6 +32,8 @@ import {
   SAGA_ITEMS,
   SAGA_TACTIC_BY_ID,
   SAGA_TRAIT_BY_ID,
+  SAGA_CORPS_LABEL,
+  sagaCorpsOf,
   tacticsFor,
 } from "@/lib/trial/saga/data";
 import {
@@ -3386,6 +3388,7 @@ function DexGrid({
                         {stats
                           ? `武 ${stats.force} · 智 ${stats.intellect} · 防 ${stats.defense} · 速 ${stats.speed} · 兵力 ${stats.maxTroops}`
                           : `武 ${def.force} · 智 ${def.intellect} · 防 ${def.defense} · 速 ${def.speed}（基础）`}
+                        {` · ${SAGA_CORPS_LABEL[sagaCorpsOf(def)]}兵`}
                       </p>
                       {stats ? (
                         <p className="mt-0.5 text-[10px] text-muted-foreground">

@@ -28,10 +28,22 @@ export interface SagaMaintenanceWindow {
 }
 
 /** 游戏内公告版本号（与站点版本对齐）。 */
-export const SAGA_NOTICE_VERSION = "0.81.0";
+export const SAGA_NOTICE_VERSION = "0.82.0";
 
 /** 最新公告：按版本从新到旧。 */
 export const SAGA_NOTICES: SagaNoticeEntry[] = [
+  {
+    id: "notice-0.82.0",
+    version: "0.82.0",
+    date: "2026-11-16",
+    kind: "update",
+    title: "兵种相克与名将连携",
+    lines: [
+      "新增兵种：武将按底子带骑兵 / 枪兵 / 弓兵，骑克弓、弓克枪、枪克骑，克制时伤害 +15%、受制 -15%。",
+      "新增 8 组名将连携：同侧凑齐对应名将即整队加成（桃园结义、五虎上将、曹魏肱骨、江东双璧等）。",
+      "战斗头顶标签与图鉴都标出当前兵种；开战时战报会写明这一场生效了哪些连携。",
+    ],
+  },
   {
     id: "notice-0.81.0",
     version: "0.81.0",

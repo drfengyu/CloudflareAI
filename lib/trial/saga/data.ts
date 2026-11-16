@@ -1,5 +1,6 @@
 import type {
   SagaChapterDef,
+  SagaCorps,
   SagaFormationDef,
   SagaGeneralDef,
   SagaItemDef,
@@ -523,3 +524,113 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
 export const SAGA_CHAPTER_BY_INDEX = new Map(SAGA_CHAPTERS.map((c) => [c.index, c]));
 
 export const SAGA_SKILLS_HINT = "攻击 / 计策 / 防御 / 道具 / 招降";
+
+/** 兵种简称：骑 / 枪 / 弓。 */
+export const SAGA_CORPS_LABEL: Record<SagaCorps, string> = {
+  cavalry: "骑",
+  spear: "枪",
+  bow: "弓",
+};
+
+/**
+ * 兵种按武将底子推：底子不动，长的只是等级与特性。
+ * 猛将（武力明显高于智力）带骑，谋士型（智力明显高于武力）带弓，其余枪兵。
+ */
+export function sagaCorpsOf(def?: SagaGeneralDef): SagaCorps {
+  if (!def) return "spear";
+  if (def.force - def.intellect >= 18) return "cavalry";
+  if (def.intellect - def.force >= 8) return "bow";
+  return "spear";
+}
+
+/** 名将连携：同一侧凑齐 need 人即整队生效（v10 起）。 */
+export interface SagaBondDef {
+  id: string;
+  name: string;
+  members: string[];
+  /** 需要同侧出现的人数（含重复 id 只算一次）。 */
+  need: number;
+  attackPct?: number;
+  damageCut?: number;
+  speed?: number;
+  tacticPoints?: number;
+  desc: string;
+}
+
+export const SAGA_BONDS: SagaBondDef[] = [
+  {
+    id: "taoyuan",
+    name: "桃园结义",
+    members: ["liubei", "guanyu", "zhangfei"],
+    need: 2,
+    attackPct: 0.1,
+    desc: "攻击 +10%",
+  },
+  {
+    id: "wuhu",
+    name: "五虎上将",
+    members: ["guanyu", "zhangfei", "zhaoyun", "machao", "huangzhong"],
+    need: 3,
+    attackPct: 0.12,
+    desc: "攻击 +12%",
+  },
+  {
+    id: "caowei",
+    name: "曹魏肱骨",
+    members: ["caocao", "xiahoudun", "xiahouyuan", "caoren", "xuchu", "dianwei"],
+    need: 3,
+    damageCut: 0.08,
+    desc: "减伤 8%",
+  },
+  {
+    id: "jiangdong",
+    name: "江东双璧",
+    members: ["sunce", "zhouyu"],
+    need: 2,
+    speed: 6,
+    tacticPoints: 2,
+    desc: "速度 +6、策略点 +2",
+  },
+  {
+    id: "wolong",
+    name: "卧龙凤雏",
+    members: ["zhugeliang", "pangtong"],
+    need: 2,
+    tacticPoints: 2,
+    attackPct: 0.08,
+    desc: "策略点 +2、攻击 +8%",
+  },
+  {
+    id: "hebei",
+    name: "河北双雄",
+    members: ["yanliang", "wenchou"],
+    need: 2,
+    attackPct: 0.12,
+    desc: "攻击 +12%",
+  },
+  {
+    id: "xiliang",
+    name: "西凉铁骑",
+    members: ["machao", "madai", "pangde"],
+    need: 2,
+    speed: 8,
+    attackPct: 0.06,
+    desc: "速度 +8、攻击 +6%",
+  },
+  {
+    id: "huangjin",
+    name: "黄巾三公",
+    members: ["zhangjiao", "zhangbao", "zhangliang"],
+    need: 2,
+    tacticPoints: 2,
+    desc: "策略点 +2",
+  },
+];
+
+/** 按上阵名单挑出生效的连携（同一连携只返回一次）。 */
+export function sagaBondsFor(ids: string[]): SagaBondDef[] {
+  const present = new Set(ids);
+  return SAGA_BONDS.filter(
+    (bond) => bond.members.filter((id) => present.has(id)).length >= bond.need,
+  );
+}

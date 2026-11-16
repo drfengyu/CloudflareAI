@@ -22,9 +22,11 @@ export const SAGA_SAVE_VERSION = 1;
  * 改成随时可劝降、成功率按剩余兵力打折（≤35% 时仍是原来的概率公式）。
  * v9 起成长与兵力换口径：四维每级成长翻三倍、四维封顶 255（基础属性不动），
  * 兵力（双方）翻一倍、药品回复按两倍兵力口径同步，敌将四维同吃这套成长。
+ * v10 起兵种相克与名将连携：兵种按武将底子推（骑 > 弓 > 枪 > 骑），
+ * 同一侧凑齐连携需要的名将即整队加成；v10 之前的行军仍按旧账重放。
  * 旧行军没有这个字段，重放时按 v1 走，避免改版把还没收兵的对局打乱。
  */
-export const SAGA_RULESET = 9;
+export const SAGA_RULESET = 10;
 
 /** 四维上限：v9 起武力 / 智力 / 防御 / 速度可以一路长到 255（基础值不动，长的是等级与特性加成）。 */
 export const SAGA_STAT_CAP = 255;
@@ -219,6 +221,9 @@ export interface SagaTraitDef {
   /** 计策伤害与回复加成（0~1）。 */
   tacticPct?: number;
 }
+
+/** 兵种：骑克弓、弓克枪、枪克骑。 */
+export type SagaCorps = "cavalry" | "spear" | "bow";
 
 export interface SagaGeneralDef {
   id: string;
@@ -485,6 +490,13 @@ export interface SagaBattleGeneral {
   tactics: TacticId[];
   /** 武将固有特性，参与伤害、暴击与开场策略点结算。 */
   traits: SagaTraitId[];
+  /** 兵种（v10 起参与克制结算；旧规则一律按枪兵算）。 */
+  corps: SagaCorps;
+  /** 生效中的名将连携名字，只用于战报与面板展示。 */
+  bonds: string[];
+  /** 连携带来的攻击加成与减伤（0.1 表示 +10%）。 */
+  bondAtk: number;
+  bondCut: number;
   tacticPoints: number;
   weaponAtk: number;
   armorDef: number;

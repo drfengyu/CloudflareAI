@@ -4,6 +4,8 @@ import {
   SAGA_ITEM_BY_ID,
   SAGA_TACTIC_BY_ID,
   SAGA_TRAIT_BY_ID,
+  sagaBondsFor,
+  sagaCorpsOf,
   tacticsFor,
 } from "./data";
 import { sagaEncounterFor } from "./encounter";
@@ -14,6 +16,7 @@ import {
   type SagaBattleEvent,
   type SagaBattleGeneral,
   type SagaBattleState,
+  type SagaCorps,
   type SagaItemDef,
   type SagaNode,
   type SagaReplayState,
@@ -206,6 +209,17 @@ function buildSoldier(
     speed: Math.round((44 + level * 0.6) * jitter),
     tactics: [],
     traits: [],
+    corps:
+      rules >= 10
+        ? slot % SOLDIER_NAMES.length === 4
+          ? "cavalry"
+          : slot % SOLDIER_NAMES.length === 3
+            ? "bow"
+            : "spear"
+        : "spear",
+    bonds: [],
+    bondAtk: 0,
+    bondCut: 0,
     tacticPoints:
       rules >= 3
         ? Math.max(1, 2 + Math.floor(intellect / 20) + Math.floor(level / 6))
@@ -236,6 +250,72 @@ function skillFactor(level: number): number {
 /** 命中率按双方智力差浮动：智力压制最多九成八，被压制至少六成五。 */
 function hitChance(actor: SagaBattleGeneral, target: SagaBattleGeneral): number {
   return clamp(0.9 + (actor.intellect - target.intellect) / 400, 0.65, 0.98);
+}
+
+/**
+ * 兵种克制：v10 起骑克弓、弓克枪、枪克骑；同兵种与旧规则一律 1 倍。
+ * 导出给单测用，别在界面上再抄一份系数。
+ */
+export function corpsCounterFactor(
+  rules: number,
+  actor: SagaCorps,
+  target: SagaCorps,
+): number {
+  if (rules < 10 || actor === target) return 1;
+  const wins =
+    (actor === "cavalry" && target === "bow") ||
+    (actor === "bow" && target === "spear") ||
+    (actor === "spear" && target === "cavalry");
+  return wins ? 1.15 : 0.85;
+}
+
+/**
+ * v10 起：按武将底子判兵种，同一侧凑齐名将连携就整队加成。
+ * 只在 v10 及以后生效，旧行军重放保持原结果。
+ */
+function applyWarband(
+  party: SagaBattleGeneral[],
+  enemies: SagaBattleGeneral[],
+  rules: number,
+  log: SagaBattleEvent[],
+): void {
+  for (const unit of [...party, ...enemies]) {
+    const def = SAGA_GENERAL_BY_ID.get(unit.id);
+    if (def) unit.corps = rules >= 10 ? sagaCorpsOf(def) : "spear";
+    else if (rules < 10) unit.corps = "spear";
+    unit.bonds = [];
+    unit.bondAtk = 0;
+    unit.bondCut = 0;
+  }
+  if (rules < 10) return;
+  const sides: { units: SagaBattleGeneral[]; side: "player" | "enemy" }[] = [
+    { units: party, side: "player" },
+    { units: enemies, side: "enemy" },
+  ];
+  for (const { units, side } of sides) {
+    if (units.length === 0) continue;
+    const bonds = sagaBondsFor(units.map((unit) => unit.id));
+    for (const unit of units) {
+      for (const bond of bonds) {
+        unit.bonds.push(bond.name);
+        unit.bondAtk += bond.attackPct ?? 0;
+        unit.bondCut += bond.damageCut ?? 0;
+        unit.speed += bond.speed ?? 0;
+        unit.tacticPoints = Math.min(12, unit.tacticPoints + (bond.tacticPoints ?? 0));
+      }
+    }
+    for (const bond of bonds) {
+      const joined = bond.members
+        .filter((id) => units.some((unit) => unit.id === id))
+        .map((id) => SAGA_GENERAL_BY_ID.get(id)?.name ?? id);
+      log.push({
+        kind: "buff",
+        side,
+        actor: bond.name,
+        text: `${bond.name} 生效：${joined.join("、")}（${bond.desc}）`,
+      });
+    }
+  }
 }
 
 export function startBattle(run: SagaRun, nodeIndex: number, state: SagaReplayState): SagaBattleState {
@@ -292,6 +372,10 @@ function buildBattle(
       speed: stats.speed + buffs.speed,
       tactics: rules >= 2 ? tacticsFor(def, saved.level) : def?.tactics ?? [],
       traits: rules >= 2 ? def?.traits ?? [] : [],
+      corps: "spear",
+      bonds: [],
+      bondAtk: 0,
+      bondCut: 0,
       // v3 起策略点主要看智力：每 20 点智力 +1，等级每 4 级再 +1，封顶 12。
       tacticPoints:
         rules >= 3
@@ -373,6 +457,10 @@ function buildBattle(
       speed: enemy.speed,
       tactics: enemy.tactics,
       traits: enemy.traits ?? [],
+      corps: "spear",
+      bonds: [],
+      bondAtk: 0,
+      bondCut: 0,
       tacticPoints:
         rules >= 3
           ? Math.max(2, 2 + Math.floor(enemy.intellect / 20) + Math.floor(enemy.level / 6))
@@ -407,6 +495,8 @@ function buildBattle(
       }
     }
   }
+  const openLog: SagaBattleEvent[] = [];
+  applyWarband(party, enemies, rules, openLog);
   return {
     nodeIndex,
     nodeName: node.name,
@@ -419,7 +509,7 @@ function buildBattle(
     playerFormation: state.save.formation,
     enemyFormation: node.enemyFormation,
     target: 0,
-    log: [],
+    log: openLog,
     lastEvents: [],
     rngState,
     rewardGold: node.rewardGold,
@@ -483,8 +573,9 @@ function dealDamage(
   const variance = 0.85 + roll(battle) * 0.3;
   const buffed = actor.buff > 0 ? 1.2 : 1;
   const guarded = target.guard ? 0.5 : 1;
-  const attackPct = 1 + traitTotal(actor, "attackPct");
-  const cut = 1 - Math.min(0.5, traitTotal(target, "damageCut"));
+  const attackPct = 1 + traitTotal(actor, "attackPct") + actor.bondAtk;
+  const cut = 1 - Math.min(0.5, traitTotal(target, "damageCut") + target.bondCut);
+  const corps = corpsCounterFactor(battle.rules, actor.corps, target.corps);
   const skill = battle.rules >= 3 ? skillFactor(actor.level) : 1;
   let damage = Math.max(
     4,
@@ -497,6 +588,7 @@ function dealDamage(
         guarded *
         attackPct *
         cut *
+        corps *
         skill *
         variance,
     ),
@@ -505,7 +597,9 @@ function dealDamage(
   const crit = critChance > 0 && roll(battle) < critChance;
   if (crit) damage = Math.round(damage * 1.7);
   target.troops = Math.max(0, target.troops - damage);
-  const suffix = `${crit ? "（暴击）" : ""}${target.guard ? "（格挡）" : ""}`;
+  const suffix = `${crit ? "（暴击）" : ""}${target.guard ? "（格挡）" : ""}${
+    corps > 1 ? "（兵种克制）" : corps < 1 ? "（兵种受制）" : ""
+  }`;
   events.push({
     kind: "attack",
     side: actor.side,

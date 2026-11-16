@@ -19,6 +19,7 @@ import {
 } from "@/lib/trial/saga/types";
 import type { FieldHotspot } from "@/lib/trial/saga/map";
 import { battleAttackPower } from "@/lib/trial/saga/battle";
+import { SAGA_CORPS_LABEL } from "@/lib/trial/saga/data";
 
 /**
  * 三国讨逆传的 Canvas 美术：俯视行军大地图与回合战斗两张场景。
@@ -2589,7 +2590,7 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     ctx.font = uiFont(10);
     const marks = `${unit.guard ? "守" : ""}${unit.buff > 0 ? "鼓" : ""}${unit.confused > 0 ? "乱" : ""}`;
     const troops = Math.max(0, Math.round(unit.troops));
-    const label = `${unit.name}${marks ? `·${marks}` : ""} 攻${battleAttackPower(unit)} 兵${troops}/${unit.maxTroops}`;
+    const label = `${unit.name}${marks ? `·${marks}` : ""}【${SAGA_CORPS_LABEL[unit.corps]}】 攻${battleAttackPower(unit)} 兵${troops}/${unit.maxTroops}`;
     const textW = ctx.measureText(label).width;
     const labelX = side === "player" ? barX : barX + barW;
     const bgX = side === "player" ? barX - 4 : barX + barW - textW - 4;

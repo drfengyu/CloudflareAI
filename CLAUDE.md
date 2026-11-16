@@ -534,9 +534,12 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.81.0（2026-11-16，游戏内公告与维护）
+**当前版本**：v0.82.0（2026-11-16，兵种相克与名将连携）
 **下一版本**：待定
 
+- v0.82.0 规则档升到 10：兵种按底子推（骑 > 弓 > 枪 > 骑，克制 ×1.15 / 受制 ×0.85），
+  8 组名将连携同侧凑齐即整队加成（攻击 / 减伤 / 速度 / 策略点）；v9 及更早行军兵种一律枪兵、
+  不触发连携，旧战报不翻盘。`SAGA_BONDS` / `sagaCorpsOf` 在 `lib/trial/saga/data.ts`。
 - v0.81.0 公告进游戏：`lib/trial/saga/notice.ts` 存公告与维护窗口（纯数据 + `maintenancePhaseAt`），
   试炼工具栏「公告」入口打开一页（维护卡 + 倒序版本说明），未读红点按最新公告 id 记在本机
   localStorage；要停机只改 `SAGA_MAINTENANCE`，组件不动。
