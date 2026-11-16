@@ -809,14 +809,14 @@ export function canEngageNode(run: SagaRun, state: SagaReplayState, node: number
   );
 }
 
-/** 破本区本阵：本区平定，存档区号推进、该区解锁武将即时发放，关卡随之双向通行。 */
+/**
+ * 破本区本阵：本区平定，该区解锁武将当场发放，关卡随之双向通行。
+ * 这里**不**推进存档区号：区域随人走，什么时候过区界由玩家决定，收兵时再按战果推进。
+ */
 function pacifyChapter(state: SagaReplayState, chapter: number): void {
   const def = SAGA_CHAPTERS[chapter];
   if (!def) return;
   applyChapterUnlock(state.save, def.unlock);
-  if (chapter + 1 > state.save.chapter) {
-    state.save.chapter = Math.min(SAGA_CHAPTERS.length - 1, chapter + 1);
-  }
 }
 
 
@@ -985,8 +985,9 @@ export function finalizeSagaSave(run: SagaRun, state: SagaReplayState): TrialSav
     save.clears += 1;
     unlock = SAGA_CHAPTERS[lastClearedChapter]?.unlock ?? null;
   }
-  // 大地图可以一趟连跨几区：区号在破本阵时就推进过了，收兵时只保证停在已平定区的下一区。
-  if (lastClearedChapter > chapterBefore) {
+  // 大地图可以一趟连跨几区：破本阵只算「本区平定」，区号到收兵时才按战果推进，
+  // 行军途中不把人强行推到下一区（区域随人走，过不过关由玩家自己决定）。
+  if (lastClearedChapter > chapterBefore || state.victory) {
     save.chapter = Math.max(save.chapter, Math.min(SAGA_CHAPTERS.length - 1, lastClearedChapter + 1));
   }
   applyChapterUnlock(save, unlock);

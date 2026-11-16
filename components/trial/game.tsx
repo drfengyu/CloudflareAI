@@ -1079,6 +1079,19 @@ export function TrialGame(props: TrialGameProps) {
           ? fieldHotspotNear(map, player.x, player.y)
           : null;
       hotspotRef.current = spot;
+      // 区域随人走：头顶显示站着的这一区，不因为破了本阵就把人当成已进了下一区。
+      if (map?.regions?.length) {
+        const tx = player.x / map.tile;
+        const ty = player.y / map.tile;
+        const region = map.regions.find(
+          (item) => tx >= item.tx && tx < item.tx + item.w && ty >= item.ty && ty < item.ty + item.h,
+        );
+        if (region) {
+          hudRef.current.chapterIndex = region.chapter;
+          hudRef.current.chapterName = region.name;
+          hudRef.current.townName = SAGA_CHAPTERS[region.chapter]?.town ?? region.name;
+        }
+      }
 
       const time = (nowMs - start) / 1000;
       ctx.setTransform(viewScaleRef.current, 0, 0, viewScaleRef.current, 0, 0);
