@@ -534,9 +534,14 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.83.0（2026-11-16，武将立绘与战斗大立绘）
+**当前版本**：v0.84.0（2026-11-16，吞食天地头像素材接入）
 **下一版本**：待定
 
+- v0.84.0 武将头像接入吞食天地素材：GitHub `mooneroid/rotj`（MIT）的 `doae_portraits/Portrait 48`
+  按 id 落到 `public/trial/portraits/<id>.gif`（81 名武将），索引在 `components/trial/portrait-assets.ts`；
+  `SagaPortrait` 有素材走 `next/image`（pixelated + 米色画框），没素材仍走 `portraits.ts` 程序化立绘；
+  战场 `paintBattleBust` 的 `options.image` 优先画素材头像，并统一垫兵种剪影（`options.corps`）。
+  素材版权归原权利人，仅个人非商业用途，出处见 `public/trial/portraits/README.md`。
 - v0.83.0 立绘向吞食天地靠：`portraits.ts` 关键轮廓加粗墨线 + 背后放射线，图鉴 / 队伍 / 敌情卡
   立绘放大；战斗里普攻 / 计策会弹出出手武将的半身大立绘（`paintBattleBust`，按事件进度淡入淡出，
   画在血条之下）。立绘仍是 Canvas 几何图形现画，不引入图片资源。

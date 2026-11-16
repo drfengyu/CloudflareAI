@@ -1,4 +1,4 @@
-import type { SagaGeneralDef } from "@/lib/trial/saga/types";
+import type { SagaCorps, SagaGeneralDef } from "@/lib/trial/saga/types";
 
 /**
  * 武将立绘：全部用 Canvas 几何图形现画，不引用任何外部图片。
@@ -16,7 +16,17 @@ export type PortraitHat =
   | "phoenix"
   | "cap"
   | "bun"
-  | "scarf";
+  | "scarf"
+  /** 虎头盔：双耳 + 额前「王」字。 */
+  | "tiger"
+  /** 凤翅盔：两侧后掠翅羽。 */
+  | "wing"
+  /** 鬼面盔：双角前挑。 */
+  | "horned"
+  /** 道冠：高冠 + 八卦。 */
+  | "dao"
+  /** 狮盔：鬃毛围一圈。 */
+  | "lion";
 
 export type PortraitBeard = "none" | "mustache" | "goatee" | "full" | "bushy" | "long";
 
@@ -29,6 +39,12 @@ export interface PortraitTraits {
   plume: string;
   fan: boolean;
   bigEars: boolean;
+  /** 独眼：夏侯惇那种罩住一只眼的皮罩。 */
+  eyePatch?: boolean;
+  /** 战纹：颊上两道朱砂。 */
+  warPaint?: boolean;
+  /** 刀疤：一道斜过眉骨。 */
+  scar?: boolean;
 }
 
 export interface PortraitGear {
@@ -56,12 +72,7 @@ function hashId(id: string): number {
 
 const SPECIAL: Record<string, Partial<PortraitTraits>> = {
   liubei: { hat: "crown", beard: "goatee", bigEars: true, skin: "#e3bc94" },
-  guanyu: { hat: "helmet", beard: "long", skin: "#b2543f", fan: false, plume: "#7f1d1d" },
-  zhangfei: { hat: "helmet", beard: "bushy", skin: "#8f6547", plume: "#1f2937" },
   zhaoyun: { hat: "helmet", beard: "none", plume: "#dbeafe" },
-  machao: { hat: "helmet", beard: "none", plume: "#e2e8f0" },
-  huangzhong: { hat: "helmet", beard: "full", skin: "#cfa07a", plume: "#fde68a" },
-  weiyan: { hat: "helmet", beard: "full", plume: "#e9d5ff" },
   zhugeliang: { hat: "scholar", beard: "goatee", fan: true, skin: "#e8cdaa" },
   pangtong: { hat: "scholar", beard: "bushy", fan: true },
   fazheng: { hat: "scholar", beard: "mustache", fan: false },
@@ -74,13 +85,9 @@ const SPECIAL: Record<string, Partial<PortraitTraits>> = {
   zhangjiao: { hat: "band", beard: "long", skin: "#cbb08a", plume: "#facc15" },
   zhangbao: { hat: "band", beard: "full", plume: "#facc15" },
   zhangliang: { hat: "band", beard: "mustache", plume: "#facc15" },
-  simayi: { hat: "crown", beard: "goatee", fan: false, skin: "#e4c19b" },
   zhangliao: { hat: "helmet", beard: "full", plume: "#c7d2fe" },
-  ganning: { hat: "helmet", beard: "bushy", plume: "#fdba74" },
-  taishici: { hat: "helmet", beard: "full", plume: "#a5f3fc" },
   huaxiong: { hat: "helmet", beard: "bushy", plume: "#fecaca" },
   zhanghe: { hat: "helmet", beard: "goatee", plume: "#d9f99d" },
-  xiahoudun: { hat: "helmet", beard: "full", plume: "#93c5fd" },
   xiahouyuan: { hat: "helmet", beard: "goatee", plume: "#bfdbfe" },
   caoren: { hat: "helmet", beard: "full", plume: "#93c5fd" },
   yanliang: { hat: "helmet", beard: "bushy", plume: "#fecaca" },
@@ -109,6 +116,21 @@ const SPECIAL: Record<string, Partial<PortraitTraits>> = {
   huzhen: { hat: "helmet", beard: "full", plume: "#d6d3d1" },
   chezhou: { hat: "cap", beard: "mustache", plume: "#d9f99d" },
   caobao: { hat: "helmet", beard: "none", plume: "#bef264" },
+  // 名将专属冠盔与面相：吞食天地里那种「一看盔就知道是谁」。
+  guanyu: { hat: "wing", beard: "long", skin: "#b2543f", plume: "#14532d", fan: false },
+  zhangfei: { hat: "tiger", beard: "bushy", plume: "#111827", skin: "#8f6547" },
+  sunce: { hat: "tiger", beard: "none", plume: "#f97316" },
+  xuchu: { hat: "tiger", beard: "bushy", plume: "#a16207" },
+  dianwei: { hat: "horned", beard: "bushy", plume: "#dc2626", warPaint: true },
+  weiyan: { hat: "horned", beard: "full", plume: "#7c3aed", scar: true },
+  machao: { hat: "lion", beard: "none", plume: "#e2e8f0" },
+  huangzhong: { hat: "wing", beard: "full", plume: "#fcd34d" },
+  pangde: { hat: "lion", beard: "goatee", plume: "#d6d3d1", scar: true },
+  xiahoudun: { hat: "helmet", beard: "full", plume: "#93c5fd", eyePatch: true },
+  simayi: { hat: "dao", beard: "goatee", fan: false, skin: "#e4c19b" },
+  zhouyu: { hat: "scholar", beard: "none", fan: false },
+  ganning: { hat: "band", beard: "bushy", plume: "#fb923c", warPaint: true },
+  taishici: { hat: "wing", beard: "full", plume: "#22d3ee" },
 };
 
 export function portraitTraitsFor(def: SagaGeneralDef): PortraitTraits {
@@ -317,6 +339,7 @@ function drawFace(traits: PortraitTraits): void {
   c.quadraticCurveTo(60, 84, 66, 81);
   c.stroke();
 
+  drawFaceMarks(traits);
   drawBeard(traits, shade(traits.skin, -8));
 }
 
@@ -389,6 +412,50 @@ function drawBeard(traits: PortraitTraits, base: string): void {
     c.beginPath();
     c.moveTo(54 + i * 3, 92);
     c.quadraticCurveTo(52 + i * 4, 112, 56 + i * 3, 124);
+    c.stroke();
+  }
+}
+
+
+/** 独眼罩、战纹与刀疤：让名将的脸一眼能认出。 */
+function drawFaceMarks(traits: PortraitTraits): void {
+  if (traits.warPaint) {
+    c.fillStyle = "rgba(190,62,44,0.75)";
+    c.beginPath();
+    c.moveTo(44, 66);
+    c.lineTo(50, 72);
+    c.lineTo(46, 78);
+    c.lineTo(40, 72);
+    c.closePath();
+    c.fill();
+    c.beginPath();
+    c.moveTo(76, 66);
+    c.lineTo(70, 72);
+    c.lineTo(74, 78);
+    c.lineTo(80, 72);
+    c.closePath();
+    c.fill();
+  }
+  if (traits.scar) {
+    c.strokeStyle = "rgba(118,48,40,0.8)";
+    c.lineWidth = 1.6;
+    c.beginPath();
+    c.moveTo(47, 49);
+    c.lineTo(56, 68);
+    c.stroke();
+  }
+  if (traits.eyePatch) {
+    c.fillStyle = "#1b1712";
+    c.beginPath();
+    c.ellipse(69, 61, 8, 7.5, -0.15, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = "#1b1712";
+    c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(77, 56);
+    c.lineTo(84, 50);
+    c.moveTo(61, 57);
+    c.lineTo(42, 54);
     c.stroke();
   }
 }
@@ -502,6 +569,170 @@ function drawHat(traits: PortraitTraits): void {
     c.fill();
     c.fillStyle = "rgba(0,0,0,0.2)";
     c.fillRect(38, 46, 44, 4);
+    return;
+  }
+
+  if (traits.hat === "tiger") {
+    // 虎头盔：圆顶 + 双耳 + 额前金「王」
+    const helm = c.createLinearGradient(36, 22, 84, 52);
+    helm.addColorStop(0, "#6b5a3c");
+    helm.addColorStop(1, "#2c2418");
+    c.fillStyle = helm;
+    c.beginPath();
+    c.arc(60, 43, 25, Math.PI, 0);
+    c.lineTo(85, 49);
+    c.lineTo(35, 49);
+    c.closePath();
+    c.fill();
+    ink(2.2);
+    c.fillStyle = shade(traits.robe, -8);
+    for (const sx of [34, 86] as const) {
+      c.beginPath();
+      c.ellipse(sx, 28, 9, 11, 0, 0, Math.PI * 2);
+      c.fill();
+      ink(1.6);
+      c.fillStyle = "rgba(240,210,150,0.45)";
+      c.beginPath();
+      c.ellipse(sx, 28, 4, 5, 0, 0, Math.PI * 2);
+      c.fill();
+      c.fillStyle = shade(traits.robe, -8);
+    }
+    c.fillStyle = "#c9a15a";
+    c.fillRect(51, 34, 18, 11);
+    c.strokeStyle = "#2b2115";
+    c.lineWidth = 1.4;
+    c.beginPath();
+    c.moveTo(55, 37);
+    c.lineTo(65, 37);
+    c.moveTo(60, 37);
+    c.lineTo(60, 42);
+    c.moveTo(55, 42);
+    c.lineTo(65, 42);
+    c.stroke();
+    c.fillStyle = "#2b2822";
+    c.fillRect(35, 47, 50, 5);
+    c.fillStyle = "#3b372f";
+    c.fillRect(33, 48, 7, 14);
+    c.fillRect(80, 48, 7, 14);
+    return;
+  }
+  if (traits.hat === "wing") {
+    // 凤翅盔：盔顶 + 两侧后掠的翅羽
+    const helm = c.createLinearGradient(38, 20, 82, 50);
+    helm.addColorStop(0, "#827a6b");
+    helm.addColorStop(1, "#33302a");
+    c.fillStyle = helm;
+    c.beginPath();
+    c.arc(60, 42, 25, Math.PI, 0);
+    c.lineTo(84, 48);
+    c.lineTo(36, 48);
+    c.closePath();
+    c.fill();
+    ink(2.2);
+    c.fillStyle = traits.plume;
+    for (const dir of [-1, 1] as const) {
+      c.beginPath();
+      c.moveTo(60 + dir * 20, 30);
+      c.quadraticCurveTo(60 + dir * 46, 18, 60 + dir * 52, 4);
+      c.quadraticCurveTo(60 + dir * 40, 22, 60 + dir * 24, 36);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = "#17130f";
+      c.lineWidth = 1.4;
+      c.stroke();
+    }
+    c.fillStyle = "#2b2822";
+    c.fillRect(35, 46, 50, 5);
+    c.fillStyle = traits.accent;
+    c.fillRect(52, 44, 16, 3);
+    c.fillStyle = "#3b372f";
+    c.fillRect(33, 48, 7, 14);
+    c.fillRect(80, 48, 7, 14);
+    return;
+  }
+  if (traits.hat === "horned") {
+    // 鬼面盔：双角前挑 + 面甲
+    c.fillStyle = "#2a2a2e";
+    c.beginPath();
+    c.arc(60, 44, 26, Math.PI, 0);
+    c.lineTo(86, 52);
+    c.lineTo(34, 52);
+    c.closePath();
+    c.fill();
+    ink(2.2);
+    c.fillStyle = "#3a2f2a";
+    for (const dir of [-1, 1] as const) {
+      c.beginPath();
+      c.moveTo(60 + dir * 18, 30);
+      c.quadraticCurveTo(60 + dir * 40, 16, 60 + dir * 34, -2);
+      c.quadraticCurveTo(60 + dir * 26, 18, 60 + dir * 10, 34);
+      c.closePath();
+      c.fill();
+      c.strokeStyle = "#17130f";
+      c.lineWidth = 1.6;
+      c.stroke();
+    }
+    c.fillStyle = "#8f2f26";
+    c.fillRect(52, 44, 16, 4);
+    c.fillStyle = "#4a453c";
+    c.fillRect(36, 48, 8, 16);
+    c.fillRect(76, 48, 8, 16);
+    return;
+  }
+  if (traits.hat === "dao") {
+    // 道冠：高冠 + 八卦，垂两条飘带
+    c.fillStyle = "#242c33";
+    c.beginPath();
+    c.moveTo(40, 48);
+    c.lineTo(43, 16);
+    c.quadraticCurveTo(60, 8, 77, 16);
+    c.lineTo(80, 48);
+    c.closePath();
+    c.fill();
+    ink(2);
+    c.fillStyle = traits.accent;
+    c.beginPath();
+    c.arc(60, 30, 7, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = "#242c33";
+    c.beginPath();
+    c.arc(60, 30, 3.4, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = traits.accent;
+    c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(78, 34);
+    c.quadraticCurveTo(92, 48, 86, 64);
+    c.stroke();
+    return;
+  }
+  if (traits.hat === "lion") {
+    // 狮盔：一圈鬃毛围住盔顶
+    c.fillStyle = shade(traits.plume, -22);
+    for (let i = 0; i < 10; i += 1) {
+      const angle = Math.PI + (i / 9) * Math.PI;
+      const px = 60 + Math.cos(angle) * 30;
+      const py = 44 + Math.sin(angle) * 30;
+      c.beginPath();
+      c.ellipse(px, py, 9, 12, angle + Math.PI / 2, 0, Math.PI * 2);
+      c.fill();
+    }
+    const helm = c.createLinearGradient(40, 22, 80, 50);
+    helm.addColorStop(0, "#9a8f78");
+    helm.addColorStop(1, "#3c3628");
+    c.fillStyle = helm;
+    c.beginPath();
+    c.arc(60, 43, 24, Math.PI, 0);
+    c.lineTo(84, 49);
+    c.lineTo(36, 49);
+    c.closePath();
+    c.fill();
+    ink(2.2);
+    c.fillStyle = "#c9a15a";
+    c.fillRect(48, 40, 24, 4);
+    c.fillStyle = "#3b372f";
+    c.fillRect(33, 48, 7, 14);
+    c.fillRect(80, 48, 7, 14);
     return;
   }
 
@@ -719,11 +950,122 @@ export interface BattleBustOptions {
   facing?: 1 | -1;
   /** 整体透明度：出场淡入 / 退场淡出用。 */
   alpha?: number;
+  /** 兵种：底部垫一排本阵兵种的剪影，像吞食天地的队伍站位。 */
+  corps?: SagaCorps;
+  /** 吞食天地头像素材：有图就画成米色画框，没图走程序化胸像。 */
+  image?: CanvasImageSource;
+}
+
+/** 兵种剪影：头盔轮廓 + 长兵器，一眼看出是骑 / 枪 / 弓。 */
+function drawCorpsSilhouette(corps: SagaCorps, x: number, y: number, scale: number): void {
+  c.save();
+  c.translate(x, y);
+  c.scale(scale, scale);
+  c.fillStyle = "rgba(18,15,12,0.72)";
+  // 身体
+  c.beginPath();
+  c.moveTo(-11, 0);
+  c.lineTo(-7, -26);
+  c.quadraticCurveTo(0, -32, 7, -26);
+  c.lineTo(11, 0);
+  c.closePath();
+  c.fill();
+  // 头 + 盔
+  c.beginPath();
+  c.arc(0, -36, 7, 0, Math.PI * 2);
+  c.fill();
+  c.beginPath();
+  c.arc(0, -38, 8, Math.PI, 0);
+  c.fill();
+  if (corps === "cavalry") {
+    // 骑兵：马首与长槊
+    c.beginPath();
+    c.ellipse(-13, -12, 13, 9, -0.2, 0, Math.PI * 2);
+    c.fill();
+    c.strokeStyle = "rgba(18,15,12,0.72)";
+    c.lineWidth = 2.4;
+    c.beginPath();
+    c.moveTo(8, -10);
+    c.lineTo(16, -58);
+    c.stroke();
+  } else if (corps === "bow") {
+    // 弓兵：斜挎的弓
+    c.strokeStyle = "rgba(18,15,12,0.72)";
+    c.lineWidth = 2.2;
+    c.beginPath();
+    c.arc(8, -30, 13, -1.2, 1.2);
+    c.stroke();
+  } else {
+    // 枪兵：直举的长枪
+    c.strokeStyle = "rgba(18,15,12,0.72)";
+    c.lineWidth = 2.2;
+    c.beginPath();
+    c.moveTo(9, -6);
+    c.lineTo(9, -62);
+    c.stroke();
+    c.beginPath();
+    c.moveTo(9, -62);
+    c.lineTo(5, -52);
+    c.lineTo(13, -52);
+    c.closePath();
+    c.fill();
+  }
+  c.restore();
+}
+
+/**
+ * 吞食天地素材的出战画面：米色画框 + 像素头像。
+ * 原素材是 48×48 的 NES 头像，这里放大到画框里并把插值关掉，保留大像素块。
+ */
+function drawAssetPortrait(image: CanvasImageSource, facing: 1 | -1): void {
+  const frameW = 104;
+  const frameH = 116;
+  const frameX = 8;
+  const frameY = 30;
+  c.save();
+  // 画框投影
+  c.fillStyle = "rgba(8,6,4,0.55)";
+  roundRectPath(frameX + 3, frameY + 5, frameW, frameH, 5);
+  c.fill();
+  // 米色画框
+  const plate = c.createLinearGradient(frameX, frameY, frameX, frameY + frameH);
+  plate.addColorStop(0, "#f7ecd2");
+  plate.addColorStop(1, "#d9c49a");
+  c.fillStyle = plate;
+  roundRectPath(frameX, frameY, frameW, frameH, 5);
+  c.fill();
+  ink(2.4);
+  // 内框细线
+  c.strokeStyle = "rgba(120,82,38,0.9)";
+  c.lineWidth = 1.2;
+  roundRectPath(frameX + 5, frameY + 5, frameW - 10, frameH - 10, 3);
+  c.stroke();
+  // 头像本身
+  const size = 84;
+  const imageX = frameX + (frameW - size) / 2;
+  const imageY = frameY + 6;
+  c.save();
+  // 抵消外层按 facing 做的整体镜像：人是朝两侧站的，脸不该跟着翻过去
+  c.translate(60, 0);
+  c.scale(facing, 1);
+  c.translate(-60, 0);
+  c.imageSmoothingEnabled = false;
+  c.drawImage(image, imageX, imageY, size, size);
+  c.restore();
+  // 画框口的一圈高光，免得像素头像贴在平板上
+  c.strokeStyle = "rgba(255,248,226,0.75)";
+  c.lineWidth = 1.6;
+  c.beginPath();
+  c.moveTo(frameX + 8, frameY + 7);
+  c.lineTo(frameX + frameW - 8, frameY + 7);
+  c.stroke();
+  c.restore();
 }
 
 /**
  * 战斗中的武将大立绘：透明底、带墨线，直接叠在战场两侧。
  * 坐标沿用立绘的 120×150 内部空间，只是不画背景与边框。
+ * 有吞食天地头像素材时画素材，没有就退回程序化胸像。
  */
 export function paintBattleBust(
   ctx: CanvasRenderingContext2D,
@@ -747,7 +1089,22 @@ export function paintBattleBust(
   ctx.ellipse(60, 148, 42, 9, 0, 0, Math.PI * 2);
   ctx.fill();
 
-  paintBustCore(traits, gear);
+  if (options.corps) {
+    ctx.save();
+    ctx.globalAlpha *= 0.9;
+    for (let i = 0; i < 5; i += 1) {
+      const sx = -36 + i * 18;
+      const sy = 146 - (i % 2 === 0 ? 0 : 4);
+      drawCorpsSilhouette(options.corps, sx + 60, sy, 0.9);
+    }
+    ctx.restore();
+  }
+
+  if (options.image) {
+    drawAssetPortrait(options.image, options.facing ?? 1);
+  } else {
+    paintBustCore(traits, gear);
+  }
   ctx.restore();
 }
 

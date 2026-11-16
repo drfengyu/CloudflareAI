@@ -5,6 +5,31 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.84.0] - 2026-11-16
+
+### 新增
+
+- 三国讨逆传**接入吞食天地头像素材**：从 GitHub 仓库 `mooneroid/rotj`（MIT）取用
+  `doae_portraits/Portrait 48`，按武将 id 落到 `public/trial/portraits/<id>.gif`，共覆盖 81 名武将；
+  素材出处、原始来源（Kongming's Archives）与非商业使用说明写进同目录 `README.md`。
+- 新增 `components/trial/portrait-assets.ts`：素材 id 清单、`hasPortraitAsset` / `portraitAssetSrc`
+  与战场用的图片缓存 `portraitAssetImage`。
+- `SagaPortrait` 有素材时渲染 `next/image`（关闭插值、米色小画框），没素材继续走 Canvas 现画。
+
+### 变更
+
+- **战场出手大立绘改用素材**：`paintBattleBust` 新增 `options.image`，有图时画吞食天地式
+  米色画框头像（内框、投影、高光，`imageSmoothingEnabled = false`），没图仍画程序化胸像；
+  两种画法都保留 `options.corps` 的本阵兵种剪影，`renderer.ts` 现在会把 `actorUnit.corps` 传进去。
+- 名将冠盔与面相细分：`PortraitHat` 增加虎头盔 / 凤翅盔 / 鬼面盔 / 道冠 / 狮盔，
+  `PortraitTraits` 增加独眼罩 / 朱砂战纹 / 刀疤，关羽、张飞、典韦、夏侯惇、司马懿等有专属条目；
+  未收录素材的武将靠这套特征区分。
+
+### 验证
+
+- 单元测试 69/69（新增「头像素材与武将 id 一一对齐」，校验 id 合法、文件真实存在、无素材武将回退）；
+  `tsc --noEmit` 0、ESLint 0、`next build` 通过。
+- 游戏内公告加 0.84.0 条目，`SAGA_NOTICE_VERSION` 同步。
 ## [0.83.0] - 2026-11-16
 
 ### 变更

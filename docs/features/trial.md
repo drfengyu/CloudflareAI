@@ -201,6 +201,21 @@
 `generalStats(general, save.gearLevels, state.rules)` 算——等级成长、铁匠铺强化、
 当前规则档三样都算进去，图鉴里麾下武将直接显示实际四维、兵力和兵器/甲胄加成；
 只见过没招到的敌将仍按基础值标注「（基础）」。
+## 吞食天地头像素材（v0.84.0）
+
+部分武将立绘改为引用《吞食天地》原版像素头像，程序化立绘仍然是兜底：
+
+- 素材来自 GitHub 仓库 `mooneroid/rotj`（MIT）的 `data/images/doae_portraits/Portrait 48`，
+  原始出处为 Kongming's Archives 的吞食天地头像包；按武将 id 重命名后放在 `public/trial/portraits/<id>.gif`，
+  出处与非商业使用说明写在同目录 `README.md`。
+- 索引在 `components/trial/portrait-assets.ts`：`SAGA_PORTRAIT_IDS` 列出有素材的 81 名武将，
+  `hasPortraitAsset` / `portraitAssetSrc` 给界面用，`portraitAssetImage` 是战场画布用的图片缓存。
+- `SagaPortrait` 有素材时渲染 `next/image`（`imageRendering: pixelated`，米色小画框），
+  没素材继续走 Canvas 程序化立绘；两套画风共用圆角与描边。
+- 战场出手大立绘：`paintBattleBust` 的 `options.image` 有值时画米色画框头像（关掉插值），
+  否则画程序化胸像；`options.corps` 在两者脚下都垫本阵兵种剪影。
+- 未收录素材的 39 名武将（曹操、孙坚、孙策、陆逊、刘表、孟获、祝融、王平、廖化等）仍用程序化立绘；
+  素材补进来只需加 gif + 在 `SAGA_PORTRAIT_IDS` 登记，测试会校验 id 与文件。
 ## 立绘与战斗演出（v0.83.0）
 
 立绘全部是 Canvas 现画的几何胸像（`components/trial/portraits.ts`），不引用外部图片：

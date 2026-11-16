@@ -28,10 +28,23 @@ export interface SagaMaintenanceWindow {
 }
 
 /** 游戏内公告版本号（与站点版本对齐）。 */
-export const SAGA_NOTICE_VERSION = "0.83.0";
+export const SAGA_NOTICE_VERSION = "0.84.0";
 
 /** 最新公告：按版本从新到旧。 */
 export const SAGA_NOTICES: SagaNoticeEntry[] = [
+  {
+    id: "notice-0.84.0",
+    version: "0.84.0",
+    date: "2026-11-16",
+    kind: "update",
+    title: "吞食天地头像素材接入",
+    lines: [
+      "81 名武将换上《吞食天地》原版像素头像（GitHub 开源仓库素材），48×48 原图放大不插值，块状像素不糊。",
+      "没有收录素材的武将（曹操、孙坚、孙策、陆逊、孟获等 39 人）继续用现画立绘，两套画风靠同一套画框与边框收口。",
+      "普攻 / 计策的出场大立绘改成吞食天地那种米色画框 + 大头像，脚下垫本阵兵种剪影（骑 / 枪 / 弓）。",
+      "名将冠盔与面相细分：关羽凤翅盔、张飞虎头盔、典韦鬼面盔配战纹、夏侯惇独眼罩、司马懿道冠带飘带等。",
+    ],
+  },
   {
     id: "notice-0.83.0",
     version: "0.83.0",

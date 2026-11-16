@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 import {
   DEFAULT_TRIAL_CONFIG,
   TRIAL_MAX_FLOORS,
@@ -7,7 +9,12 @@ import {
   trialGoldFor,
   type TrialConfig,
 } from "../lib/trial/config";
-import { SAGA_CHAPTERS, SAGA_GENERAL_BY_ID, SAGA_TRAITS, SAGA_TRAIT_BY_ID, sagaBondsFor, sagaCorpsOf, tacticsFor, traitStats } from "../lib/trial/saga/data";
+import { SAGA_CHAPTERS, SAGA_GENERAL_BY_ID, SAGA_GENERALS, SAGA_TRAITS, SAGA_TRAIT_BY_ID, sagaBondsFor, sagaCorpsOf, tacticsFor, traitStats } from "../lib/trial/saga/data";
+import {
+  SAGA_PORTRAIT_IDS,
+  hasPortraitAsset,
+  portraitAssetSrc,
+} from "../components/trial/portrait-assets";
 import { SAGA_NOTICES, SAGA_NOTICE_VERSION, latestNoticeId, maintenanceActiveAt, maintenancePhaseAt } from "../lib/trial/saga/notice";
 import {
   SAGA_FIELD_COLS,
@@ -2199,4 +2206,26 @@ test("兵种相克与名将连携只在 v10 起生效", () => {
   assert.equal(oldBattle.enemies.every((unit) => unit.corps === "spear" && unit.bonds.length === 0), true);
   assert.equal(oldBattle.log.some((event) => event.text.includes("生效")), false, "旧规则不出连携战报");
 });
+
 
+test("吞食天地头像素材与武将 id 一一对齐", () => {
+  // 素材来自 GitHub 仓库 mooneroid/rotj 里的吞食天地头像包，按武将 id 落成 gif。
+  assert.ok(SAGA_PORTRAIT_IDS.length >= 60, "至少覆盖半数武将");
+  assert.equal(new Set(SAGA_PORTRAIT_IDS).size, SAGA_PORTRAIT_IDS.length, "素材 id 不重复");
+  const assetDir = fileURLToPath(new URL("../public/trial/portraits/", import.meta.url));
+  for (const id of SAGA_PORTRAIT_IDS) {
+    assert.ok(SAGA_GENERAL_BY_ID.has(id), `${id} 必须是已登记的武将`);
+    assert.ok(hasPortraitAsset(id), `${id} 应被识别为有素材`);
+    assert.equal(portraitAssetSrc(id), `/trial/portraits/${id}.gif`);
+    assert.ok(existsSync(`${assetDir}${id}.gif`), `${id}.gif 应真实存在于 public/trial/portraits`);
+  }
+
+  // 没有收录素材的武将（如黄巾力士）退回程序化立绘，不能算成有图。
+  assert.equal(hasPortraitAsset("huangjin_lishi"), false);
+  assert.equal(portraitAssetSrc("huangjin_lishi"), null);
+  assert.equal(hasPortraitAsset(null), false);
+
+  // 素材只给武将用，别把特性 / 物品的 id 也误当成头像。
+  const generalIds = new Set(SAGA_GENERALS.map((general) => general.id));
+  assert.ok(SAGA_PORTRAIT_IDS.every((id) => generalIds.has(id)), "素材 id 必须全部来自武将表");
+});

@@ -21,6 +21,7 @@ import type { FieldHotspot } from "@/lib/trial/saga/map";
 import { battleAttackPower } from "@/lib/trial/saga/battle";
 import { SAGA_CORPS_LABEL, SAGA_GENERAL_BY_ID } from "@/lib/trial/saga/data";
 import { paintBattleBust, portraitTraitsFor } from "@/components/trial/portraits";
+import { portraitAssetImage } from "@/components/trial/portrait-assets";
 
 /**
  * 三国讨逆传的 Canvas 美术：俯视行军大地图与回合战斗两张场景。
@@ -2589,7 +2590,12 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
           x,
           baseY,
           tall,
-          { facing: currentEvent.side === "player" ? 1 : -1, alpha },
+          {
+            facing: currentEvent.side === "player" ? 1 : -1,
+            alpha,
+            corps: actorUnit.corps,
+            image: portraitAssetImage(actorUnit.id) ?? undefined,
+          },
         );
       }
     }

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { MessageCircle, MessageSquare, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -7,6 +8,7 @@ import { SAGA_GENERAL_BY_ID } from "@/lib/trial/saga/data";
 import { SAGA_NPCS, type SagaScene } from "@/lib/trial/saga/story";
 import type { SagaGeneralState, SagaNode } from "@/lib/trial/saga/types";
 import type { SagaQuest } from "@/lib/trial/saga/quests";
+import { portraitAssetSrc } from "./portrait-assets";
 import {
   npcTraitsFor,
   paintTraitsPortrait,
@@ -39,7 +41,9 @@ export function SagaPortrait({
   const ref = useRef<HTMLCanvasElement | null>(null);
   const wornWeapon = gear?.weapon;
   const wornArmor = gear?.armor;
+  const asset = portraitAssetSrc(generalId);
   useEffect(() => {
+    if (asset) return;
     const canvas = ref.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -58,7 +62,32 @@ export function SagaPortrait({
       def ? { weapon: wornWeapon, armor: wornArmor } : {},
       { x: 0, y: 0, w, h },
     );
-  }, [generalId, npcId, wornWeapon, wornArmor, width, height]);
+  }, [generalId, npcId, wornWeapon, wornArmor, width, height, asset]);
+
+  // 有吞食天地头像素材的武将直接贴原图：48×48 的像素头像放大后关掉插值，
+  // 摆在米色小画框里，跟游戏里其他面板的木质边框凑成一套。
+  if (asset) {
+    return (
+      <div
+        style={{ width, height }}
+        className={cn(
+          "relative shrink-0 overflow-hidden rounded-md border border-border/60 bg-[#e9d9b5]",
+          className,
+        )}
+        aria-hidden
+      >
+        <Image
+          src={asset}
+          alt=""
+          width={48}
+          height={48}
+          unoptimized
+          className="h-full w-full object-contain"
+          style={{ imageRendering: "pixelated" }}
+        />
+      </div>
+    );
+  }
 
   return (
     <canvas
