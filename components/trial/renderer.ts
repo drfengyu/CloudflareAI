@@ -344,15 +344,14 @@ function paintGround(
   ctx.fillStyle = ground;
   ctx.fillRect(0, gy - 26, view.w, view.h - gy + 26);
 
-  // 石板路
+  // 石板路面：只铺一行，画面下方别被石砖占掉太多。
   ctx.fillStyle = mood.road;
-  ctx.fillRect(0, gy + 6, view.w, 76);
+  ctx.fillRect(0, gy + 6, view.w, 38);
   ctx.strokeStyle = mood.roadEdge;
   ctx.lineWidth = 1;
   const offset = camera % 96;
   for (let x = -offset - 96; x < view.w + 96; x += 96) {
     ctx.strokeRect(x, gy + 6, 96, 38);
-    ctx.strokeRect(x + 48, gy + 44, 96, 38);
   }
   ctx.fillStyle = mood.roadGlow;
   ctx.fillRect(0, gy + 6, view.w, 3);
@@ -1409,10 +1408,20 @@ function battleRandom(seed: number): () => number {
   };
 }
 
-/** 头顶血条的满格长度：兵力上限越高条越长，最少 84px、最多 140px。 */
+/** 头顶血条的满格长度：兵力上限越高条越长，最少 168px、最多 280px（约为旧口径的两倍）。 */
 export function battleHpBarWidth(maxTroops: number, widestMax: number): number {
   const ratio = widestMax > 0 ? Math.max(0, Math.min(1, maxTroops / widestMax)) : 1;
-  return Math.round(84 + 56 * ratio);
+  return Math.round(168 + 112 * ratio);
+}
+
+/** 血条的分格口径：格子宽度固定，条越长格子越多，读起来像一排方砖。 */
+export const BATTLE_HP_CELL = 18;
+const BATTLE_HP_CELL_GAP = 3;
+const BATTLE_HP_CELL_COUNT_MIN = 8;
+
+/** 一条血条切成几格。 */
+export function battleHpCellCount(barWidth: number): number {
+  return Math.max(BATTLE_HP_CELL_COUNT_MIN, Math.round(barWidth / BATTLE_HP_CELL));
 }
 
 /**
@@ -2660,72 +2669,80 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     unit: typeof battle.party[number],
     slot: UnitSlot,
     side: "player" | "enemy",
-    zipped: boolean,
   ): void => {
     // 败将已经有「败」字印章，头顶不再留一条空血条。
     if (unit.downed) return;
     const scale = unit.boss ? slot.scale * 1.2 : slot.scale;
     const barW = battleHpBarWidth(unit.maxTroops, widestMax);
-    const barH = 9;
-    const barX = slot.x - barW / 2;
+    const barH = 10;
+    // 血条与名签都贴到画幅两侧：我方从最左边起、敌军从最右边收，
+    // 队列中间的走动与出手动画就不会把信息挤得到处跑。
+    const margin = 14;
+    const barX = side === "player" ? margin : view.w - margin - barW;
     const barY = slot.y - 106 * scale;
     const ratio = Math.max(0, Math.min(1, unit.troops / unit.maxTroops));
-    ctx.fillStyle = "rgba(12,10,8,0.78)";
-    roundRect(ctx, barX - 1.5, barY - 1.5, barW + 3, barH + 3, 4);
-    ctx.fill();
-    ctx.strokeStyle = side === "player" ? "rgba(214,178,116,0.9)" : "rgba(210,120,96,0.9)";
-    ctx.lineWidth = 1.4;
-    ctx.stroke();
-    if (ratio > 0) {
+
+    // 条身是一排宽长格子：格子宽固定、条越长格子越多，掉兵时逐格熄灭。
+    const cells = battleHpCellCount(barW);
+    const gap = BATTLE_HP_CELL_GAP;
+    const cellW = (barW - gap * (cells - 1)) / cells;
+    const lit = ratio * cells;
+    for (let i = 0; i < cells; i++) {
+      const cx =
+        side === "player"
+          ? barX + i * (cellW + gap)
+          : barX + barW - cellW - i * (cellW + gap);
+      ctx.fillStyle = "rgba(12,10,8,0.76)";
+      roundRect(ctx, cx, barY, cellW, barH, 2);
+      ctx.fill();
+      ctx.strokeStyle = side === "player" ? "rgba(214,178,116,0.7)" : "rgba(210,120,96,0.7)";
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // 每格单独按比例填：整数格全亮，跨到的那一格按剩多少亮一截。
+      const cellLit = Math.max(0, Math.min(1, lit - i));
+      if (cellLit <= 0) continue;
+      const fillW = cellW * cellLit;
       ctx.fillStyle = side === "player" ? "#c9a15a" : "#b5533d";
-      // 我方血条左对齐、从左边掉；敌军右对齐、从右边掉，两军对峙时一眼看清各剩多少。
-      const fillW = Math.max(3, barW * ratio);
       roundRect(
         ctx,
-        side === "player" ? barX : barX + barW - fillW,
-        barY,
-        fillW,
-        barH,
-        3,
+        side === "player" ? cx : cx + cellW - fillW,
+        barY + 0.8,
+        Math.max(1.5, fillW),
+        barH - 1.6,
+        1.6,
       );
       ctx.fill();
-      // 条面高光，加粗之后不至于显成一条平涂色块
-      ctx.fillStyle = "rgba(255,238,206,0.28)";
+      // 条面高光，一排格子不至于糊成一条平涂色块
+      ctx.fillStyle = "rgba(255,238,206,0.26)";
       roundRect(
         ctx,
-        side === "player" ? barX : barX + barW - fillW,
-        barY + 1,
-        Math.max(2, fillW),
-        2.4,
-        1.4,
+        side === "player" ? cx : cx + cellW - fillW,
+        barY + 1.8,
+        Math.max(1.5, fillW),
+        2.2,
+        1,
       );
       ctx.fill();
     }
+
     ctx.font = uiFont(11);
     const marks = `${unit.guard ? "守" : ""}${unit.buff > 0 ? "鼓" : ""}${unit.confused > 0 ? "乱" : ""}`;
     const troops = Math.max(0, Math.round(unit.troops));
     // 名签口径与「敌情」面板一致：攻取 battleAttackPower，防与武 / 智 / 速一样取基础防御值。
     const label = `${unit.name}${marks ? `·${marks}` : ""}【${SAGA_CORPS_LABEL[unit.corps]}】攻${battleAttackPower(unit)} 防${unit.defense} 兵${troops}/${unit.maxTroops}`;
     const textW = ctx.measureText(label).width;
-    // 两列交错的密集阵把名签摆在血条正中上方，免得两列的名签在同一行撞车。
-    const centered = zipped;
-    const labelX = centered ? slot.x : side === "player" ? barX : barX + barW;
-    const bgX = centered ? slot.x - textW / 2 - 5 : side === "player" ? barX - 5 : barX + barW - textW - 5;
+    // 名签同样贴边：我方左对齐到画幅左边距，敌军右对齐到右边距。
+    const labelX = side === "player" ? margin : view.w - margin;
+    const bgX = side === "player" ? margin - 5 : view.w - margin - textW - 5;
     ctx.fillStyle = "rgba(12,10,8,0.7)";
-    roundRect(ctx, bgX, barY - 17, textW + 10, 15, 4);
+    roundRect(ctx, bgX, barY - 18, textW + 10, 15, 4);
     ctx.fill();
     ctx.fillStyle = "#f0e2c4";
-    ctx.textAlign = centered ? "center" : side === "player" ? "left" : "right";
-    ctx.fillText(label, labelX, barY - 6);
+    ctx.textAlign = side === "player" ? "left" : "right";
+    ctx.fillText(label, labelX, barY - 7);
   };
-  const zippedParty = battle.party.length >= 5;
-  const zippedEnemies = battle.enemies.length >= 5;
-  battle.party.forEach((unit, index) =>
-    paintUnitBar(unit, playerSlots[index], "player", zippedParty),
-  );
-  battle.enemies.forEach((unit, index) =>
-    paintUnitBar(unit, enemySlots[index], "enemy", zippedEnemies),
-  );
+  battle.party.forEach((unit, index) => paintUnitBar(unit, playerSlots[index], "player"));
+  battle.enemies.forEach((unit, index) => paintUnitBar(unit, enemySlots[index], "enemy"));
 
   // 战斗特效
   if (currentEvent) {

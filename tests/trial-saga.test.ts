@@ -94,6 +94,7 @@ import { applyRecruitOffer, battleAttackPower, battleTurnOrder, corpsCounterFact
 import {
   battleEnemyAtPoint,
   battleHpBarWidth,
+  battleHpCellCount,
   battleUnitSlots,
   makeSagaView,
 } from "../components/trial/renderer";
@@ -1333,10 +1334,12 @@ test("战斗内景：头顶血条按兵力上限分长短，攻击力与普攻�
   const widths = battle.party.map((unit) => battleHpBarWidth(unit.maxTroops, widest));
   assert.equal(new Set(widths).size > 1, true, "不同兵力上限的武将初始血条长度不同");
   for (const width of widths) {
-    assert.equal(width >= 84 && width <= 140, true, "条长落在 84~140px");
+    assert.equal(width >= 168 && width <= 280, true, "条长落在 168~280px");
   }
-  assert.equal(battleHpBarWidth(widest, widest), 140);
-  assert.equal(battleHpBarWidth(0, widest), 84);
+  assert.equal(battleHpBarWidth(widest, widest), 280);
+  assert.equal(battleHpBarWidth(0, widest), 168);
+  assert.equal(battleHpCellCount(battleHpBarWidth(widest, widest)), 16, "最长条 16 格");
+  assert.equal(battleHpCellCount(battleHpBarWidth(0, widest)), 9, "最短条 9 格");
   const hero = battle.party[0];
   assert.equal(battleAttackPower(hero), hero.force + hero.weaponAtk + hero.level * 2, "我方攻击力口径");
   const foe = battle.enemies[0];

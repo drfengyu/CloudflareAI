@@ -28,10 +28,22 @@ export interface SagaMaintenanceWindow {
 }
 
 /** 游戏内公告版本号（与站点版本对齐）。 */
-export const SAGA_NOTICE_VERSION = "0.86.0";
+export const SAGA_NOTICE_VERSION = "0.86.1";
 
 /** 最新公告：按版本从新到旧。 */
 export const SAGA_NOTICES: SagaNoticeEntry[] = [
+  {
+    id: "notice-0.86.1",
+    version: "0.86.1",
+    date: "2026-11-16",
+    kind: "update",
+    title: "血条改成分格并贴边",
+    lines: [
+      "兵力条长度再翻一倍（168~280 像素），条身是一排宽长格子，掉兵时逐格熄灭，剩多少一眼数得出。",
+      "武将名签与兵力条改为贴住画面左右两边：我方靠最左、敌军靠最右，不再随站位漂移。",
+      "战斗画面下方的石板路少铺一行，多出来的高度留给校场。",
+    ],
+  },
   {
     id: "notice-0.86.0",
     version: "0.86.0",
