@@ -64,7 +64,7 @@ import {
 export const SAGA_MAX_PURCHASES = 100;
 
 /** 指令里允许出现的营地下标上限（与 `TRIAL_MAX_FLOORS` 对齐，这里不引配置以免破坏纯函数复用）。 */
-const SAGA_MAX_NODE_INDEX = 6;
+const SAGA_MAX_NODE_INDEX = 8;
 
 const clampInt = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, Math.trunc(value)));
@@ -215,6 +215,33 @@ export function generateSagaRun(options: {
       enemyFormation: pick(rng, SAGA_FORMATIONS).id,
     });
   }
+  // 剧情分支：初战之后岔出两处营，只能走一条（打通一条，另一条自动闭营）。
+  // 两条路敌将、名称、文案与奖励都不同：守正的一条多给金币，奇袭的一条多给经验。
+  if (nodeCount >= 4 && chapter.branch) {
+    const options: [0 | 1, NonNullable<typeof chapter.branch>["a"]][] = [
+      [0, chapter.branch.a],
+      [1, chapter.branch.b],
+    ];
+    const branchNodes: SagaNode[] = options.map(([option, config]) => {
+      const enemies = config.pool
+        .slice(0, 2)
+        .map((id) => makeEnemy(id, chapter.index, 1, "battle", false));
+      const rewardGold = 18 + chapter.index * 22 + 8 + (config.bonus === "gold" ? 70 : 0);
+      const rewardExp = 16 + chapter.index * 10 + 6 + (config.bonus === "exp" ? 60 : 0);
+      return {
+        kind: "battle",
+        name: config.name,
+        blurb: `${config.blurb} 此处与另一条路只能走一条。`.slice(0, 120),
+        chapter: chapter.index,
+        enemies,
+        rewardGold,
+        rewardExp,
+        enemyFormation: pick(rng, SAGA_FORMATIONS).id,
+        branch: { group: chapter.index, option },
+      };
+    });
+    nodes.splice(1, 0, ...branchNodes);
+  }
   return {
     version: SAGA_RUN_VERSION,
     kind: "saga",
@@ -292,6 +319,15 @@ function parseNode(raw: unknown): SagaNode | null {
     const n = Math.trunc(Number(value));
     return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
   };
+  const branchRaw = it.branch;
+  let branch: SagaNode["branch"];
+  if (branchRaw && typeof branchRaw === "object") {
+    const group = Math.trunc(Number((branchRaw as { group?: unknown }).group));
+    const option = Math.trunc(Number((branchRaw as { option?: unknown }).option));
+    if (Number.isFinite(group) && (option === 0 || option === 1)) {
+      branch = { group: Math.min(SAGA_CHAPTERS.length - 1, Math.max(0, group)), option };
+    }
+  }
   return {
     kind,
     name: String(it.name ?? "遭遇战").slice(0, 32),
@@ -301,6 +337,7 @@ function parseNode(raw: unknown): SagaNode | null {
     rewardGold: num(it.rewardGold, 0, 9999, 20),
     rewardExp: num(it.rewardExp, 0, 9999, 20),
     enemyFormation: formation,
+    ...(branch ? { branch } : {}),
   };
 }
 
@@ -423,7 +460,7 @@ export function parseSagaRun(raw: string | null | undefined): SagaRun | null {
   if (it.version !== SAGA_RUN_VERSION || it.kind !== "saga") return null;
   const activityKey = typeof it.activityKey === "string" ? it.activityKey.trim() : "";
   if (!activityKey) return null;
-  if (!Array.isArray(it.nodes) || it.nodes.length === 0 || it.nodes.length > 7) return null;
+  if (!Array.isArray(it.nodes) || it.nodes.length === 0 || it.nodes.length > 9) return null;
   const nodes: SagaNode[] = [];
   for (const item of it.nodes) {
     const node = parseNode(item);
@@ -814,6 +851,18 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
         state.battle = battle;
         if (battle.phase === "won") {
           state.clearedNodes.push(command.node);
+          // 岔路只走一条：打通这条，另一条当场闭营，本阵的解锁条件也随之满足。
+          const clearedNode = run.nodes[command.node];
+          const branch = clearedNode?.branch;
+          if (branch) {
+            const sibling = run.nodes.findIndex(
+              (item, index) =>
+                index !== command.node && item.branch?.group === branch.group,
+            );
+            if (sibling >= 0 && !state.clearedNodes.includes(sibling)) {
+              state.clearedNodes.push(sibling);
+            }
+          }
           state.completed = state.clearedNodes.length;
           state.scene = state.completed >= run.nodes.length ? "won" : "field";
           state.victory = state.completed >= run.nodes.length;

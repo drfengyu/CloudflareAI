@@ -225,7 +225,7 @@ export function generateSagaField(options: {
   const tile = SAGA_FIELD_TILE;
   const chapterIndex = clamp(Math.trunc(options.chapter), 0, SAGA_CHAPTERS.length - 1);
   const chapter = SAGA_CHAPTERS[chapterIndex];
-  const count = clamp(Math.trunc(options.nodeCount), 1, 7);
+  const count = clamp(Math.trunc(options.nodeCount), 1, 9);
   const rng = mulberry32((options.seed ^ 0x5f3759df) >>> 0);
   const terrain = new Array<number>(cols * rows).fill(SAGA_TILE_GRASS);
 

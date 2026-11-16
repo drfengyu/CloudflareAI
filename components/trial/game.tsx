@@ -3310,10 +3310,21 @@ function CampPanel({
         <p className="font-medium">
           {target.name}
           <span className="ml-2 text-xs font-normal text-muted-foreground">
-            {target.kind === "boss" ? "主帅本阵" : target.kind === "elite" ? "精锐营" : "野战营"}
+            {target.kind === "boss"
+              ? "主帅本阵"
+              : target.branch
+                ? `岔路 · 第 ${target.branch.option + 1} 条`
+                : target.kind === "elite"
+                  ? "精锐营"
+                  : "野战营"}
           </span>
         </p>
         <p className="mt-1 text-xs text-muted-foreground">{target.blurb}</p>
+        {target.branch ? (
+          <p className="mt-1 text-xs text-warning">
+            岔路两条只能走一条：打通此处，另一条路当场闭营。
+          </p>
+        ) : null}
         <p className="mt-2 text-xs text-muted-foreground">
           已破 {state.clearedNodes.length}/{run.nodes.length} 座营 · 此行金币 +{state.goldGained} ·
           先破其余营寨，才能直取主帅本阵

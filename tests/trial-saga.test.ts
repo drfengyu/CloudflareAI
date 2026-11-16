@@ -242,24 +242,100 @@ test("讨逆传生成：同种子同一局，节点按章节地名推进并以�
   const run = freshRun();
   assert.equal(run.version, SAGA_RUN_VERSION);
   assert.equal(run.kind, "saga");
-  assert.equal(run.nodes.length, 5);
+  // 5 座营 + 一处岔路的两条路（各算一座，只能走一条）。
+  assert.equal(run.nodes.length, 7);
   assert.deepEqual(
     run.nodes.map((node) => node.kind),
-    ["battle", "battle", "battle", "elite", "boss"],
+    ["battle", "battle", "battle", "battle", "battle", "elite", "boss"],
   );
   assert.deepEqual(freshRun(), run);
   assert.equal(freshRun(12).seed, 12);
 
-  const stages = new Set(SAGA_CHAPTERS[0].stages);
+  const stages = new Set([
+    ...SAGA_CHAPTERS[0].stages,
+    ...SAGA_CHAPTERS[0].landmarks,
+  ]);
+  const branchNames = new Set(
+    [
+      SAGA_CHAPTERS[0].branch?.a.name,
+      SAGA_CHAPTERS[0].branch?.b.name,
+    ].filter((name): name is string => Boolean(name)),
+  );
   for (const node of run.nodes) {
-    assert.equal(stages.has(node.name.split("·")[0]), true, `节点地名 ${node.name} 来自章节`);
+    if (node.branch) {
+      assert.equal(branchNames.has(node.name), true, `岔路名称 ${node.name} 来自章节岔路配置`);
+    } else {
+      assert.equal(stages.has(node.name.split("·")[0]), true, `节点地名 ${node.name} 来自章节`);
+    }
     const ids = node.enemies.map((enemy) => enemy.id);
     assert.equal(new Set(ids).size, ids.length, "同一场敌将不重复");
   }
   assert.equal(run.nodes[run.nodes.length - 1].enemies[0].id, SAGA_CHAPTERS[0].boss);
 
-  assert.equal(freshRun(5, TRIAL_MAX_FLOORS).nodes.length, TRIAL_MAX_FLOORS);
+  assert.equal(freshRun(5, TRIAL_MAX_FLOORS).nodes.length, TRIAL_MAX_FLOORS + 2);
   assert.equal(freshRun(5, 0).nodes.length, 2);
+});
+
+test("剧情分支：一处岔路两条路只能走一条，打通一条另一条自动闭营", () => {
+  const base = freshRun();
+  // 把每场敌军压到一击必杀，专心验岔路的开通与闭营规则。
+  const nodes = base.nodes.map((node) => ({
+    ...node,
+    enemies: node.enemies.map((enemy) => ({
+      ...enemy,
+      troops: 1,
+      maxTroops: 1,
+      force: 0,
+      intellect: 0,
+      defense: 0,
+      speed: 0,
+    })),
+  }));
+  const run: SagaRun = { ...base, nodes };
+  const branchIndices = nodes
+    .map((node, index) => ({ node, index }))
+    .filter(({ node }) => node.branch);
+  assert.equal(branchIndices.length, 2, "每章只岔一处、两条路");
+  assert.equal(
+    branchIndices[0].node.branch!.group,
+    branchIndices[1].node.branch!.group,
+    "两条路同属一个岔路组",
+  );
+  assert.notEqual(branchIndices[0].node.branch!.option, branchIndices[1].node.branch!.option);
+  assert.notEqual(branchIndices[0].node.name, branchIndices[1].node.name, "两条路各有名字与敌将");
+  const [goldRoute, expRoute] = branchIndices
+    .map(({ node }) => node)
+    .sort((a, b) => b.rewardGold - a.rewardGold);
+  assert.equal(goldRoute.rewardGold > expRoute.rewardGold, true, "守正的一条多给金币");
+  assert.equal(expRoute.rewardExp > goldRoute.rewardExp, true, "奇袭的一条多给经验");
+
+  const state = createReplayState(run);
+  const chosen = branchIndices[0].index;
+  const sibling = branchIndices[1].index;
+  assert.equal(canEngageNode(run, state, chosen), true, "岔路开局就能打");
+  assert.equal(canEngageNode(run, state, sibling), true, "另一条也开着，先打哪条由玩家定");
+
+  // 营寨 / 精锐会按种子补士兵位，多打几轮把这一场收干净。
+  const volley = [
+    { g: "liubei", a: "attack" as const, target: 0 },
+    { g: "guanyu", a: "attack" as const, target: 0 },
+    { g: "zhangfei", a: "attack" as const, target: 0 },
+  ];
+  const battle: SagaCommand = {
+    k: "battle",
+    node: chosen,
+    rounds: [volley, volley, volley, volley],
+  };
+  const replay = replaySagaRun(run, [battle]).state;
+  assert.equal(replay.clearedNodes.includes(chosen), true, "打通选中的那条");
+  assert.equal(replay.clearedNodes.includes(sibling), true, "另一条当场闭营");
+  assert.equal(canEngageNode(run, replay, sibling), false, "闭营后不能再打");
+  assert.equal(openNodes(run, replay).includes(sibling), false, "闭营的那条不再出现在可攻列表");
+  assert.equal(
+    parseSagaRun(JSON.stringify(run))?.nodes[branchIndices[0].index].branch?.group,
+    branchIndices[0].node.branch!.group,
+    "岔路信息随对局 JSON 往返",
+  );
 });
 
 test("对局 JSON：版本校验严格，旧玩法与损坏数据一律当没有对局", () => {
@@ -277,7 +353,7 @@ test("对局 JSON：版本校验严格，旧玩法与损坏数据一律当没有
   assert.equal(parseSagaRun(JSON.stringify({ ...run, kind: "dungeon" })), null);
   assert.equal(parseSagaRun(JSON.stringify({ ...run, activityKey: "" })), null);
   assert.equal(parseSagaRun(JSON.stringify({ ...run, nodes: [] })), null);
-  assert.equal(parseSagaRun(JSON.stringify({ ...run, nodes: Array(8).fill(run.nodes[0]) })), null);
+  assert.equal(parseSagaRun(JSON.stringify({ ...run, nodes: Array(10).fill(run.nodes[0]) })), null);
   // v5 浮游城/答题存档不会被误认成讨逆传。
   assert.equal(parseSagaRun(JSON.stringify({ version: 5, seed: 1, heroHp: 100, floors: [] })), null);
 });
@@ -310,7 +386,7 @@ test("指令清洗：未知字段、旧金币商店与错槽装备都被丢弃",
     },
     { k: "leave" },
     // 营地下标越界、缺失或不是数字：整条战斗指令丢弃。
-    { k: "battle", node: 7, rounds: [[]] },
+    { k: "battle", node: 9, rounds: [[]] },
     { k: "battle", node: -1, rounds: [[]] },
     { k: "battle", rounds: [[]] },
     "junk",
@@ -922,7 +998,10 @@ test("大地图不入库存档：只由种子复现，与对局 JSON 里的节�
   const run = freshRun(81, 4);
   const field = sagaFieldFor(run);
   assert.equal(field.camps.length, run.nodes.length);
-  assert.deepEqual(sagaFieldFor(run), generateSagaField({ chapter: 0, nodeCount: 4, seed: run.seed }));
+  assert.deepEqual(
+    sagaFieldFor(run),
+    generateSagaField({ chapter: 0, nodeCount: run.nodes.length, seed: run.seed }),
+  );
   // 只有种子/节点数参与地图，行军进度不会改变地形。
   const replayed = { ...run, nodes: run.nodes.slice(0, 3) };
   assert.equal(sagaFieldFor(replayed).camps.length, 3);

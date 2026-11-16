@@ -257,6 +257,14 @@ export interface SagaChapterDef {
   elite: string[];
   boss: string;
   guards: string[];
+  /**
+   * 本章岔路：两处营地只能打一处，敌将 / 名称 / 文案 / 奖励各不相同。
+   * 一条偏「守正」（护民、护粮，多给金币），一条偏「奇袭」（截粮、劫营，多给经验）。
+   */
+  branch?: {
+    a: { name: string; blurb: string; pool: string[]; bonus: "gold" | "exp" };
+    b: { name: string; blurb: string; pool: string[]; bonus: "gold" | "exp" };
+  };
   unlock: string | null;
 }
 
@@ -302,6 +310,11 @@ export interface SagaNode {
   rewardGold: number;
   rewardExp: number;
   enemyFormation: FormationId;
+  /**
+   * 岔路：同一 `group` 的两座营只能走一条。
+   * 打通其中一条后，另一条自动闭营（写进 `clearedNodes`），不会卡住本阵解锁。
+   */
+  branch?: { group: number; option: 0 | 1 };
 }
 
 export interface SagaPurchase {

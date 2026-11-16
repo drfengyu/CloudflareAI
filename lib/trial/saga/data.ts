@@ -264,6 +264,20 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     elite: ["zhangbao", "zhangliang", "guanhai"],
     boss: "zhangjiao",
     guards: ["zhangbao", "zhangliang", "guanhai"],
+    branch: {
+      a: {
+        name: "楼桑村·护乡邻",
+        blurb: "黄巾溃兵围了楼桑村，乡邻还在里面。护住他们，涿郡人心才归你。",
+        pool: ["peiyuanshao", "zhoucang"],
+        bonus: "gold",
+      },
+      b: {
+        name: "涿郡道·截粮车",
+        blurb: "张角的粮车夜里过涿郡道，车上粮食够黄巾吃半月。",
+        pool: ["guanhai", "liaohua"],
+        bonus: "exp",
+      },
+    },
     unlock: null,
   },
   {
@@ -284,6 +298,20 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     elite: ["huaxiong", "huzhen", "lijue"],
     boss: "dongzhuo",
     guards: ["lvbu", "huaxiong", "lijue", "guosi"],
+    branch: {
+      a: {
+        name: "汜水关前·救盟军",
+        blurb: "华雄趁夜袭盟军粮营，营里还有几十个受伤的盟军士卒。",
+        pool: ["fanchou", "niufu"],
+        bonus: "gold",
+      },
+      b: {
+        name: "虎牢侧道·夺马",
+        blurb: "西凉军马队在虎牢关侧道歇脚，夺了马，明日阵前就快人一步。",
+        pool: ["lijue", "zhangji"],
+        bonus: "exp",
+      },
+    },
     unlock: null,
   },
   {
@@ -304,6 +332,20 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     elite: ["jiling", "qiaorui", "yangfeng"],
     boss: "yuanshu",
     guards: ["jiling", "zhangxun", "yangfeng"],
+    branch: {
+      a: {
+        name: "郯城野·收流民",
+        blurb: "袁术的兵在郯城外抢粮，流民堵在道上哭。护住他们，徐州才认你这个主。",
+        pool: ["leibo", "chenlan"],
+        bonus: "gold",
+      },
+      b: {
+        name: "淮水渡·烧舟",
+        blurb: "袁术的粮舟泊在淮水渡口，一把火烧了，前线的兵就得饿三天。",
+        pool: ["yangfeng", "liuxun"],
+        bonus: "exp",
+      },
+    },
     unlock: "zhaoyun",
   },
   {
@@ -324,6 +366,20 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     elite: ["gaoshun", "zhangliao", "zangba"],
     boss: "lvbu",
     guards: ["gaoshun", "zhangliao", "zangba"],
+    branch: {
+      a: {
+        name: "下邳巷·清残部",
+        blurb: "吕布败了，残部还缩在下邳巷子里抢掠百姓。清干净，才算真拿下此城。",
+        pool: ["houcheng", "weixu"],
+        bonus: "gold",
+      },
+      b: {
+        name: "白门楼外·截马",
+        blurb: "并州铁骑趁乱往北跑，拦下这批人马，正好补进自家骑队。",
+        pool: ["songxian", "zangba"],
+        bonus: "exp",
+      },
+    },
     unlock: "zhangliao",
   },
   {
@@ -344,6 +400,20 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     elite: ["yanliang", "wenchou", "chunyuqiong"],
     boss: "yuanshao",
     guards: ["zhanghe", "gaolan", "chunyuqiong"],
+    branch: {
+      a: {
+        name: "乌巢北·护粮",
+        blurb: "袁军游骑摸到乌巢北面，淳于琼的粮囤还没烧完，护住一处是一处。",
+        pool: ["chunyuqiong", "yuanshang"],
+        bonus: "gold",
+      },
+      b: {
+        name: "延津道·焚粮",
+        blurb: "袁绍的第二批粮车正在延津道上，田丰派了人接应——烧不烧得掉，就看这一趟。",
+        pool: ["tianfeng", "jushou"],
+        bonus: "exp",
+      },
+    },
     unlock: "zhugeliang",
   },
   {
@@ -364,6 +434,20 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     elite: ["caimao", "zhangyun", "xuchu", "huanggai"],
     boss: "caocao",
     guards: ["caoren", "xuhuang", "xuchu"],
+    branch: {
+      a: {
+        name: "乌林滩·护船",
+        blurb: "江上起了南风，吴军火船还没到位，先护住自己这边的战船。",
+        pool: ["wenpin", "kuaiyue"],
+        bonus: "gold",
+      },
+      b: {
+        name: "华容道·截骑",
+        blurb: "曹军轻骑从华容小道撤，道上泥深——拦住他们，能捡一批好马好甲。",
+        pool: ["pangde", "zhangxiu"],
+        bonus: "exp",
+      },
+    },
     unlock: "huangzhong",
   },
   {
@@ -384,6 +468,20 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     elite: ["zhangren", "yanyan", "wuyi"],
     boss: "liuzhang",
     guards: ["zhangren", "yanyan", "wuyi"],
+    branch: {
+      a: {
+        name: "葭萌关·护民",
+        blurb: "李严的兵在葭萌关下拉夫征粮，百姓躲进山里。把关口护住，西川人心才稳。",
+        pool: ["liyan", "wuyi"],
+        bonus: "gold",
+      },
+      b: {
+        name: "雒城道·劫粮",
+        blurb: "雒城的军粮正沿山道往成都运，孟达押车。截下来，成都就少守一月。",
+        pool: ["mengda", "shamoke"],
+        bonus: "exp",
+      },
+    },
     unlock: "machao",
   },
   {
@@ -404,6 +502,20 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     elite: ["guohuai", "sunli", "dengai", "wangshuang"],
     boss: "simayi",
     guards: ["guohuai", "sunli", "dengai", "haozhao"],
+    branch: {
+      a: {
+        name: "陈仓道·护运",
+        blurb: "郝昭守陈仓，粮道断不得。把运粮队护过去，前线才不至于断炊。",
+        pool: ["haozhao", "wangshuang"],
+        bonus: "gold",
+      },
+      b: {
+        name: "斜谷口·截粮",
+        blurb: "魏军粮车正从斜谷口进营，邓艾亲自押送。截了这一趟，渭水对岸就得挨饿。",
+        pool: ["dengai", "zhonghui"],
+        bonus: "exp",
+      },
+    },
     unlock: "weiyan",
   },
 ];
