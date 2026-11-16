@@ -636,6 +636,11 @@ function dealDamage(
   }
 }
 
+/**
+ * 计策结算：按计策表里的 `kind` 分家族走，威力取 `power`，
+ * 结束统一按 `cost` 扣策略值。入门四计（炼火 / 赤心 / 疑心 / 鼓舞）系数为 1，
+ * 与旧版战报的数值口径一致，旧行军重放不会翻账。
+ */
 function executeTactic(
   battle: SagaBattleState,
   actor: SagaBattleGeneral,
@@ -643,65 +648,108 @@ function executeTactic(
   requestedTarget: number | undefined,
   events: SagaBattleEvent[],
 ): void {
+  const def = SAGA_TACTIC_BY_ID.get(tactic);
   const allies = actor.side === "player" ? battle.party : battle.enemies;
   const foes = actor.side === "player" ? battle.enemies : battle.party;
   const foeFormation = actor.side === "player" ? battle.enemyFormation : battle.playerFormation;
   const allyFormation = actor.side === "player" ? battle.playerFormation : battle.enemyFormation;
   const tacticPct = 1 + traitTotal(actor, "tacticPct");
-  switch (tactic) {
-    case "huoji": {
-      const power = actor.intellect * 0.6 + actor.level * 2;
+  const power = def?.power ?? 1;
+  const name = def?.name ?? tacticName(tactic);
+  const kind = def?.kind ?? "fire";
+
+  const hitFoe = (foe: SagaBattleGeneral, raw: number, countered: number, allowHalf: boolean, skill: number) => {
+    const resist = foe.intellect * (kind === "water" ? 0.5 : 0.4);
+    const variance = 0.85 + roll(battle) * 0.3;
+    let damage = Math.max(6, Math.round((raw - resist) * variance * countered * tacticPct * skill));
+    if (allowHalf && roll(battle) < 0.22) damage = Math.round(damage * 0.5);
+    foe.troops = Math.max(0, foe.troops - damage);
+    events.push({
+      kind: "tactic",
+      side: actor.side,
+      actor: actor.name,
+      target: foe.name,
+      amount: damage,
+      text: `${actor.name} 施放${name}，${foe.name} -${damage} 兵力`,
+    });
+    if (foe.troops <= 0 && !foe.downed) {
+      foe.downed = true;
+      events.push({
+        kind: "down",
+        side: foe.side,
+        actor: foe.name,
+        target: foe.name,
+        text: `${foe.name} 败退`,
+      });
+    }
+  };
+
+  switch (kind) {
+    case "fire": {
+      // 火系：打全体，吃阵形克制。
+      const base = power * (actor.intellect * 0.6 + actor.level * 2);
       const skill = battle.rules >= 3 ? skillFactor(actor.level) : 1;
       for (const foe of living(foes)) {
-        // 火计也要看智力：智力差太大时，敌将能抢先避开火势。
         if (battle.rules >= 3 && roll(battle) > hitChance(actor, foe)) {
           events.push({
             kind: "miss",
             side: actor.side,
             actor: actor.name,
             target: foe.name,
-            text: `${foe.name} 避开火势，未受火计所伤`,
+            text: `${foe.name} 避开火势，未受${name}所伤`,
           });
           continue;
         }
-        const resist = foe.intellect * 0.4;
-        const variance = 0.85 + roll(battle) * 0.3;
-        const countered = counterMod(allyFormation, foeFormation);
-        let damage = Math.max(
-          6,
-          Math.round((power - resist) * variance * countered * tacticPct * skill),
-        );
-        if (roll(battle) < 0.22) damage = Math.round(damage * 0.5);
-        foe.troops = Math.max(0, foe.troops - damage);
-        events.push({
-          kind: "tactic",
-          side: actor.side,
-          actor: actor.name,
-          target: foe.name,
-          amount: damage,
-          text: `${actor.name} 施放火计，${foe.name} -${damage} 兵力`,
-        });
-        if (foe.troops <= 0 && !foe.downed) {
-          foe.downed = true;
-          events.push({
-            kind: "down",
-            side: foe.side,
-            actor: foe.name,
-            target: foe.name,
-            text: `${foe.name} 败退`,
-          });
-        }
+        hitFoe(foe, base, counterMod(allyFormation, foeFormation), true, skill);
       }
       break;
     }
-    case "huifu": {
+    case "water": {
+      // 水系：打全体，水分开道路，不受阵形克制影响。
+      const base = power * (actor.intellect * 0.55 + actor.level * 2);
+      const skill = battle.rules >= 3 ? skillFactor(actor.level) : 1;
+      for (const foe of living(foes)) {
+        if (battle.rules >= 3 && roll(battle) > hitChance(actor, foe)) {
+          events.push({
+            kind: "miss",
+            side: actor.side,
+            actor: actor.name,
+            target: foe.name,
+            text: `${foe.name} 抢先避开水流，未受${name}所伤`,
+          });
+          continue;
+        }
+        hitFoe(foe, base, 1, true, skill);
+      }
+      break;
+    }
+    case "rock": {
+      // 石系：砸单体，本作里单体最重，失去拒敌加成。
+      const candidates = living(foes);
+      const target =
+        (typeof requestedTarget === "number" ? candidates[requestedTarget] : null) ??
+        candidates.sort((a, b) => b.troops - a.troops)[0];
+      if (!target) break;
+      const chance = clamp(55 + (actor.intellect - target.intellect) / 2, 20, 90);
+      if (roll(battle) * 100 >= chance) {
+        events.push({
+          kind: "miss",
+          side: actor.side,
+          actor: actor.name,
+          target: target.name,
+          text: `${target.name} 躲开落石，未受${name}所伤`,
+        });
+        break;
+      }
+      const base = power * (actor.intellect * 0.8 + actor.level * 3);
+      hitFoe(target, base, counterMod(allyFormation, foeFormation), false, 1);
+      break;
+    }
+    case "heal": {
       const candidates = living(allies).sort((a, b) => a.troops / a.maxTroops - b.troops / b.maxTroops);
       const target = candidates[0];
       if (target) {
-        const heal = Math.max(
-          20,
-          Math.round((actor.intellect * 0.8 + actor.level * 2 + 30) * tacticPct),
-        );
+        const heal = Math.max(20, Math.round(power * (actor.intellect * 0.8 + actor.level * 2 + 30) * tacticPct));
         const before = target.troops;
         target.troops = Math.min(target.maxTroops, target.troops + heal);
         events.push({
@@ -710,12 +758,30 @@ function executeTactic(
           actor: actor.name,
           target: target.name,
           amount: target.troops - before,
-          text: `${actor.name} 施放回复，${target.name} +${target.troops - before} 兵力`,
+          text: `${actor.name} 施放${name}，${target.name} +${target.troops - before} 兵力`,
         });
       }
       break;
     }
-    case "hunluan": {
+    case "healAll": {
+      const heal = Math.max(20, Math.round(power * (actor.intellect * 0.6 + actor.level * 2 + 20) * tacticPct));
+      for (const ally of living(allies)) {
+        const before = ally.troops;
+        ally.troops = Math.min(ally.maxTroops, ally.troops + heal);
+        const gained = ally.troops - before;
+        if (gained <= 0) continue;
+        events.push({
+          kind: "heal",
+          side: actor.side,
+          actor: actor.name,
+          target: ally.name,
+          amount: gained,
+          text: `${actor.name} 施放${name}，${ally.name} +${gained} 兵力`,
+        });
+      }
+      break;
+    }
+    case "confuse": {
       const candidates = living(foes);
       const target =
         (typeof requestedTarget === "number" ? candidates[requestedTarget] : null) ??
@@ -723,13 +789,14 @@ function executeTactic(
       if (target) {
         const chance = clamp(50 + (actor.intellect - target.intellect) / 2, 20, 85);
         if (roll(battle) * 100 < chance) {
-          target.confused = 2;
+          const turns = Math.max(1, def?.turns ?? 2);
+          target.confused = turns;
           events.push({
             kind: "confuse",
             side: actor.side,
             actor: actor.name,
             target: target.name,
-            text: `${actor.name} 施放混乱，${target.name} 陷入混乱`,
+            text: `${actor.name} 施放${name}，${target.name} 陷入混乱`,
           });
         } else {
           events.push({
@@ -737,24 +804,64 @@ function executeTactic(
             side: actor.side,
             actor: actor.name,
             target: target.name,
-            text: `${target.name} 看破了混乱之计`,
+            text: `${target.name} 看破了${name}`,
           });
         }
       }
       break;
     }
-    case "guwu": {
+    case "trap": {
+      const candidates = living(foes);
+      const target =
+        (typeof requestedTarget === "number" ? candidates[requestedTarget] : null) ??
+        candidates.sort((a, b) => b.troops - a.troops)[0];
+      if (target) {
+        const chance = clamp(55 + (actor.intellect - target.intellect) / 2, 20, 88);
+        if (roll(battle) * 100 < chance) {
+          const loss = Math.max(6, Math.round(target.troops * power));
+          target.troops = Math.max(0, target.troops - loss);
+          events.push({
+            kind: "tactic",
+            side: actor.side,
+            actor: actor.name,
+            target: target.name,
+            amount: loss,
+            text: `${actor.name} 施放${name}，${target.name} 折损 ${loss} 兵力`,
+          });
+          if (target.troops <= 0 && !target.downed) {
+            target.downed = true;
+            events.push({
+              kind: "down",
+              side: target.side,
+              actor: target.name,
+              target: target.name,
+              text: `${target.name} 败退`,
+            });
+          }
+        } else {
+          events.push({
+            kind: "miss",
+            side: actor.side,
+            actor: actor.name,
+            target: target.name,
+            text: `${target.name} 察觉了${name}，未曾上当`,
+          });
+        }
+      }
+      break;
+    }
+    case "buff": {
       for (const ally of living(allies)) ally.buff = Math.max(ally.buff, 3);
       events.push({
         kind: "buff",
         side: actor.side,
         actor: actor.name,
-        text: `${actor.name} 擂鼓鼓舞，全队攻击提升`,
+        text: `${actor.name} 擂鼓${name}，全队攻击提升`,
       });
       break;
     }
   }
-  actor.tacticPoints = Math.max(0, actor.tacticPoints - 1);
+  actor.tacticPoints = Math.max(0, actor.tacticPoints - (def?.cost ?? 1));
 }
 
 function executeItem(
@@ -860,18 +967,32 @@ function aiCommand(battle: SagaBattleState, actor: SagaBattleGeneral): SagaRound
   const target = playersAlive
     .map((g, index) => ({ index, ratio: g.troops / g.maxTroops }))
     .sort((a, b) => a.ratio - b.ratio)[0]?.index ?? 0;
-  if (actor.tacticPoints > 0 && actor.tactics.length > 0 && roll(battle) < 0.34) {
-    if (actor.tactics.includes("huifu") && enemiesAlive.some((g) => g.troops / g.maxTroops < 0.45)) {
-      return { g: actor.id, a: "tactic", t: "huifu" };
+  // 只挑策略值付得起的计策，按系别分工：先救急、再输出、最后才控制。
+  const affordable = actor.tactics.filter((id) => (SAGA_TACTIC_BY_ID.get(id)?.cost ?? 1) <= actor.tacticPoints);
+  if (affordable.length > 0 && roll(battle) < 0.34) {
+    const healId = affordable
+      .filter((id) => {
+        const kind = SAGA_TACTIC_BY_ID.get(id)?.kind;
+        return kind === "heal" || kind === "healAll";
+      })
+      .sort((a, b) => (SAGA_TACTIC_BY_ID.get(b)?.cost ?? 0) - (SAGA_TACTIC_BY_ID.get(a)?.cost ?? 0))[0];
+    if (healId && enemiesAlive.some((g) => g.troops / g.maxTroops < 0.45)) {
+      return { g: actor.id, a: "tactic", t: healId, target };
     }
-    if (actor.tactics.includes("huoji") && playersAlive.length >= 2) {
-      return { g: actor.id, a: "tactic", t: "huoji" };
+    const damageId = affordable
+      .filter((id) => {
+        const kind = SAGA_TACTIC_BY_ID.get(id)?.kind;
+        return kind === "rock" || kind === "fire" || kind === "water";
+      })
+      .sort((a, b) => (SAGA_TACTIC_BY_ID.get(b)?.cost ?? 0) - (SAGA_TACTIC_BY_ID.get(a)?.cost ?? 0))[0];
+    if (damageId && playersAlive.length >= 2) return { g: actor.id, a: "tactic", t: damageId, target };
+    const confuseId = affordable.find((id) => SAGA_TACTIC_BY_ID.get(id)?.kind === "confuse");
+    if (confuseId && playersAlive.some((g) => g.confused === 0)) {
+      return { g: actor.id, a: "tactic", t: confuseId, target };
     }
-    if (actor.tactics.includes("hunluan") && playersAlive.some((g) => g.confused === 0)) {
-      return { g: actor.id, a: "tactic", t: "hunluan", target };
-    }
-    if (actor.tactics.includes("guwu") && enemiesAlive.every((g) => g.buff === 0)) {
-      return { g: actor.id, a: "tactic", t: "guwu" };
+    const buffId = affordable.find((id) => SAGA_TACTIC_BY_ID.get(id)?.kind === "buff");
+    if (buffId && enemiesAlive.every((g) => g.buff === 0)) {
+      return { g: actor.id, a: "tactic", t: buffId };
     }
   }
   return { g: actor.id, a: "attack", target };
@@ -889,9 +1010,14 @@ function executeCommand(
     events.push({ kind: "guard", side: actor.side, actor: actor.name, text: `${actor.name} 举盾防守` });
     return;
   }
+  if (command.a === "formation") {
+    // 变阵已在回合开始前统一结算，轮到该将时本回合只做布阵动作、不再出手。
+    return;
+  }
   if (command.a === "tactic") {
     const tactic = command.t;
-    if (tactic && actor.tactics.includes(tactic) && actor.tacticPoints > 0) {
+    const def = tactic ? SAGA_TACTIC_BY_ID.get(tactic) : null;
+    if (tactic && actor.tactics.includes(tactic) && def && actor.tacticPoints >= def.cost) {
       executeTactic(battle, actor, tactic, command.target, events);
       return;
     }
@@ -1096,6 +1222,57 @@ function finishBattle(
   }
 }
 
+/**
+ * v12：战斗内变阵。变阵要在所有武将行动之前统一结算，
+ * 否则会被速度顺序当成一次普攻打出去。下令的人活着的、阵形解锁了、
+ * 策略值够付的才算布成；没布成的人本回合照常出手。
+ */
+function resolveFormationCommands(
+  battle: SagaBattleState,
+  roundCommands: SagaRoundCommand[],
+  events: SagaBattleEvent[],
+): SagaRoundCommand[] {
+  if (battle.rules < 12) return roundCommands;
+  const maxLevel = battle.party.reduce((top, general) => Math.max(top, general.level), 0);
+  return roundCommands.map((command) => {
+    if (command.a !== "formation") return command;
+    const general = battle.party.find((unit) => unit.id === command.g);
+    const next = command.f ? SAGA_FORMATION_BY_ID.get(command.f) : null;
+    if (!general || general.downed || !next) return { g: command.g, a: "attack", target: battle.target };
+    if (next.level > maxLevel) {
+      events.push({
+        kind: "miss",
+        side: "player",
+        actor: general.name,
+        text: `${general.name} 修为还不到 ${next.level} 级，布不下${next.name}阵`,
+      });
+      return { g: command.g, a: "attack", target: battle.target };
+    }
+    if (general.tacticPoints < next.cost) {
+      events.push({
+        kind: "miss",
+        side: "player",
+        actor: general.name,
+        text: `${general.name} 策略值不足 ${next.cost} 点，布不下${next.name}阵`,
+      });
+      return { g: command.g, a: "attack", target: battle.target };
+    }
+    general.tacticPoints -= next.cost;
+    const before = battle.playerFormation;
+    battle.playerFormation = next.id;
+    events.push({
+      kind: "buff",
+      side: "player",
+      actor: general.name,
+      text:
+        before === next.id
+          ? `${general.name} 重整${next.name}阵，耗策略 ${next.cost}`
+          : `${general.name} 变阵为${next.name}阵，耗策略 ${next.cost}`,
+    });
+    return command;
+  });
+}
+
 export function resolveBattleRound(
   battle: SagaBattleState,
   roundCommands: SagaRoundCommand[],
@@ -1103,7 +1280,8 @@ export function resolveBattleRound(
 ): void {
   if (battle.phase !== "select") return;
   const events: SagaBattleEvent[] = [];
-  const byId = new Map(roundCommands.map((command) => [command.g, command]));
+  const commands = resolveFormationCommands(battle, roundCommands, events);
+  const byId = new Map(commands.map((command) => [command.g, command]));
   const actors = battleTurnOrder(battle);
   for (const actor of actors) {
     if (battle.phase !== "select") break;

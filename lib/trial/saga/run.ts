@@ -4,6 +4,7 @@ import {
   SAGA_FORMATIONS,
   SAGA_GENERAL_BY_ID,
   SAGA_ITEM_BY_ID,
+  SAGA_TACTICS,
   SAGA_TRAIT_BY_ID,
   tacticsFor,
   traitStats,
@@ -23,6 +24,7 @@ import {
   applyChapterUnlock,
   cloneSave,
   equipGeneral,
+  findGeneral,
   generalStats,
   grantItem,
   normalizeTrialSave,
@@ -283,8 +285,8 @@ function parseEnemy(raw: unknown): SagaEnemy | null {
   const maxTroops = num(it.maxTroops, 1, 999_999, 100);
   const troops = num(it.troops, 0, maxTroops, maxTroops);
   const tactics = Array.isArray(it.tactics)
-    ? it.tactics.filter((t): t is SagaEnemy["tactics"][number] =>
-        ["huoji", "huifu", "hunluan", "guwu"].includes(String(t)),
+    ? it.tactics.filter(
+        (t): t is SagaEnemy["tactics"][number] => typeof t === "string" && TACTIC_IDS.has(t),
       )
     : [];
   const traits = Array.isArray(it.traits)
@@ -550,8 +552,10 @@ const ROUND_ACTIONS = new Set<SagaRoundCommand["a"]>([
   "tactic",
   "item",
   "recruit",
+  "formation",
 ]);
-const TACTIC_IDS = new Set(["huoji", "huifu", "hunluan", "guwu"]);
+/** 计策 id 白名单直接从计策表生成，以后加计策不必再回来补一行。 */
+const TACTIC_IDS: Set<string> = new Set(SAGA_TACTICS.map((tactic) => tactic.id));
 
 function sanitizeRoundCommands(raw: unknown): SagaRoundCommand[] {
   if (!Array.isArray(raw)) return [];
@@ -565,6 +569,9 @@ function sanitizeRoundCommands(raw: unknown): SagaRoundCommand[] {
     const command: SagaRoundCommand = { g, a: a as SagaRoundCommand["a"] };
     if (typeof it.t === "string" && TACTIC_IDS.has(it.t)) command.t = it.t as SagaRoundCommand["t"];
     if (typeof it.i === "string") command.i = it.i.slice(0, 32);
+    if (typeof it.f === "string" && SAGA_FORMATION_BY_ID.get(it.f as FormationId)) {
+      command.f = it.f as FormationId;
+    }
     const target = Math.trunc(Number(it.target));
     if (Number.isFinite(target) && target >= 0 && target < 8) command.target = target;
     out.push(command);
@@ -882,9 +889,18 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
       if (!done || retreating) continue;
     }
     switch (command.k) {
-      case "formation":
+      case "formation": {
+        // v12：阵形要练到等级才解锁。旧战报（rules < 12）不设门禁，免得重放时换不了阵。
+        if ((run.rules ?? SAGA_RULESET) >= 12) {
+          const def = SAGA_FORMATION_BY_ID.get(command.f);
+          const maxLevel = state.save.party
+            .map((entry) => findGeneral(state.save, entry.id)?.level ?? 0)
+            .reduce((top, level) => Math.max(top, level), 0);
+          if (!def || maxLevel < def.level) break;
+        }
         setFormation(state.save, command.f);
         break;
+      }
       case "equip":
         equipGeneral(state.save, command.g, command.slot, command.i);
         break;

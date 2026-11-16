@@ -9,7 +9,7 @@ import {
   trialGoldFor,
   type TrialConfig,
 } from "../lib/trial/config";
-import { SAGA_CHAPTERS, SAGA_GENERAL_BY_ID, SAGA_GENERALS, SAGA_TRAITS, SAGA_TRAIT_BY_ID, sagaBondsFor, sagaCorpsOf, tacticsFor, traitStats } from "../lib/trial/saga/data";
+import { SAGA_CHAPTERS, SAGA_FORMATION_BY_ID, SAGA_GENERAL_BY_ID, SAGA_GENERALS, SAGA_TACTIC_BY_ID, SAGA_TRAITS, SAGA_TRAIT_BY_ID, sagaBondsFor, sagaCorpsOf, tacticsFor, traitStats } from "../lib/trial/saga/data";
 import {
   SAGA_PORTRAIT_IDS,
   hasPortraitAsset,
@@ -1951,15 +1951,22 @@ test("战斗规则：新行军启用特性与成长计策，旧行军已落的�
   save.party = [createGeneralState("zhaoyun", 9)];
   const lv9Run = { ...easyRun(save), rules: SAGA_RULESET };
   const lv9 = startBattle(lv9Run, 0, createReplayState(lv9Run)).party[0];
-  assert.deepEqual(lv9.tactics, ["huoji"], "9 级赵云还没领悟鼓舞");
+  assert.equal(lv9.tactics.includes("guwu"), false, "9 级赵云还没领悟鼓舞");
+  assert.equal(lv9.tactics.includes("huoji"), true, "赵云天生会炼火");
+  assert.equal(lv9.tactics.includes("yehuo"), true, "智力够、等级到，业火计自动领悟");
   save.party[0].level = 10;
   const lv10 = startBattle(lv9Run, 0, createReplayState(lv9Run)).party[0];
-  assert.deepEqual(lv10.tactics, ["huoji", "guwu"], "10 级领悟鼓舞");
+  assert.equal(lv10.tactics.includes("guwu"), true, "10 级领悟鼓舞");
 });
 
 test("策略点：主要随智力浮动，等级再补几点，封顶 12 点", () => {
-  assert.deepEqual(tacticsFor(SAGA_GENERAL_BY_ID.get("pangtong"), 7), ["huoji", "hunluan"]);
-  assert.deepEqual(tacticsFor(SAGA_GENERAL_BY_ID.get("pangtong"), 8), ["huoji", "hunluan", "guwu"]);
+  const pangAt7 = tacticsFor(SAGA_GENERAL_BY_ID.get("pangtong"), 7);
+  const pangAt8 = tacticsFor(SAGA_GENERAL_BY_ID.get("pangtong"), 8);
+  assert.equal(pangAt7.includes("huoji"), true);
+  assert.equal(pangAt7.includes("hunluan"), true);
+  assert.equal(pangAt7.includes("guwu"), false, "7 级庞统还没领悟鼓舞");
+  assert.equal(pangAt8.includes("guwu"), true, "8 级领悟鼓舞");
+  assert.equal(pangAt7.every((id) => SAGA_TACTIC_BY_ID.has(id)), true, "计策表里都有这些计策");
 
   const save = initialTrialSave();
   const run = { ...easyRun(save), rules: SAGA_RULESET };
@@ -2304,7 +2311,7 @@ test("公告与维护窗口判定", () => {
 });
 
 test("兵种相克与名将连携只在 v10 起生效", () => {
-  assert.equal(SAGA_RULESET, 11, "规则档升到 v11");
+  assert.equal(SAGA_RULESET, 12, "规则档升到 v12（策略与阵形按等级领悟）");
 
   // 兵种按底子推：猛将骑、谋士弓、其余枪。
   assert.equal(sagaCorpsOf(SAGA_GENERAL_BY_ID.get("lvbu")), "cavalry");
@@ -2330,7 +2337,7 @@ test("兵种相克与名将连携只在 v10 起生效", () => {
 
   const run = { ...easyRun(), rules: SAGA_RULESET };
   const battle = startBattle(run, 0, createReplayState(run));
-  assert.equal(battle.rules, 11);
+  assert.equal(battle.rules, 12);
   const partyIds = battle.party.map((unit) => unit.id);
   const bonds = sagaBondsFor(partyIds);
   assert.equal(battle.party.every((unit) => unit.bonds.length === bonds.length), true, "连携按全队生效");
@@ -2368,4 +2375,84 @@ test("吞食天地头像素材与武将 id 一一对齐", () => {
   // 素材只给武将用，别把特性 / 物品的 id 也误当成头像。
   const generalIds = new Set(SAGA_GENERALS.map((general) => general.id));
   assert.ok(SAGA_PORTRAIT_IDS.every((id) => generalIds.has(id)), "素材 id 必须全部来自武将表");
+});
+
+test("计策按表里的消耗扣策略值，点数不够就发不出去", () => {
+  const save = initialTrialSave();
+  save.party = [createGeneralState("zhugeliang", SAGA_MAX_LEVEL)];
+  const run = { ...easyRun(save), rules: SAGA_RULESET };
+  const state = createReplayState(run);
+  const battle = startBattle(run, 0, state);
+  const hero = battle.party[0];
+  assert.equal(hero.tactics.includes("huoshen"), true, "满级诸葛亮会火神计");
+  assert.equal(hero.tactics.includes("jishi"), true, "智力封顶也记着激石计");
+  const cost = SAGA_TACTIC_BY_ID.get("huoshen")?.cost ?? 0;
+  assert.equal(cost, 4);
+  const before = hero.tacticPoints;
+  resolveBattleRound(battle, [{ g: hero.id, a: "tactic", t: "huoshen" }], state);
+  assert.equal(hero.tacticPoints, Math.max(0, before - cost), "施放火神计扣 4 点");
+
+  // 策略值清零后发计策：按普攻兜底，不会白扣也不会白放。
+  const poor = initialTrialSave();
+  poor.party = [createGeneralState("zhugeliang", SAGA_MAX_LEVEL)];
+  const poorRun = { ...easyRun(poor), rules: SAGA_RULESET };
+  const poorState = createReplayState(poorRun);
+  const poorBattle = startBattle(poorRun, 0, poorState);
+  poorBattle.party[0].tacticPoints = 0;
+  resolveBattleRound(poorBattle, [{ g: poorBattle.party[0].id, a: "tactic", t: "huoshen" }], poorState);
+  assert.equal(poorBattle.party[0].tacticPoints, 0);
+  assert.equal(
+    poorBattle.log.some((event) => event.text.includes("火神计")),
+    false,
+    "点数不够时计策不会生效",
+  );
+});
+
+test("战斗内变阵：等级与策略值都够才布成，并扣掉变阵消耗", () => {
+  const save = initialTrialSave();
+  save.party = [createGeneralState("zhugeliang", SAGA_MAX_LEVEL)];
+  const run = { ...easyRun(save), rules: SAGA_RULESET };
+  const state = createReplayState(run);
+  const battle = startBattle(run, 0, state);
+  const hero = battle.party[0];
+  const before = hero.tacticPoints;
+  const cost = SAGA_FORMATION_BY_ID.get("bamen")?.cost ?? 0;
+  assert.equal(cost, 6);
+  resolveBattleRound(battle, [{ g: hero.id, a: "formation", f: "bamen" }], state);
+  assert.equal(battle.playerFormation, "bamen", "满级军师布得下八门阵");
+  assert.equal(hero.tacticPoints, Math.max(0, before - cost), "变阵扣 6 点策略值");
+
+  // 等级不够：变阵作废，本回合照常出手。
+  const low = initialTrialSave();
+  const lowRun = { ...easyRun(low), rules: SAGA_RULESET };
+  const lowState = createReplayState(lowRun);
+  const lowBattle = startBattle(lowRun, 0, lowState);
+  const lowHero = lowBattle.party[0];
+  const points = lowHero.tacticPoints;
+  resolveBattleRound(lowBattle, [{ g: lowHero.id, a: "formation", f: "beishui" }], lowState);
+  assert.equal(lowBattle.playerFormation, low.formation, "1 级队伍布不下背水阵");
+  assert.equal(lowHero.tacticPoints, points, "布阵失败不扣点");
+  assert.equal(
+    lowBattle.log.some((event) => event.text.includes("布不下背水阵")),
+    true,
+    "会给一句修为不足的战报",
+  );
+});
+
+test("阵形换装按等级解锁：新规则要够等级，旧战报不设门禁", () => {
+  const save = initialTrialSave();
+  const run = { ...easyRun(save), rules: SAGA_RULESET };
+  const blocked = replaySagaRun(run, [{ k: "formation", f: "bamen" }]);
+  assert.equal(blocked.state.save.formation, save.formation, "1 级队伍换不了八门阵");
+
+  const veteran = {
+    ...easyRun({ ...save, party: save.party.map((member) => ({ ...member, level: SAGA_MAX_LEVEL })) }),
+    rules: SAGA_RULESET,
+  };
+  const allowed = replaySagaRun(veteran, [{ k: "formation", f: "bamen" }]);
+  assert.equal(allowed.state.save.formation, "bamen", "练到 24 级才换得成");
+
+  const legacy = { ...easyRun(save), rules: 11 };
+  const old = replaySagaRun(legacy, [{ k: "formation", f: "bamen" }]);
+  assert.equal(old.state.save.formation, "bamen", "v11 及更早的战报照原样重放");
 });

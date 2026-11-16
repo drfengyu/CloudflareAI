@@ -534,9 +534,28 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.86.1（2026-11-16，血条分格与贴边信息）
+**当前版本**：v0.87.0（2026-11-16，策略与阵形按吞食天地改版）
 **下一版本**：待定
 
+- v0.87.0 策略改版，规则档 `SAGA_RULESET = 12`：
+  - 计策表 `SAGA_TACTICS` 扩到 24 条：火（炼火 / 业火 / 炎热 / 大热 / 火神）、水（水途 / 水星 /
+    水雷 / 洪水 / 水龙）、石（落木 / 流木 / 落石 / 投石 / 激石）、回复（赤心 / 铜仙 / 银仙 /
+    完复 / 金仙）、特殊（疑心 / 缚杀 / 陷阱 / 鼓舞）。`SagaTacticDef` 增 `kind / power / turns`，
+    `executeTactic` 按 `kind` 分家族结算：火 / 水打全体（水不吃阵形克制）、石砸单体最重、
+    金仙补全队、缚杀控三回合、陷阱削当前兵力四成。入门四计（`huoji / huifu / hunluan / guwu`）
+    的 id 与系数保持 1，旧战报数值不变。
+  - 策略值按 `SAGA_TACTIC_BY_ID.cost` 扣（1~5）；`executeCommand` 的计策分支改判
+    `tacticPoints >= cost`。领悟制：`tacticsFor` 在固有与 `learn` 之外按智力谱系（`TACTIC_LINES`）
+    自动领悟，再按计策 `level` 过滤，一名武将最多记 12 条（各系只留最强两条）。
+  - 阵形 `SagaFormationDef` 增 `level / cost`（雁行 6、衡轭 10、车悬 14、背水 18、八门 24），
+    战斗内新指令 `{ g, a: "formation", f }` 由 `resolveFormationCommands` 在行动序**之前**
+    统一预结算（存活 + 已解锁 + `tacticPoints >= cost` 才生效并扣点），布阵回合不再出手；
+    `replaySagaRun` 的 `case "formation"` 只在 `rules >= 12` 校验等级。`TACTIC_IDS` 与
+    `parseEnemy` 的计策白名单改从 `SAGA_TACTICS` 生成（原来只认 4 条，读档会抹掉新计策）。
+  - UI：战斗面板加「变阵」按钮 + 阵形下拉；计策按钮标消耗、点数不够禁用；编成所阵形列表
+    标解锁等级与变阵消耗，未练到的置灰。
+  - 画面：血条空格不画、野外空白点击不再弹军中一览、`unitSlots` 回到单列均布
+    （`top = 150 / bottom = 440`，人多可越过城墙营寨）。
 - v0.86.1 血条改成一排宽长格子：`battleHpBarWidth = 168 + 112 × 占比`（168~280 px，条高 10），
   `BATTLE_HP_CELL = 18` 定格宽、`battleHpCellCount` 切 9~16 格，逐格熄灭；名签与血条贴画幅两侧
   （我方左边距 14 px、敌军右边距），不再跟着站位飘；底部石板路由两行减成一行（38 px）。

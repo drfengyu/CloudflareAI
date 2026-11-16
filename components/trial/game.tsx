@@ -181,12 +181,13 @@ function markNoticeSeen(): void {
   }
   window.dispatchEvent(new Event(NOTICE_SEEN_EVENT));
 }
-type BattleAction = "attack" | "guard" | "tactic" | "item";
+type BattleAction = "attack" | "guard" | "tactic" | "item" | "formation";
 
 interface BattlePick {
   a: BattleAction;
   t?: TacticId;
   i?: string;
+  f?: FormationId;
   target?: number;
 }
 
@@ -1447,6 +1448,7 @@ export function TrialGame(props: TrialGameProps) {
       const command: SagaRoundCommand = { g: unit.id, a: pick.a };
       if (pick.t) command.t = pick.t;
       if (pick.i) command.i = pick.i;
+      if (pick.f) command.f = pick.f;
       if (pick.target !== undefined) command.target = pick.target;
       commandsForRound.push(command);
     }
@@ -1741,8 +1743,7 @@ export function TrialGame(props: TrialGameProps) {
               enterTown();
               return;
             }
-            // 野外点空白处：翻看队伍状态、道具、装备与编制。
-            setPanel("status");
+            // 野外点空白：不再弹「军中一览」，免得走位途中被打断；要看队伍走城里的编成所。
           }}
         />
 
@@ -2016,12 +2017,23 @@ export function TrialGame(props: TrialGameProps) {
                             [
                               ["attack", "攻击"],
                               ["tactic", "计策"],
+                              ["formation", "变阵"],
                               ["guard", "防御"],
                               ["item", "道具"],
                             ] as [BattleAction, string][]
                           ).map(([action, label]) => {
+                            const affordable = unit.tactics.filter(
+                              (id) => (SAGA_TACTIC_BY_ID.get(id)?.cost ?? 1) <= unit.tacticPoints,
+                            );
+                            const usableFormations = SAGA_FORMATIONS.filter(
+                              (row) =>
+                                row.level <= Math.max(...battle.battle.party.map((unit) => unit.level)) &&
+                                row.cost <= unit.tacticPoints &&
+                                row.id !== battle.battle.playerFormation,
+                            );
                             const disabled =
-                              (action === "tactic" && (unit.tacticPoints <= 0 || unit.tactics.length === 0)) ||
+                              (action === "tactic" && affordable.length === 0) ||
+                              (action === "formation" && usableFormations.length === 0) ||
                               (action === "item" && availableItems(battle.scratch).length === 0);
                             return (
                               <button
@@ -2088,33 +2100,76 @@ export function TrialGame(props: TrialGameProps) {
                           ) : null}
                           {pick.a === "tactic" ? (
                             <span className="flex flex-wrap gap-1.5">
-                              {unit.tactics.map((tactic) => (
-                                <button
-                                  key={tactic}
-                                  type="button"
-                                  title={SAGA_TACTIC_BY_ID.get(tactic)?.desc}
-                                  onClick={() =>
-                                    setBattle((prev) =>
-                                      prev
-                                        ? {
-                                            ...prev,
-                                            picks: {
-                                              ...prev.picks,
-                                              [unit.id]: { a: "tactic", t: tactic, target: prev.picks[unit.id]?.target },
-                                            },
-                                          }
-                                        : prev,
-                                    )
-                                  }
-                                  className={cn(
-                                    "rounded-md border px-2 py-1 text-[11px]",
-                                    pick.t === tactic ? "border-amber-300 bg-amber-300/20" : "border-white/15",
-                                  )}
-                                >
-                                  {SAGA_TACTIC_BY_ID.get(tactic)?.name ?? tactic}
-                                </button>
-                              ))}
+                              {unit.tactics.map((tactic) => {
+                                const def = SAGA_TACTIC_BY_ID.get(tactic);
+                                const cost = def?.cost ?? 1;
+                                const short = unit.tacticPoints < cost;
+                                return (
+                                  <button
+                                    key={tactic}
+                                    type="button"
+                                    disabled={short}
+                                    title={`${def?.desc ?? ""}（耗策略 ${cost}）`}
+                                    onClick={() =>
+                                      setBattle((prev) =>
+                                        prev
+                                          ? {
+                                              ...prev,
+                                              picks: {
+                                                ...prev.picks,
+                                                [unit.id]: {
+                                                  a: "tactic",
+                                                  t: tactic,
+                                                  target: prev.picks[unit.id]?.target,
+                                                },
+                                              },
+                                            }
+                                          : prev,
+                                      )
+                                    }
+                                    className={cn(
+                                      "rounded-md border px-2 py-1 text-[11px]",
+                                      pick.t === tactic ? "border-amber-300 bg-amber-300/20" : "border-white/15",
+                                      short && "cursor-not-allowed opacity-40",
+                                    )}
+                                  >
+                                    {def?.name ?? tactic}
+                                    <span className="ml-1 text-[10px] text-sky-200/70">{cost}</span>
+                                  </button>
+                                );
+                              })}
                             </span>
+                          ) : null}
+                          {pick.a === "formation" ? (
+                            <select
+                              value={pick.f ?? ""}
+                              onChange={(event) =>
+                                setBattle((prev) =>
+                                  prev
+                                    ? {
+                                        ...prev,
+                                        picks: {
+                                          ...prev.picks,
+                                          [unit.id]: { a: "formation", f: event.target.value as FormationId },
+                                        },
+                                      }
+                                    : prev,
+                                )
+                              }
+                              className="h-6 rounded-md border border-white/15 bg-black/40 px-1 text-[11px] text-amber-50"
+                            >
+                              <option value="" className="bg-[#14110d]">选择阵形</option>
+                              {SAGA_FORMATIONS.filter(
+                                (row) =>
+                                  row.level <= Math.max(...battle.battle.party.map((unit) => unit.level)) &&
+                                  row.cost <= unit.tacticPoints &&
+                                  row.id !== battle.battle.playerFormation,
+                              ).map((row) => (
+                                <option key={row.id} value={row.id} className="bg-[#14110d]">
+                                  {row.name}阵（策 {row.cost}）
+                                </option>
+                              ))}
+                            </select>
                           ) : null}
                           {pick.a === "item" ? (
                             <select
@@ -2770,22 +2825,32 @@ export function TrialGame(props: TrialGameProps) {
                       {SAGA_FORMATIONS.map((formation) => {
                         const active = save.formation === formation.id;
                         const beats = SAGA_FORMATIONS.find((row) => row.id === formation.beats)?.name ?? "";
+                        const topLevel = save.party.reduce((top, member) => Math.max(top, member.level), 0);
+                        const locked = topLevel < formation.level;
                         return (
                           <button
                             key={formation.id}
                             type="button"
+                            disabled={locked}
                             onClick={() => setFormation(formation.id)}
                             className={cn(
                               "rounded-lg border p-2.5 text-left text-sm",
                               active ? "border-primary/70 bg-primary/5" : "border-border hover:border-primary/40",
+                              locked && "cursor-not-allowed opacity-45",
                             )}
                           >
                             <span className="flex items-center justify-between font-medium">
                               {formation.name}
-                              {active ? <span className="text-[11px] text-primary">当前</span> : null}
+                              {active ? (
+                                <span className="text-[11px] text-primary">当前</span>
+                              ) : locked ? (
+                                <span className="text-[11px] text-muted-foreground">Lv{formation.level} 解锁</span>
+                              ) : null}
                             </span>
                             <p className="mt-0.5 text-xs text-muted-foreground">{formation.desc}</p>
-                            <p className="mt-0.5 text-xs text-muted-foreground">克制 {beats}</p>
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              克制 {beats} · 变阵耗策略 {formation.cost}
+                            </p>
                           </button>
                         );
                       })}

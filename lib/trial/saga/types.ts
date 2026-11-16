@@ -26,9 +26,11 @@ export const SAGA_SAVE_VERSION = 1;
  * 同一侧凑齐连携需要的名将即整队加成；v10 之前的行军仍按旧账重放。
  * v11 起取消战斗内劝降指令：战斗胜利后按概率弹出归降提议，标价金（或物品）与成功率，
  * 玩家接受后扣资源、再掷一次概率决定是否入队；v10 及更早的行军仍按旧战报重放。
+ * v12 起策略与阵形按等级领悟：计策分等级与策略值消耗，高级阵形要练到等级才能换，
+ * 战斗内可发变阵指令（消耗下令武将的策略值）；v11 及更早的行军仍按旧账重放。
  * 旧行军没有这个字段，重放时按 v1 走，避免改版把还没收兵的对局打乱。
  */
-export const SAGA_RULESET = 11;
+export const SAGA_RULESET = 12;
 
 /** 四维上限：v9 起武力 / 智力 / 防御 / 速度可以一路长到 255（基础值不动，长的是等级与特性加成）。 */
 export const SAGA_STAT_CAP = 255;
@@ -180,7 +182,31 @@ export type FormationId =
   | "beishui"
   | "bamen"
   | "chexuan";
-export type TacticId = "huoji" | "huifu" | "hunluan" | "guwu";
+export type TacticId =
+  | "huoji"
+  | "huifu"
+  | "hunluan"
+  | "guwu"
+  | "yehuo"
+  | "yanre"
+  | "dare"
+  | "huoshen"
+  | "shutu"
+  | "shuixing"
+  | "shuilei"
+  | "hongshui"
+  | "shuilong"
+  | "luomu"
+  | "liushui"
+  | "luoshi"
+  | "toushi"
+  | "jishi"
+  | "tongxian"
+  | "yinxian"
+  | "wanfu"
+  | "jinxian"
+  | "fusha"
+  | "xianjing";
 export type SagaItemKind = "weapon" | "armor" | "consumable" | "supply";
 
 /** 武将固有特性：数值、暴击与连击上的个人长板。 */
@@ -305,6 +331,10 @@ export interface SagaFormationDef {
   def: number;
   spd: number;
   beats: FormationId;
+  /** 解锁等级：队伍里有武将练到这个等级，才能在编成所换上。 */
+  level: number;
+  /** 战斗内变阵消耗的策略值（由下令武将出）。 */
+  cost: number;
 }
 
 export interface SagaChapterDef {
@@ -336,11 +366,24 @@ export interface SagaChapterDef {
   unlock: string | null;
 }
 
+/**
+ * 计策定义：按吞食天地那套分火 / 水 / 石 / 回复 / 特殊几系，
+ * 每阶有威力系数、习得等级与策略值消耗。
+ */
 export interface SagaTacticDef {
   id: TacticId;
   name: string;
   desc: string;
+  /** 施放一次消耗的策略值。 */
   cost: number;
+  /** 领悟等级：0 为入门计策，其余要练到这个等级才出现在计策表里。 */
+  level: number;
+  /** 计策系别，决定结算口径（火 / 水打全体，石打单体，回复与特殊各自一套）。 */
+  kind: "fire" | "water" | "rock" | "heal" | "healAll" | "confuse" | "buff" | "trap";
+  /** 威力系数：火 / 水 / 石按它放大伤害，回复按它放大回兵量。 */
+  power?: number;
+  /** 混乱 / 缚杀这类计策持续几回合。 */
+  turns?: number;
 }
 
 export interface SagaEnemy {
@@ -455,8 +498,10 @@ export interface SagaRun {
 
 export interface SagaRoundCommand {
   g: string;
-  a: "attack" | "guard" | "tactic" | "item" | "recruit";
+  a: "attack" | "guard" | "tactic" | "item" | "recruit" | "formation";
   t?: TacticId;
+  /** 变阵指令要换的阵形。 */
+  f?: FormationId;
   i?: string;
   target?: number;
 }

@@ -1425,47 +1425,19 @@ export function battleHpCellCount(barWidth: number): number {
 }
 
 /**
- * 两军各排成一列，从上往下就位；人少时队列疏开，五人满编时改排两列交错。
+ * 两军各排成一列，从上往下均匀铺满各自那半边画面。
  *
- * 队列贴向画面两侧（中间留出对峙空当），纵向落在内景（木栅 / 城墙）下方、
- * 地面之上的那块校场里，所以武将是「站在营地中间」而不是压在前景陈设上。
- *
- * 五个人的时候单列排不下：头顶的名字签 + 血条约 70~80 px，单列纵向间距只有 53 px，
- * 名字签会盖住下一个人的头。所以 5 人改排「外列 / 内列」两列，奇偶交错上下错半格，
- * 每列三人的间距与名字签高度对得上，点击命中框也不会挤在一起。
+ * 队列贴向画面两侧（中间留出对峙空当），纵向几乎占满整幅高度：人多时压缩间距、
+ * 人少时疏开，顶端允许越过城墙 / 营寨上沿，阵势才铺得开。
  */
 function unitSlots(count: number, side: "player" | "enemy", k = 1, seed = 0): UnitSlot[] {
   const slots: UnitSlot[] = [];
   const scale =
     count >= 5 ? 0.52 : count === 4 ? 0.58 : count === 3 ? 0.66 : count === 2 ? 0.76 : 0.86;
   const rand = battleRandom(seed ^ (side === "player" ? 0x9e3779b9 : 0x85ebca6b));
-  const facing = side === "player" ? 1 : -1;
-  // 内景上移之后，队列往下挪一档，头顶血条与名字签正好落在栅栏前沿之外。
-  const top = 216;
-  const bottom = 430;
-  const zipped = count >= 5;
-
-  if (zipped) {
-    // 外列靠画面两侧，内列往中间收一档；两列的纵向节点错开半个间距。
-    const perColumn = Math.ceil(count / 2);
-    const step = (bottom - top) / (perColumn - 1);
-    for (let i = 0; i < count; i++) {
-      const column = i % 2;
-      const row = Math.floor(i / 2);
-      const jitterX = (rand() - 0.5) * 10;
-      const jitterY = (rand() - 0.5) * 6;
-      const outerX = 146;
-      const innerX = 268;
-      const baseX = column === 0 ? outerX : innerX;
-      slots.push({
-        x: facing === 1 ? baseX + jitterX : VIEW_W - baseX + jitterX,
-        y: (top + row * step + column * step * 0.5 + jitterY) * k,
-        scale,
-      });
-    }
-    return slots;
-  }
-
+  // 纵向铺满：顶端越过内景上沿也允许，底端压在地面之上，五人满编也不会挤成一坨。
+  const top = 150;
+  const bottom = 440;
   const step = count > 1 ? (bottom - top) / (count - 1) : 0;
   const start = top + ((bottom - top) - step * (count - 1)) / 2;
   for (let i = 0; i < count; i++) {
@@ -2688,40 +2660,29 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     const cellW = (barW - gap * (cells - 1)) / cells;
     const lit = ratio * cells;
     for (let i = 0; i < cells; i++) {
+      // 没血的格子不画：条子只剩还有兵的那几格，掉得越多条越短，一眼看出虚实。
+      const cellLit = Math.max(0, Math.min(1, lit - i));
+      if (cellLit <= 0) continue;
       const cx =
         side === "player"
           ? barX + i * (cellW + gap)
           : barX + barW - cellW - i * (cellW + gap);
+      const fillW = cellW * cellLit;
+      const fx = side === "player" ? cx : cx + cellW - fillW;
+      // 格底与描边只跟着有血的格走，空格不占位
       ctx.fillStyle = "rgba(12,10,8,0.76)";
-      roundRect(ctx, cx, barY, cellW, barH, 2);
+      roundRect(ctx, fx, barY, Math.max(1.5, fillW), barH, 2);
       ctx.fill();
       ctx.strokeStyle = side === "player" ? "rgba(214,178,116,0.7)" : "rgba(210,120,96,0.7)";
       ctx.lineWidth = 1;
       ctx.stroke();
       // 每格单独按比例填：整数格全亮，跨到的那一格按剩多少亮一截。
-      const cellLit = Math.max(0, Math.min(1, lit - i));
-      if (cellLit <= 0) continue;
-      const fillW = cellW * cellLit;
       ctx.fillStyle = side === "player" ? "#c9a15a" : "#b5533d";
-      roundRect(
-        ctx,
-        side === "player" ? cx : cx + cellW - fillW,
-        barY + 0.8,
-        Math.max(1.5, fillW),
-        barH - 1.6,
-        1.6,
-      );
+      roundRect(ctx, fx + 0.8, barY + 0.8, Math.max(1, fillW - 1.6), barH - 1.6, 1.6);
       ctx.fill();
       // 条面高光，一排格子不至于糊成一条平涂色块
       ctx.fillStyle = "rgba(255,238,206,0.26)";
-      roundRect(
-        ctx,
-        side === "player" ? cx : cx + cellW - fillW,
-        barY + 1.8,
-        Math.max(1.5, fillW),
-        2.2,
-        1,
-      );
+      roundRect(ctx, fx + 0.8, barY + 1.8, Math.max(1, fillW - 1.6), 2.2, 1);
       ctx.fill();
     }
 

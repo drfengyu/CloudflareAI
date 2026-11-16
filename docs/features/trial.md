@@ -201,6 +201,33 @@
 `generalStats(general, save.gearLevels, state.rules)` 算——等级成长、铁匠铺强化、
 当前规则档三样都算进去，图鉴里麾下武将直接显示实际四维、兵力和兵器/甲胄加成；
 只见过没招到的敌将仍按基础值标注「（基础）」。
+## 策略与阵形（v0.87.0）
+
+规则档升到 `SAGA_RULESET = 12`：计策与阵形改成《吞食天地2》那套「练到等级才领悟、施放要耗策略值」。
+
+- **计策表**：`SAGA_TACTICS` 24 条，按 `kind` 分家族——
+  - `fire` / `water`：打全体，水不吃阵形克制；`rock`：砸单体，威力最高；
+  - `heal`：补兵力最少的那名友军；`healAll`：金仙补全队；
+  - `confuse`：疑心 2 回合、缚杀 3 回合不能行动；`trap`：陷阱削目标当前四成兵力；`buff`：鼓舞。
+  每条带 `cost`（1~5 点）、`level`（领悟等级，按本作 30 级上限压缩）、`power`（威力系数）。
+  入门四计 `huoji / huifu / hunluan / guwu` 沿用旧 id 且系数为 1，旧战报数值不变。
+- **领悟**：`tacticsFor(def, level)` = 固有计策 + `learn` 成长计策 + 智力谱系
+  （`TACTIC_LINES`：智力越高能摸到越高阶的计策，各系只留最强两条），再按计策 `level` 过滤，
+  一人最多记 12 条。`tacticUnlocked` / `formationUnlocked` 是对外的判定函数。
+- **扣点**：`executeTactic` 结算完按 `cost` 扣；`executeCommand` 的计策分支要求
+  `tacticPoints >= cost`，不够就按普攻兜底。
+- **阵形**：`SagaFormationDef` 加 `level`（解锁等级）与 `cost`（变阵消耗）。入门五阵（鱼鳞 / 鹤翼 /
+  锋矢 / 方圆 / 长蛇）人人可摆；雁行 6、衡轭 10、车悬 14、背水 18、八门 24。
+- **战斗内变阵**：回合指令 `{ g, a: "formation", f }`。`resolveFormationCommands` 在行动顺序
+  **之前**统一预结算（下令武将活着、阵形已解锁、策略值够才生效并扣点），布阵这一回合不再出手；
+  `run.ts` 的 `ROUND_ACTIONS` 收 `formation`、`sanitizeRoundCommands` 保留并校验 `f`。
+- **行军侧门禁**：`replaySagaRun` 的 `case "formation"` 只在 `rules >= 12` 时按队伍最高等级校验，
+  旧行军（v11 及更早）照原样换阵。
+- **白名单从表生成**：`TACTIC_IDS`（指令清洗）与 `parseEnemy`（读档）都改用 `SAGA_TACTICS`，
+  原先写死 4 条会把新计策在读档时抹掉。
+- **界面**：战斗面板多一个「变阵」按钮与阵形下拉；计策按钮标出消耗、点数不够置灰；
+  编成所阵形列表写清解锁等级与变阵消耗，没练到的置灰。
+
 ## 吞食天地头像素材（v0.84.0）
 
 部分武将立绘改为引用《吞食天地》原版像素头像，程序化立绘仍然是兜底：
