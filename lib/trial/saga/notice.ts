@@ -28,10 +28,23 @@ export interface SagaMaintenanceWindow {
 }
 
 /** 游戏内公告版本号（与站点版本对齐）。 */
-export const SAGA_NOTICE_VERSION = "0.84.0";
+export const SAGA_NOTICE_VERSION = "0.85.0";
 
 /** 最新公告：按版本从新到旧。 */
 export const SAGA_NOTICES: SagaNoticeEntry[] = [
+  {
+    id: "notice-0.85.0",
+    version: "0.85.0",
+    date: "2026-11-16",
+    kind: "update",
+    title: "招降改为胜后礼聘",
+    lines: [
+      "战斗内不再设劝降指令；打赢后，有名敌将按概率上门归降，面板标出聘金与入队成功率。",
+      "接受归降先扣聘金，再按成功率掷一次：成功入队（队伍满则进后备），失败敌将婉拒、聘金不退。",
+      "主帅本阵（boss）不收；营地、精锐与野外遭遇里的可招名将都可能上门，自动战斗默认婉拒。",
+      "旧存档里的战斗内劝降战报仍按原口径重放，已经打过的仗不会因改版翻盘。",
+    ],
+  },
   {
     id: "notice-0.84.0",
     version: "0.84.0",

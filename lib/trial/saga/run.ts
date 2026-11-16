@@ -8,7 +8,7 @@ import {
   tacticsFor,
   traitStats,
 } from "./data";
-import { startBattle, resolveBattleRound, startEncounterBattle } from "./battle";
+import { startBattle, resolveBattleRound, startEncounterBattle, applyRecruitOffer } from "./battle";
 import {
   DEFAULT_SAGA_BANK,
   sanitizeSagaBank,
@@ -653,6 +653,20 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
         out.push({ k: "skirmish", rounds });
         break;
       }
+      case "recruit": {
+        const general = typeof it.general === "string" ? it.general.slice(0, 32) : "";
+        if (!general) break;
+        const accept = Boolean(it.accept);
+        const gold = Math.trunc(Number(it.gold) || 0);
+        const itemId =
+          it.itemId === null || it.itemId === undefined
+            ? null
+            : typeof it.itemId === "string" && SAGA_ITEM_BY_ID.has(it.itemId)
+              ? it.itemId
+              : null;
+        out.push({ k: "recruit", general, accept, gold, itemId });
+        break;
+      }
       case "ferry": {
         const to = Math.trunc(Number(it.to));
         if (!Number.isFinite(to) || to < 0 || to >= SAGA_CHAPTERS.length) break;
@@ -951,6 +965,13 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
         } else if (battle.phase === "lost") {
           state.scene = "lost";
         }
+        break;
+      }
+      case "recruit": {
+        // 归降回应紧跟在那场胜仗之后：提议必须来自本场战报，否则按婉拒忽略。
+        const battle = state.battle;
+        if (!battle || battle.phase !== "won") break;
+        applyRecruitOffer(state, battle, command.general, command.accept);
         break;
       }
       default:

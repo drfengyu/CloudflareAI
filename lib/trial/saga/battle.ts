@@ -10,7 +10,7 @@ import {
 } from "./data";
 import { sagaEncounterFor } from "./encounter";
 import { forgeStat } from "./forge";
-import { generalStats, grantGeneralExp, recruitToSave } from "./state";
+import { generalStats, grantGeneralExp, recruitToSave, findGeneral } from "./state";
 import {
   SAGA_PARTY_SIZE,
   type SagaBattleEvent,
@@ -515,6 +515,7 @@ function buildBattle(
     rewardGold: node.rewardGold,
     rewardExp: node.rewardExp,
     pendingRecruits: [],
+    recruitOffers: [],
   };
 }
 
@@ -921,6 +922,89 @@ function checkBattleEnd(battle: SagaBattleState): void {
   else if (living(battle.party).length === 0) battle.phase = "lost";
 }
 
+/** v11：胜利后按本场种子滚出归降提议（标价金、聘礼与成功率都由种子确定）。 */
+function buildRecruitOffers(battle: SagaBattleState, state: SagaReplayState): void {
+  if (battle.rules < 11) return;
+  const partyIntel = battle.party.length
+    ? battle.party.reduce((sum, g) => sum + g.intellect, 0) / battle.party.length
+    : 0;
+  const partyLevel = battle.party.length
+    ? battle.party.reduce((sum, g) => sum + g.level, 0) / battle.party.length
+    : 1;
+  for (const enemy of battle.enemies) {
+    if (!SAGA_GENERAL_BY_ID.has(enemy.id)) continue;
+    if (enemy.boss) continue;
+    if (findGeneral(state.save, enemy.id)) continue;
+    if (state.save.met.includes(enemy.id)) continue;
+    if (roll(battle) >= 0.55) continue;
+    const hard = enemy.recruitHard;
+    const chance = clamp(
+      45 + (partyIntel - enemy.intellect) * 0.8 - (enemy.level - partyLevel) * 3 - (hard ? 20 : 0),
+      10,
+      90,
+    );
+    const goldCost = 100 + enemy.level * 20 + (hard ? 220 : 0) + Math.round(enemy.force * 0.8);
+    battle.recruitOffers.push({
+      generalId: enemy.id,
+      name: enemy.name,
+      title: enemy.title,
+      level: enemy.level,
+      goldCost,
+      itemId: null,
+      itemCount: 0,
+      chance: Math.round(chance),
+      hard,
+    });
+  }
+}
+
+export interface RecruitOfferResult {
+  ok: boolean;
+  joined: "party" | "reserve" | null;
+  text: string;
+}
+
+/**
+ * v11：接受 / 婉拒一条胜利后的归降提议。接受才扣聘金，再按成功率掷一次；
+ * 失败不入队、聘金不退。提议必须来自本场战报，旧存档没有提议时直接忽略。
+ */
+export function applyRecruitOffer(
+  state: SagaReplayState,
+  battle: SagaBattleState,
+  generalId: string,
+  accept: boolean,
+): RecruitOfferResult {
+  const offer = battle.recruitOffers.find((item) => item.generalId === generalId);
+  if (!offer) return { ok: false, joined: null, text: "没有这条归降提议" };
+  if (!accept) return { ok: true, joined: null, text: `${offer.name} 婉拒了归降` };
+  if (state.save.gold < offer.goldCost) {
+    return { ok: false, joined: null, text: `金不足，无法礼聘 ${offer.name}` };
+  }
+  state.save.gold -= offer.goldCost;
+  if (roll(battle) * 100 >= offer.chance) {
+    return { ok: false, joined: null, text: `${offer.name} 婉拒归降，聘金未退` };
+  }
+  const result = recruitToSave(state.save, generalId);
+  if (result.ok) {
+    state.recruited.push(generalId);
+    if (result.joined === "party") {
+      const saved = state.save.party.find((g) => g.id === generalId);
+      if (saved) {
+        const stats = generalStats(saved, state.save.gearLevels, battle.rules);
+        state.partyTroops[generalId] = Math.round(
+          stats.maxTroops * (1 + state.buffs.troopPct / 100),
+        );
+      }
+    }
+    return { ok: true, joined: result.joined, text: `${offer.name} 加入${result.joined === "party" ? "队伍" : "后备"}` };
+  }
+  return {
+    ok: false,
+    joined: null,
+    text: `${offer.name} 未能入队：${result.reason ?? "队伍与后备已满"}`,
+  };
+}
+
 function finishBattle(
   battle: SagaBattleState,
   state: SagaReplayState,
@@ -964,6 +1048,7 @@ function finishBattle(
         }
       }
     }
+    buildRecruitOffers(battle, state);
     for (const enemy of battle.enemies) {
       // 杂兵与临时士兵位不在武将表里，图鉴只收真正的武将。
       if (!SAGA_GENERAL_BY_ID.has(enemy.id)) continue;

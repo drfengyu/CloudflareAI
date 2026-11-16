@@ -24,9 +24,11 @@ export const SAGA_SAVE_VERSION = 1;
  * 兵力（双方）翻一倍、药品回复按两倍兵力口径同步，敌将四维同吃这套成长。
  * v10 起兵种相克与名将连携：兵种按武将底子推（骑 > 弓 > 枪 > 骑），
  * 同一侧凑齐连携需要的名将即整队加成；v10 之前的行军仍按旧账重放。
+ * v11 起取消战斗内劝降指令：战斗胜利后按概率弹出归降提议，标价金（或物品）与成功率，
+ * 玩家接受后扣资源、再掷一次概率决定是否入队；v10 及更早的行军仍按旧战报重放。
  * 旧行军没有这个字段，重放时按 v1 走，避免改版把还没收兵的对局打乱。
  */
-export const SAGA_RULESET = 10;
+export const SAGA_RULESET = 11;
 
 /** 四维上限：v9 起武力 / 智力 / 防御 / 速度可以一路长到 255（基础值不动，长的是等级与特性加成）。 */
 export const SAGA_STAT_CAP = 255;
@@ -472,8 +474,34 @@ export type SagaCommand =
   | { k: "battle"; node: number; rounds: SagaRoundCommand[][] }
   /** 野外遭遇战：不占营地进度，编成由种子与这是第几场遭遇推出。 */
   | { k: "skirmish"; rounds: SagaRoundCommand[][] }
+  /** 胜利后的归降回应：accept=true 按标价付钱并再掷一次成功率，false 婉拒（无成本）。 */
+  | {
+      k: "recruit";
+      general: string;
+      accept: boolean;
+      gold: number;
+      itemId: string | null;
+    }
   /** 乘船：在两区渡口之间摆渡，扣船票（金币）。走位本身不入指令，这里只管钱与关卡口径。 */
   | { k: "ferry"; to: number };
+
+/**
+ * 胜利后弹出的一条归降提议：由本场战斗的种子与战报确定标价、聘礼与成功率，
+ * 玩家接受后服务端（重放）再掷一次概率决定是否入队。
+ */
+export interface RecruitOffer {
+  generalId: string;
+  name: string;
+  title: string;
+  level: number;
+  goldCost: number;
+  itemId: string | null;
+  itemCount: number;
+  /** 接受后的入队概率（0–100）。 */
+  chance: number;
+  /** 名将级难招：标价更高、基础概率更低。 */
+  hard: boolean;
+}
 
 export interface SagaBattleGeneral {
   id: string;
@@ -559,6 +587,8 @@ export interface SagaBattleState {
   rewardGold: number;
   rewardExp: number;
   pendingRecruits: string[];
+  /** v11 起胜利后生成的归降提议；旧规则为空。 */
+  recruitOffers: RecruitOffer[];
 }
 
 export interface SagaInventory {

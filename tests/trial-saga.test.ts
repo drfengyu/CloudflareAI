@@ -31,6 +31,7 @@ import {
   type SagaBattleState,
   type SagaCommand,
   type SagaGeneralState,
+  type SagaReplayState,
   type SagaRun,
 } from "../lib/trial/saga/types";
 import {
@@ -89,7 +90,7 @@ import {
   initialTrialSave,
   normalizeTrialSave,
 } from "../lib/trial/saga/state";
-import { battleAttackPower, battleTurnOrder, corpsCounterFactor, resolveBattleRound, startBattle, startEncounterBattle } from "../lib/trial/saga/battle";
+import { applyRecruitOffer, battleAttackPower, battleTurnOrder, corpsCounterFactor, resolveBattleRound, startBattle, startEncounterBattle } from "../lib/trial/saga/battle";
 import { battleEnemyAtPoint, battleHpBarWidth, makeSagaView } from "../components/trial/renderer";
 import {
   SAGA_TRAINING_ITEM_ID,
@@ -1517,6 +1518,135 @@ test("旧规则（v6 及更早）招降口径不变：营寨里的可招武将�
   assert.equal(battle.enemies[0].recruitable, true, "v6 仍按编成数据开放招降");
 });
 
+/** 造一场已经打完、带一条合成归降提议的战斗，用来验接受 / 婉拒结算。 */
+function offerBattle(): { battle: SagaBattleState; state: SagaReplayState } {
+  const run = easyRun();
+  const state = createReplayState(run);
+  const battle = startBattle(run, 0, state);
+  battle.phase = "won";
+  battle.recruitOffers = [
+    {
+      generalId: "zhangjiao",
+      name: "张角",
+      title: "测试",
+      level: 1,
+      goldCost: 200,
+      itemId: null,
+      itemCount: 0,
+      chance: 100,
+      hard: false,
+    },
+  ];
+  return { battle, state };
+}
+
+test("v11 胜利后归降提议：主帅本阵不上门，标价与成功率口径合法", () => {
+  let found = false;
+  for (let seed = 1; seed <= 60; seed++) {
+    const base = easyRun();
+    const run = {
+      ...base,
+      seed,
+      rules: SAGA_RULESET,
+      nodes: [
+        {
+          ...base.nodes[0],
+          kind: "battle" as const,
+          enemies: [{ ...base.nodes[0].enemies[0], boss: false, troops: 1, maxTroops: 1 }],
+        },
+      ],
+    };
+    const state = createReplayState(run);
+    const battle = startBattle(run, 0, state);
+    for (let round = 0; round < 20 && battle.phase === "select"; round++) {
+      resolveBattleRound(
+        battle,
+        battle.party.filter((g) => !g.downed).map((g) => ({ g: g.id, a: "attack" as const, target: 0 })),
+        state,
+      );
+    }
+    assert.equal(battle.phase, "won");
+    if (battle.recruitOffers.length === 0) continue;
+    found = true;
+    for (const offer of battle.recruitOffers) {
+      assert.equal(offer.generalId, "zhangjiao");
+      assert.ok(offer.goldCost > 0, "标价为正");
+      assert.ok(offer.chance >= 10 && offer.chance <= 90, "成功率落在 10–90");
+      assert.equal(offer.itemId, null);
+    }
+    break;
+  }
+  assert.ok(found, "种子扫描内出现过归降提议");
+
+  // 主帅本阵（boss）即使在武将表里也不弹归降。
+  const bossRun = { ...easyRun(), rules: SAGA_RULESET };
+  const bossState = createReplayState(bossRun);
+  const bossBattle = startBattle(bossRun, 0, bossState);
+  for (let round = 0; round < 20 && bossBattle.phase === "select"; round++) {
+    resolveBattleRound(
+      bossBattle,
+      bossBattle.party.filter((g) => !g.downed).map((g) => ({ g: g.id, a: "attack" as const, target: 0 })),
+      bossState,
+    );
+  }
+  assert.equal(bossBattle.phase, "won");
+  assert.deepEqual(bossBattle.recruitOffers, [], "主帅本阵不弹归降提议");
+});
+
+test("接受归降：成功率 100 入队并扣聘金；0 不入队且聘金不退", () => {
+  const ok = offerBattle();
+  ok.state.save.gold = 500;
+  const before = ok.state.save.gold;
+  const joined = applyRecruitOffer(ok.state, ok.battle, "zhangjiao", true);
+  assert.equal(joined.ok, true);
+  assert.ok(joined.joined);
+  assert.equal(ok.state.save.gold, before - 200, "入队扣聘金");
+  assert.ok(findGeneral(ok.state.save, "zhangjiao"));
+
+  const fail = offerBattle();
+  fail.state.save.gold = 500;
+  fail.battle.recruitOffers[0].chance = 0;
+  const refused = applyRecruitOffer(fail.state, fail.battle, "zhangjiao", true);
+  assert.equal(refused.ok, false);
+  assert.equal(fail.state.save.gold, 300, "失败聘金不退");
+  assert.equal(findGeneral(fail.state.save, "zhangjiao"), null);
+});
+
+test("归降回应：金不足不收；婉拒无成本；无此提议忽略", () => {
+  const poor = offerBattle();
+  poor.state.save.gold = 50;
+  const noGold = applyRecruitOffer(poor.state, poor.battle, "zhangjiao", true);
+  assert.equal(noGold.ok, false);
+  assert.equal(poor.state.save.gold, 50, "金不足不扣");
+
+  const declined = offerBattle();
+  declined.state.save.gold = 500;
+  const decline = applyRecruitOffer(declined.state, declined.battle, "zhangjiao", false);
+  assert.equal(decline.ok, true);
+  assert.equal(declined.state.save.gold, 500, "婉拒不扣金");
+  assert.equal(findGeneral(declined.state.save, "zhangjiao"), null);
+
+  const ghost = offerBattle();
+  const missing = applyRecruitOffer(ghost.state, ghost.battle, "nobody", true);
+  assert.equal(missing.ok, false);
+});
+
+test("归降指令：sanitize 保留字段；没打过仗时被忽略", () => {
+  const sanitized = sanitizeSagaCommands([
+    { k: "recruit", general: "zhangjiao", accept: true, gold: 200, itemId: null, junk: 1 },
+  ]);
+  assert.deepEqual(sanitized, [
+    { k: "recruit", general: "zhangjiao", accept: true, gold: 200, itemId: null },
+  ]);
+
+  const run = easyRun();
+  const result = replaySagaRun(run, [
+    { k: "recruit", general: "zhangjiao", accept: true, gold: 200, itemId: null },
+  ]);
+  assert.equal(result.state.save.gold, run.startSave.gold, "无胜仗时不扣金");
+  assert.equal(findGeneral(result.state.save, "zhangjiao"), null);
+});
+
 test("野外遭遇战：不占营地进度，打赢照常得金币经验并继续行军", () => {
   const run = easyRun();
   const rounds = Array.from({ length: 50 }, () => [
@@ -2164,7 +2294,7 @@ test("公告与维护窗口判定", () => {
 });
 
 test("兵种相克与名将连携只在 v10 起生效", () => {
-  assert.equal(SAGA_RULESET, 10, "规则档升到 v10");
+  assert.equal(SAGA_RULESET, 11, "规则档升到 v11");
 
   // 兵种按底子推：猛将骑、谋士弓、其余枪。
   assert.equal(sagaCorpsOf(SAGA_GENERAL_BY_ID.get("lvbu")), "cavalry");
@@ -2190,7 +2320,7 @@ test("兵种相克与名将连携只在 v10 起生效", () => {
 
   const run = { ...easyRun(), rules: SAGA_RULESET };
   const battle = startBattle(run, 0, createReplayState(run));
-  assert.equal(battle.rules, 10);
+  assert.equal(battle.rules, 11);
   const partyIds = battle.party.map((unit) => unit.id);
   const bonds = sagaBondsFor(partyIds);
   assert.equal(battle.party.every((unit) => unit.bonds.length === bonds.length), true, "连携按全队生效");
@@ -2206,7 +2336,7 @@ test("兵种相克与名将连携只在 v10 起生效", () => {
   assert.equal(oldBattle.enemies.every((unit) => unit.corps === "spear" && unit.bonds.length === 0), true);
   assert.equal(oldBattle.log.some((event) => event.text.includes("生效")), false, "旧规则不出连携战报");
 });
-
+
 
 test("吞食天地头像素材与武将 id 一一对齐", () => {
   // 素材来自 GitHub 仓库 mooneroid/rotj 里的吞食天地头像包，按武将 id 落成 gif。

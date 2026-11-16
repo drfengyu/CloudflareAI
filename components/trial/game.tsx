@@ -181,7 +181,7 @@ function markNoticeSeen(): void {
   }
   window.dispatchEvent(new Event(NOTICE_SEEN_EVENT));
 }
-type BattleAction = "attack" | "guard" | "tactic" | "item" | "recruit";
+type BattleAction = "attack" | "guard" | "tactic" | "item";
 
 interface BattlePick {
   a: BattleAction;
@@ -271,16 +271,6 @@ function availableItems(state: SagaReplayState): { id: string; name: string; cou
   return list;
 }
 
-function canRecruit(battle: SagaBattleState): boolean {
-  // v8 起野外头目随时可劝降（成功率随剩余兵力递减）；v7 及更早仍要兵力压到 35% 以下。
-  return battle.enemies.some(
-    (enemy) =>
-      !enemy.downed &&
-      enemy.recruitable &&
-      (battle.rules >= 8 || enemy.troops <= enemy.maxTroops * 0.35),
-  );
-}
-
 /** 战斗事件按动画节拍逐条配音：画面上谁动，耳朵里就响什么。 */
 function playBattleSfx(events: SagaBattleEvent[], stepMs: number): void {
   events.forEach((event, index) => {
@@ -347,6 +337,9 @@ export function TrialGame(props: TrialGameProps) {
   /** 战斗演出倍速：只改动画节拍与配音间隔，结算结果不受影响。 */
   const [battleSpeed, setBattleSpeed] = useState<1 | 2>(1);
   const [focusId, setFocusId] = useState<string | null>(null);
+  /** 胜利后的归降提议面板：接受 / 婉拒逐条记录，随本场战斗指令一起落档。 */
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [offerDecisions, setOfferDecisions] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [settlement, setSettlement] = useState<TrialSettlement | null>(null);
   const [banner, setBanner] = useState<{ kind: "won" | "lost"; name: string; gold: number; exp: number } | null>(null);
@@ -1366,13 +1359,25 @@ export function TrialGame(props: TrialGameProps) {
   }, [battle, beginEncounter, panel, run, settlement, state]);
 
   const commitBattle = useCallback(
-    (session: BattleSession) => {
+    (session: BattleSession, decisions: Record<string, boolean> = {}) => {
       appendCommand(
         session.encounter
           ? { k: "skirmish", rounds: session.rounds }
           : { k: "battle", node: session.node, rounds: session.rounds },
       );
       const won = session.battle.phase === "won";
+      // 胜利后的归降回应紧跟本场战斗指令：接受按标价扣聘金，婉拒无成本。
+      if (won) {
+        for (const offer of session.battle.recruitOffers) {
+          appendCommand({
+            k: "recruit",
+            general: offer.generalId,
+            accept: Boolean(decisions[offer.generalId]),
+            gold: offer.goldCost,
+            itemId: offer.itemId,
+          });
+        }
+      }
       gameAudio.play(won ? "win" : "lose");
       setBanner({
         kind: won ? "won" : "lost",
@@ -1389,9 +1394,17 @@ export function TrialGame(props: TrialGameProps) {
       setAnim(null);
       setFocusId(null);
       setShowEnemyInfo(false);
+      setOfferOpen(false);
+      setOfferDecisions({});
     },
     [appendCommand, markSceneSeen, run],
   );
+
+  /** 归降面板点「继续行军」：把本场战斗与逐条归降回应一起落档。 */
+  const finishWithOffers = useCallback(() => {
+    if (!battle) return;
+    commitBattle(battle, offerDecisions);
+  }, [battle, commitBattle, offerDecisions]);
 
   const runRound = useCallback(
     (session: BattleSession, round: SagaRoundCommand[]) => {
@@ -1408,7 +1421,14 @@ export function TrialGame(props: TrialGameProps) {
         animTimerRef.current = null;
         setAnim(null);
         if (next.battle.phase !== "select") {
-          commitBattle(next);
+          const offers = next.battle.recruitOffers;
+          if (next.battle.phase === "won" && offers.length > 0) {
+            // 先弹归降提议，玩家逐条接受 / 婉拒后再落本场战斗指令。
+            setOfferDecisions({});
+            setOfferOpen(true);
+          } else {
+            commitBattle(next);
+          }
         } else {
           setBattle((prev) => (prev ? { ...prev, picks: defaultPicks(prev.battle) } : prev));
           setFocusId(next.battle.party.find((unit) => !unit.downed)?.id ?? null);
@@ -1542,7 +1562,9 @@ export function TrialGame(props: TrialGameProps) {
     [appendCommand],
   );
 
-  const battleLocked = Boolean(anim);
+  /** 胜利后归降面板开启时，战斗指令按钮一律锁定，避免误撤退 / 误执行。 */
+  const offerActive = Boolean(battle && offerOpen && battle.battle.phase === "won");
+  const battleLocked = Boolean(anim) || offerActive;
   /** 战斗头信息：行动顺序、阵型对抗与当前指挥目标，全部从当前战局推出。 */
   const battleView = (() => {
     if (!battle) return null;
@@ -1561,9 +1583,7 @@ export function TrialGame(props: TrialGameProps) {
           ? (pick.t ? SAGA_TACTIC_BY_ID.get(pick.t)?.name : "") || "计策"
           : pick.a === "item"
             ? `道具 · ${itemName(pick.i ?? "")}`
-            : pick.a === "recruit"
-              ? "招降"
-              : "防御";
+            : "防御";
     const targetName =
       pick?.a === "attack" ? (current.enemies[pick.target ?? 0]?.name ?? null) : null;
     const playerFormation = SAGA_FORMATION_BY_ID.get(current.playerFormation) ?? null;
@@ -1947,10 +1967,8 @@ export function TrialGame(props: TrialGameProps) {
                         : pick.a === "tactic"
                           ? (pick.t ? SAGA_TACTIC_BY_ID.get(pick.t)?.name : "") || "计策"
                           : pick.a === "item"
-                            ? `道具 · ${itemName(pick.i ?? "")}`
-                            : pick.a === "recruit"
-                              ? "招降"
-                              : "防御";
+                          ? `道具 · ${itemName(pick.i ?? "")}`
+                          : "防御";
                   return (
                     <div
                       key={unit.id}
@@ -1997,13 +2015,11 @@ export function TrialGame(props: TrialGameProps) {
                               ["tactic", "计策"],
                               ["guard", "防御"],
                               ["item", "道具"],
-                              ["recruit", "招降"],
                             ] as [BattleAction, string][]
                           ).map(([action, label]) => {
                             const disabled =
                               (action === "tactic" && (unit.tacticPoints <= 0 || unit.tactics.length === 0)) ||
-                              (action === "item" && availableItems(battle.scratch).length === 0) ||
-                              (action === "recruit" && !canRecruit(battle.battle));
+                              (action === "item" && availableItems(battle.scratch).length === 0);
                             return (
                               <button
                                 key={action}
@@ -2129,6 +2145,82 @@ export function TrialGame(props: TrialGameProps) {
                   );
                 })}
               </div>
+            </div>
+          </div>
+        ) : null}
+
+        {offerActive && battle ? (
+          <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-xl border border-amber-300/30 bg-[#1d160c]/97 p-4 shadow-2xl">
+              <p className="text-sm font-semibold text-amber-100">捷报 · 归降来投</p>
+              <p className="mt-1 text-[11px] text-white/55">
+                胜后有敌将愿受礼聘：接受需付聘金，再按成功率掷入麾下；未能入队时聘金不退。
+              </p>
+              <div className="mt-3 space-y-2">
+                {battle.battle.recruitOffers.map((offer) => {
+                  const decision = offerDecisions[offer.generalId];
+                  const affordable = save.gold >= offer.goldCost;
+                  return (
+                    <div key={offer.generalId} className="rounded-lg border border-white/10 bg-white/[0.04] p-2.5">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="text-[13px] font-medium text-amber-50">{offer.name}</span>
+                        <span className="text-[11px] text-white/45">
+                          {offer.title} · Lv{offer.level}
+                        </span>
+                        {offer.hard ? (
+                          <span className="rounded border border-rose-300/30 bg-rose-300/10 px-1 text-[10px] text-rose-200">
+                            难招
+                          </span>
+                        ) : null}
+                        <span className="ml-auto text-[11px] tabular-nums text-amber-200">
+                          聘金 {formatCredits(offer.goldCost)}
+                        </span>
+                        <span className="text-[11px] tabular-nums text-sky-200">成功率 {offer.chance}%</span>
+                      </div>
+                      <div className="mt-2 flex gap-1.5">
+                        <button
+                          type="button"
+                          disabled={!affordable || decision === true}
+                          onClick={() =>
+                            setOfferDecisions((prev) => ({ ...prev, [offer.generalId]: true }))
+                          }
+                          className={cn(
+                            "rounded-md border px-2.5 py-1 text-[11px]",
+                            decision === true
+                              ? "border-amber-300 bg-amber-300 text-black"
+                              : affordable
+                                ? "border-amber-300/40 text-amber-100 hover:bg-amber-300/10"
+                                : "cursor-not-allowed opacity-40",
+                          )}
+                        >
+                          接受归降
+                        </button>
+                        <button
+                          type="button"
+                          disabled={decision === false}
+                          onClick={() =>
+                            setOfferDecisions((prev) => ({ ...prev, [offer.generalId]: false }))
+                          }
+                          className={cn(
+                            "rounded-md border px-2.5 py-1 text-[11px]",
+                            decision === false
+                              ? "border-white/40 bg-white/10 text-white/80"
+                              : "border-white/15 hover:bg-white/10",
+                          )}
+                        >
+                          婉拒
+                        </button>
+                      </div>
+                      {!affordable ? (
+                        <p className="mt-1 text-[10px] text-rose-200/80">金币不足，无法礼聘</p>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+              <Button className="mt-3 w-full" onClick={finishWithOffers}>
+                继续行军
+              </Button>
             </div>
           </div>
         ) : null}
@@ -3100,7 +3192,7 @@ export function TrialGame(props: TrialGameProps) {
         操作：方向键 / WASD 四向行走，走到城门口、敌营或乡野点位旁按回车交互；
         也可以直接点击地图上的城池、营寨、村庄与渡口。点城池走进城中街道，在街上四向走动，
         走到铺子 / 皇宫门口会自动进门，柜台前按回车与掌柜说话、办正事；皇宫里可以面见主公议事；从城门出城。
-        战斗为回合制：逐将选择攻击 / 计策 / 防守 / 道具 / 招降，或按「总攻击」「自动战斗」速战。
+        战斗为回合制：逐将选择攻击 / 计策 / 防守 / 道具，或按「总攻击」「自动战斗」速战；胜后可礼聘归降。
         野外草地、树林会随机遇敌，敌军编成由种子与第几场遭遇推出。
         走位本身不影响任何数值：战报只上传编制、购物与「打哪座营、打不打这场遭遇、怎么打」的指令，
         服务端按种子重放判定；战斗指令存在本机，刷新页面可以接着打。剧情对话、军令与走访记录只在本机，

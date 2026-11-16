@@ -523,7 +523,7 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
 
 export const SAGA_CHAPTER_BY_INDEX = new Map(SAGA_CHAPTERS.map((c) => [c.index, c]));
 
-export const SAGA_SKILLS_HINT = "攻击 / 计策 / 防御 / 道具 / 招降";
+export const SAGA_SKILLS_HINT = "攻击 / 计策 / 防御 / 道具；胜后可礼聘归降";
 
 /** 兵种简称：骑 / 枪 / 弓。 */
 export const SAGA_CORPS_LABEL: Record<SagaCorps, string> = {

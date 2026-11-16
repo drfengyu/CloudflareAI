@@ -534,9 +534,13 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.84.0（2026-11-16，吞食天地头像素材接入）
+**当前版本**：v0.85.0（2026-11-16，招降改为胜后礼聘）
 **下一版本**：待定
 
+- v0.85.0 招降改为胜利后礼聘：战斗内不再发劝降回合指令；胜后在武将表、不在麾下、非主帅本阵的
+  有名敌将按概率弹归降提议，标聘金（金币）与成功率，接受先扣聘金再掷概率，成功入队 / 进后备，
+  失败婉拒且聘金不退；新指令 `{ k: "recruit", general, accept, gold, itemId }` 紧跟胜仗落档，
+  服务端按本场战报与种子重放；旧 `recruit` 回合指令保留兼容旧存档重放。规则档 `SAGA_RULESET = 11`。
 - v0.84.0 武将头像接入吞食天地素材：GitHub `mooneroid/rotj`（MIT）的 `doae_portraits/Portrait 48`
   按 id 落到 `public/trial/portraits/<id>.gif`（81 名武将），索引在 `components/trial/portrait-assets.ts`；
   `SagaPortrait` 有素材走 `next/image`（pixelated + 米色画框），没素材仍走 `portraits.ts` 程序化立绘；
