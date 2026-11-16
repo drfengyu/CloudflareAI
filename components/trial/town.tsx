@@ -65,7 +65,9 @@ type ShopId =
   | "hall"
   | "tavern";
 
-type Scene = { kind: "street" } | { kind: "shop"; id: ShopId } | { kind: "palace" };
+type HouseId = "house-a" | "house-b" | "house-c" | "hermit";
+
+type Scene = { kind: "street" } | { kind: "shop"; id: ShopId } | { kind: "palace" } | { kind: "house"; id: HouseId };
 
 interface StreetSpot {
   id: FieldFacilityId | "palace" | "house-a" | "house-b" | "house-c" | "hermit";
@@ -122,6 +124,13 @@ const SHOP_IDS = new Set<string>([
 
 function isShopId(id: StreetSpot["id"]): id is ShopId {
   return SHOP_IDS.has(id);
+}
+
+const HOUSE_IDS = new Set<string>(["house-a", "house-b", "house-c", "hermit"]);
+
+/** 民居 / 隐士庐也能推门进去：屋里只有屋主，没有柜台买卖。 */
+function isHouseId(id: StreetSpot["id"]): id is HouseId {
+  return HOUSE_IDS.has(id);
 }
 
 interface StreetWalker {
@@ -418,6 +427,74 @@ const SHOP_ROOMS: Record<ShopId, ShopRoom> = {
   hall: { npcId: "drillmaster", wall: "#7d8452", accent: "#5f7440", floor: "#9c8d4a", prop: "armor" },
   tavern: { npcId: "tavernkeeper", wall: "#8f6b48", accent: "#a35f34", floor: "#a87c46", prop: "tables" },
 };
+
+interface RoomPaint {
+  label: string;
+  npcName: string;
+  wall: string;
+  accent: string;
+  floor: string;
+  prop: ShopRoom["prop"];
+}
+
+const HOUSE_ROOMS: Record<HouseId, { paint: RoomPaint; npcId: string; title: string; lines: string[] }> = {
+  "house-a": {
+    npcId: "townswoman",
+    title: "民居主人",
+    lines: [
+      "将军来得正好，灶上刚蒸了糜子饭，不嫌粗就坐下吃一碗。",
+      "前些日子黄巾过境，家里的鸡都丢了，亏得城墙挡了一挡。",
+      "院里井水甜，行军的水壶空了就来灌满。",
+    ],
+    paint: { label: "民居", npcName: "王婶", wall: "#8a6a48", accent: "#8a6a48", floor: "#a67f4c", prop: "tables" },
+  },
+  "house-b": {
+    npcId: "oldfarmer",
+    title: "民居主人",
+    lines: [
+      "今年麦子长得旺，可惜路上不太平，收上来的粮运不出去。",
+      "将军要人马草料，我这院子里还有两垛，尽管来取。",
+      "听说西边又打起来了，这日子什么时候是个头。",
+    ],
+    paint: { label: "民居", npcName: "老农", wall: "#87684a", accent: "#7a6a3c", floor: "#a27b46", prop: "herbs" },
+  },
+  "house-c": {
+    npcId: "weaver",
+    title: "民居主人",
+    lines: [
+      "这几匹麻布是新织的，将军军旗要是破了，我连夜缝。",
+      "街上铺子卖的是兵器甲胄，我这儿只有针线，帮不上大忙。",
+      "孩子他爹跟着军走了，说是打完这仗就回来。",
+    ],
+    paint: { label: "民居", npcName: "织户", wall: "#8d6a4c", accent: "#8a5a4a", floor: "#a67b52", prop: "armor" },
+  },
+  hermit: {
+    npcId: "hermitmaster",
+    title: "隐士",
+    lines: [
+      "将军用计，火借风势，水因地势，石凭山险——地利不对，计策再高也是空耗。",
+      "同系计策各有阶第，低阶点少、高阶势大，看军中计策点留着用哪一档。",
+      "阵形相克在前，计策在后；先列好阵，再落计。",
+    ],
+    paint: { label: "隐士庐", npcName: "司马徽之徒", wall: "#7a7250", accent: "#6f5a3a", floor: "#94844c", prop: "herbs" },
+  },
+};
+
+function spotRoomPaint(spot: StreetSpot): RoomPaint | null {
+  if (isShopId(spot.id)) {
+    const room = SHOP_ROOMS[spot.id];
+    return {
+      label: spot.label,
+      npcName: SAGA_NPCS[room.npcId]?.name ?? "",
+      wall: room.wall,
+      accent: room.accent,
+      floor: room.floor,
+      prop: room.prop,
+    };
+  }
+  if (isHouseId(spot.id)) return HOUSE_ROOMS[spot.id].paint;
+  return null;
+}
 
 interface WalkState {
   x: number;
@@ -1879,17 +1956,15 @@ function paintRoomProp(
   }
 }
 
-function paintShopInterior(
+function paintRoomInterior(
   ctx: CanvasRenderingContext2D,
   time: number,
-  shop: ShopId,
+  room: RoomPaint,
   player: WalkState,
   partyColor: string,
   partyAccent: string,
 ): void {
-  const room = SHOP_ROOMS[shop];
-  const spot = SPOT_BY_ID.get(shop);
-  const npc = SAGA_NPCS[room.npcId];
+  const npcName = room.npcName;
 
   ctx.fillStyle = room.wall;
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
@@ -1914,7 +1989,7 @@ function paintShopInterior(
   ctx.font = townFont(20);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(spot?.label ?? "", 480, 75);
+  ctx.fillText(room.label, 480, 75);
   ctx.textBaseline = "alphabetic";
 
   paintLantern(ctx, 276, 118, time, 0.5);
@@ -1953,7 +2028,7 @@ function paintShopInterior(
   roundRectPath(ctx, 416, 508, 128, 12, 4);
   ctx.fill();
 
-  if (npc) {
+  if (npcName) {
     paintWalkerSprite(ctx, 480, 384, {
       facing: "down",
       moving: false,
@@ -1965,7 +2040,7 @@ function paintShopInterior(
       basket: false,
       time,
     });
-    paintNameTag(ctx, 480, 316, npc.name);
+    paintNameTag(ctx, 480, 316, npcName);
   }
 
   // 柜台沿墙拉通整间铺面（左右抵到墙根）：掌柜站在台后，台后区域走不进去
@@ -2204,8 +2279,8 @@ function streetTargetAt(player: WalkState, time: number): StreetTarget | null {
   const py = player.y;
 
   for (const spot of STREET_SPOTS) {
-    // 铺子与皇宫走到门口就自动进门，不再占用 E 键
-    if (spot.kind === "shop" || spot.kind === "palace") continue;
+    // 铺子、皇宫与民居走到门口就自动进门，不再占用 E 键
+    if (spot.kind === "shop" || spot.kind === "palace" || spot.kind === "house") continue;
     const dx = Math.abs(px - spot.x);
     if (dx > spot.width / 2 + 22) continue;
     const dy = py - spot.y;
@@ -2287,14 +2362,15 @@ function streetSpotAtPoint(px: number, py: number, x: number, y: number): Street
   return best;
 }
 
-/** 走到铺子 / 皇宫门口就直接切内景，不必再按 E：只有朝北贴到门脸那一小段才算。 */
+/** 走到铺子 / 皇宫 / 民居门口就直接切内景，不必再按 E：朝北贴到门脸那一小段就算。 */
 function doorSpotAt(player: WalkState): StreetSpot | null {
   if (player.facing !== "up") return null;
   for (const spot of STREET_SPOTS) {
-    if (spot.kind !== "shop" && spot.kind !== "palace") continue;
-    if (Math.abs(player.x - spot.x) > Math.min(48, spot.width / 2 - 10)) continue;
+    if (spot.kind !== "shop" && spot.kind !== "palace" && spot.kind !== "house") continue;
+    if (Math.abs(player.x - spot.x) > Math.min(56, spot.width / 2 - 10)) continue;
+    // 门口判定放宽到 4~56：北排贴着走位上限，太窄的一条带子容易走不进去。
     const dy = player.y - spot.y;
-    if (dy >= 6 && dy <= 46) return spot;
+    if (dy >= 4 && dy <= 56) return spot;
   }
   return null;
 }
@@ -2315,7 +2391,7 @@ function streetSolidAt(x: number, y: number): boolean {
 
 /** 内景里的柜台与御案是一整块障碍，只能绕着走。 */
 function roomSolidAt(x: number, y: number, scene: Scene): boolean {
-  if (scene.kind === "shop") return x > 18 && x < 942 && y > 384 && y < 472;
+  if (scene.kind === "shop" || scene.kind === "house") return x > 18 && x < 942 && y > 384 && y < 472;
   if (scene.kind === "palace") return x > 330 && x < 630 && y > 296 && y < 382;
   return false;
 }
@@ -2332,7 +2408,10 @@ function roomTargetAt(scene: Scene, player: WalkState): RoomTarget | null {
     return null;
   }
   const dist = Math.hypot(player.x - 480, player.y - 486);
-  if (dist < 74) return { kind: "counter", label: "与掌柜交谈", walkX: 480, walkY: 484 };
+  if (dist < 74) {
+    const label = scene.kind === "house" ? "与屋主交谈" : "与掌柜交谈";
+    return { kind: "counter", label, walkX: 480, walkY: 484 };
+  }
   return null;
 }
 
@@ -2443,6 +2522,10 @@ export function WalkTown({
       }
       if (isShopId(spot.id)) {
         goScene({ kind: "shop", id: spot.id }, 480, 470, "up");
+        return;
+      }
+      if (isHouseId(spot.id)) {
+        goScene({ kind: "house", id: spot.id }, 480, 470, "up");
       }
     },
     [goScene],
@@ -2479,7 +2562,18 @@ export function WalkTown({
         exitScene();
         return;
       }
-      if (target.kind === "counter" && current.kind === "shop") {
+      if (target.kind === "counter" && (current.kind === "shop" || current.kind === "house")) {
+        if (current.kind === "house") {
+          const house = HOUSE_ROOMS[current.id];
+          openSpeech({
+            npcId: house.npcId,
+            name: house.paint.npcName,
+            title: house.title,
+            lines: house.lines,
+            index: 0,
+          });
+          return;
+        }
         const room = SHOP_ROOMS[current.id];
         const npc = SAGA_NPCS[room.npcId];
         if (!npc) return;
@@ -2600,7 +2694,12 @@ export function WalkTown({
       }
       if (sy < 490 && Math.abs(sx - 480) < 300) {
         player.walkTo = { x: 480, y: 484 };
-        player.pending = { kind: "counter", label: "与掌柜交谈", walkX: 480, walkY: 484 };
+        player.pending = {
+          kind: "counter",
+          label: current.kind === "house" ? "与屋主交谈" : "与掌柜交谈",
+          walkX: 480,
+          walkY: 484,
+        };
         return;
       }
       player.walkTo = {
@@ -2817,7 +2916,9 @@ export function WalkTown({
           info.partyAccent,
         );
       } else {
-        paintShopInterior(ctx, time, current.id, player, info.partyColor, info.partyAccent);
+        const spot = SPOT_BY_ID.get(current.id);
+        const paint = spot ? spotRoomPaint(spot) : null;
+        if (paint) paintRoomInterior(ctx, time, paint, player, info.partyColor, info.partyAccent);
       }
 
       raf = requestAnimationFrame(frame);
@@ -2831,7 +2932,9 @@ export function WalkTown({
       ? `${townName} · 街道`
       : scene.kind === "palace"
         ? "皇宫 · 大殿"
-        : `${SPOT_BY_ID.get(scene.id)?.label ?? ""} · 前台`;
+        : scene.kind === "house"
+          ? `${SPOT_BY_ID.get(scene.id)?.label ?? "民居"} · 屋内`
+          : `${SPOT_BY_ID.get(scene.id)?.label ?? ""} · 前台`;
 
   const speechLine = speech ? speech.lines[speech.index % speech.lines.length] : "";
 
@@ -2920,7 +3023,7 @@ export function WalkTown({
       ) : null}
 
       <p className="pointer-events-none absolute bottom-3 left-1/2 z-10 hidden -translate-x-1/2 rounded-full border border-amber-900/40 bg-black/55 px-3 py-1 text-[11px] text-amber-100/60 backdrop-blur sm:block">
-        方向键 / WASD 或点击地面走动 · 走到铺子 / 皇宫门口直接进门 · 柜台前按回车与掌柜交谈
+        方向键 / WASD 或点击地面走动 · 走到铺子 / 皇宫 / 民居门口直接进门 · 柜台前按回车交谈
       </p>
     </div>
   );

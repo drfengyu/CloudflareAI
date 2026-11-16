@@ -30,6 +30,7 @@ import {
   normalizeTrialSave,
   setActiveParty,
   setFormation,
+  troopBaseline,
 } from "./state";
 import {
   SAGA_FERRY_TICKETS,
@@ -108,12 +109,17 @@ function makeEnemy(
   const fallback = SAGA_GENERAL_BY_ID.get("huangjin_lishi")!;
   const raw = def ?? fallback;
   const level = 1 + chapterIndex * 4 + nodeIndex + (kind === "elite" ? 1 : 0) + (kind === "boss" ? 3 : 0);
-  const scale = kind === "boss" ? 1.25 : kind === "elite" ? 1.1 : 1;
-  // v9 起敌军也吃新口径：兵力翻一倍，四维每级成长翻三倍并封顶 255。
-  const troops = Math.max(
-    60,
-    Math.round((raw.baseTroops + level * raw.growth) * 2 * (1 + chapterIndex * 0.06) * scale),
-  );
+  // v13 起敌军兵力按「同等级我方基准」给：基准 = 关羽曲线 400 + 24×(等级-1)，
+  // 再按身份 ×1.2~6（本阵主将最高 6 倍，随身份强弱浮动），不再用武将自身的 baseTroops 开小差。
+  const refTroops = troopBaseline(level);
+  const strength = Math.min(1, Math.max(0, (raw.baseTroops - 120) / 140));
+  const mult =
+    kind === "boss"
+      ? 3.6 + 2.4 * strength
+      : kind === "elite"
+        ? 2.2 + 1.8 * strength
+        : 1.5 + 1.2 * strength;
+  const troops = Math.max(80, Math.round(refTroops * Math.min(6, Math.max(1.2, mult))));
   const bonus = traitStats(raw);
   const cap = (value: number): number => Math.min(SAGA_STAT_CAP, Math.round(value));
   return {

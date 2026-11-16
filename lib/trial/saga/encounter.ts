@@ -15,6 +15,7 @@ import {
   traitStats,
 } from "./data";
 import { SAGA_MAX_COMMANDS, type SagaEnemy, type SagaNode, type SagaRun } from "./types";
+import { troopBaseline } from "./state";
 
 interface FoeTemplate {
   key: "soldier" | "bandit" | "pirate" | "thief";
@@ -121,13 +122,20 @@ function pick<T>(rng: () => number, list: readonly T[]): T {
   return list[Math.min(list.length - 1, Math.floor(rng() * list.length))];
 }
 
-function leaderEnemy(leaderId: string, chapterIndex: number, ordinal: number): SagaEnemy {
+function leaderEnemy(leaderId: string, chapterIndex: number, ordinal: number, rules: number): SagaEnemy {
   const def = SAGA_GENERAL_BY_ID.get(leaderId) ?? SAGA_GENERAL_BY_ID.get("huangjin_lishi")!;
   const level = 1 + chapterIndex * 4 + Math.floor(ordinal / 3);
-  const troops = Math.max(
-    50,
-    Math.round((def.baseTroops + level * def.growth) * (1 + chapterIndex * 0.05) * 0.8),
-  );
+  // v13 起野外领头的敌将也按「同等级我方基准 × 1.3~2.3」给兵；旧规则仍走原曲线重放。
+  const troops =
+    rules >= 13
+      ? Math.round(
+          troopBaseline(level) *
+            (1.3 + 1.0 * Math.min(1, Math.max(0, (def.baseTroops - 120) / 140))),
+        )
+      : Math.max(
+          50,
+          Math.round((def.baseTroops + level * def.growth) * (1 + chapterIndex * 0.05) * 0.8),
+        );
   const bonus = traitStats(def);
   return {
     id: def.id,
@@ -165,14 +173,21 @@ function squadEnemy(
     rules >= 6
       ? 1 + chapterIndex * 2 + Math.floor(ordinal / 3)
       : 1 + chapterIndex * 3 + Math.floor(ordinal / 2);
-  const troops = Math.max(
-    40,
-    Math.round(
-      (foe.baseTroops + level * foe.growth) *
-        (1 + chapterIndex * 0.07) *
-        (withLeader ? 0.9 : 1),
-    ),
-  );
+  const troops =
+    rules >= 13
+      ? Math.round(
+          troopBaseline(level) *
+            (1.2 + 0.5 * Math.min(1, Math.max(0, (foe.baseTroops - 60) / 120))) *
+            (withLeader ? 1.05 : 1),
+        )
+      : Math.max(
+          40,
+          Math.round(
+            (foe.baseTroops + level * foe.growth) *
+              (1 + chapterIndex * 0.07) *
+              (withLeader ? 0.9 : 1),
+          ),
+        );
   return {
     id: `foe_${foe.key}_${ordinal}_${slot}`,
     name: `${foe.name}${SQUAD_MARKS[slot] ?? slot + 1}`,
@@ -212,7 +227,7 @@ export function sagaEncounterFor(run: SagaRun, ordinal: number, rules: number): 
   const enemies: SagaEnemy[] = [];
   let leaderName = "";
   if (hasLeader) {
-    const leader = leaderEnemy(pick(rng, chapter.field), chapter.index, index);
+    const leader = leaderEnemy(pick(rng, chapter.field), chapter.index, index, rules);
     leaderName = leader.name;
     enemies.push(leader);
   }

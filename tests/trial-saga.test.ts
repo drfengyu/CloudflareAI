@@ -89,6 +89,7 @@ import {
   generalStats,
   initialTrialSave,
   normalizeTrialSave,
+  troopBaseline,
 } from "../lib/trial/saga/state";
 import { applyRecruitOffer, battleAttackPower, battleTurnOrder, corpsCounterFactor, resolveBattleRound, startBattle, startEncounterBattle } from "../lib/trial/saga/battle";
 import {
@@ -306,7 +307,7 @@ test("剧情分支：一处岔路两条路只能走一条，打通一条另一�
       speed: 0,
     })),
   }));
-  const run: SagaRun = { ...base, nodes };
+  const run: SagaRun = { ...base, nodes, rules: 12 };
   const branchIndices = nodes
     .map((node, index) => ({ node, index }))
     .filter(({ node }) => node.branch);
@@ -802,7 +803,7 @@ test("v9 属性口径：四维成长翻三倍并封顶 255，兵力翻倍，旧�
   assert.equal(legacy.maxTroops, 240 + (SAGA_MAX_LEVEL - 1) * 13, "旧规则兵力不加倍");
 });
 
-test("v9 敌军口径：兵力翻倍，四维同样封顶 255", () => {
+test("敌军兵力口径：同等级我方基准的 1.2~6 倍，四维同样封顶 255", () => {
   const save = { ...initialTrialSave(), chapter: 7 };
   const run = generateSagaRun({ activityKey: "trial-test", save, nodeCount: 7, seed: 909 });
   const boss = run.nodes[run.nodes.length - 1];
@@ -813,29 +814,29 @@ test("v9 敌军口径：兵力翻倍，四维同样封顶 255", () => {
       assert.equal(enemy.defense <= SAGA_STAT_CAP, true, `${enemy.name} 防御不越过 255`);
       const def = SAGA_GENERAL_BY_ID.get(enemy.id);
       assert.ok(def, `${enemy.name} 在武将表里`);
-      const scale =
-        node.kind === "boss"
-          ? enemy.boss
-            ? 1.25
-            : 1.1
-          : node.kind === "elite"
-            ? 1.1
-            : 1;
+      const baseline = troopBaseline(enemy.level);
+      const strength = Math.min(1, Math.max(0, (def!.baseTroops - 120) / 140));
+      const kind = enemy.boss
+        ? "boss"
+        : node.kind === "boss" || node.kind === "elite"
+          ? "elite"
+          : "battle";
+      const mult =
+        kind === "boss" ? 3.6 + 2.4 * strength : kind === "elite" ? 2.2 + 1.8 * strength : 1.5 + 1.2 * strength;
       assert.equal(
         enemy.troops,
-        Math.max(
-          60,
-          Math.round((def!.baseTroops + enemy.level * def!.growth) * 2 * (1 + 7 * 0.06) * scale),
-        ),
-        `${enemy.name} 兵力按翻倍口径生成`,
+        Math.max(80, Math.round(baseline * Math.min(6, Math.max(1.2, mult)))),
+        `${enemy.name} 兵力 = 同等级我方基准 × 身份倍率`,
       );
+      const ratio = enemy.troops / baseline;
+      assert.equal(ratio >= 1.2 && ratio <= 6, true, `${enemy.name} 兵力落在 1.2~6 倍`);
     }
   }
   const first = boss.enemies[0];
   assert.equal(
-    first.troops > SAGA_GENERAL_BY_ID.get(first.id)!.baseTroops * 2,
+    first.troops > troopBaseline(first.level) * 3,
     true,
-    "本阵主将兵力明显多于基础值",
+    "本阵主将兵力三倍于同级我方",
   );
 });
 
@@ -1334,12 +1335,12 @@ test("战斗内景：头顶血条按兵力上限分长短，攻击力与普攻�
   const widths = battle.party.map((unit) => battleHpBarWidth(unit.maxTroops, widest));
   assert.equal(new Set(widths).size > 1, true, "不同兵力上限的武将初始血条长度不同");
   for (const width of widths) {
-    assert.equal(width >= 168 && width <= 280, true, "条长落在 168~280px");
+    assert.equal(width >= 84 && width <= 480, true, "条长落在 84~480px（最长半个画幅）");
   }
-  assert.equal(battleHpBarWidth(widest, widest), 280);
-  assert.equal(battleHpBarWidth(0, widest), 168);
-  assert.equal(battleHpCellCount(battleHpBarWidth(widest, widest)), 16, "最长条 16 格");
-  assert.equal(battleHpCellCount(battleHpBarWidth(0, widest)), 9, "最短条 9 格");
+  assert.equal(battleHpBarWidth(widest, widest), 480, "满格顶到半个画幅");
+  assert.equal(battleHpBarWidth(0, widest), 84, "兵再少也留一条短条");
+  assert.equal(battleHpCellCount(battleHpBarWidth(widest, widest)), 23, "最长条 23 格");
+  assert.equal(battleHpCellCount(battleHpBarWidth(0, widest)), 4, "最短条 4 格");
   const hero = battle.party[0];
   assert.equal(battleAttackPower(hero), hero.force + hero.weaponAtk + hero.level * 2, "我方攻击力口径");
   const foe = battle.enemies[0];
@@ -2114,7 +2115,8 @@ test("命中：智力被压制会落空，旧规则仍按原公式必中", () =>
 // ---------------------------------------------------------------- 撤退 / 训练
 
 test("撤退：只结束当前这一场仗，编制与已走指令都保留，之后还能接着打", () => {
-  const run = freshRun();
+  // 这条只验撤退流程，兵力压回 v12 口径，免得一场仗要打到回合上限。
+  const run = { ...freshRun(), rules: 12 };
   const formation: SagaCommand = { k: "formation", f: "fengshi" };
   const prelude = replaySagaRun(run, [formation]).state;
   const rounds = autoBattleRounds(run, 0, prelude);
@@ -2321,7 +2323,7 @@ test("公告与维护窗口判定", () => {
 });
 
 test("兵种相克与名将连携只在 v10 起生效", () => {
-  assert.equal(SAGA_RULESET, 12, "规则档升到 v12（策略与阵形按等级领悟）");
+  assert.equal(SAGA_RULESET, 13, "规则档升到 v13（敌军兵力按同级我方基准的 1.2~6 倍）");
 
   // 兵种按底子推：猛将骑、谋士弓、其余枪。
   assert.equal(sagaCorpsOf(SAGA_GENERAL_BY_ID.get("lvbu")), "cavalry");
@@ -2347,7 +2349,7 @@ test("兵种相克与名将连携只在 v10 起生效", () => {
 
   const run = { ...easyRun(), rules: SAGA_RULESET };
   const battle = startBattle(run, 0, createReplayState(run));
-  assert.equal(battle.rules, 12);
+  assert.equal(battle.rules, SAGA_RULESET);
   const partyIds = battle.party.map((unit) => unit.id);
   const bonds = sagaBondsFor(partyIds);
   assert.equal(battle.party.every((unit) => unit.bonds.length === bonds.length), true, "连携按全队生效");

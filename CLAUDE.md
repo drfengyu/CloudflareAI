@@ -534,8 +534,21 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.90.0（2026-11-16，城内世界放大 + 四排重排 + 四向出城）
+**当前版本**：v0.91.0（2026-11-16，敌军 1.2~6 倍带兵 + 计策全阶 + 民居可进门 + 血条按实兵）
 **下一版本**：待定
+
+- v0.91.0 敌军兵力换口径（`SAGA_RULESET` 12 → 13）：`state.ts` 新增
+  `troopBaseline(level) = 400 + 24 × (level-1)`（关羽曲线，1 级 400 / 30 级 1096）；
+  `run.ts makeEnemy` 野战 1.5~2.7 / 精锐 2.2~4.0 / 本阵主将 3.6~6.0（倍率按武将自身
+  `baseTroops` 强弱浮动、统一钳在 1.2~6）；`battle.ts buildSoldier` 营卒 1.4~2.0
+  （`rules >= 13` 才吃新口径）；`encounter.ts leaderEnemy` 野外领头 1.3~2.3、
+  `squadEnemy` 杂兵 1.2~1.7。计策不再按系只留最强两条：`data.ts tacticsFor` 去掉
+  `slice(0,2)`、`TACTIC_MEMORY_CAP` 12 → 26，各系按耗点从高到低全阶列出。
+  城内 `town.tsx` 的 `Scene` 增 `house` 变体（`HOUSE_ROOMS` / `spotRoomPaint()` /
+  `paintRoomInterior()`），民居与隐士庐走门口自动进屋、屋主各一段家常话，隐士讲计策阵形；
+  `doorSpotAt` 放宽到 `dy 4..56`、`dx ≤ 56`，北排贴走位上限的铺面也能进门。
+  `renderer.ts` 血条改按实兵分长短：`battleHpBarWidth = max(84, 480 × 上限/全场上限)`，
+  `battleHpCellCount = 条长 ÷ 21`（最少 2 格、最长 23 格，满格半个画幅）。
 
 - v0.90.0 城内世界放大（`components/trial/town.tsx`）：世界 1440×1180 → 2400×1900，走位 60..2320 / 336..1700；`STREET_SPOTS` 重写成四排 × 四座（中心线 220 / 860 / 1500 / 2140，屋宽 320、相邻净空 320），树位 / 水渠石桥 / 路网 / 广场 / 主街中线 / 沙土带 / 院墙与门柱 / 路灯旗杆 / 告示井 / NPC 站位整套跟着挪；走速 158 → 235。四向出城重做：新增 `TOWN_EXITS` + `atExit()`，南北东西走进判定区即 `onLeave`（`exitedRef` 只触发一次），不再只有南口 `gate` 能出城。店内柜台改成沿墙拉通的一长条（x 28..932、y 392..466），`roomSolidAt` 台后整片不可进、掌柜立到台前 y 484，`renderer.ts` 长枪枪尾收到膝上不再在地面拖白痕。
 - v0.89.2 NPC 名字牌统一成黑底米字圆角小牌（`paintNameTag` 描边），守卫拆成门卒甲 / 门卒乙 / 禁军甲 / 禁军乙；v0.89.1 房屋拉开间距、屋顶单字方匾（武 / 药 / 宿 / 军 / 钱 / 酒 / 券 / 训 / 编 / 道 / 宅 / 记）；v0.89.0 城内重排：十字路 + 四个城口、铺面 172 宽与双开门、每排≤4 座、皇宫移城东加一圈水渠与石桥、NPC 放大并加门卒/禁军、`partyMembers` 队伍跟走（`WalkTownProps` 新增可选字段，`renderer.ts` 的 `HeroSpriteOptions` 加 `scale`）。

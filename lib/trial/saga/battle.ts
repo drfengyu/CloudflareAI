@@ -10,7 +10,7 @@ import {
 } from "./data";
 import { sagaEncounterFor } from "./encounter";
 import { forgeStat } from "./forge";
-import { generalStats, grantGeneralExp, recruitToSave, findGeneral } from "./state";
+import { generalStats, grantGeneralExp, recruitToSave, findGeneral, troopBaseline } from "./state";
 import {
   SAGA_PARTY_SIZE,
   type SagaBattleEvent,
@@ -184,7 +184,14 @@ function buildSoldier(
     nodeIndex +
     (node.kind === "boss" ? 2 : node.kind === "elite" ? 1 : 0);
   const jitter = 0.9 + rng() * 0.2;
-  const troops = Math.max(60, Math.round((90 + level * 9) * (1 + chapter * 0.05) * jitter));
+  // v13 起营中杂兵也按「同等级我方基准 × 1.4~2.0」给兵：站在营里的步卒不比将少太多。
+  const troops =
+    rules >= 13
+      ? Math.max(
+          120,
+          Math.round(troopBaseline(level) * (1.4 + (slot % 3) * 0.2) * jitter),
+        )
+      : Math.max(60, Math.round((90 + level * 9) * (1 + chapter * 0.05) * jitter));
   const intellect = Math.max(12, Math.round(20 + level * 0.5));
   // v5 起 5 级一档并可能带随机强化；旧规则不多抽随机数，重放结果不变。
   const weaponPlus = rules >= 5 ? gearPlusFor(rng, level, true) : 0;

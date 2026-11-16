@@ -5,6 +5,31 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.91.0] - 2026-11-16
+
+### 变更
+
+- **敌军兵力换口径（SAGA_RULESET 12 → 13）**：新增 	roopBaseline(level) = 400 + 24 × (level-1)
+  作为「同等级我方基准」（关羽曲线），敌军一律按这条基准乘身份倍率给兵：
+  un.ts makeEnemy 野战 1.5~2.7 / 精锐 2.2~4.0 / 本阵主将 3.6~6.0（倍率随武将自身
+  aseTroops 强弱浮动，统一钳在 1.2~6）；attle.ts buildSoldier 营中步卒 1.4~2.0；
+  ncounter.ts leaderEnemy 野外领头 1.3~2.3、squadEnemy 杂兵 1.2~1.7。
+  新口径只在 ules >= 13 的战斗里生效，v12 及更早的行军仍按旧曲线重放。
+- **计策全阶列出（data.ts tacticsFor）**：同一系（火 / 水 / 石 / 回复 / 混乱 / 陷阱）
+  不再按消耗只留最强两条，凡智力与等级解锁的每一阶都列出来（各系按耗点从高到低）；
+  记忆上限 12 → 26，正好装下全表。
+- **民居与隐士庐可进门（components/trial/town.tsx）**：Scene 增 house 变体，
+  新增 HOUSE_ROOMS 与 spotRoomPaint()，paintShopInterior 泛化为 paintRoomInterior
+  按 RoomPaint 画；三处民居各有屋主（王婶 / 老农 / 织户），隐士庐给计策与阵形提示。
+  进屋同样走门口自动触发，oomSolidAt / oomTargetAt / 柜台对话按内景分派。
+- **门口判定放宽**：doorSpotAt 从 dy 6..46、dx ≤ 48 放到 dy 4..56、dx ≤ 56，
+  北排贴走位上限的铺面也能走进去；streetTargetAt 不再把民居当 E 键交互。
+- **血条按实兵分长短（enderer.ts）**：attleHpBarWidth = max(84, 480 × 兵力上限 / 全场上限)，
+  满格顶到半个画幅；attleHpCellCount 改为 条长 ÷ (18 格宽 + 3 缝隙)（最少 2 格），
+  最长 23 格；空地格依旧不画，掉兵逐格熄灭。
+- **测试与文档**：	ests/trial-saga.test.ts 兵力用例改成新口径断言（含 1.2~6 倍区间校验），
+  血条用例改为 84~480 / 23 / 4 格；两条只验机制的用例（剧情分支、撤退）压回 ules: 12，
+  免得一场仗打到回合上限。公告、README、CLAUDE、docs/features/trial.md 同步 0.91.0。
 ## [0.90.0] - 2026-11-16
 
 ### 变更

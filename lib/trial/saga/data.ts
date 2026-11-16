@@ -303,8 +303,8 @@ const TACTIC_LINES: { id: TacticId; intellect: number }[] = [
   { id: "xianjing", intellect: 92 },
 ];
 
-/** 一名武将同时能记的计策上限，多的只留各系最强的两条。 */
-const TACTIC_MEMORY_CAP = 12;
+/** 一名武将同时能记的计策上限：够装下所有已解锁的阶数，不再为省位砍掉低阶。 */
+const TACTIC_MEMORY_CAP = 26;
 const TACTIC_FAMILY_ORDER = ["fire", "water", "rock", "heal", "confuse", "trap"] as const;
 
 export function tacticsFor(def: SagaGeneralDef | undefined, level: number): TacticId[] {
@@ -314,14 +314,14 @@ export function tacticsFor(def: SagaGeneralDef | undefined, level: number): Tact
     .map((entry) => entry.tactic);
   const byIntellect: TacticId[] = [];
   for (const family of TACTIC_FAMILY_ORDER) {
+    // 同系各阶威力随等级不同，全部列出（按消耗从高到低），不再只留最强的两条。
     const picks = TACTIC_LINES.filter((line) => {
       const kind = SAGA_TACTIC_BY_ID.get(line.id)?.kind;
       return kind === family && def.intellect >= line.intellect;
     })
       .map((line) => line.id)
       .filter((id) => tacticUnlocked(id, level))
-      .sort((a, b) => (SAGA_TACTIC_BY_ID.get(b)?.cost ?? 0) - (SAGA_TACTIC_BY_ID.get(a)?.cost ?? 0))
-      .slice(0, 2);
+      .sort((a, b) => (SAGA_TACTIC_BY_ID.get(b)?.cost ?? 0) - (SAGA_TACTIC_BY_ID.get(a)?.cost ?? 0));
     byIntellect.push(...picks);
   }
   const all = [...new Set([...def.tactics, ...learned, ...byIntellect])].filter((id) => tacticUnlocked(id, level));

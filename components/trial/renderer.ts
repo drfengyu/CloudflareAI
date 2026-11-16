@@ -1411,20 +1411,24 @@ function battleRandom(seed: number): () => number {
   };
 }
 
-/** 头顶血条的满格长度：兵力上限越高条越长，最少 168px、最多 280px（约为旧口径的两倍）。 */
+/**
+ * 头顶血条的满格长度：按「全场上限」折算，满格可以顶到半个画幅（480 px）。
+ * 一格代表的兵力 = 全场上限 ÷ 最多格数，兵少的将条子自然短，不再人人一条长条。
+ */
 export function battleHpBarWidth(maxTroops: number, widestMax: number): number {
   const ratio = widestMax > 0 ? Math.max(0, Math.min(1, maxTroops / widestMax)) : 1;
-  return Math.round(168 + 112 * ratio);
+  return Math.max(BATTLE_HP_BAR_MIN, Math.round(BATTLE_HP_BAR_MAX * ratio));
 }
 
 /** 血条的分格口径：格子宽度固定，条越长格子越多，读起来像一排方砖。 */
 export const BATTLE_HP_CELL = 18;
 const BATTLE_HP_CELL_GAP = 3;
-const BATTLE_HP_CELL_COUNT_MIN = 8;
+const BATTLE_HP_BAR_MAX = 480;
+const BATTLE_HP_BAR_MIN = 84;
 
-/** 一条血条切成几格。 */
+/** 一条血条切成几格：条长 ÷（格宽 + 缝宽），最少留两格。 */
 export function battleHpCellCount(barWidth: number): number {
-  return Math.max(BATTLE_HP_CELL_COUNT_MIN, Math.round(barWidth / BATTLE_HP_CELL));
+  return Math.max(2, Math.round(barWidth / (BATTLE_HP_CELL + BATTLE_HP_CELL_GAP)));
 }
 
 /**

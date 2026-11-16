@@ -2107,7 +2107,7 @@ export function TrialGame(props: TrialGameProps) {
                             </select>
                           ) : null}
                           {pick.a === "tactic" ? (
-                            <span className="flex flex-wrap gap-1.5">
+                            <span className="flex max-h-28 flex-wrap gap-1.5 overflow-y-auto pr-1">
                               {unit.tactics.map((tactic) => {
                                 const def = SAGA_TACTIC_BY_ID.get(tactic);
                                 const cost = def?.cost ?? 1;

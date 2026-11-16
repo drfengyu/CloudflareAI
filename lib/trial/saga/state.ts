@@ -209,6 +209,14 @@ export function expToNext(level: number): number {
   return 30 + Math.max(1, level) * 25;
 }
 
+/**
+ * 同等级我方兵力基准（关羽曲线）：1 级 400、30 级 1096。
+ * v13 起敌军兵力按这条基准 × 1.2~6 倍给，不再各按武将自己的 baseTroops 开小差。
+ */
+export function troopBaseline(level: number): number {
+  return 400 + Math.max(0, Math.trunc(level) - 1) * 24;
+}
+
 export function grantGeneralExp(state: SagaGeneralState, amount: number): number {
   const gain = Math.max(0, Math.trunc(amount));
   if (gain <= 0) return 0;
