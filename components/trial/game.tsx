@@ -1992,6 +1992,9 @@ export function TrialGame(props: TrialGameProps) {
                         <span className="text-[11px] tabular-nums text-amber-100/80">
                           攻 {battleAttackPower(unit)}
                         </span>
+                        <span className="text-[11px] tabular-nums text-emerald-100/75">
+                          防 {unit.defense}
+                        </span>
                         <span className="text-[11px] tabular-nums text-sky-200/80">
                           策 {unit.tacticPoints}
                         </span>

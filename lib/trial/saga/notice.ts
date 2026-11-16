@@ -28,10 +28,23 @@ export interface SagaMaintenanceWindow {
 }
 
 /** 游戏内公告版本号（与站点版本对齐）。 */
-export const SAGA_NOTICE_VERSION = "0.85.0";
+export const SAGA_NOTICE_VERSION = "0.86.0";
 
 /** 最新公告：按版本从新到旧。 */
 export const SAGA_NOTICES: SagaNoticeEntry[] = [
+  {
+    id: "notice-0.86.0",
+    version: "0.86.0",
+    date: "2026-11-16",
+    kind: "update",
+    title: "战斗画面重排",
+    lines: [
+      "两军各靠画面两侧列阵，中间空出对峙的位置；营寨与城墙抬到画面上部，武将站在营盘中间的校场。",
+      "武将头顶名签补上防御：名字后面是兵种、攻击、防御与剩余兵力。",
+      "兵力条加长加粗，带兵量差一眼就能看出来；我方从左边掉、敌军从右边掉。",
+      "五人满编改排两列交错，名签不再压住下一位的头。",
+    ],
+  },
   {
     id: "notice-0.85.0",
     version: "0.85.0",

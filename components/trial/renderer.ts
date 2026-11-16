@@ -1409,35 +1409,80 @@ function battleRandom(seed: number): () => number {
   };
 }
 
-/** 头顶血条的满格长度：兵力上限越高条越长，最少 30px、最多 76px。 */
+/** 头顶血条的满格长度：兵力上限越高条越长，最少 84px、最多 140px。 */
 export function battleHpBarWidth(maxTroops: number, widestMax: number): number {
   const ratio = widestMax > 0 ? Math.max(0, Math.min(1, maxTroops / widestMax)) : 1;
-  return Math.round(30 + 46 * ratio);
+  return Math.round(84 + 56 * ratio);
 }
 
-/** 两军各排成一列，从上往下就位；人多时整体缩小，避免队列挤出屏幕。 */
+/**
+ * 两军各排成一列，从上往下就位；人少时队列疏开，五人满编时改排两列交错。
+ *
+ * 队列贴向画面两侧（中间留出对峙空当），纵向落在内景（木栅 / 城墙）下方、
+ * 地面之上的那块校场里，所以武将是「站在营地中间」而不是压在前景陈设上。
+ *
+ * 五个人的时候单列排不下：头顶的名字签 + 血条约 70~80 px，单列纵向间距只有 53 px，
+ * 名字签会盖住下一个人的头。所以 5 人改排「外列 / 内列」两列，奇偶交错上下错半格，
+ * 每列三人的间距与名字签高度对得上，点击命中框也不会挤在一起。
+ */
 function unitSlots(count: number, side: "player" | "enemy", k = 1, seed = 0): UnitSlot[] {
   const slots: UnitSlot[] = [];
   const scale =
     count >= 5 ? 0.52 : count === 4 ? 0.58 : count === 3 ? 0.66 : count === 2 ? 0.76 : 0.86;
   const rand = battleRandom(seed ^ (side === "player" ? 0x9e3779b9 : 0x85ebca6b));
-  // 顶部不再挂两军面板，队列整体上移，给头顶血条与名字签留出空档。
-  const top = 152;
-  const bottom = 390;
-  const step = count > 1 ? Math.min(56, (bottom - top) / (count - 1)) : 0;
+  const facing = side === "player" ? 1 : -1;
+  // 内景上移之后，队列往下挪一档，头顶血条与名字签正好落在栅栏前沿之外。
+  const top = 216;
+  const bottom = 430;
+  const zipped = count >= 5;
+
+  if (zipped) {
+    // 外列靠画面两侧，内列往中间收一档；两列的纵向节点错开半个间距。
+    const perColumn = Math.ceil(count / 2);
+    const step = (bottom - top) / (perColumn - 1);
+    for (let i = 0; i < count; i++) {
+      const column = i % 2;
+      const row = Math.floor(i / 2);
+      const jitterX = (rand() - 0.5) * 10;
+      const jitterY = (rand() - 0.5) * 6;
+      const outerX = 146;
+      const innerX = 268;
+      const baseX = column === 0 ? outerX : innerX;
+      slots.push({
+        x: facing === 1 ? baseX + jitterX : VIEW_W - baseX + jitterX,
+        y: (top + row * step + column * step * 0.5 + jitterY) * k,
+        scale,
+      });
+    }
+    return slots;
+  }
+
+  const step = count > 1 ? (bottom - top) / (count - 1) : 0;
   const start = top + ((bottom - top) - step * (count - 1)) / 2;
   for (let i = 0; i < count; i++) {
     // 阵位带一点按种子固定的错落，不同营地的队列不会像复制粘贴
-    const jitterX = (rand() - 0.5) * 18;
+    const jitterX = (rand() - 0.5) * 16;
     const jitterY = (rand() - 0.5) * 10;
-    const stagger = count >= 4 ? (i % 2 === 0 ? -20 : 20) : 0;
+    const stagger = count >= 4 ? (i % 2 === 0 ? -18 : 18) : 0;
     slots.push({
-      x: side === "player" ? 258 + stagger + jitterX : 702 - stagger + jitterX,
+      x: side === "player" ? 208 + stagger + jitterX : 752 - stagger + jitterX,
       y: (start + i * step + jitterY) * k,
       scale,
     });
   }
   return slots;
+}
+
+/** 阵位对外只读：点击命中、飘字、印章与绘制共用同一份摆位，避免各自算偏移。 */
+export function battleUnitSlots(
+  battle: SagaBattleState,
+  view: SagaView,
+): { party: UnitSlot[]; enemies: UnitSlot[] } {
+  const seed = battleLayoutSeed(battle);
+  return {
+    party: unitSlots(battle.party?.length ?? 0, "player", view.k, seed),
+    enemies: unitSlots(battle.enemies?.length ?? 0, "enemy", view.k, seed),
+  };
 }
 
 const SQUAD_ARMOR_TIER: Record<string, 1 | 2 | 3> = {
@@ -1730,7 +1775,7 @@ export function battleEnemyAtPoint(
   x: number,
   y: number,
 ): number {
-  const slots = unitSlots(battle.enemies.length, "enemy", view.k, battleLayoutSeed(battle));
+  const slots = battleUnitSlots(battle, view).enemies;
   let best = -1;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (let index = 0; index < slots.length; index++) {
@@ -2157,19 +2202,21 @@ function paintCampVenue(
   rand: () => number,
 ): void {
   const gy = view.groundY;
-  const baseY = gy - 168;
-  const gateX = 260 + rand() * 440;
-  const gateW = 84;
+  // 内景整体抬到画面上部：栅栏与帐篷在上，武将在下方校场中间，前景陈设只压画面下沿。
+  const baseY = gy - 244;
+  // 寨门略宽，营盘横向铺满整幅画面（两端出血），中间留给两军对峙。
+  const gateW = 108;
+  const gateX = 300 + rand() * 360;
 
   for (let i = 0; i < 3; i++) {
-    const tx = 110 + i * 290 + rand() * 90;
-    if (Math.abs(tx - gateX) < 110) continue;
+    const tx = 74 + i * 366 + rand() * 80;
+    if (Math.abs(tx - gateX) < 130) continue;
     paintCampTent(ctx, tx, baseY - 30, 0.9 + rand() * 0.28, rand() > 0.5);
   }
-  paintCampWatchtower(ctx, time, 862 + rand() * 36, baseY);
+  paintCampWatchtower(ctx, time, 890 + rand() * 30, baseY);
 
-  // 木栅：尖头木桩逐根歪一点，门洞处留空
-  for (let x = -14; x < view.w + 14; x += 30) {
+  // 木栅：尖头木桩逐根歪一点，门洞处留空；左右各铺出画面，营盘看起来比画布还宽
+  for (let x = -26; x < view.w + 26; x += 30) {
     if (Math.abs(x - gateX) < gateW / 2 + 6) continue;
     const h = 56 + rand() * 26;
     const lean = (rand() - 0.5) * 4;
@@ -2186,8 +2233,8 @@ function paintCampVenue(
     ctx.fillRect(x + 2, baseY - h + 16, 4, h - 16);
   }
   ctx.fillStyle = "#5b4530";
-  ctx.fillRect(-10, baseY - 34, view.w + 20, 7);
-  ctx.fillRect(-10, baseY - 62, view.w + 20, 6);
+  ctx.fillRect(-30, baseY - 34, view.w + 60, 7);
+  ctx.fillRect(-30, baseY - 62, view.w + 60, 6);
 
   // 寨门
   ctx.fillStyle = "#2b2116";
@@ -2205,17 +2252,17 @@ function paintCampVenue(
   paintHangingLantern(ctx, time, gateX, baseY - 108, 1);
 
   // 栅上号旗
-  const bannerXs = [90 + rand() * 200, 640 + rand() * 220];
+  const bannerXs = [58 + rand() * 150, 700 + rand() * 180];
   for (const bx of bannerXs) {
-    if (Math.abs(bx - gateX) < 100) continue;
+    if (Math.abs(bx - gateX) < 110) continue;
     paintVenueBanner(ctx, time, bx, baseY - 24, 88, "#7d2f2a");
   }
 
-  // 近景：篝火、兵器架、粮箱，落在队列脚下，不遮挡武将
-  paintCampfire(ctx, time, 118, gy - 46);
-  paintWeaponRack(ctx, 838, gy - 22);
-  paintSupplyCrate(ctx, 196, gy - 26, 1);
-  paintSupplyCrate(ctx, 782, gy - 24, 0.72);
+  // 近景：篝火、兵器架、粮箱只压两侧下沿，中间整块留给武将队列
+  paintCampfire(ctx, time, 66, gy - 42);
+  paintWeaponRack(ctx, 892, gy - 20);
+  paintSupplyCrate(ctx, 128, gy - 24, 1);
+  paintSupplyCrate(ctx, 846, gy - 22, 0.72);
 }
 
 /** 城墙马面：比墙体略高出一截，顶部压一片飞檐。 */
@@ -2244,7 +2291,8 @@ function paintCityVenue(
   rand: () => number,
 ): void {
   const gy = view.groundY;
-  const baseY = gy - 166;
+  // 与营寨一致：城墙压到画面上部，城下那片空地才是两军列阵的地方。
+  const baseY = gy - 226;
   const wallH = 92;
   const wallTop = baseY - wallH;
   const gateX = 400 + rand() * 140;
@@ -2383,21 +2431,22 @@ function paintBattleVenue(
   const gy = view.groundY;
   const rand = battleRandom(seed ^ 0x51ed270b);
 
-  // 战场台地：上缘融进远山，下缘淡进地面，武将队列就站在这一带
-  const dirt = ctx.createLinearGradient(0, gy - 256, 0, gy - 26);
+  // 战场台地：上缘融进远山，下缘淡进地面，武将队列就站在这一带。
+  // 左右各铺出画面 40 px，营盘 / 城下空地读起来比画幅更宽，两军靠两侧也不贴边。
+  const dirt = ctx.createLinearGradient(0, gy - 300, 0, gy - 20);
   dirt.addColorStop(0, "rgba(92,72,48,0)");
-  dirt.addColorStop(0.16, "rgba(92,72,48,0.62)");
-  dirt.addColorStop(0.62, "rgba(66,52,35,0.88)");
+  dirt.addColorStop(0.18, "rgba(92,72,48,0.62)");
+  dirt.addColorStop(0.6, "rgba(66,52,35,0.88)");
   dirt.addColorStop(1, "rgba(46,37,26,0)");
   ctx.fillStyle = dirt;
-  ctx.fillRect(0, gy - 256, view.w, 230);
+  ctx.fillRect(-40, gy - 300, view.w + 80, 290);
 
   if (venue === "city") paintCityVenue(ctx, time, view, rand);
   else paintCampVenue(ctx, time, view, rand);
 
   // 章节色雾压一层，石墙木栅才不会和天候脱节
   ctx.fillStyle = mood.fieldTint;
-  ctx.fillRect(0, gy - 256, view.w, 230);
+  ctx.fillRect(0, gy - 300, view.w, 290);
 }
 
 export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintOptions): void {
@@ -2472,8 +2521,7 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
   paintBattleVenue(ctx, time, view, mood, layoutSeed, battle.boss ? "city" : "camp");
 
   // 阵位只跟内景种子有关；名字签、兵力条都画在各自头顶，不再需要顶部面板。
-  const playerSlots = unitSlots(battle.party.length, "player", view.k, layoutSeed);
-  const enemySlots = unitSlots(battle.enemies.length, "enemy", view.k, layoutSeed);
+  const { party: playerSlots, enemies: enemySlots } = battleUnitSlots(battle, view);
 
   const drawUnit = (
     unit: typeof battle.party[number],
@@ -2612,20 +2660,21 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     unit: typeof battle.party[number],
     slot: UnitSlot,
     side: "player" | "enemy",
+    zipped: boolean,
   ): void => {
     // 败将已经有「败」字印章，头顶不再留一条空血条。
     if (unit.downed) return;
     const scale = unit.boss ? slot.scale * 1.2 : slot.scale;
     const barW = battleHpBarWidth(unit.maxTroops, widestMax);
-    const barH = 6;
+    const barH = 9;
     const barX = slot.x - barW / 2;
-    const barY = slot.y - 120 * scale;
+    const barY = slot.y - 106 * scale;
     const ratio = Math.max(0, Math.min(1, unit.troops / unit.maxTroops));
-    ctx.fillStyle = "rgba(12,10,8,0.75)";
-    roundRect(ctx, barX - 1, barY - 1, barW + 2, barH + 2, 3);
+    ctx.fillStyle = "rgba(12,10,8,0.78)";
+    roundRect(ctx, barX - 1.5, barY - 1.5, barW + 3, barH + 3, 4);
     ctx.fill();
-    ctx.strokeStyle = side === "player" ? "rgba(214,178,116,0.85)" : "rgba(210,120,96,0.85)";
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = side === "player" ? "rgba(214,178,116,0.9)" : "rgba(210,120,96,0.9)";
+    ctx.lineWidth = 1.4;
     ctx.stroke();
     if (ratio > 0) {
       ctx.fillStyle = side === "player" ? "#c9a15a" : "#b5533d";
@@ -2637,26 +2686,46 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
         barY,
         fillW,
         barH,
-        2,
+        3,
+      );
+      ctx.fill();
+      // 条面高光，加粗之后不至于显成一条平涂色块
+      ctx.fillStyle = "rgba(255,238,206,0.28)";
+      roundRect(
+        ctx,
+        side === "player" ? barX : barX + barW - fillW,
+        barY + 1,
+        Math.max(2, fillW),
+        2.4,
+        1.4,
       );
       ctx.fill();
     }
-    ctx.font = uiFont(10);
+    ctx.font = uiFont(11);
     const marks = `${unit.guard ? "守" : ""}${unit.buff > 0 ? "鼓" : ""}${unit.confused > 0 ? "乱" : ""}`;
     const troops = Math.max(0, Math.round(unit.troops));
-    const label = `${unit.name}${marks ? `·${marks}` : ""}【${SAGA_CORPS_LABEL[unit.corps]}】 攻${battleAttackPower(unit)} 兵${troops}/${unit.maxTroops}`;
+    // 名签口径与「敌情」面板一致：攻取 battleAttackPower，防与武 / 智 / 速一样取基础防御值。
+    const label = `${unit.name}${marks ? `·${marks}` : ""}【${SAGA_CORPS_LABEL[unit.corps]}】攻${battleAttackPower(unit)} 防${unit.defense} 兵${troops}/${unit.maxTroops}`;
     const textW = ctx.measureText(label).width;
-    const labelX = side === "player" ? barX : barX + barW;
-    const bgX = side === "player" ? barX - 4 : barX + barW - textW - 4;
-    ctx.fillStyle = "rgba(12,10,8,0.66)";
-    roundRect(ctx, bgX, barY - 15, textW + 8, 13, 3);
+    // 两列交错的密集阵把名签摆在血条正中上方，免得两列的名签在同一行撞车。
+    const centered = zipped;
+    const labelX = centered ? slot.x : side === "player" ? barX : barX + barW;
+    const bgX = centered ? slot.x - textW / 2 - 5 : side === "player" ? barX - 5 : barX + barW - textW - 5;
+    ctx.fillStyle = "rgba(12,10,8,0.7)";
+    roundRect(ctx, bgX, barY - 17, textW + 10, 15, 4);
     ctx.fill();
     ctx.fillStyle = "#f0e2c4";
-    ctx.textAlign = side === "player" ? "left" : "right";
-    ctx.fillText(label, labelX, barY - 5);
+    ctx.textAlign = centered ? "center" : side === "player" ? "left" : "right";
+    ctx.fillText(label, labelX, barY - 6);
   };
-  battle.party.forEach((unit, index) => paintUnitBar(unit, playerSlots[index], "player"));
-  battle.enemies.forEach((unit, index) => paintUnitBar(unit, enemySlots[index], "enemy"));
+  const zippedParty = battle.party.length >= 5;
+  const zippedEnemies = battle.enemies.length >= 5;
+  battle.party.forEach((unit, index) =>
+    paintUnitBar(unit, playerSlots[index], "player", zippedParty),
+  );
+  battle.enemies.forEach((unit, index) =>
+    paintUnitBar(unit, enemySlots[index], "enemy", zippedEnemies),
+  );
 
   // 战斗特效
   if (currentEvent) {

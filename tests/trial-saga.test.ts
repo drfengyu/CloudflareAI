@@ -91,7 +91,12 @@ import {
   normalizeTrialSave,
 } from "../lib/trial/saga/state";
 import { applyRecruitOffer, battleAttackPower, battleTurnOrder, corpsCounterFactor, resolveBattleRound, startBattle, startEncounterBattle } from "../lib/trial/saga/battle";
-import { battleEnemyAtPoint, battleHpBarWidth, makeSagaView } from "../components/trial/renderer";
+import {
+  battleEnemyAtPoint,
+  battleHpBarWidth,
+  battleUnitSlots,
+  makeSagaView,
+} from "../components/trial/renderer";
 import {
   SAGA_TRAINING_ITEM_ID,
   SAGA_TRAINING_TICKETS_PER_LEVEL,
@@ -1328,10 +1333,10 @@ test("战斗内景：头顶血条按兵力上限分长短，攻击力与普攻�
   const widths = battle.party.map((unit) => battleHpBarWidth(unit.maxTroops, widest));
   assert.equal(new Set(widths).size > 1, true, "不同兵力上限的武将初始血条长度不同");
   for (const width of widths) {
-    assert.equal(width >= 30 && width <= 76, true, "条长落在 30~76px");
+    assert.equal(width >= 84 && width <= 140, true, "条长落在 84~140px");
   }
-  assert.equal(battleHpBarWidth(widest, widest), 76);
-  assert.equal(battleHpBarWidth(0, widest), 30);
+  assert.equal(battleHpBarWidth(widest, widest), 140);
+  assert.equal(battleHpBarWidth(0, widest), 84);
   const hero = battle.party[0];
   assert.equal(battleAttackPower(hero), hero.force + hero.weaponAtk + hero.level * 2, "我方攻击力口径");
   const foe = battle.enemies[0];
@@ -2185,14 +2190,16 @@ test("训练购买记录：解析留档，重放按购买位置抬到目标等�
 
 test("战斗点选：人多时命中框重叠，按距离取最近的敌将", () => {
   const view = makeSagaView(540);
-  // 5 个敌将时纵向间距 56、横向错位 40，命中框仍会互相覆盖。
+  // 5 个敌将时纵向间距 46.5、左右错位 36，命中框仍会互相覆盖。
   const battle = {
     nodeIndex: 0,
     party: [],
     enemies: Array.from({ length: 5 }, () => ({})),
   } as unknown as SagaBattleState;
-  assert.equal(battleEnemyAtPoint(view, battle, 722, 160), 0, "点第 1 个敌将");
-  assert.equal(battleEnemyAtPoint(view, battle, 682, 277), 3, "点第 4 个敌将，不能被前面的框截走");
+  const { enemies } = battleUnitSlots(battle, view);
+  const face = (index: number) => enemies[index].y - 40 * enemies[index].scale;
+  assert.equal(battleEnemyAtPoint(view, battle, enemies[0].x, face(0)), 0, "点第 1 个敌将");
+  assert.equal(battleEnemyAtPoint(view, battle, enemies[3].x, face(3)), 3, "点第 4 个敌将，不能被前面的框截走");
   assert.equal(battleEnemyAtPoint(view, battle, 20, 20), -1, "点空地不选人");
 });
 
