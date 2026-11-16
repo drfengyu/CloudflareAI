@@ -2574,20 +2574,31 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     ctx.stroke();
     if (ratio > 0) {
       ctx.fillStyle = side === "player" ? "#c9a15a" : "#b5533d";
-      roundRect(ctx, barX, barY, Math.max(3, barW * ratio), barH, 2);
+      // 我方血条左对齐、从左边掉；敌军右对齐、从右边掉，两军对峙时一眼看清各剩多少。
+      const fillW = Math.max(3, barW * ratio);
+      roundRect(
+        ctx,
+        side === "player" ? barX : barX + barW - fillW,
+        barY,
+        fillW,
+        barH,
+        2,
+      );
       ctx.fill();
     }
-    ctx.textAlign = "center";
     ctx.font = uiFont(10);
     const marks = `${unit.guard ? "守" : ""}${unit.buff > 0 ? "鼓" : ""}${unit.confused > 0 ? "乱" : ""}`;
     const troops = Math.max(0, Math.round(unit.troops));
     const label = `${unit.name}${marks ? `·${marks}` : ""} 攻${battleAttackPower(unit)} 兵${troops}/${unit.maxTroops}`;
     const textW = ctx.measureText(label).width;
+    const labelX = side === "player" ? barX : barX + barW;
+    const bgX = side === "player" ? barX - 4 : barX + barW - textW - 4;
     ctx.fillStyle = "rgba(12,10,8,0.66)";
-    roundRect(ctx, slot.x - textW / 2 - 4, barY - 15, textW + 8, 13, 3);
+    roundRect(ctx, bgX, barY - 15, textW + 8, 13, 3);
     ctx.fill();
     ctx.fillStyle = "#f0e2c4";
-    ctx.fillText(label, slot.x, barY - 5);
+    ctx.textAlign = side === "player" ? "left" : "right";
+    ctx.fillText(label, labelX, barY - 5);
   };
   battle.party.forEach((unit, index) => paintUnitBar(unit, playerSlots[index], "player"));
   battle.enemies.forEach((unit, index) => paintUnitBar(unit, enemySlots[index], "enemy"));

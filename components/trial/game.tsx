@@ -100,6 +100,7 @@ import type {
   TrialSave,
 } from "@/lib/trial/saga/types";
 import type { ActiveTrialRun, TrialSettlement } from "@/lib/trial/store";
+import { SAGA_RULESET } from "@/lib/trial/saga/types";
 import type { ActivityCouponView } from "@/lib/activity/coupons";
 import {
   autoSaveTrialAction,
@@ -364,9 +365,12 @@ export function TrialGame(props: TrialGameProps) {
     });
   }, [save]);
 
+  /** 界面上的属性 / 兵力一律按当前对局的规则档算：图鉴、编队、出战面板与战场不能各说各话。 */
+  const uiRules = state?.rules ?? run?.rules ?? SAGA_RULESET;
+
   /** 上阵武将当前兵力：没出城时就是满编；行军中的残兵来自重放状态。 */
   const troopRows = save.party.map((general) => {
-    const stats = generalStats(general);
+    const stats = generalStats(general, save.gearLevels, uiRules);
     const max = Math.max(1, Math.round(stats.maxTroops * (1 + (state?.buffs.troopPct ?? 0) / 100)));
     const current = Math.min(max, state?.partyTroops[general.id] ?? max);
     return { id: general.id, name: generalName(general.id), current, max };
@@ -2142,10 +2146,10 @@ export function TrialGame(props: TrialGameProps) {
                           );
                         })}
                       </div>
-                      <PartyList save={save} />
+                      <PartyList save={save} rules={uiRules} />
                     </div>
                   ) : (
-                    <DexGrid save={save} gearById={gearById} />
+                    <DexGrid save={save} gearById={gearById} rules={uiRules} />
                   )}
                 </div>
               ) : null}
@@ -2497,7 +2501,7 @@ export function TrialGame(props: TrialGameProps) {
                       <div className="grid gap-2 sm:grid-cols-2">
                         {[...save.party, ...save.reserve].map((member) => {
                           const def = SAGA_GENERAL_BY_ID.get(member.id);
-                          const stats = generalStats(member);
+                          const stats = generalStats(member, save.gearLevels, uiRules);
                           const active = save.party.some((row) => row.id === member.id);
                           return (
                             <div key={member.id} className="rounded-lg border border-border p-2.5 text-sm">
@@ -2728,7 +2732,7 @@ export function TrialGame(props: TrialGameProps) {
               ) : null}
 
               {panel === "status" ? (
-                <StatusPanel save={save} state={state} rules={run?.rules ?? 2} />
+                <StatusPanel save={save} state={state} rules={uiRules} />
               ) : null}
 
               {panel === "tavern" ? (
@@ -3066,13 +3070,13 @@ function StatusPanel({
 
       <section className="space-y-2">
         <p className="text-sm font-medium">上阵武将</p>
-        <StatusRoster members={save.party} active state={state} rules={rules} />
+        <StatusRoster members={save.party} active state={state} rules={rules} gearLevels={save.gearLevels} />
       </section>
 
       {save.reserve.length > 0 ? (
         <section className="space-y-2">
           <p className="text-sm font-medium">后备武将</p>
-          <StatusRoster members={save.reserve} active={false} state={state} rules={rules} />
+          <StatusRoster members={save.reserve} active={false} state={state} rules={rules} gearLevels={save.gearLevels} />
         </section>
       ) : null}
 
@@ -3133,17 +3137,19 @@ function StatusRoster({
   active,
   state,
   rules,
+  gearLevels,
 }: {
   members: TrialSave["party"];
   active: boolean;
   state: SagaReplayState | null;
   rules: number;
+  gearLevels: Record<string, number>;
 }) {
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       {members.map((member) => {
         const def = SAGA_GENERAL_BY_ID.get(member.id);
-        const stats = generalStats(member);
+        const stats = generalStats(member, gearLevels, rules);
         const max = Math.max(1, Math.round(stats.maxTroops * (1 + (state?.buffs.troopPct ?? 0) / 100)));
         const current = Math.min(max, state?.partyTroops[member.id] ?? max);
         const ratio = max > 0 ? current / max : 1;
@@ -3208,12 +3214,12 @@ function StatusRoster({
   );
 }
 
-function PartyList({ save }: { save: TrialSave }) {
+function PartyList({ save, rules = SAGA_RULESET }: { save: TrialSave; rules?: number }) {
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       {[...save.party, ...save.reserve].map((member) => {
         const def = SAGA_GENERAL_BY_ID.get(member.id);
-        const stats = generalStats(member);
+        const stats = generalStats(member, save.gearLevels, rules);
         const active = save.party.some((row) => row.id === member.id);
         const attack = stats.force + stats.weaponAtk + member.level * 2;
         return (
@@ -3264,9 +3270,11 @@ function PartyList({ save }: { save: TrialSave }) {
 function DexGrid({
   save,
   gearById,
+  rules = SAGA_RULESET,
 }: {
   save: TrialSave;
   gearById: Record<string, { weapon: string | null; armor: string | null }>;
+  rules?: number;
 }) {
   const owned = new Set([...save.party, ...save.reserve].map((member) => member.id));
   const met = new Set(save.met);
@@ -3279,6 +3287,11 @@ function DexGrid({
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map((def) => {
           const known = met.has(def.id) || owned.has(def.id);
+          // 麾下武将按实际等级、强化算实际属性与兵力；只见过没招到的仍看基础值。
+          const member = owned.has(def.id)
+            ? [...save.party, ...save.reserve].find((row) => row.id === def.id)
+            : undefined;
+          const stats = member ? generalStats(member, save.gearLevels, rules) : null;
           return (
             <div
               key={def.id}
@@ -3308,8 +3321,15 @@ function DexGrid({
                   {known ? (
                     <>
                       <p className="mt-0.5 text-muted-foreground">
-                        武 {def.force} · 智 {def.intellect} · 防 {def.defense} · 速 {def.speed}
+                        {stats
+                          ? `武 ${stats.force} · 智 ${stats.intellect} · 防 ${stats.defense} · 速 ${stats.speed} · 兵力 ${stats.maxTroops}`
+                          : `武 ${def.force} · 智 ${def.intellect} · 防 ${def.defense} · 速 ${def.speed}（基础）`}
                       </p>
+                      {stats ? (
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          Lv{member?.level ?? 1} · 兵器 {stats.weaponAtk} · 甲胄 {stats.armorDef}
+                        </p>
+                      ) : null}
                       <p className="mt-0.5 text-muted-foreground">
                         {def.tactics.length > 0
                           ? def.tactics.map((tactic) => SAGA_TACTIC_BY_ID.get(tactic)?.name).join(" / ")
