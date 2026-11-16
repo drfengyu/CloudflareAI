@@ -201,6 +201,20 @@
 `generalStats(general, save.gearLevels, state.rules)` 算——等级成长、铁匠铺强化、
 当前规则档三样都算进去，图鉴里麾下武将直接显示实际四维、兵力和兵器/甲胄加成；
 只见过没招到的敌将仍按基础值标注「（基础）」。
+## 公告与维护（v0.81.0）
+
+游戏内「公告」入口（工具栏，未读带红点）打开一页：维护安排 + 按版本倒序的更新说明。
+
+- 数据全在 `lib/trial/saga/notice.ts`：
+  `SAGA_NOTICES`（id / version / date / kind / title / lines，按版本从新到旧）、
+  `SAGA_MAINTENANCE`（带 +08:00 偏移的 start / end / note，null 表示暂无计划）、
+  `maintenancePhaseAt(now, window)` → upcoming / active / done / null。
+- 维护窗口两端都算在内；时间解析失败或窗口缺失一律按「不在维护」。
+- 已读按「最新一条公告 id」存 `localStorage`（键 `trial-saga-notice-seen`），
+  通过 `useSyncExternalStore` 订阅，读写都在本机，不参与结算、不影响存档。
+
+改公告只动数据文件；要真停机，把 `SAGA_MAINTENANCE` 填成计划窗口即可，界面会自动显示
+「计划中 / 维护中 / 已结束」，无需改组件。
 ## 剧情分支：八章各一处岔路（v0.79.0）
 
 - **一处岔路、两条路只能走一条**：每章在初战之后多出一对营地（`SagaNode.branch = { group, option }`），

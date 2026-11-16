@@ -534,9 +534,12 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.80.2（2026-11-16，图鉴口径与血条对齐）
+**当前版本**：v0.81.0（2026-11-16，游戏内公告与维护）
 **下一版本**：待定
 
+- v0.81.0 公告进游戏：`lib/trial/saga/notice.ts` 存公告与维护窗口（纯数据 + `maintenancePhaseAt`），
+  试炼工具栏「公告」入口打开一页（维护卡 + 倒序版本说明），未读红点按最新公告 id 记在本机
+  localStorage；要停机只改 `SAGA_MAINTENANCE`，组件不动。
 - v0.80.2 界面与战场同口径：图鉴 / 编队 / 队伍 / 出战面板的 `generalStats` 补传
   `save.gearLevels` 与 `state.rules`（原先漏了强化与规则档，显示旧成长、未强化值）；
   图鉴麾下武将显示实际四维＋兵力＋兵器/甲胄。战斗头顶血条我方左对齐、敌军右对齐。

@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
+  Bell,
   Coins,
   Flag,
   Home,
@@ -101,6 +102,13 @@ import type {
 } from "@/lib/trial/saga/types";
 import type { ActiveTrialRun, TrialSettlement } from "@/lib/trial/store";
 import { SAGA_RULESET } from "@/lib/trial/saga/types";
+import {
+  SAGA_MAINTENANCE,
+  SAGA_NOTICES,
+  SAGA_NOTICE_VERSION,
+  latestNoticeId,
+  maintenancePhaseAt,
+} from "@/lib/trial/saga/notice";
 import type { ActivityCouponView } from "@/lib/activity/coupons";
 import {
   autoSaveTrialAction,
@@ -135,7 +143,42 @@ import {
 } from "./scenes";
 import { WalkTown } from "./town";
 
-type PanelId = FieldFacilityId | "camp" | "army" | "status" | "dex" | null;
+type PanelId = FieldFacilityId | "camp" | "army" | "status" | "dex" | "notice" | null;
+
+/** 公告已读标记：按「最新一条公告 id」记在本机。 */
+const NOTICE_SEEN_KEY = "trial-saga-notice-seen";
+const NOTICE_SEEN_EVENT = "trial-saga-notice-seen-change";
+
+/** 本机还没读过最新一条公告。 */
+function noticeUnreadSnapshot(): boolean {
+  try {
+    const latest = latestNoticeId();
+    if (!latest) return false;
+    return window.localStorage.getItem(NOTICE_SEEN_KEY) !== latest;
+  } catch {
+    return false;
+  }
+}
+
+function subscribeNoticeSeen(onChange: () => void): () => void {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(NOTICE_SEEN_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(NOTICE_SEEN_EVENT, onChange);
+  };
+}
+
+/** 打开公告即记已读；存不了本机也照常看公告。 */
+function markNoticeSeen(): void {
+  try {
+    const latest = latestNoticeId();
+    if (latest) window.localStorage.setItem(NOTICE_SEEN_KEY, latest);
+  } catch {
+    // 隐私模式下 localStorage 会抛，忽略即可。
+  }
+  window.dispatchEvent(new Event(NOTICE_SEEN_EVENT));
+}
 type BattleAction = "attack" | "guard" | "tactic" | "item" | "recruit";
 
 interface BattlePick {
@@ -305,8 +348,16 @@ export function TrialGame(props: TrialGameProps) {
   const [busy, setBusy] = useState<string | null>(null);
   const [settlement, setSettlement] = useState<TrialSettlement | null>(null);
   const [banner, setBanner] = useState<{ kind: "won" | "lost"; name: string; gold: number; exp: number } | null>(null);
+  /** 公告红点：只读本机已读记录，服务端渲染时按已读处理。 */
+  const noticeUnread = useSyncExternalStore(subscribeNoticeSeen, noticeUnreadSnapshot, () => false);
   /** 城中街道场景：进城后把大地图盖住，铺子从街景里进。 */
   const [inTown, setInTown] = useState(false);
+  /** 打开版本公告：先把城景/战场让开，再记已读。 */
+  const openNotice = () => {
+    setInTown(false);
+    setPanel("notice");
+    markNoticeSeen();
+  };
   /** 剧情对话浮层：开场、阵前、平定、乡野、酒馆与营帐议事都走这里。 */
   const [dialogue, setDialogue] = useState<SagaScene | null>(null);
   /** 纯前端见闻：走访过的乡野点位与看过的剧情，只存本机，不参与结算。 */
@@ -1534,7 +1585,9 @@ export function TrialGame(props: TrialGameProps) {
         : battle.battle.log.slice(-3)
     : [];
   const panelTitle =
-    panel === "dex"
+    panel === "notice"
+      ? "版本公告"
+      : panel === "dex"
       ? "武将图鉴"
       : panel === "status"
         ? "军中一览"
@@ -2090,6 +2143,8 @@ export function TrialGame(props: TrialGameProps) {
               </button>
             </div>
             <div className={PANEL_BODY}>
+              {panel === "notice" ? <NoticeBoard /> : null}
+
               {panel === "record" ? (
                 <div className="space-y-3">
                   <NpcIntro npcId="recordkeeper" />
@@ -3030,6 +3085,13 @@ export function TrialGame(props: TrialGameProps) {
           <ScrollText className="h-3.5 w-3.5" />
           图鉴
         </Button>
+        <Button variant="outline" size="sm" onClick={openNotice}>
+          <Bell className="h-3.5 w-3.5" />
+          公告
+          {noticeUnread ? (
+            <span className="ml-1 inline-block h-1.5 w-1.5 rounded-full bg-red-500" aria-label="有未读公告" />
+          ) : null}
+        </Button>
       </div>
 
       <p className="max-w-3xl text-xs text-muted-foreground">
@@ -3753,6 +3815,80 @@ function SettlementCard({
             不急着出发也可以：点「回到城镇」整理装备，下次再出发仍从{next.town}开始，等级、金币与装备都已存好。
           </p>
         ) : null}
+      </div>
+    </div>
+  );
+}
+
+const NOTICE_KIND_LABEL: Record<string, string> = {
+  update: "版本更新",
+  maintain: "维护",
+  event: "活动",
+};
+
+const MAINTENANCE_PHASE_LABEL: Record<string, { text: string; className: string }> = {
+  upcoming: { text: "计划中", className: "text-sky-500" },
+  active: { text: "维护中", className: "text-red-500" },
+  done: { text: "已结束", className: "text-muted-foreground" },
+};
+
+/** 版本公告：更新内容、维护安排与历史版本都收在这一页。 */
+function NoticeBoard() {
+  const phase = maintenancePhaseAt(new Date());
+  const window = SAGA_MAINTENANCE;
+  const moment = (iso: string): string => iso.replace("T", " ").slice(0, 16);
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="rounded-lg border border-border p-2.5">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-medium">维护安排</span>
+          {phase ? (
+            <span className={MAINTENANCE_PHASE_LABEL[phase].className}>
+              {MAINTENANCE_PHASE_LABEL[phase].text}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">暂无计划</span>
+          )}
+        </div>
+        {window ? (
+          <>
+            <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+              {moment(window.start)} ~ {moment(window.end)}（北京时间）
+            </p>
+            <p className="mt-1 text-xs">{window.note}</p>
+          </>
+        ) : (
+          <p className="mt-1 text-xs text-muted-foreground">
+            当前没有停机维护计划。真要停机，会提前在这里写明时间与影响；维护期间已存的战报与本地指令不会丢。
+          </p>
+        )}
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        游戏内版本 v{SAGA_NOTICE_VERSION} · 公告与已读记录只存在本机，不参与结算。
+      </p>
+
+      <div className="space-y-2">
+        {SAGA_NOTICES.map((entry) => (
+          <div key={entry.id} className="rounded-lg border border-border p-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="font-medium">
+                <span className="mr-1.5 rounded bg-primary/10 px-1 text-[10px] text-primary">
+                  {NOTICE_KIND_LABEL[entry.kind] ?? "公告"}
+                </span>
+                {entry.title}
+              </span>
+              <span className="text-muted-foreground">
+                v{entry.version} · {entry.date}
+              </span>
+            </div>
+            <ul className="mt-1 list-disc space-y-0.5 pl-4 text-xs text-muted-foreground">
+              {entry.lines.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
       </div>
     </div>
   );

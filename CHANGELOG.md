@@ -5,6 +5,26 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.81.0] - 2026-11-16
+
+### 新增
+
+- 三国讨逆传**游戏内公告与维护**：工具栏新增「公告」入口，一页看维护安排与按版本倒序的
+  更新说明（本次更新 / 历史版本 / 维护标签）；有未读公告时入口带红点，打开即记已读。
+- 新增 `lib/trial/saga/notice.ts`：`SAGA_NOTICES`（公告数据）、`SAGA_MAINTENANCE`（维护窗口，
+  null 表示暂无计划）、`maintenanceActiveAt` / `maintenancePhaseAt`（窗口判定）、`latestNoticeId`。
+  维护窗口两端含在内，时间解析失败或缺失按「不在维护」处理。
+- 维护卡片按窗口显示「计划中 / 维护中 / 已结束」，无窗口时写明暂无停机计划；
+  要停机只改数据文件，组件不用动。
+
+### 说明
+
+- 已读标记按「最新公告 id」存本机 localStorage（`trial-saga-notice-seen`），
+  与存证、结算完全无关，清缓存只会让红点重新出现。
+
+### 验证
+
+- 单元测试 67/67（新增公告排序 id 唯一、维护窗口边界与阶段判定）；`tsc` 0、ESLint 0、`next build` 通过。
 ## [0.80.2] - 2026-11-16
 
 ### 修正

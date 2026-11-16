@@ -8,6 +8,7 @@ import {
   type TrialConfig,
 } from "../lib/trial/config";
 import { SAGA_CHAPTERS, SAGA_GENERAL_BY_ID, SAGA_TRAITS, SAGA_TRAIT_BY_ID, tacticsFor, traitStats } from "../lib/trial/saga/data";
+import { SAGA_NOTICES, latestNoticeId, maintenanceActiveAt, maintenancePhaseAt } from "../lib/trial/saga/notice";
 import {
   SAGA_FIELD_COLS,
   SAGA_FIELD_ROWS,
@@ -2131,3 +2132,27 @@ test("大地图：乘船指令能存能读，越界目标被丢掉", () => {
   const state = replaySagaRun(parsed, [{ k: "ferry", to: 1 }]).state;
   assert.equal(state.save.gold, parsed.startSave.gold, "前一区没平定，船开不了也不扣票钱");
 });
+
+const NOTICE_WINDOW = { start: "2026-11-18T02:00:00+08:00", end: "2026-11-18T04:00:00+08:00", note: "版本切换" };
+
+test("公告与维护窗口判定", () => {
+  // 公告按版本从新到旧，最新一条的 id 就是红点比对的基准。
+  assert.ok(SAGA_NOTICES.length >= 5);
+  assert.equal(SAGA_NOTICES[0].version, "0.81.0");
+  assert.equal(latestNoticeId(), SAGA_NOTICES[0].id);
+  assert.equal(new Set(SAGA_NOTICES.map((row) => row.id)).size, SAGA_NOTICES.length, "公告 id 不能重复");
+  assert.ok(SAGA_NOTICES.every((row) => row.lines.length > 0 && row.version && row.date));
+
+  // 维护窗口：开始与结束都算在内，窗口边界外不算，没有窗口一律不在维护。
+  const at = (iso: string) => new Date(iso);
+  assert.equal(maintenanceActiveAt(at("2026-11-18T01:59:00+08:00"), NOTICE_WINDOW), false);
+  assert.equal(maintenanceActiveAt(at("2026-11-18T02:00:00+08:00"), NOTICE_WINDOW), true);
+  assert.equal(maintenanceActiveAt(at("2026-11-18T04:00:00+08:00"), NOTICE_WINDOW), true);
+  assert.equal(maintenanceActiveAt(at("2026-11-18T04:01:00+08:00"), NOTICE_WINDOW), false);
+  assert.equal(maintenanceActiveAt(at("2026-11-18T03:00:00+08:00"), null), false);
+  assert.equal(maintenancePhaseAt(at("2026-11-18T01:00:00+08:00"), NOTICE_WINDOW), "upcoming");
+  assert.equal(maintenancePhaseAt(at("2026-11-18T03:00:00+08:00"), NOTICE_WINDOW), "active");
+  assert.equal(maintenancePhaseAt(at("2026-11-18T05:00:00+08:00"), NOTICE_WINDOW), "done");
+  assert.equal(maintenancePhaseAt(at("2026-11-18T03:00:00+08:00"), null), null);
+});
+
