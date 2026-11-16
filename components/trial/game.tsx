@@ -226,8 +226,12 @@ function availableItems(state: SagaReplayState): { id: string; name: string; cou
 }
 
 function canRecruit(battle: SagaBattleState): boolean {
+  // v8 起野外头目随时可劝降（成功率随剩余兵力递减）；v7 及更早仍要兵力压到 35% 以下。
   return battle.enemies.some(
-    (enemy) => !enemy.downed && enemy.recruitable && enemy.troops <= enemy.maxTroops * 0.35,
+    (enemy) =>
+      !enemy.downed &&
+      enemy.recruitable &&
+      (battle.rules >= 8 || enemy.troops <= enemy.maxTroops * 0.35),
   );
 }
 

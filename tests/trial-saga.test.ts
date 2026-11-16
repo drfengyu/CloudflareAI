@@ -1225,10 +1225,8 @@ test("招降只收人：敌将带着强化装备来降，入队后仍是空手",
 });
 
 test("招降只在野外：v7 营寨 / 攻城不可招，野外头目可降", () => {
-  // 第一章野外的头目全是黄巾杂号（资料里不可招），换到有可招敌将的汜水关再验。
-  const save = initialTrialSave();
-  save.chapter = 1;
-  const run = generateSagaRun({ activityKey: "trial-test", save, nodeCount: 5, seed: 11 });
+  // 桃园起兵的野外头目资料里没有 recruitable 标记，v7 起不再看白名单，照样能招。
+  const run = freshRun(11, 5);
   // 节点战（营寨 / 精锐 / 攻城）一律不可招降。
   run.nodes.forEach((node, index) => {
     const battle = startBattle(run, index, createReplayState(run));
@@ -1250,7 +1248,6 @@ test("招降只在野外：v7 营寨 / 攻城不可招，野外头目可降", ()
   }
   assert.ok(battle, "野外存在可招降的头目");
   const leader = battle!.enemies.find((unit) => !unit.id.startsWith("foe_"))!;
-  assert.equal(SAGA_GENERAL_BY_ID.get(leader.id)?.recruitable === true, true, "头目资料本身可招");
   assert.equal(leader.recruitable, true, "野外头目开放招降");
   assert.equal(
     battle!.enemies.filter((unit) => unit.id.startsWith("foe_")).every((unit) => !unit.recruitable),
@@ -1279,6 +1276,88 @@ test("招降只在野外：v7 营寨 / 攻城不可招，野外头目可降", ()
   assert.ok(joined, "入队的武将在队伍或后备里");
   assert.equal(joined.weapon, null, "招降不带兵器");
   assert.equal(joined.armor, null, "招降不带甲胄");
+});
+
+test("劝降口径：v8 野外头目满兵时也能点、但几乎招不到；v7 仍要压到 35%", () => {
+  // v8：野外头目血少，35% 窗口常被一击跨过，所以改成「随时可劝降、兵力越少成功率越高」。
+  const save = initialTrialSave();
+  const run = generateSagaRun({ activityKey: "trial-test", save, nodeCount: 5, seed: 11 });
+  const state = createReplayState(run);
+  let found = false;
+  for (let ordinal = 0; ordinal < 20 && !found; ordinal++) {
+    const battle = startEncounterBattle(run, ordinal, state);
+    const leaderIndex = battle.enemies.findIndex(
+      (unit) => !unit.id.startsWith("foe_") && unit.recruitable,
+    );
+    if (leaderIndex < 0) continue;
+    found = true;
+    const leader = battle.enemies[leaderIndex];
+    resolveBattleRound(
+      battle,
+      battle.party
+        .filter((unit) => !unit.downed)
+        .map((unit) => ({ g: unit.id, a: "recruit" as const, target: leaderIndex })),
+      state,
+    );
+    assert.equal(state.recruited.includes(leader.id), false, "满兵时招不到");
+    assert.equal(
+      battle.log.some((event) => event.text.includes("拒绝归降")),
+      true,
+      "满兵时提示拒绝归降，而不是「没有可以招降的敌将」",
+    );
+  }
+  assert.equal(found, true, "找到可招的野外头目");
+
+  // v7 旧口径：兵力还在六成时，连招降目标都选不上。
+  const oldSave = initialTrialSave();
+  oldSave.chapter = 1;
+  const oldBase = { ...generateSagaRun({ activityKey: "trial-test", save: oldSave, nodeCount: 5, seed: 11 }), rules: 7 };
+  const oldState = createReplayState(oldBase);
+  for (let ordinal = 0; ordinal < 20; ordinal++) {
+    const battle = startEncounterBattle(oldBase, ordinal, oldState);
+    const leaderIndex = battle.enemies.findIndex(
+      (unit) => !unit.id.startsWith("foe_") && unit.recruitable,
+    );
+    if (leaderIndex < 0) continue;
+    const leader = battle.enemies[leaderIndex];
+    leader.troops = Math.round(leader.maxTroops * 0.6);
+    resolveBattleRound(
+      battle,
+      battle.party
+        .filter((unit) => !unit.downed)
+        .map((unit) => ({ g: unit.id, a: "recruit" as const, target: leaderIndex })),
+      createReplayState(oldBase),
+    );
+    assert.equal(
+      battle.log.some((event) => event.text.includes("没有可以招降的敌将")),
+      true,
+      "v7 六成兵力仍不可招",
+    );
+    break;
+  }
+});
+
+test("野外头目都能招：八章逐一验，只有黄巾力士这类通用杂号不收", () => {
+  for (let chapter = 0; chapter < SAGA_CHAPTERS.length; chapter++) {
+    const save = initialTrialSave();
+    save.chapter = chapter;
+    const run = generateSagaRun({ activityKey: "trial-test", save, nodeCount: 5, seed: 20261116 });
+    const state = createReplayState(run);
+    let leaders = 0;
+    for (let ordinal = 0; ordinal < 30; ordinal++) {
+      const battle = startEncounterBattle(run, ordinal, state);
+      for (const unit of battle.enemies) {
+        if (unit.id.startsWith("foe_")) continue;
+        leaders++;
+        assert.equal(
+          unit.recruitable,
+          unit.id !== "huangjin_lishi",
+          `第 ${chapter} 章第 ${ordinal} 场野外头目 ${unit.id} 的可招标记`,
+        );
+      }
+    }
+    assert.equal(leaders > 0, true, `第 ${chapter} 章野外出过领头头目`);
+  }
 });
 
 test("旧规则（v6 及更早）招降口径不变：营寨里的可招武将照旧能降", () => {

@@ -319,18 +319,24 @@ function buildBattle(
   const gearStep = rules >= 5 ? 5 : 8;
   const poorShift = rules >= 6 ? -2 : -1;
   const gearRng = rules >= 5 ? seedRng((rngState ^ 0x2545f491) >>> 0) : null;
-  // v7 起招降只在野外遭遇：营寨 / 精锐 / 攻城一律不可招，野外头目按武将资料开放。
+  // v7 起招降只在野外遭遇：营寨 / 精锐 / 攻城一律不可招。
+  // v8 起野外「有名有姓的领头头目」都能劝降，不再看武将资料的 recruitable 白名单
+  // （否则桃园起兵 / 徐州风云 / 赤壁之战这几章的野外一场都招不到人）；
+  // 只有 `poor` 的杂兵和「黄巾力士」这种兵种型通用杂号不收。
+  // v7 的行军仍按旧白名单重放，避免已经落下的招降指令结果翻盘。
   const fieldEncounter = nodeIndex < 0;
   const enemies: SagaBattleGeneral[] = node.enemies.slice(0, SAGA_PARTY_SIZE).map((enemy) => {
     const baseDef = SAGA_GENERAL_BY_ID.get(enemy.id);
+    const fieldLeader = fieldEncounter && !enemy.poor && enemy.id !== "huangjin_lishi";
+    const fieldLeaderV7 = fieldLeader && Boolean(baseDef?.recruitable);
     const recruitable =
-      rules >= 7
-        ? fieldEncounter && !enemy.poor && Boolean(baseDef?.recruitable)
-        : enemy.recruitable;
+      rules >= 8 ? fieldLeader : rules >= 7 ? fieldLeaderV7 : enemy.recruitable;
     const recruitHard =
-      rules >= 7
-        ? fieldEncounter && !enemy.poor && Boolean(baseDef?.recruitHard)
-        : enemy.recruitHard;
+      rules >= 8
+        ? fieldLeader && Boolean(baseDef?.recruitHard)
+        : rules >= 7
+          ? fieldLeaderV7 && Boolean(baseDef?.recruitHard)
+          : enemy.recruitHard;
     // v4 起杂兵也带装备，但比同级敌将低档：v6 起低两档，v4/v5 低一档；v3 只有敌将带装备。
     const gear =
       rules < 3 || (rules < 4 && enemy.poor)
@@ -696,8 +702,11 @@ function executeRecruit(
   requestedTarget: number | undefined,
   events: SagaBattleEvent[],
 ): void {
+  // v7 及更早：只有兵力 ≤ 35% 的敌将才可劝降（营寨时代的口径，旧战报按这个重放）。
+  // v8 起：野外头目随时可以劝降，成功率随其剩余兵力递减——野外头目血少，
+  // 「压到 35%」这个窗口常常被一击跨过，按旧门槛根本招不到人。
   const candidates = living(battle.enemies).filter(
-    (enemy) => enemy.recruitable && enemy.troops <= enemy.maxTroops * 0.35,
+    (enemy) => enemy.recruitable && (battle.rules >= 8 || enemy.troops <= enemy.maxTroops * 0.35),
   );
   const target =
     (typeof requestedTarget === "number" ? candidates[requestedTarget] : null) ??
@@ -707,8 +716,13 @@ function executeRecruit(
     return;
   }
   const base = 30 + (actor.level - target.level) * 4 + Math.floor((actor.intellect - target.intellect) / 2);
-  const chance = clamp(base - (target.recruitHard ? 25 : 0), 5, 80);
-  if (roll(battle) * 100 < chance) {
+  const ratio = target.maxTroops > 0 ? target.troops / target.maxTroops : 1;
+  const factor = battle.rules >= 8 && ratio > 0.35 ? (1 - ratio) / 0.65 : 1;
+  const raw = base - (target.recruitHard ? 25 : 0);
+  // v7 及更早仍按「5~80」的概率区间（旧战报要一模一样重放）。
+  const chance =
+    battle.rules >= 8 ? clamp(Math.round(raw * factor), 0, 80) : clamp(raw, 5, 80);
+  if (chance > 0 && roll(battle) * 100 < chance) {
     target.downed = true;
     target.troops = 0;
     battle.pendingRecruits.push(target.id);

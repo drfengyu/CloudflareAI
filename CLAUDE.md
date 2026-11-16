@@ -534,9 +534,16 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.76.9（2026-11-16，招降改为只在野外生效）
+**当前版本**：v0.76.10（2026-11-16，野外招降修正）
 **下一版本**：待定
 
+- v0.76.10 野外招降修正（`SAGA_RULESET` 7 → 8）：0.76.9 的 v7 招降实际上招不到人——
+  一是只看武将资料的 `recruitable` 白名单，桃园起兵 / 徐州风云 / 赤壁之战的野外头目全被挡掉；
+  二是硬门槛「兵力 ≤ 35%」摸不到（野外头目兵力 0.8 倍，一轮全队攻击就从 40%+ 打到 0）。
+  v8 起野外有名有姓的头目都能劝降（`poor` 杂兵与「黄巾力士」除外），且随时可劝降、
+  成功率按剩余兵力打折（满兵为 0，≤35% 时仍是原公式）；`executeRecruit` 按 `battle.rules` 分口径，
+  v7 及更早照旧（营寨可招 + 要压到 35%）。界面 `canRecruit` 同步放宽。
+  `tests/trial-saga.test.ts` 60/60；`tsc` 0 错误、改动文件 ESLint 0/0。
 - v0.76.9 三国讨逆传招降改为只在野外遭遇：`SAGA_RULESET` 6 → 7。`buildBattle` 按
   `nodeIndex < 0` 认野外遭遇——营寨 / 精锐 / 攻城的敌将一律 `recruitable = false`，
   野外头目按武将资料的 `recruitable` 开放（`poor` 杂兵与黄巾杂号仍不可招），
