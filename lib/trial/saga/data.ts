@@ -191,10 +191,10 @@ export const SAGA_ITEMS: SagaItemDef[] = [
   { id: "leather", name: "皮甲", kind: "armor", priceTickets: 2, def: 11, desc: "防御 +11" },
   { id: "iron_armor", name: "铁甲", kind: "armor", priceTickets: 3, def: 17, desc: "防御 +17" },
   { id: "heavy_armor", name: "重铠", kind: "armor", priceTickets: 5, def: 23, desc: "防御 +23" },
-  { id: "herb", name: "伤药", kind: "consumable", priceTickets: 1, heal: 60, desc: "回复 60 兵力", stack: true },
-  { id: "medicine", name: "良药", kind: "consumable", priceTickets: 2, heal: 150, desc: "回复 150 兵力", stack: true },
-  { id: "jinchuang", name: "金疮药", kind: "consumable", priceTickets: 3, heal: 300, desc: "回复 300 兵力", stack: true },
-  { id: "dahuan", name: "大还丹", kind: "consumable", priceTickets: 5, heal: 600, desc: "回复 600 兵力", stack: true },
+  { id: "herb", name: "伤药", kind: "consumable", priceTickets: 1, heal: 120, desc: "回复 120 兵力", stack: true },
+  { id: "medicine", name: "良药", kind: "consumable", priceTickets: 2, heal: 300, desc: "回复 300 兵力", stack: true },
+  { id: "jinchuang", name: "金疮药", kind: "consumable", priceTickets: 3, heal: 600, desc: "回复 600 兵力", stack: true },
+  { id: "dahuan", name: "大还丹", kind: "consumable", priceTickets: 5, heal: 1200, desc: "回复 1200 兵力", stack: true },
   { id: "secret_medicine", name: "秘药", kind: "supply", priceTickets: 1, supply: "heal", desc: "此行：一名武将兵力回满", stack: true },
   { id: "revive_token", name: "兵符", kind: "supply", priceTickets: 2, supply: "revive", desc: "此行：复活一名败将（四成兵力）", stack: true },
   { id: "tiger_tally", name: "虎符", kind: "supply", priceTickets: 2, supply: "troops", desc: "此行：全队兵力上限 +10%" },
@@ -211,8 +211,8 @@ export const SAGA_ITEMS: SagaItemDef[] = [
   { id: "yulinjia", name: "鱼鳞甲", kind: "armor", priceTickets: 7, def: 30, desc: "防御 +30" },
   { id: "mingguang", name: "明光铠", kind: "armor", priceTickets: 9, def: 38, desc: "防御 +38" },
   { id: "shoumian", name: "兽面吞头铠", kind: "armor", priceTickets: 12, def: 46, desc: "防御 +46" },
-  { id: "junliang", name: "军粮", kind: "consumable", priceTickets: 2, heal: 200, desc: "回复 200 兵力，随军携带的干粮", stack: true },
-  { id: "lingzhi", name: "灵芝", kind: "consumable", priceTickets: 4, heal: 450, desc: "回复 450 兵力，山中所采的灵药", stack: true },
+  { id: "junliang", name: "军粮", kind: "consumable", priceTickets: 2, heal: 400, desc: "回复 400 兵力，随军携带的干粮", stack: true },
+  { id: "lingzhi", name: "灵芝", kind: "consumable", priceTickets: 4, heal: 900, desc: "回复 900 兵力，山中所采的灵药", stack: true },
 ];
 
 export const SAGA_ITEM_BY_ID = new Map(SAGA_ITEMS.map((i) => [i.id, i]));

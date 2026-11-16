@@ -37,6 +37,7 @@ import {
   SAGA_PARTY_SIZE,
   SAGA_RULESET,
   SAGA_RUN_VERSION,
+  SAGA_STAT_CAP,
   type FormationId,
   type SagaCommand,
   type SagaEnemy,
@@ -105,11 +106,13 @@ function makeEnemy(
   const raw = def ?? fallback;
   const level = 1 + chapterIndex * 4 + nodeIndex + (kind === "elite" ? 1 : 0) + (kind === "boss" ? 3 : 0);
   const scale = kind === "boss" ? 1.25 : kind === "elite" ? 1.1 : 1;
+  // v9 起敌军也吃新口径：兵力翻一倍，四维每级成长翻三倍并封顶 255。
   const troops = Math.max(
     60,
-    Math.round((raw.baseTroops + level * raw.growth) * (1 + chapterIndex * 0.06) * scale),
+    Math.round((raw.baseTroops + level * raw.growth) * 2 * (1 + chapterIndex * 0.06) * scale),
   );
   const bonus = traitStats(raw);
+  const cap = (value: number): number => Math.min(SAGA_STAT_CAP, Math.round(value));
   return {
     id: raw.id,
     name: raw.name,
@@ -117,10 +120,10 @@ function makeEnemy(
     level,
     troops,
     maxTroops: troops,
-    force: raw.force + bonus.force + Math.floor(level * 1.4),
-    intellect: raw.intellect + bonus.intellect + Math.floor(level * 1.1),
-    defense: raw.defense + bonus.defense + Math.floor(level * 1.2),
-    speed: raw.speed + bonus.speed + Math.floor(level * 0.7),
+    force: cap(raw.force + bonus.force + Math.floor(level * 4.2)),
+    intellect: cap(raw.intellect + bonus.intellect + Math.floor(level * 3.3)),
+    defense: cap(raw.defense + bonus.defense + Math.floor(level * 3.6)),
+    speed: cap(raw.speed + bonus.speed + Math.floor(level * 2.1)),
     tactics: tacticsFor(raw, level),
     traits: raw.traits ?? [],
     color: raw.color,
@@ -651,7 +654,7 @@ export function bankSagaGold(state: SagaReplayState, gold: number, bank: SagaBan
 export function restAtInn(state: SagaReplayState): boolean {
   let healed = 0;
   for (const general of state.save.party) {
-    const stats = generalStats(general);
+    const stats = generalStats(general, undefined, state.rules);
     const maxTroops = Math.max(
       1,
       Math.round(stats.maxTroops * (1 + state.buffs.troopPct / 100)),

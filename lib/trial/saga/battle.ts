@@ -26,6 +26,19 @@ import {
 const clamp = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, value));
 
+/**
+ * v8 及更早的药品回复口径。v9 把双方兵力翻倍、药品按两倍兵力同步，
+ * 旧行军重放时仍按原值结算，已经打过的战报不会因为改版翻盘。
+ */
+const LEGACY_HEAL: Record<string, number> = {
+  herb: 60,
+  medicine: 150,
+  jinchuang: 300,
+  dahuan: 600,
+  junliang: 200,
+  lingzhi: 450,
+};
+
 function nextRand(state: number): { value: number; state: number } {
   const a = (state + 0x6d2b79f5) >>> 0;
   let t = a;
@@ -258,7 +271,7 @@ function buildBattle(
   const rules = state.rules ?? 1;
   const party: SagaBattleGeneral[] = state.save.party.map((saved) => {
     const def = SAGA_GENERAL_BY_ID.get(saved.id);
-    const stats = generalStats(saved, state.save.gearLevels);
+    const stats = generalStats(saved, state.save.gearLevels, rules);
     const maxTroops = Math.max(
       1,
       Math.round(stats.maxTroops * (1 + buffs.troopPct / 100)),
@@ -682,7 +695,9 @@ function executeItem(
   if (!target) return false;
   const heal = item.supply === "heal" || item.id === "secret_medicine"
     ? target.maxTroops
-    : item.heal ?? 0;
+    : battle.rules >= 9
+      ? item.heal ?? 0
+      : LEGACY_HEAL[item.id] ?? item.heal ?? 0;
   const before = target.troops;
   target.troops = Math.min(target.maxTroops, target.troops + heal);
   events.push({
@@ -868,7 +883,7 @@ function finishBattle(
         if (result.joined === "party") {
           const saved = state.save.party.find((g) => g.id === id);
           if (saved) {
-            const stats = generalStats(saved, state.save.gearLevels);
+            const stats = generalStats(saved, state.save.gearLevels, battle.rules);
             state.partyTroops[id] = Math.round(stats.maxTroops * (1 + state.buffs.troopPct / 100));
           }
         }

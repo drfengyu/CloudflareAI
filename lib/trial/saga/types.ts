@@ -20,9 +20,14 @@ export const SAGA_SAVE_VERSION = 1;
  * v8 起野外头目不再看武将资料的白名单（有名有姓的头目都能劝降，杂兵与「黄巾力士」除外），
  * 且取消「兵力 ≤ 35% 才可劝降」的硬门槛：野外头目血少，35% 窗口常被一击跨过，
  * 改成随时可劝降、成功率按剩余兵力打折（≤35% 时仍是原来的概率公式）。
+ * v9 起成长与兵力换口径：四维每级成长翻三倍、四维封顶 255（基础属性不动），
+ * 兵力（双方）翻一倍、药品回复按两倍兵力口径同步，敌将四维同吃这套成长。
  * 旧行军没有这个字段，重放时按 v1 走，避免改版把还没收兵的对局打乱。
  */
-export const SAGA_RULESET = 8;
+export const SAGA_RULESET = 9;
+
+/** 四维上限：v9 起武力 / 智力 / 防御 / 速度可以一路长到 255（基础值不动，长的是等级与特性加成）。 */
+export const SAGA_STAT_CAP = 255;
 
 export const SAGA_PARTY_SIZE = 5;
 export const SAGA_RESERVE_SIZE = 12;

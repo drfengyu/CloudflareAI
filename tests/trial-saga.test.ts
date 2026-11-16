@@ -14,6 +14,7 @@ import {
   SAGA_MAX_LEVEL,
   SAGA_RULESET,
   SAGA_RUN_VERSION,
+  SAGA_STAT_CAP,
   SAGA_TILE_FOREST,
   SAGA_TILE_GRASS,
   SAGA_TILE_ROAD,
@@ -21,6 +22,7 @@ import {
   SAGA_TILE_YARD,
   type SagaBattleState,
   type SagaCommand,
+  type SagaGeneralState,
   type SagaRun,
 } from "../lib/trial/saga/types";
 import {
@@ -490,7 +492,11 @@ test("客栈：住店券记录按指令位置补兵，兵败后能重整旗鼓�
   const rested = replaySagaRun(innRun, [...lose, { k: "formation", f: "fengshi" }]).state;
   assert.equal(rested.scene, "field");
   assert.equal(rested.save.gold, 100, "店钱不走金币");
-  assert.equal(rested.partyTroops.liubei, generalStats(run.startSave.party[0]).maxTroops);
+  assert.equal(
+    rested.partyTroops.liubei,
+    // 测试关没写 rules，重放按 v1 的旧成长补兵。
+    generalStats(run.startSave.party[0], undefined, 1).maxTroops,
+  );
   assert.equal(rested.save.formation, "fengshi");
 
   // 重整后能接着打下另一座营，行军不会被兵败锁死。
@@ -684,6 +690,62 @@ test("铁匠铺强化：价格随等级递增、满级封顶，属性按基础�
     "只留可强化装备，等级截断到 0~5",
   );
   assert.deepEqual(normalizeTrialSave({ ...initialTrialSave(), gearLevels: undefined }).gearLevels, {});
+});
+
+test("v9 属性口径：四维成长翻三倍并封顶 255，兵力翻倍，旧规则不动", () => {
+  const maxed: SagaGeneralState = { id: "lvbu", level: SAGA_MAX_LEVEL, exp: 0, weapon: null, armor: null };
+  const fresh: SagaGeneralState = { id: "lvbu", level: 1, exp: 0, weapon: null, armor: null };
+  const maxedStats = generalStats(maxed);
+  assert.equal(maxedStats.force <= SAGA_STAT_CAP, true, "四维不越过 255");
+  assert.equal(maxedStats.force, 236, "吕布 100 + 无双 6 + 30 级 × 4.5 = 236");
+  assert.equal(generalStats(fresh).force, 106, "1 级仍是基础值 + 特性");
+  assert.equal(generalStats(fresh).maxTroops, 480, "1 级兵力 = 基础 240 × 2");
+  assert.equal(
+    maxedStats.maxTroops,
+    240 * 2 + (SAGA_MAX_LEVEL - 1) * 13 * 2,
+    "兵力按满级成长 × 2",
+  );
+  // 旧规则（v8 及更早）还是原来的成长与兵力，已落库的战报重放不会翻盘。
+  const legacy = generalStats(maxed, undefined, 8);
+  assert.equal(legacy.force, 106 + Math.floor((SAGA_MAX_LEVEL - 1) * 1.5), "旧规则仍按 ×1.5 成长");
+  assert.equal(legacy.maxTroops, 240 + (SAGA_MAX_LEVEL - 1) * 13, "旧规则兵力不加倍");
+});
+
+test("v9 敌军口径：兵力翻倍，四维同样封顶 255", () => {
+  const save = { ...initialTrialSave(), chapter: 7 };
+  const run = generateSagaRun({ activityKey: "trial-test", save, nodeCount: 7, seed: 909 });
+  const boss = run.nodes[run.nodes.length - 1];
+  assert.equal(boss.kind, "boss");
+  for (const node of run.nodes) {
+    for (const enemy of node.enemies) {
+      assert.equal(enemy.force <= SAGA_STAT_CAP, true, `${enemy.name} 武力不越过 255`);
+      assert.equal(enemy.defense <= SAGA_STAT_CAP, true, `${enemy.name} 防御不越过 255`);
+      const def = SAGA_GENERAL_BY_ID.get(enemy.id);
+      assert.ok(def, `${enemy.name} 在武将表里`);
+      const scale =
+        node.kind === "boss"
+          ? enemy.boss
+            ? 1.25
+            : 1.1
+          : node.kind === "elite"
+            ? 1.1
+            : 1;
+      assert.equal(
+        enemy.troops,
+        Math.max(
+          60,
+          Math.round((def!.baseTroops + enemy.level * def!.growth) * 2 * (1 + 7 * 0.06) * scale),
+        ),
+        `${enemy.name} 兵力按翻倍口径生成`,
+      );
+    }
+  }
+  const first = boss.enemies[0];
+  assert.equal(
+    first.troops > SAGA_GENERAL_BY_ID.get(first.id)!.baseTroops * 2,
+    true,
+    "本阵主将兵力明显多于基础值",
+  );
 });
 
 test("铁匠铺强化：购买记录按指令位置抬等级，收兵存档保留，脏记录被丢掉", () => {

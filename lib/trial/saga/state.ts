@@ -10,7 +10,9 @@ import {
   SAGA_MAX_LEVEL,
   SAGA_PARTY_SIZE,
   SAGA_RESERVE_SIZE,
+  SAGA_RULESET,
   SAGA_SAVE_VERSION,
+  SAGA_STAT_CAP,
   type FormationId,
   type SagaGeneralState,
   type TrialSave,
@@ -178,6 +180,7 @@ export interface SagaGeneralStats {
 export function generalStats(
   state: SagaGeneralState,
   gearLevels?: Record<string, number>,
+  rules = SAGA_RULESET,
 ): SagaGeneralStats {
   const def = SAGA_GENERAL_BY_ID.get(state.id);
   if (!def) {
@@ -187,12 +190,16 @@ export function generalStats(
   const weapon = state.weapon ? SAGA_ITEM_BY_ID.get(state.weapon) : null;
   const armor = state.armor ? SAGA_ITEM_BY_ID.get(state.armor) : null;
   const bonus = traitStats(def);
+  // v9 起每级成长翻三倍、四维封顶 255，兵力翻一倍；旧规则仍按原成长重放，已打过的仗不翻盘。
+  const growth = rules >= 9 ? 3 : 1;
+  const troopScale = rules >= 9 ? 2 : 1;
+  const cap = (value: number): number => Math.min(SAGA_STAT_CAP, Math.round(value));
   return {
-    force: def.force + bonus.force + Math.floor((level - 1) * 1.5),
-    intellect: def.intellect + bonus.intellect + Math.floor((level - 1) * 1.2),
-    defense: def.defense + bonus.defense + Math.floor((level - 1) * 1.3),
-    speed: def.speed + bonus.speed + Math.floor((level - 1) * 0.8),
-    maxTroops: def.baseTroops + (level - 1) * def.growth,
+    force: cap(def.force + bonus.force + Math.floor((level - 1) * 1.5 * growth)),
+    intellect: cap(def.intellect + bonus.intellect + Math.floor((level - 1) * 1.2 * growth)),
+    defense: cap(def.defense + bonus.defense + Math.floor((level - 1) * 1.3 * growth)),
+    speed: cap(def.speed + bonus.speed + Math.floor((level - 1) * 0.8 * growth)),
+    maxTroops: (def.baseTroops + (level - 1) * def.growth) * troopScale,
     weaponAtk: weapon ? forgeStat(weapon.id, gearLevels?.[weapon.id] ?? 0) : 0,
     armorDef: armor ? forgeStat(armor.id, gearLevels?.[armor.id] ?? 0) : 0,
   };
