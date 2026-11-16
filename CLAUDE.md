@@ -534,9 +534,16 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.76.8（2026-11-16，加载性能修补）
+**当前版本**：v0.76.9（2026-11-16，招降改为只在野外生效）
 **下一版本**：待定
 
+- v0.76.9 三国讨逆传招降改为只在野外遭遇：`SAGA_RULESET` 6 → 7。`buildBattle` 按
+  `nodeIndex < 0` 认野外遭遇——营寨 / 精锐 / 攻城的敌将一律 `recruitable = false`，
+  野外头目按武将资料的 `recruitable` 开放（`poor` 杂兵与黄巾杂号仍不可招），
+  `recruitHard` 同样从资料取。判定仍是「兵力 ≤ 35% + 概率」，不设次数上限。
+  编成数据不改，旧行军 `legacyRules = 6` 重放已落指令、战报不变，续战新战斗才吃 v7；
+  支线提示同步改成「在野外遭遇里招降」。`tests/trial-saga.test.ts` 新增两组回归，
+  58/58 通过；`tsc` 0 错误、改动文件 ESLint 0/0。
 - v0.76.8 加载性能修补：顶栏未读 / 最近站内信 / 货币条移进 Suspense，正文不再等顶栏的
   D1 查询；活动券配置与珍宝礼包由逐玩法一条查询合并成一次 `IN`（`getJsonSettings`），
   货币条 8 → 5 跳；任务成就每项统计独立 catch，单项超时只显示 0 进度；`cfRequest`

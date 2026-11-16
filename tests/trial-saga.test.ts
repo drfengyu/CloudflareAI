@@ -1004,7 +1004,7 @@ test("野外遭遇编成：同种子同序号固定，1~4 队且将领可有可�
     assert.equal(
       node.enemies.every((enemy) => !enemy.recruitable),
       true,
-      "野外敌军不开放招降",
+      "野外编成不预置可招标记，v7 起由 buildBattle 开放头目招降",
     );
   }
 });
@@ -1193,7 +1193,8 @@ test("战斗内景：头顶血条按兵力上限分长短，攻击力与普攻�
 });
 
 test("招降只收人：敌将带着强化装备来降，入队后仍是空手", () => {
-  const run = { ...easyRun(), rules: SAGA_RULESET };
+  // 这里验的是「招降只收人」的结算口径，用 v6 旧规则跑，避免和 v7 的「只野外可招」混在一起。
+  const run = { ...easyRun(), rules: 6 };
   const enemy = run.nodes[0].enemies[0];
   enemy.recruitable = true;
   enemy.recruitHard = false;
@@ -1221,6 +1222,71 @@ test("招降只收人：敌将带着强化装备来降，入队后仍是空手",
   assert.ok(joined, "入队的武将在队伍或后备里");
   assert.equal(joined.weapon, null, "招降不带兵器");
   assert.equal(joined.armor, null, "招降不带甲胄");
+});
+
+test("招降只在野外：v7 营寨 / 攻城不可招，野外头目可降", () => {
+  // 第一章野外的头目全是黄巾杂号（资料里不可招），换到有可招敌将的汜水关再验。
+  const save = initialTrialSave();
+  save.chapter = 1;
+  const run = generateSagaRun({ activityKey: "trial-test", save, nodeCount: 5, seed: 11 });
+  // 节点战（营寨 / 精锐 / 攻城）一律不可招降。
+  run.nodes.forEach((node, index) => {
+    const battle = startBattle(run, index, createReplayState(run));
+    assert.equal(
+      battle.enemies.every((unit) => !unit.recruitable),
+      true,
+      `第 ${index} 场节点战不可招降（${node.kind}）`,
+    );
+  });
+
+  // 野外遭遇：只开放头目，杂兵不可招。
+  let battle: ReturnType<typeof startEncounterBattle> | null = null;
+  const state = createReplayState(run);
+  for (let ordinal = 0; ordinal < 40 && !battle; ordinal++) {
+    const candidate = startEncounterBattle(run, ordinal, state);
+    if (candidate.enemies.some((unit) => !unit.id.startsWith("foe_") && unit.recruitable)) {
+      battle = candidate;
+    }
+  }
+  assert.ok(battle, "野外存在可招降的头目");
+  const leader = battle!.enemies.find((unit) => !unit.id.startsWith("foe_"))!;
+  assert.equal(SAGA_GENERAL_BY_ID.get(leader.id)?.recruitable === true, true, "头目资料本身可招");
+  assert.equal(leader.recruitable, true, "野外头目开放招降");
+  assert.equal(
+    battle!.enemies.filter((unit) => unit.id.startsWith("foe_")).every((unit) => !unit.recruitable),
+    true,
+    "野外杂兵不可招降",
+  );
+
+  // 兵力压到三成以下才可劝降；先把杂兵请下场，招降成功即结束战斗、结算入队。
+  leader.troops = 1;
+  leader.maxTroops = 100;
+  for (const unit of battle!.enemies) {
+    if (unit !== leader) {
+      unit.downed = true;
+      unit.troops = 0;
+    }
+  }
+  const leaderIndex = battle!.enemies.indexOf(leader);
+  for (let round = 0; round < 40 && battle!.phase === "select"; round++) {
+    const commands = battle!.party
+      .filter((unit) => !unit.downed)
+      .map((unit) => ({ g: unit.id, a: "recruit" as const, target: leaderIndex }));
+    resolveBattleRound(battle!, commands, state);
+  }
+  assert.equal(state.recruited.includes(leader.id), true, "野外头目招降成功入队");
+  const joined = [...state.save.party, ...state.save.reserve].find((member) => member.id === leader.id);
+  assert.ok(joined, "入队的武将在队伍或后备里");
+  assert.equal(joined.weapon, null, "招降不带兵器");
+  assert.equal(joined.armor, null, "招降不带甲胄");
+});
+
+test("旧规则（v6 及更早）招降口径不变：营寨里的可招武将照旧能降", () => {
+  const run = { ...easyRun(), rules: 6 };
+  const enemy = run.nodes[0].enemies[0];
+  enemy.recruitable = true;
+  const battle = startBattle(run, 0, createReplayState(run));
+  assert.equal(battle.enemies[0].recruitable, true, "v6 仍按编成数据开放招降");
 });
 
 test("野外遭遇战：不占营地进度，打赢照常得金币经验并继续行军", () => {

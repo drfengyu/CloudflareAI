@@ -144,7 +144,8 @@ function leaderEnemy(leaderId: string, chapterIndex: number, ordinal: number): S
     traits: def.traits,
     color: def.color,
     accent: def.accent,
-    // 野外头目只是拦路的，不开放招降，免得刷遭遇把名将成批带走。
+    // 编成里先记「不可招」：v7 起由 `buildBattle` 按野外遭遇判定开放（营寨 / 攻城一律不可招），
+    // 旧规则（v6 及更早）重放时仍按这份编成，已经打过的仗不会因为改版翻盘。
     recruitable: false,
     recruitHard: false,
     boss: false,

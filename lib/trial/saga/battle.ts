@@ -319,7 +319,18 @@ function buildBattle(
   const gearStep = rules >= 5 ? 5 : 8;
   const poorShift = rules >= 6 ? -2 : -1;
   const gearRng = rules >= 5 ? seedRng((rngState ^ 0x2545f491) >>> 0) : null;
+  // v7 起招降只在野外遭遇：营寨 / 精锐 / 攻城一律不可招，野外头目按武将资料开放。
+  const fieldEncounter = nodeIndex < 0;
   const enemies: SagaBattleGeneral[] = node.enemies.slice(0, SAGA_PARTY_SIZE).map((enemy) => {
+    const baseDef = SAGA_GENERAL_BY_ID.get(enemy.id);
+    const recruitable =
+      rules >= 7
+        ? fieldEncounter && !enemy.poor && Boolean(baseDef?.recruitable)
+        : enemy.recruitable;
+    const recruitHard =
+      rules >= 7
+        ? fieldEncounter && !enemy.poor && Boolean(baseDef?.recruitHard)
+        : enemy.recruitHard;
     // v4 起杂兵也带装备，但比同级敌将低档：v6 起低两档，v4/v5 低一档；v3 只有敌将带装备。
     const gear =
       rules < 3 || (rules < 4 && enemy.poor)
@@ -361,8 +372,8 @@ function buildBattle(
       confused: 0,
       buff: 0,
       downed: false,
-      recruitable: enemy.recruitable,
-      recruitHard: enemy.recruitHard,
+      recruitable,
+      recruitHard,
       boss: enemy.boss,
     };
   });

@@ -92,7 +92,7 @@ export function sagaQuestsFor(ctx: SagaQuestContext): SagaQuest[] {
       id: "recruit",
       scope: "side",
       title: "招降敌将",
-      desc: "在阵前招降一名敌将，让他成为麾下一员。",
+      desc: "在野外遭遇里招降一名敌将，让他成为麾下一员。",
       progress: Math.min(ctx.recruited, 1),
       target: 1,
     },
