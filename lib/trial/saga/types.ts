@@ -99,7 +99,17 @@ export const SAGA_MAX_COMMANDS = 4000;
 export const SAGA_MAX_ROUNDS_PER_BLOCK = 200;
 export const SAGA_MAX_TOTAL_ROUNDS = 2400;
 
-export type FormationId = "yulin" | "heyi" | "fengshi" | "fangyuan" | "changshe";
+export type FormationId =
+  | "yulin"
+  | "heyi"
+  | "fengshi"
+  | "fangyuan"
+  | "changshe"
+  | "yanxing"
+  | "hengzhe"
+  | "beishui"
+  | "bamen"
+  | "chexuan";
 export type TacticId = "huoji" | "huifu" | "hunluan" | "guwu";
 export type SagaItemKind = "weapon" | "armor" | "consumable" | "supply";
 
@@ -111,7 +121,16 @@ export type SagaTraitId =
   | "mengjiang"
   | "tiebi"
   | "shensu"
-  | "rende";
+  | "rende"
+  | "xiaoxiong"
+  | "ganglie"
+  | "shendao"
+  | "baizhan"
+  | "zhenjun"
+  | "xiaoyong"
+  | "jizhi"
+  | "tongshuai"
+  | "xianfeng";
 
 export interface SagaTraitDef {
   id: SagaTraitId;
