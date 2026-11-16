@@ -1755,6 +1755,10 @@ export function TrialGame(props: TrialGameProps) {
             active={!panel && !dialogue}
             partyColor={heroDef?.color ?? "#3f6212"}
             partyAccent={heroDef?.accent ?? "#bef264"}
+            partyMembers={save.party.map((member) => {
+              const def = SAGA_GENERAL_BY_ID.get(member.id);
+              return { color: def?.color ?? "#3f6212", accent: def?.accent ?? "#bef264" };
+            })}
             onFacility={(spot) => setPanel(spot)}
             onLeave={() => {
               setPanel(null);

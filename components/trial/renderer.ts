@@ -975,6 +975,8 @@ export interface HeroSpriteOptions {
   moving: boolean;
   partyColor: string;
   partyAccent: string;
+  /** 小人整体缩放：城内按《吞食天地》比例放大，大地图保持原尺寸。 */
+  scale?: number;
 }
 
 export function paintHeroSprite(
@@ -988,6 +990,7 @@ export function paintHeroSprite(
   const step = moving ? Math.sin(time * 10) * 3 : 0;
   ctx.save();
   ctx.translate(x, y - bob);
+  if (options.scale && options.scale !== 1) ctx.scale(options.scale, options.scale);
 
   ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.beginPath();

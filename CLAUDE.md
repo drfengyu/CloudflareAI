@@ -1,4 +1,4 @@
-﻿@AGENTS.md
+@AGENTS.md
 
 # 改造路线图：参考 new-api 重构本项目
 
@@ -534,9 +534,16 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.87.2（2026-11-16，公告栏只显示最近三条）
+**当前版本**：v0.89.0（2026-11-16，城内重排 + 队伍跟走）
 **下一版本**：待定
 
+- v0.89.0 城内重排：十字路 + 四个城口、铺面 172 宽与双开门、每排≤4 座、皇宫移城东加一圈水渠与石桥、NPC 放大并加门卒/禁军、`partyMembers` 队伍跟走（`WalkTownProps` 新增可选字段，`renderer.ts` 的 `HeroSpriteOptions` 加 `scale`）。`gate` 仍在南口 x=700。
+- v0.88.0 城内街景重画（`components/trial/town.tsx`）：整屏都是城、上沿灰砖城墙（小块错缝 + 垛口）；
+  地面草地打底 + 铺面跟前橙黄沙土带 + 灰石石板路（28×18 错缝、黑描边）；铺面小门脸（奶油木壁、
+  黑描边、小窗、深木门、屋檐横匾、橘红瓦顶瓦垄）；广场缩成 280×108 方砖地，主街中线收窄 40px；
+  街边补矮树。撤掉 `gate` 的城门贴图：最外围改成带垛口的院墙（南墙两段 + 东西两道 + 门柱，
+  南面留 110px 出城口），`gate` 交互点仍在墙口前（`spotActionLabel` 照旧「出城行军」）；
+  店内内景提亮。
 - v0.87.2 游戏内公告栏只显示最近三条：`notice.ts` 加 `SAGA_NOTICE_VISIBLE = 3` 与
   `visibleNotices()`，`game.tsx` 设置页改用它渲染（不再整串 `SAGA_NOTICES`），面板底部
   提示旧版本查 CHANGELOG。公告数据仍全量留档，`latestNoticeId()` 红点比对不受影响；

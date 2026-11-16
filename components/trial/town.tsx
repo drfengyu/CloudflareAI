@@ -54,7 +54,7 @@ type ShopId =
 type Scene = { kind: "street" } | { kind: "shop"; id: ShopId } | { kind: "palace" };
 
 interface StreetSpot {
-  id: FieldFacilityId | "palace";
+  id: FieldFacilityId | "palace" | "house-a" | "house-b" | "house-c" | "hermit";
   label: string;
   x: number;
   /** 门脸基线（门口所在的世界 y）。 */
@@ -62,28 +62,34 @@ interface StreetSpot {
   width: number;
   /** 门脸向上占的高度，南排要按它挡住走位。 */
   height: number;
-  kind: "shop" | "palace" | "monument" | "tent" | "gate";
+  kind: "shop" | "palace" | "monument" | "tent" | "gate" | "house";
   accent: string;
   roof: string;
 }
 
 const STREET_SPOTS: StreetSpot[] = [
-  // 北排：坐北朝南，分列皇宫两侧，中间让出通往城门的中轴主街
-  { id: "forge", label: "铁匠铺", x: 170, y: 300, width: 124, height: 180, kind: "shop", accent: "#c2703a", roof: "#564337" },
-  { id: "herb", label: "药铺", x: 330, y: 300, width: 124, height: 180, kind: "shop", accent: "#7f9a54", roof: "#4a4a38" },
-  { id: "supply", label: "军需帐", x: 490, y: 300, width: 124, height: 180, kind: "shop", accent: "#b08a4e", roof: "#54473a" },
-  { id: "palace", label: "皇宫", x: 740, y: 300, width: 250, height: 220, kind: "palace", accent: "#b23a32", roof: "#5c2a22" },
-  { id: "inn", label: "客栈", x: 1010, y: 300, width: 124, height: 180, kind: "shop", accent: "#c99a5b", roof: "#5a4636" },
-  { id: "bank", label: "钱庄", x: 1170, y: 300, width: 124, height: 180, kind: "shop", accent: "#b9a05a", roof: "#4a4236" },
-  { id: "coupon", label: "活动券", x: 1330, y: 300, width: 124, height: 180, kind: "shop", accent: "#c98a9a", roof: "#54403e" },
-  // 南排：门脸朝南，左三右二，中间留出中轴与城门前的空地
-  { id: "train", label: "训练场", x: 206, y: 880, width: 124, height: 180, kind: "shop", accent: "#a2623a", roof: "#4f4033" },
-  { id: "hall", label: "编成所", x: 366, y: 880, width: 124, height: 180, kind: "shop", accent: "#7f8f5a", roof: "#474a3a" },
-  { id: "tavern", label: "酒馆", x: 526, y: 880, width: 124, height: 180, kind: "shop", accent: "#c07a4a", roof: "#5a4436" },
-  { id: "tent", label: "营帐", x: 916, y: 880, width: 146, height: 150, kind: "tent", accent: "#a87947", roof: "#6b5a3f" },
-  { id: "record", label: "桃园碑", x: 1096, y: 880, width: 92, height: 120, kind: "monument", accent: "#b9a05a", roof: "#4a4438" },
-  // 城门压在中轴最南端，是可穿行的门洞（不参与碰撞）
-  { id: "gate", label: "城门", x: 740, y: 1080, width: 190, height: 170, kind: "gate", accent: "#a87947", roof: "#4a4238" },
+  // 北排：坐北朝南（在走位区上沿之外，不挡走位），皇宫居中，两侧各两座
+  { id: "forge", label: "铁匠铺", x: 200, y: 300, width: 172, height: 180, kind: "shop", accent: "#b5522a", roof: "#c8561f" },
+  { id: "herb", label: "药铺", x: 410, y: 300, width: 172, height: 180, kind: "shop", accent: "#5f7a36", roof: "#cf6a2a" },
+  { id: "palace", label: "皇宫", x: 900, y: 300, width: 320, height: 220, kind: "palace", accent: "#a33327", roof: "#b83a24" },
+  { id: "inn", label: "客栈", x: 1200, y: 300, width: 172, height: 180, kind: "shop", accent: "#b06a30", roof: "#ce6d2c" },
+  // 中排：横街两侧，各两座，让出中轴与东西两个城口
+  { id: "supply", label: "军需帐", x: 200, y: 520, width: 172, height: 180, kind: "shop", accent: "#9a6a30", roof: "#c85f22" },
+  { id: "bank", label: "钱庄", x: 400, y: 520, width: 172, height: 180, kind: "shop", accent: "#9a7a34", roof: "#c65f21" },
+  { id: "tavern", label: "酒馆", x: 1000, y: 520, width: 172, height: 180, kind: "shop", accent: "#a35f34", roof: "#c8621f" },
+  { id: "coupon", label: "活动券", x: 1200, y: 520, width: 172, height: 180, kind: "shop", accent: "#a05a6a", roof: "#c0684f" },
+  // 民居排：两座民居 + 一座隐士草庐，夹在街心两侧当街景
+  { id: "house-a", label: "民居", x: 320, y: 740, width: 172, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a" },
+  { id: "hermit", label: "隐士庐", x: 460, y: 740, width: 172, height: 170, kind: "house", accent: "#6f5a3a", roof: "#b0703c" },
+  { id: "house-b", label: "民居", x: 950, y: 740, width: 172, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a" },
+  { id: "house-c", label: "民居", x: 1150, y: 740, width: 172, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a" },
+  // 南排：门脸朝南，中轴让出出城口
+  { id: "train", label: "训练场", x: 200, y: 920, width: 172, height: 180, kind: "shop", accent: "#9a5230", roof: "#c85c20" },
+  { id: "hall", label: "编成所", x: 400, y: 920, width: 172, height: 180, kind: "shop", accent: "#5f7440", roof: "#ca6b2b" },
+  { id: "tent", label: "营帐", x: 1020, y: 920, width: 200, height: 150, kind: "tent", accent: "#9a6a30", roof: "#c07a3a" },
+  { id: "record", label: "桃园碑", x: 1280, y: 920, width: 92, height: 120, kind: "monument", accent: "#8d7434", roof: "#a89a6a" },
+  // 南面院墙中段留出城口，触发点在墙口前（不可见，只做交互）
+  { id: "gate", label: "出城口", x: 700, y: 1108, width: 110, height: 60, kind: "gate", accent: "#9a6a30", roof: "#a97a44" },
 ];
 
 const SPOT_BY_ID = new Map(STREET_SPOTS.map((spot) => [spot.id, spot]));
@@ -134,7 +140,7 @@ const STREET_WALKERS: StreetWalker[] = [
     y: 500,
     speed: 0.24,
     phase: 0.4,
-    scale: 1,
+    scale: 1.5,
     hat: false,
     staff: true,
     basket: false,
@@ -154,7 +160,7 @@ const STREET_WALKERS: StreetWalker[] = [
     y: 660,
     speed: 0.34,
     phase: 1.9,
-    scale: 0.94,
+    scale: 1.42,
     hat: false,
     staff: false,
     basket: true,
@@ -174,11 +180,80 @@ const STREET_WALKERS: StreetWalker[] = [
     y: 660,
     speed: 0.46,
     phase: 4.2,
-    scale: 0.8,
+    scale: 1.2,
     hat: false,
     staff: false,
     basket: false,
     lines: ["我长大也要当将军！", "娘说将军的队伍不抢东西，是真的吗？"],
+  },
+  // 城口与皇宫门前的甲士：站定不动，只做拦问与对话
+  {
+    npcId: "guard-south",
+    name: "门卒",
+    title: "城南门卒",
+    color: "#4a4f3c",
+    accent: "#d9c48a",
+    baseX: 648,
+    range: 0,
+    y: 1096,
+    speed: 0,
+    phase: 0,
+    scale: 1.5,
+    hat: true,
+    staff: true,
+    basket: false,
+    lines: ["出城往南是旷野，将军要多带些伤药。", "城门昼夜不闭，只是外头不太平。"],
+  },
+  {
+    npcId: "guard-south-b",
+    name: "门卒",
+    title: "城南门卒",
+    color: "#4a4f3c",
+    accent: "#d9c48a",
+    baseX: 752,
+    range: 0,
+    y: 1096,
+    speed: 0,
+    phase: 0,
+    scale: 1.5,
+    hat: true,
+    staff: true,
+    basket: false,
+    lines: ["末将守这一班，将军慢走。", "回来时敲三下门环，我就开。"],
+  },
+  {
+    npcId: "guard-palace",
+    name: "禁军",
+    title: "宫门甲士",
+    color: "#5a4030",
+    accent: "#e0c070",
+    baseX: 848,
+    range: 0,
+    y: 352,
+    speed: 0,
+    phase: 0,
+    scale: 1.5,
+    hat: true,
+    staff: true,
+    basket: false,
+    lines: ["宫内不得喧哗，将军请报上名号。", "主公正在堂上议事。"],
+  },
+  {
+    npcId: "guard-palace-b",
+    name: "禁军",
+    title: "宫门甲士",
+    color: "#5a4030",
+    accent: "#e0c070",
+    baseX: 952,
+    range: 0,
+    y: 352,
+    speed: 0,
+    phase: 0,
+    scale: 1.5,
+    hat: true,
+    staff: true,
+    basket: false,
+    lines: ["主公在殿上，将军进前一步便好。", "宫墙外头就是水渠，别踩空。"],
   },
 ];
 
@@ -319,15 +394,15 @@ interface ShopRoom {
 }
 
 const SHOP_ROOMS: Record<ShopId, ShopRoom> = {
-  forge: { npcId: "blacksmith", wall: "#382e26", accent: "#d98a44", floor: "#43372a", prop: "anvil" },
-  herb: { npcId: "herbalist", wall: "#363528", accent: "#9fbf72", floor: "#423c2c", prop: "herbs" },
-  supply: { npcId: "quartermaster", wall: "#3d3325", accent: "#d8b46a", floor: "#493d2a", prop: "racks" },
-  inn: { npcId: "innkeeper", wall: "#3f322a", accent: "#e0b070", floor: "#4d3d2d", prop: "stairs" },
-  bank: { npcId: "banker", wall: "#383126", accent: "#e3c164", floor: "#443a2b", prop: "abacus" },
-  coupon: { npcId: "couponkeeper", wall: "#3f2d2d", accent: "#e59aac", floor: "#483531", prop: "gifts" },
-  train: { npcId: "trainer", wall: "#393026", accent: "#cf9560", floor: "#483a2b", prop: "dummies" },
-  hall: { npcId: "drillmaster", wall: "#333828", accent: "#b9cf8a", floor: "#41422e", prop: "armor" },
-  tavern: { npcId: "tavernkeeper", wall: "#402f28", accent: "#e0a05c", floor: "#4b392c", prop: "tables" },
+  forge: { npcId: "blacksmith", wall: "#8a6a44", accent: "#b5522a", floor: "#a9793f", prop: "anvil" },
+  herb: { npcId: "herbalist", wall: "#7f8a52", accent: "#5f7a36", floor: "#9a8b46", prop: "herbs" },
+  supply: { npcId: "quartermaster", wall: "#8d7450", accent: "#9a6a30", floor: "#a8834a", prop: "racks" },
+  inn: { npcId: "innkeeper", wall: "#8f7050", accent: "#b06a30", floor: "#ad8046", prop: "stairs" },
+  bank: { npcId: "banker", wall: "#877552", accent: "#9a7a34", floor: "#a68b4e", prop: "abacus" },
+  coupon: { npcId: "couponkeeper", wall: "#94706a", accent: "#a05a6a", floor: "#a3796a", prop: "gifts" },
+  train: { npcId: "trainer", wall: "#8a7050", accent: "#9a5230", floor: "#a57b42", prop: "dummies" },
+  hall: { npcId: "drillmaster", wall: "#7d8452", accent: "#5f7440", floor: "#9c8d4a", prop: "armor" },
+  tavern: { npcId: "tavernkeeper", wall: "#8f6b48", accent: "#a35f34", floor: "#a87c46", prop: "tables" },
 };
 
 interface WalkState {
@@ -369,6 +444,8 @@ export interface WalkTownProps {
   active: boolean;
   partyColor: string;
   partyAccent: string;
+  /** 队伍成员配色（按编成所顺序），用来在街上排成一列跟走。 */
+  partyMembers?: { color: string; accent: string }[];
   onFacility: (id: FieldFacilityId) => void;
   onLeave: () => void;
   onCouncil: () => void;
@@ -460,130 +537,129 @@ function paintLantern(
   ctx.fillRect(lx - 2, ly + 8, 4, 2);
 }
 
-function paintRidge(
-  ctx: CanvasRenderingContext2D,
-  offset: number,
-  baseline: number,
-  amplitude: number,
-  color: string,
-  phase: number,
-): void {
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.moveTo(0, baseline + 20);
-  for (let x = -40; x <= VIEW_W + 80; x += 40) {
-    const y = baseline - Math.abs(Math.sin((x + offset) * 0.006 + phase)) * amplitude;
-    ctx.lineTo(x, y);
-  }
-  ctx.lineTo(VIEW_W, baseline + 30);
-  ctx.lineTo(0, baseline + 30);
-  ctx.closePath();
-  ctx.fill();
-}
-
 function paintShopFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: number, time: number): void {
   const w = spot.width;
   const left = sx - w / 2;
   const base = spot.y;
+  const wallH = 92;
+  const wallTop = base - wallH;
 
-  ctx.fillStyle = "rgba(0,0,0,0.34)";
-  ctx.beginPath();
-  ctx.ellipse(sx, base + 16, w * 0.56, 12, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // 影子：原版是一小块硬边暗影，不做柔和渐变
+  ctx.fillStyle = "#a86f26";
+  ctx.fillRect(left - 2, base - 2, w + 4, 9);
 
-  ctx.fillStyle = "#6c5a44";
-  ctx.fillRect(left - 6, base - 6, w + 12, 8);
+  // 石台阶：灰石 + 黑边
+  ctx.fillStyle = "#9fa294";
+  ctx.fillRect(left - 6, base - 12, w + 12, 12);
+  ctx.fillStyle = "#bcbfb0";
+  for (let x = left - 6; x < left + w + 6; x += 26) {
+    ctx.fillRect(x + 1, base - 11, 24, 8);
+  }
+  ctx.fillStyle = "#1c1a15";
+  ctx.fillRect(left - 6, base - 12, w + 12, 2);
+  ctx.fillRect(left - 6, base - 2, w + 12, 2);
 
-  const wall = ctx.createLinearGradient(0, base - 128, 0, base);
-  wall.addColorStop(0, "#e2cfa8");
-  wall.addColorStop(1, "#b89a74");
-  ctx.fillStyle = wall;
-  ctx.fillRect(left, base - 128, w, 122);
+  // 墙身：奶油木壁，外圈一道黑描边，中间立柱深褐
+  ctx.fillStyle = "#efdcac";
+  ctx.fillRect(left, wallTop, w, wallH);
+  ctx.fillStyle = "#f7e9c4";
+  ctx.fillRect(left + 2, wallTop + 2, w - 4, 6);
+  ctx.fillStyle = "#1c1a15";
+  ctx.fillRect(left, wallTop, w, 2);
+  ctx.fillRect(left, wallTop, 2, wallH);
+  ctx.fillRect(left + w - 2, wallTop, 2, wallH);
+  ctx.fillStyle = "#6b4a28";
+  ctx.fillRect(left + 6, wallTop + 2, 6, wallH - 2);
+  ctx.fillRect(left + w - 12, wallTop + 2, 6, wallH - 2);
 
-  ctx.fillStyle = "#4a3422";
-  ctx.fillRect(left, base - 128, 7, 122);
-  ctx.fillRect(left + w - 7, base - 128, 7, 122);
-  ctx.fillRect(left, base - 128, w, 7);
-  ctx.fillRect(left, base - 118, w, 3);
-
-  ctx.fillStyle = "#2a2119";
-  ctx.fillRect(left + 14, base - 104, 26, 28);
-  ctx.fillRect(left + w - 40, base - 104, 26, 28);
-  ctx.strokeStyle = "rgba(214,190,146,0.5)";
-  ctx.lineWidth = 1;
-  for (const wx of [left + 14, left + w - 40]) {
-    ctx.beginPath();
-    ctx.moveTo(wx + 13, base - 104);
-    ctx.lineTo(wx + 13, base - 76);
-    ctx.moveTo(wx, base - 90);
-    ctx.lineTo(wx + 26, base - 90);
-    ctx.stroke();
+  // 两扇小窗：黑框 + 木棂十字
+  for (const wx of [left + 18, left + w - 36]) {
+    ctx.fillStyle = "#1c1a15";
+    ctx.fillRect(wx, wallTop + 16, 18, 16);
+    ctx.fillStyle = "#f4e6c2";
+    ctx.fillRect(wx + 2, wallTop + 18, 14, 12);
+    ctx.fillStyle = "#7c5326";
+    ctx.fillRect(wx + 8, wallTop + 18, 2, 12);
+    ctx.fillRect(wx + 2, wallTop + 23, 14, 2);
   }
 
-  ctx.fillStyle = "#241c13";
-  ctx.beginPath();
-  ctx.moveTo(sx - 21, base);
-  ctx.lineTo(sx - 21, base - 48);
-  ctx.quadraticCurveTo(sx, base - 64, sx + 21, base - 48);
-  ctx.lineTo(sx + 21, base);
-  ctx.closePath();
-  ctx.fill();
-  const doorGlow = ctx.createLinearGradient(0, base - 58, 0, base);
-  doorGlow.addColorStop(0, "rgba(255,204,126,0.05)");
-  doorGlow.addColorStop(1, "rgba(255,190,108,0.42)");
-  ctx.fillStyle = doorGlow;
-  ctx.fillRect(sx - 17, base - 54, 34, 54);
+  // 门：一整扇双开木门，比窗高出一头，黑框 + 门楣 + 门钉，不做窗棂
+  const doorW = 64;
+  ctx.fillStyle = "#1c1a15";
+  ctx.fillRect(sx - doorW / 2 - 3, base - 68, doorW + 6, 66);
+  ctx.fillStyle = "#8a5a2c";
+  ctx.fillRect(sx - doorW / 2, base - 65, doorW / 2 - 1, 62);
+  ctx.fillRect(sx + 1, base - 65, doorW / 2 - 1, 62);
+  // 门扇木纹
+  ctx.fillStyle = "#a06a34";
+  for (let yy = base - 60; yy < base - 6; yy += 12) {
+    ctx.fillRect(sx - doorW / 2 + 2, yy, doorW / 2 - 5, 2);
+    ctx.fillRect(sx + 3, yy, doorW / 2 - 5, 2);
+  }
+  // 门钉：两扇各四枚
+  ctx.fillStyle = "#f0d9a0";
+  for (const kx of [-12, 8]) {
+    for (const ky of [-50, -26]) ctx.fillRect(sx + kx, base + ky, 3, 3);
+  }
+  // 门缝 + 门槛石
+  ctx.fillStyle = "#1c1a15";
+  ctx.fillRect(sx, base - 65, 2, 62);
+  ctx.fillStyle = "#b0895a";
+  ctx.fillRect(sx - doorW / 2 - 5, base - 4, doorW + 10, 5);
 
-  ctx.fillStyle = spot.accent;
-  ctx.fillRect(sx - 25, base - 68, 50, 5);
-  for (let i = 0; i < 5; i++) {
-    ctx.fillStyle = i % 2 === 0 ? "#efe0bb" : spot.accent;
-    ctx.fillRect(sx - 25 + i * 10, base - 80, 10, 12);
+  // 匾额：屋檐下的小横匾，白底黑框，字照原版那种正楷横排（民居不挂匾）
+  if (spot.kind !== "house") {
+    const plaqueW = Math.min(w - 24, 18 + spot.label.length * 13);
+    ctx.fillStyle = "#1c1a15";
+    ctx.fillRect(sx - plaqueW / 2 - 2, wallTop - 15, plaqueW + 4, 22);
+    ctx.fillStyle = "#f8eed2";
+    ctx.fillRect(sx - plaqueW / 2, wallTop - 13, plaqueW, 18);
+    ctx.fillStyle = "#241a10";
+    ctx.font = townFont(12);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(spot.label, sx, wallTop - 3);
+    ctx.textBaseline = "alphabetic";
   }
 
-  ctx.fillStyle = "#f1e2bd";
-  roundRectPath(ctx, sx - 36, base - 102, 72, 20, 3);
-  ctx.fill();
-  ctx.strokeStyle = spot.accent;
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-  ctx.fillStyle = "#3a2a1a";
-  ctx.font = townFont(12);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(spot.label, sx, base - 91);
-  ctx.textBaseline = "alphabetic";
+  paintLantern(ctx, left + 4, base - wallH - 2, time, sx * 0.01);
+  paintLantern(ctx, left + w - 4, base - wallH - 2, time, sx * 0.01 + 1.9);
 
-  paintLantern(ctx, left + 16, base - 122, time, sx * 0.01);
-  paintLantern(ctx, left + w - 16, base - 122, time, sx * 0.01 + 1.9);
-
+  // 瓦顶：橘红瓦、横向瓦垄、黑檐口，两角起翘
+  const roofTop = wallTop - 44;
   ctx.fillStyle = spot.roof;
   ctx.beginPath();
-  ctx.moveTo(left - 16, base - 124);
-  ctx.lineTo(left + 2, base - 168);
-  ctx.lineTo(left + w - 2, base - 168);
-  ctx.lineTo(left + w + 16, base - 124);
+  ctx.moveTo(left - 16, wallTop + 2);
+  ctx.lineTo(left - 10, wallTop - 16);
+  ctx.lineTo(left + 8, roofTop);
+  ctx.lineTo(left + w - 8, roofTop);
+  ctx.lineTo(left + w + 10, wallTop - 16);
+  ctx.lineTo(left + w + 16, wallTop + 2);
   ctx.closePath();
   ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.22)";
-  ctx.lineWidth = 1;
-  for (let i = 1; i < 5; i++) {
-    const t = i / 5;
-    ctx.beginPath();
-    ctx.moveTo(left - 16 + 18 * t, base - 124);
-    ctx.lineTo(left + 2 + (w - 4) * t, base - 168);
-    ctx.stroke();
+  // 瓦垄：一条 1px 深线一行，行间夹一道更亮的橘色，像素瓦片味
+  for (let y = roofTop + 6; y < wallTop - 2; y += 7) {
+    const t = (y - roofTop) / (wallTop - roofTop);
+    const inset = 8 + 12 * t;
+    ctx.fillStyle = "#8e3208";
+    ctx.fillRect(left - 16 + inset, y, w + 32 - inset * 2, 1);
+    ctx.fillStyle = "#e8842f";
+    ctx.fillRect(left - 16 + inset, y + 1, w + 32 - inset * 2, 2);
   }
-  ctx.fillStyle = "#8a6a44";
-  ctx.fillRect(left + 2, base - 172, w - 4, 6);
-
-  const spill = ctx.createRadialGradient(sx, base + 12, 2, sx, base + 12, 52);
-  spill.addColorStop(0, "rgba(255,196,112,0.2)");
-  spill.addColorStop(1, "rgba(255,180,90,0)");
-  ctx.fillStyle = spill;
-  ctx.beginPath();
-  ctx.ellipse(sx, base + 12, 52, 26, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // 瓦当竖缝：每 10px 一条短竖线，只压下半截，避免糊成一片
+  ctx.fillStyle = "rgba(120,42,8,0.8)";
+  for (let x = left - 12; x < left + w + 12; x += 10) {
+    ctx.fillRect(x, roofTop + 10, 1, wallTop - roofTop - 14);
+  }
+  // 檐口黑边与屋脊
+  ctx.fillStyle = "#1c1a15";
+  ctx.fillRect(left - 16, wallTop, w + 32, 3);
+  ctx.fillRect(left + w + 14, wallTop - 18, 4, 12);
+  ctx.fillRect(left - 18, wallTop - 18, 4, 12);
+  ctx.fillStyle = "#5a2f12";
+  ctx.fillRect(left + 6, roofTop - 5, w - 12, 6);
+  ctx.fillStyle = "#1c1a15";
+  ctx.fillRect(left + 6, roofTop - 7, w - 12, 2);
 }
 
 function paintPalaceFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: number, time: number): void {
@@ -864,94 +940,47 @@ function paintTentFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: num
   ctx.stroke();
 }
 
-function paintGateFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: number, time: number): void {
-  const w = spot.width;
-  const left = sx - w / 2;
-  const base = spot.y;
+/** 城内的树：三团像素绿块 + 黑描边 + 褐树干，照原版那种矮墩墩的树画。 */
+function paintTree(ctx: CanvasRenderingContext2D, x: number, y: number, scale: number): void {
+  const r = 18 * scale;
+  ctx.fillStyle = "#a86f26";
+  ctx.fillRect(x - r * 1.1, y - 2, r * 2.2, 6);
 
-  ctx.fillStyle = "rgba(0,0,0,0.38)";
-  ctx.beginPath();
-  ctx.ellipse(sx, base + 16, w * 0.6, 13, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillStyle = "#6b4a24";
+  ctx.fillRect(x - 3 * scale, y - 12 * scale, 6 * scale, 12 * scale);
 
-  const wall = ctx.createLinearGradient(0, base - 136, 0, base);
-  wall.addColorStop(0, "#736b5c");
-  wall.addColorStop(1, "#4a4438");
-  ctx.fillStyle = wall;
-  ctx.fillRect(left, base - 136, w, 132);
-  ctx.fillStyle = "#5b5447";
-  for (let x = left; x < left + w; x += 24) {
-    ctx.fillRect(x + 3, base - 148, 15, 12);
+  const blobs: [number, number, number][] = [
+    [0, -26, 1],
+    [-0.75, -16, 0.72],
+    [0.75, -16, 0.72],
+  ];
+  for (const [dx, dy, s] of blobs) {
+    ctx.fillStyle = "#266b1f";
+    ctx.fillRect(x + dx * r * 1.2 - r * s - 2, y + dy * scale - r * s - 2, r * s * 2 + 4, r * s * 2 + 4);
   }
-  ctx.strokeStyle = "rgba(30,26,20,0.35)";
-  ctx.lineWidth = 1;
-  for (let y = base - 124; y < base; y += 22) {
-    ctx.beginPath();
-    ctx.moveTo(left, y);
-    ctx.lineTo(left + w, y);
-    ctx.stroke();
+  for (const [dx, dy, s] of blobs) {
+    ctx.fillStyle = "#3f9c2f";
+    ctx.fillRect(x + dx * r * 1.2 - r * s, y + dy * scale - r * s, r * s * 2, r * s * 2);
   }
-
-  ctx.fillStyle = "#1f1a14";
-  ctx.beginPath();
-  ctx.moveTo(sx - 46, base);
-  ctx.lineTo(sx - 46, base - 66);
-  ctx.quadraticCurveTo(sx, base - 94, sx + 46, base - 66);
-  ctx.lineTo(sx + 46, base);
-  ctx.closePath();
-  ctx.fill();
-  const glow = ctx.createLinearGradient(0, base - 80, 0, base + 10);
-  glow.addColorStop(0, "rgba(255,214,150,0.08)");
-  glow.addColorStop(1, "rgba(255,196,120,0.45)");
-  ctx.fillStyle = glow;
-  ctx.fillRect(sx - 42, base - 74, 84, 74);
-
-  // 门扇向内敞开，门洞是可穿行的
-  for (const dir of [-1, 1] as const) {
-    ctx.save();
-    ctx.translate(sx + dir * 44, base - 58);
-    ctx.rotate(dir * 0.42);
-    ctx.fillStyle = "#4a2f1c";
-    ctx.fillRect(dir === -1 ? 0 : -30, 0, 30, 58);
-    ctx.strokeStyle = "#c99a58";
-    ctx.lineWidth = 2;
-    ctx.strokeRect(dir === -1 ? 2 : -28, 4, 26, 50);
-    ctx.restore();
-  }
-  for (const dir of [-1, 1] as const) {
-    ctx.fillStyle = "#c99a58";
-    ctx.beginPath();
-    ctx.arc(sx + dir * 58, base - 30, 3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.fillStyle = "#3c362e";
-  ctx.fillRect(left - 8, base - 174, w + 16, 42);
-  ctx.fillStyle = "#5a3a28";
-  ctx.beginPath();
-  ctx.moveTo(left - 16, base - 168);
-  ctx.quadraticCurveTo(sx, base - 214, left + w + 16, base - 168);
-  ctx.quadraticCurveTo(sx, base - 150, left - 16, base - 168);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = "#e8d0a0";
-  ctx.font = townFont(15);
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(spot.label, sx, base - 158);
-  ctx.textBaseline = "alphabetic";
-
-  paintLantern(ctx, left + 16, base - 128, time, 1.1);
-  paintLantern(ctx, left + w - 16, base - 128, time, 3.3);
-
-  const spill = ctx.createRadialGradient(sx, base + 10, 2, sx, base + 10, 58);
-  spill.addColorStop(0, "rgba(255,200,120,0.2)");
-  spill.addColorStop(1, "rgba(255,190,100,0)");
-  ctx.fillStyle = spill;
-  ctx.beginPath();
-  ctx.ellipse(sx, base + 10, 58, 28, 0, 0, Math.PI * 2);
-  ctx.fill();
+  ctx.fillStyle = "#63bd47";
+  ctx.fillRect(x - r * 0.7, y - 26 * scale - r * 0.6, r * 0.9, r * 0.6);
 }
+
+/** 城内几处树位：只摆在铺面之间的空当与南排街边，不挡走位。 */
+const STREET_TREES: [number, number, number][] = [
+  [250, 306, 0.92],
+  [410, 306, 0.86],
+  [905, 302, 0.98],
+  [1248, 306, 0.88],
+  [1388, 340, 0.7],
+  [92, 352, 0.72],
+  [286, 906, 0.82],
+  [446, 906, 0.8],
+  [614, 1092, 0.9],
+  [860, 1092, 0.9],
+  [1006, 944, 0.76],
+  [1196, 940, 0.78],
+];
 
 function paintLampPost(ctx: CanvasRenderingContext2D, x: number, y: number, time: number, phase: number): void {
   ctx.fillStyle = "rgba(0,0,0,0.28)";
@@ -969,8 +998,7 @@ function paintLampPost(ctx: CanvasRenderingContext2D, x: number, y: number, time
   paintLantern(ctx, x, y - 56, time, phase);
 }
 
-function paintBannerPost(ctx: CanvasRenderingContext2D, x: number, y: number, time: number, phase: number): void {
-  ctx.strokeStyle = "#2b241b";
+function paintBannerPost(ctx: CanvasRenderingContext2D, x: number, y: number, time: number, phase: number): void {  ctx.strokeStyle = "#2b241b";
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(x, y);
@@ -1150,154 +1178,237 @@ function paintStreet(
   player: WalkState,
   partyColor: string,
   partyAccent: string,
+  partyMembers: { color: string; accent: string }[] = [],
+  trailRef: { current: { x: number; y: number; facing: FieldFacing }[] } = { current: [] },
 ): void {
   const camX = cam.x;
   const camY = cam.y;
   const horizon = 300 - camY;
 
-  ctx.fillStyle = "#241f19";
+  // 吞食天地式城内：整屏都是城，不画天。上方一道灰砖城墙，下方大片赭黄土地。
+  ctx.fillStyle = "#d2953a";
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 
-  const skyBottom = 236 - camY;
-  if (skyBottom > 0) {
-    const sky = ctx.createLinearGradient(0, -camY, 0, skyBottom);
-    sky.addColorStop(0, "#151d32");
-    sky.addColorStop(0.55, "#3c3a52");
-    sky.addColorStop(1, "#8a6048");
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, VIEW_W, Math.min(VIEW_H, skyBottom));
+  // 城墙：亮灰砖 + 深灰缝，砖块错缝砌，砖面再压一道高光
+  const wallBottom = horizon;
+  if (wallBottom > 0) {
+    const brickH = 26;
+    const brickW = 52;
+    ctx.fillStyle = "#aeb0a6";
+    ctx.fillRect(0, 0, VIEW_W, Math.min(VIEW_H, wallBottom));
+    ctx.fillStyle = "#c2c4b8";
+    for (let row = 0; row * brickH < wallBottom + brickH; row++) {
+      const y = row * brickH - (camY % brickH);
+      const shift = (row % 2) * (brickW / 2);
+      for (let col = -1; col * brickW < VIEW_W + brickW; col++) {
+        const x = col * brickW + shift - (camX % (brickW * 2));
+        if (x > VIEW_W || x + brickW < 0 || y > wallBottom || y + brickH < 0) continue;
+        ctx.fillRect(x + 2, y + 2, brickW - 4, brickH - 5);
+      }
+    }
+    ctx.fillStyle = "rgba(72,73,66,0.16)";
+    for (let row = 0; row * brickH < wallBottom + brickH; row++) {
+      const y = row * brickH - (camY % brickH);
+      if (y > wallBottom) continue;
+      ctx.fillRect(0, y + brickH - 3, VIEW_W, 3);
+      ctx.fillRect(0, y, VIEW_W, 2);
+    }
+    // 墙顶压檐与墙脚石头，两侧各一段垛口
+    ctx.fillStyle = "#8d8f85";
+    ctx.fillRect(0, 0, VIEW_W, Math.max(0, 10 - camY));
+    ctx.fillStyle = "#6f7168";
+    ctx.fillRect(0, Math.max(0, 10 - camY), VIEW_W, 3);
+    ctx.fillStyle = "#8f9187";
+    ctx.fillRect(0, wallBottom - 12, VIEW_W, 12);
+    ctx.fillStyle = "#5d5f57";
+    ctx.fillRect(0, wallBottom - 3, VIEW_W, 4);
+    // 城墙上的小垛口，隔 120 一格
+    for (let x = -((camX * 0.6) % 120); x < VIEW_W + 120; x += 120) {
+      ctx.fillStyle = "#9b9d92";
+      ctx.fillRect(x + 8, 6 - camY, 46, 16);
+      ctx.fillStyle = "#6f7168";
+      ctx.fillRect(x, 22 - camY, 62, 4);
+    }
+    // 北城口：在城墙上开一道门洞，正对南北主街（走位只到墙面，口子当出城方向）
+    const gateX = 640 - camX;
+    const gateTop = 232 - camY;
+    if (gateX < VIEW_W && gateX + 120 > 0 && gateTop < wallBottom) {
+      ctx.fillStyle = "#1c1a15";
+      ctx.fillRect(gateX, gateTop, 120, wallBottom - gateTop);
+      const tunnel = ctx.createLinearGradient(0, gateTop, 0, wallBottom);
+      tunnel.addColorStop(0, "#2b241c");
+      tunnel.addColorStop(1, "#4a3a28");
+      ctx.fillStyle = tunnel;
+      ctx.fillRect(gateX + 6, gateTop + 8, 108, wallBottom - gateTop - 8);
+      ctx.fillStyle = "#8d9082";
+      ctx.beginPath();
+      ctx.moveTo(gateX, gateTop);
+      ctx.lineTo(gateX + 60, gateTop - 26);
+      ctx.lineTo(gateX + 120, gateTop);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = "#a5a898";
+      ctx.fillRect(gateX - 10, gateTop - 6, 18, wallBottom - gateTop + 6);
+      ctx.fillRect(gateX + 112, gateTop - 6, 18, wallBottom - gateTop + 6);
+    }
   }
 
-  ctx.fillStyle = "rgba(236,240,248,0.65)";
-  for (let i = 0; i < 120; i++) {
-    const sx = ((i * 149 + 31) % TOWN_W) - camX;
-    const sy = ((i * 47) % 118) + 8 - camY;
-    if (sx < -2 || sx > VIEW_W + 2 || sy < -2 || sy > skyBottom) continue;
-    ctx.fillRect(sx, sy, 1.3, 1.3);
+  // 地面：原版城内是草地打底，铺面跟前一圈橙黄沙土，中间一条条灰石路
+  const groundTop = Math.max(0, wallBottom);
+  if (groundTop < VIEW_H) {
+    ctx.fillStyle = "#55b53c";
+    ctx.fillRect(0, groundTop, VIEW_W, VIEW_H - groundTop);
+    // 草地纹理：亮暗小方块，硬边像素感
+    for (let i = 0; i < 520; i++) {
+      const wx = (i * 149 + 23) % TOWN_W;
+      const wy = 300 + ((i * 91) % 880);
+      const sx = wx - camX;
+      const sy = wy - camY;
+      if (sx < -3 || sx > VIEW_W + 3 || sy < groundTop || sy > VIEW_H) continue;
+      ctx.fillStyle = i % 3 === 0 ? "#3d9a2c" : "#79cd5c";
+      ctx.fillRect(sx, sy, 3, 2);
+    }
+    // 铺面跟前的沙土带：一整条，上下压深色边，边缘再撒几块凸起
+    const dirtBands: [number, number, number, number][] = [
+      [0, 292, TOWN_W, 54],
+      [0, 512, TOWN_W, 44],
+      [0, 732, TOWN_W, 44],
+      [0, 912, TOWN_W, 44],
+    ];
+    for (const [dx, dy, dw, dh] of dirtBands) {
+      const sx = dx - camX;
+      const sy = dy - camY;
+      if (sx + dw < -10 || sx > VIEW_W + 10 || sy + dh < -10 || sy > VIEW_H + 10) continue;
+      ctx.fillStyle = "#b57426";
+      ctx.fillRect(sx, sy, dw, dh);
+      ctx.fillStyle = "#dda03c";
+      ctx.fillRect(sx, sy + 2, dw, dh - 4);
+      // 边缘凸起，别切成一条死板的直线
+      for (let x = 0; x < dw; x += 26) {
+        const bump = (x / 26) % 3 === 0 ? 6 : 3;
+        ctx.fillStyle = "#dda03c";
+        ctx.fillRect(sx + x, sy + dh - 2, 22, bump);
+        ctx.fillStyle = "#b57426";
+        ctx.fillRect(sx + x, sy + dh + bump - 2, 22, 2);
+      }
+      ctx.fillStyle = "#c9842e";
+      for (let i = 0; i < dw / 12; i++) {
+        ctx.fillRect(sx + ((i * 31) % dw), sy + 6 + ((i * 17) % Math.max(8, dh - 12)), 3, 2);
+      }
+    }
   }
 
-  paintRidge(ctx, camX * 0.12, 172 - camY * 0.45, 30, "#242a3d", 0.5);
-  paintRidge(ctx, camX * 0.2, 194 - camY * 0.55, 20, "#1c2132", 1.7);
-
-  const wallTop = 236 - camY;
-  ctx.fillStyle = "#2b2924";
-  ctx.fillRect(0, wallTop, VIEW_W, 64);
-  ctx.fillStyle = "#39362f";
-  for (let x = -((camX * 0.3) % 30); x < VIEW_W; x += 30) {
-    ctx.fillRect(x, wallTop - 8, 16, 9);
-  }
-
-  const ground = ctx.createLinearGradient(0, horizon, 0, VIEW_H);
-  ground.addColorStop(0, "#5d5240");
-  ground.addColorStop(0.55, "#4a4031");
-  ground.addColorStop(1, "#2f2a21");
-  ctx.fillStyle = ground;
-  ctx.fillRect(0, horizon, VIEW_W, VIEW_H - horizon);
-
-  ctx.strokeStyle = "rgba(22,18,12,0.26)";
-  ctx.lineWidth = 1;
-  for (let wy = 340; wy < TOWN_H; wy += 36) {
-    const sy = wy - camY;
-    if (sy < -2 || sy > VIEW_H + 2) continue;
-    ctx.beginPath();
-    ctx.moveTo(0, sy);
-    ctx.lineTo(VIEW_W, sy);
-    ctx.stroke();
-  }
-  for (let wx = camX - ((camX + 26) % 52); wx < camX + VIEW_W; wx += 52) {
-    if (wx < 0 || wx > TOWN_W) continue;
-    const sx = wx - camX;
-    ctx.beginPath();
-    ctx.moveTo(sx, Math.max(0, horizon));
-    ctx.lineTo(sx, VIEW_H);
-    ctx.stroke();
-  }
+  // 皇宫一圈水渠：蓝水 + 黑描边 + 亮水纹，正南留一道石桥通向宫门
+  const paintCanal = (x: number, y: number, w: number, h: number) => {
+    const sx = x - camX;
+    const sy = y - camY;
+    if (sx > VIEW_W || sx + w < 0 || sy > VIEW_H || sy + h < 0) return;
+    ctx.fillStyle = "#1c1a15";
+    ctx.fillRect(sx, sy, w, h);
+    ctx.fillStyle = "#2f6b9a";
+    ctx.fillRect(sx + 2, sy + 2, w - 4, h - 4);
+    ctx.fillStyle = "#6fa8c8";
+    for (let i = 0; i < Math.max(w, h) / 14; i++) {
+      const wx = sx + 4 + ((i * 23) % Math.max(8, w - 10));
+      const wy = sy + 5 + ((i * 17) % Math.max(8, h - 10));
+      ctx.fillRect(wx, wy, Math.min(9, w - 6), 2);
+    }
+  };
+  paintCanal(712, 40, 26, 258);
+  paintCanal(1062, 40, 26, 258);
+  paintCanal(712, 292, 198, 26);
+  paintCanal(966, 292, 122, 26);
+  // 石桥：压在正南渠上，桥面带两道石栏
+  const bx = 852 - camX;
+  const by = 290 - camY;
+  ctx.fillStyle = "#1c1a15";
+  ctx.fillRect(bx, by, 106, 30);
+  ctx.fillStyle = "#b4b7a8";
+  ctx.fillRect(bx + 2, by + 2, 102, 26);
+  ctx.fillStyle = "#bcbfb0";
+  for (let i = 0; i < 102; i += 26) ctx.fillRect(bx + 4 + i, by + 4, 22, 10);
+  ctx.fillStyle = "#8d9082";
+  ctx.fillRect(bx + 2, by + 16, 102, 3);
 
   const paintRoad = (x: number, y: number, w: number, h: number) => {
     const rx = x - camX;
     const ry = y - camY;
     if (rx > VIEW_W || rx + w < 0 || ry > VIEW_H || ry + h < 0) return;
-    const road = ctx.createLinearGradient(0, ry, 0, ry + h);
-    road.addColorStop(0, "#6b5d47");
-    road.addColorStop(1, "#544736");
-    ctx.fillStyle = road;
+    // 灰石路：小块方石、黑描边、深灰缝，像素味要足
+    const TILE_W = 28;
+    const TILE_H = 18;
+    ctx.fillStyle = "#a9ac9e";
     ctx.fillRect(rx, ry, w, h);
-    ctx.fillStyle = "rgba(30,25,18,0.32)";
-    ctx.fillRect(rx, ry, w, 3);
-    ctx.fillRect(rx, ry + h - 3, w, 3);
-    ctx.strokeStyle = "rgba(232,214,176,0.11)";
-    ctx.lineWidth = 1.2;
-    for (let wy = y + 24; wy < y + h; wy += 28) {
+    ctx.fillStyle = "#bcbfb0";
+    for (let wy = Math.max(y, 0) - (Math.max(y, 0) % TILE_H); wy < y + h; wy += TILE_H) {
+      const sy = wy - camY;
+      if (sy > VIEW_H || sy + TILE_H < 0) continue;
+      const rowShift = (Math.round((wy - y) / TILE_H) % 2) * (TILE_W / 2);
+      for (let wx = x - (x % TILE_W) + rowShift; wx < x + w; wx += TILE_W) {
+        const sx = wx - camX;
+        if (sx > VIEW_W || sx + TILE_W < 0) continue;
+        ctx.fillRect(
+          Math.max(sx, rx) + 1,
+          sy + 1,
+          Math.min(sx + TILE_W, rx + w) - Math.max(sx, rx) - 2,
+          TILE_H - 2,
+        );
+      }
+    }
+    ctx.fillStyle = "#575a4c";
+    for (let wy = y + TILE_H; wy < y + h; wy += TILE_H) {
       const sy = wy - camY;
       if (sy < -2 || sy > VIEW_H + 2) continue;
-      ctx.beginPath();
-      ctx.moveTo(rx, sy);
-      ctx.lineTo(rx + w, sy);
-      ctx.stroke();
+      ctx.fillRect(rx, sy, w, 2);
     }
-    for (let wx = x - (x % 56); wx < x + w; wx += 56) {
+    for (let wx = x - (x % TILE_W); wx < x + w; wx += TILE_W) {
       const sx = wx - camX;
       if (sx < -2 || sx > VIEW_W + 2) continue;
-      ctx.beginPath();
-      ctx.moveTo(sx, Math.max(ry, 0));
-      ctx.lineTo(sx, Math.min(ry + h, VIEW_H));
-      ctx.stroke();
+      ctx.fillRect(sx, Math.max(ry, 0), 2, Math.min(ry + h, VIEW_H) - Math.max(ry, 0));
     }
+    // 路沿：一条黑线把路和沙土分开
+    ctx.fillStyle = "#22201a";
+    ctx.fillRect(rx, ry, w, 3);
+    ctx.fillRect(rx, ry + h - 3, w, 3);
   };
-  // 路网：南北两条横街 + 贯穿皇宫与城门的中轴主街 + 东西两条支巷。
-  // 主街最宽最亮，横街次之，支巷最暗，靠明度差读出主次而不是铺满一整块地面。
-  paintRoad(0, 344, TOWN_W, 356);
-  paintRoad(0, 880, TOWN_W, 270);
-  paintRoad(40, 336, 120, 814);
-  paintRoad(1280, 336, 120, 814);
-  paintRoad(670, 336, 140, 814);
+  // 路网：一横一竖两条石板路十字穿过全城，四个方向各自接到城口的缺口上
+  paintRoad(640, 336, 120, 814);
+  paintRoad(0, 600, TOWN_W, 100);
 
-  // 广场：中轴与北横街交汇处的一块方砖地，四周压边石
-  const plaza = { x: 510, y: 512, w: 460, h: 188 };
+  // 广场：南北主街与东西横街交汇处一块方砖地，压黑边
+  const plaza = { x: 566, y: 566, w: 268, h: 168 };
   const px = plaza.x - camX;
   const py = plaza.y - camY;
   if (px < VIEW_W && px + plaza.w > 0 && py < VIEW_H && py + plaza.h > 0) {
-    const stone = ctx.createLinearGradient(0, py, 0, py + plaza.h);
-    stone.addColorStop(0, "#786852");
-    stone.addColorStop(1, "#5f513d");
-    ctx.fillStyle = stone;
+    ctx.fillStyle = "#b4b7a8";
     ctx.fillRect(px, py, plaza.w, plaza.h);
-    ctx.strokeStyle = "rgba(28,23,16,0.5)";
-    ctx.lineWidth = 5;
-    ctx.strokeRect(px + 3, py + 3, plaza.w - 6, plaza.h - 6);
-    ctx.strokeStyle = "rgba(232,214,176,0.14)";
-    ctx.lineWidth = 1;
-    for (let gx = plaza.x + 46; gx < plaza.x + plaza.w; gx += 46) {
-      ctx.beginPath();
-      ctx.moveTo(gx - camX, Math.max(py, 0));
-      ctx.lineTo(gx - camX, Math.min(py + plaza.h, VIEW_H));
-      ctx.stroke();
-    }
-    for (let gy = plaza.y + 46; gy < plaza.y + plaza.h; gy += 46) {
+    ctx.fillStyle = "#c4c7b8";
+    for (let gy = plaza.y + 18; gy < plaza.y + plaza.h; gy += 18) {
       const sy = gy - camY;
-      ctx.beginPath();
-      ctx.moveTo(Math.max(px, 0), sy);
-      ctx.lineTo(Math.min(px + plaza.w, VIEW_W), sy);
-      ctx.stroke();
+      const shift = (Math.round((gy - plaza.y) / 18) % 2) * 15;
+      for (let gx = plaza.x + 30; gx < plaza.x + plaza.w; gx += 30) {
+        ctx.fillRect(gx - camX + shift + 1, sy - 16, 28, 15);
+      }
     }
-    // 中心铺一圈方石，暗示这里是全城的汇聚点
-    ctx.strokeStyle = "rgba(226,200,148,0.3)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(740 - camX, 606 - camY, 62, 0, Math.PI * 2);
-    ctx.stroke();
+    ctx.fillStyle = "#22201a";
+    ctx.fillRect(px, py, plaza.w, 3);
+    ctx.fillRect(px, py + plaza.h - 3, plaza.w, 3);
+    ctx.fillRect(px, py, 3, plaza.h);
+    ctx.fillRect(px + plaza.w - 3, py, 3, plaza.h);
   }
 
-  // 主街中线：一条浅色石带从皇宫脚下一直铺到城门
-  ctx.fillStyle = "rgba(214,192,150,0.14)";
-  ctx.fillRect(694 - camX, 344, 92, 806);
-  ctx.fillStyle = "rgba(236,214,176,0.2)";
-  ctx.fillRect(738 - camX, 344, 4, 806);
+  // 主街中线：一条窄石带顺着南北主街铺到南面城口
+  ctx.fillStyle = "#cfd2c2";
+  ctx.fillRect(684 - camX, 344, 28, 806);
+  ctx.fillStyle = "#22201a";
+  ctx.fillRect(684 - camX, 344, 2, 806);
+  ctx.fillRect(710 - camX, 344, 2, 806);
 
   // 北排门脸前的阶沿
-  ctx.fillStyle = "#6a5b46";
+  ctx.fillStyle = "#b4b7a8";
   ctx.fillRect(0, 326 - camY, VIEW_W, 18);
-  ctx.fillStyle = "rgba(24,20,14,0.4)";
+  ctx.fillStyle = "#22201a";
+  ctx.fillRect(0, 326 - camY, VIEW_W, 3);
   ctx.fillRect(0, 342 - camY, VIEW_W, 3);
 
   const viewLeft = camX - 160;
@@ -1312,19 +1423,24 @@ function paintStreet(
 
   const bodies: { y: number; draw: () => void }[] = [];
   for (const spot of STREET_SPOTS) {
+    // 出城口只是个不可见的交互点，画面上由院墙的缺口表示
+    if (spot.kind === "gate") continue;
     if (!inView(spot.x, spot.y, spot.width / 2)) continue;
     bodies.push({
       y: spot.y,
       draw: () => {
-        if (spot.kind === "shop") paintShopFront(ctx, spot, spot.x, time);
+        if (spot.kind === "shop" || spot.kind === "house") paintShopFront(ctx, spot, spot.x, time);
         else if (spot.kind === "palace") paintPalaceFront(ctx, spot, spot.x, time);
         else if (spot.kind === "monument") paintMonument(ctx, spot, spot.x, time);
-        else if (spot.kind === "tent") paintTentFront(ctx, spot, spot.x, time);
-        else paintGateFront(ctx, spot, spot.x, time);
+        else paintTentFront(ctx, spot, spot.x, time);
       },
     });
   }
 
+  for (const [tx, ty, ts] of STREET_TREES) {
+    if (!inView(tx, ty, 60)) continue;
+    bodies.push({ y: ty, draw: () => paintTree(ctx, tx, ty, ts) });
+  }
   for (const [lx, ly] of [
     [300, 470],
     [620, 470],
@@ -1379,12 +1495,47 @@ function paintStreet(
   bodies.push({
     y: player.y,
     draw: () => {
+      // 队伍移动：按队伍人数在身后排成一条队列，队尾的人跟在走过的轨迹上
+      const members = partyMembers.length > 0 ? partyMembers : [{ color: partyColor, accent: partyAccent }];
+      const trail = trailRef.current;
+      const followers = Math.max(0, Math.min(members.length - 1, 5));
+      // 站着不动时轨迹很短，剩下的队友按朝向排在身后，别叠成一坨
+      const back =
+        player.facing === "up"
+          ? { x: 0, y: 1 }
+          : player.facing === "down"
+            ? { x: 0, y: -1 }
+            : player.facing === "left"
+              ? { x: 1, y: 0 }
+              : { x: -1, y: 0 };
+      for (let i = followers; i >= 1; i--) {
+        const sample = trail[Math.min(trail.length - 1, i * 12)];
+        const mem = members[i] ?? members[members.length - 1];
+        const far = !sample || Math.hypot(sample.x - player.x, sample.y - player.y) < i * 12;
+        const at = far
+          ? { x: player.x + back.x * i * 20, y: player.y + back.y * i * 20, facing: player.facing }
+          : sample;
+        bodies.push({
+          y: at.y,
+          draw: () => {
+            paintHeroSprite(ctx, at.x, at.y, {
+              time,
+              facing: at.facing,
+              moving: player.moving,
+              partyColor: mem.color,
+              partyAccent: mem.accent,
+              scale: 1.42,
+            });
+          },
+        });
+      }
       paintHeroSprite(ctx, player.x, player.y, {
         time,
         facing: player.facing,
         moving: player.moving,
         partyColor,
         partyAccent,
+        scale: 1.5,
       });
     },
   });
@@ -1392,9 +1543,66 @@ function paintStreet(
   for (const body of bodies) body.draw();
   ctx.restore();
 
-  const vignette = ctx.createRadialGradient(VIEW_W / 2, 300, 260, VIEW_W / 2, 270, 620);
+  // 院墙：沿走位区外沿砌一圈灰砖墙，南面中段留出城口（不画城门，只留缺口与门柱）
+  const paintYardWall = (x: number, y: number, w: number, h: number, crenel: boolean) => {
+    const sx = x - camX;
+    const sy = y - camY;
+    if (sx > VIEW_W || sx + w < 0 || sy > VIEW_H || sy + h < 0) return;
+    ctx.fillStyle = "#22201a";
+    ctx.fillRect(sx, sy, w, h);
+    ctx.fillStyle = "#b4b7a8";
+    ctx.fillRect(sx + 2, sy + 2, w - 4, h - 6);
+    // 砖缝：横两行，竖错缝
+    ctx.fillStyle = "#8d9082";
+    for (let by = sy + 12; by < sy + h - 4; by += 12) {
+      ctx.fillRect(sx + 2, by, w - 4, 2);
+    }
+    for (let by = sy + 2, row = 0; by < sy + h - 6; by += 12, row++) {
+      const shift = (row % 2) * 12;
+      for (let bx = sx + 2 + shift; bx < sx + w - 4; bx += 24) {
+        ctx.fillRect(bx, by, 2, 10);
+      }
+    }
+    if (crenel) {
+      ctx.fillStyle = "#c6c9ba";
+      for (let bx = sx + 4; bx < sx + w - 8; bx += 22) {
+        ctx.fillRect(bx, sy - 8, 12, 8);
+        ctx.fillStyle = "#22201a";
+        ctx.fillRect(bx + 12, sy - 8, 2, 8);
+        ctx.fillStyle = "#c6c9ba";
+      }
+    }
+  };
+  // 南墙分左右两段，中段 120 宽留出南城口
+  paintYardWall(0, 1150, 640, 26, true);
+  paintYardWall(760, 1150, 680, 26, true);
+  // 东西两道墙，各在横街中线（y 600~700）开一个城口
+  paintYardWall(14, 336, 22, 264, false);
+  paintYardWall(14, 700, 22, 450, false);
+  paintYardWall(1404, 336, 22, 264, false);
+  paintYardWall(1404, 700, 22, 450, false);
+  // 城口两侧的门柱，比墙高出一截
+  for (const [px, py, ph] of [
+    [628, 1128, 48],
+    [772, 1128, 48],
+    [8, 596, 48],
+    [8, 704, 48],
+    [1398, 596, 48],
+    [1398, 704, 48],
+  ] as [number, number, number][]) {
+    const sx = px - camX;
+    const sy = py - camY;
+    ctx.fillStyle = "#22201a";
+    ctx.fillRect(sx, sy, 20, ph);
+    ctx.fillStyle = "#a5a898";
+    ctx.fillRect(sx + 2, sy + 2, 16, ph - 4);
+    ctx.fillStyle = "#c6c9ba";
+    ctx.fillRect(sx + 2, sy + 2, 16, 6);
+  }
+
+  const vignette = ctx.createRadialGradient(VIEW_W / 2, 300, 300, VIEW_W / 2, 270, 660);
   vignette.addColorStop(0, "rgba(0,0,0,0)");
-  vignette.addColorStop(1, "rgba(0,0,0,0.46)");
+  vignette.addColorStop(1, "rgba(30,22,8,0.22)");
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 }
@@ -1674,12 +1882,12 @@ function paintShopInterior(
 
   const floor = ctx.createLinearGradient(0, 300, 0, VIEW_H);
   floor.addColorStop(0, room.floor);
-  floor.addColorStop(1, "#211a13");
+  floor.addColorStop(1, "#7a5730");
   ctx.fillStyle = floor;
   ctx.fillRect(0, 300, VIEW_W, VIEW_H - 300);
 
-  ctx.strokeStyle = "rgba(20,15,10,0.35)";
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = "rgba(74,48,22,0.4)";
+  ctx.lineWidth = 1.4;
   for (let y = 318; y < VIEW_H; y += 34) {
     ctx.beginPath();
     ctx.moveTo(0, y);
@@ -1752,9 +1960,9 @@ function paintShopInterior(
     partyAccent,
   });
 
-  const vignette = ctx.createRadialGradient(480, 300, 220, 480, 270, 540);
+  const vignette = ctx.createRadialGradient(480, 300, 240, 480, 270, 560);
   vignette.addColorStop(0, "rgba(0,0,0,0)");
-  vignette.addColorStop(1, "rgba(0,0,0,0.5)");
+  vignette.addColorStop(1, "rgba(40,26,10,0.24)");
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, VIEW_W, VIEW_H);
 }
@@ -2056,7 +2264,7 @@ function doorSpotAt(player: WalkState): StreetSpot | null {
 function streetSolidAt(x: number, y: number): boolean {
   for (const spot of STREET_SPOTS) {
     // 城门是门洞，可以穿过去；北排在走位区之外，不用拦
-    if (spot.y < 600 || spot.kind === "gate") continue;
+    if (spot.y <= SHOP_WALK_TOP || spot.kind === "gate") continue;
     if (Math.abs(x - spot.x) > spot.width / 2 + 6) continue;
     if (y > spot.y - spot.height - 10 && y < spot.y + 10) return true;
   }
@@ -2096,6 +2304,7 @@ export function WalkTown({
   active,
   partyColor,
   partyAccent,
+  partyMembers,
   onFacility,
   onLeave,
   onCouncil,
@@ -2110,7 +2319,7 @@ export function WalkTown({
   const sceneRef = useRef<Scene>({ kind: "street" });
   const speechRef = useRef<Speech | null>(null);
   const activeRef = useRef(active);
-  const propsRef = useRef({ chapterIndex, townName, partyColor, partyAccent, onFacility, onLeave, onCouncil, onArmy });
+  const propsRef = useRef({ chapterIndex, townName, partyColor, partyAccent, partyMembers, onFacility, onLeave, onCouncil, onArmy });
   const playerRef = useRef<WalkState>({
     x: 740,
     y: 1140,
@@ -2123,10 +2332,11 @@ export function WalkTown({
   const targetRef = useRef<TownTarget | null>(null);
   const promptRef = useRef<string | null>(null);
   const timeRef = useRef(0);
-  const returnRef = useRef({ x: 740, y: 1140 });
+  const returnRef = useRef({ x: 700, y: 1140 });
+  const trailRef = useRef<{ x: number; y: number; facing: FieldFacing }[]>([]);
 
   useEffect(() => {
-    propsRef.current = { chapterIndex, townName, partyColor, partyAccent, onFacility, onLeave, onCouncil, onArmy };
+    propsRef.current = { chapterIndex, townName, partyColor, partyAccent, partyMembers, onFacility, onLeave, onCouncil, onArmy };
   });
 
   useEffect(() => {
@@ -2526,9 +2736,30 @@ export function WalkTown({
         setPrompt(label);
       }
 
+      // 队尾轨迹：只在街上记录，进了内景就断掉，出来重新排队
+      if (current.kind === "street") {
+        const trail = trailRef.current;
+        const last = trail[trail.length - 1];
+        if (!last || Math.hypot(player.x - last.x, player.y - last.y) > 3) {
+          trail.push({ x: player.x, y: player.y, facing: player.facing });
+          if (trail.length > 90) trail.shift();
+        }
+      } else {
+        trailRef.current.length = 0;
+      }
+
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       if (current.kind === "street") {
-        paintStreet(ctx, time, streetCam(player.x, player.y), player, info.partyColor, info.partyAccent);
+        paintStreet(
+          ctx,
+          time,
+          streetCam(player.x, player.y),
+          player,
+          info.partyColor,
+          info.partyAccent,
+          info.partyMembers ?? [],
+          trailRef,
+        );
       } else if (current.kind === "palace") {
         const index = info.chapterIndex % PALACE_LORDS.length;
         paintPalace(
