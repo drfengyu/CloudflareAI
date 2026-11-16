@@ -1953,18 +1953,20 @@ test("战斗规则：新行军启用特性与成长计策，旧行军已落的�
   const lv9 = startBattle(lv9Run, 0, createReplayState(lv9Run)).party[0];
   assert.equal(lv9.tactics.includes("guwu"), false, "9 级赵云还没领悟鼓舞");
   assert.equal(lv9.tactics.includes("huoji"), true, "赵云天生会炼火");
-  assert.equal(lv9.tactics.includes("yehuo"), true, "智力够、等级到，业火计自动领悟");
+  assert.equal(lv9.tactics.includes("yehuo"), false, "业火计要到 10 级才领悟");
   save.party[0].level = 10;
   const lv10 = startBattle(lv9Run, 0, createReplayState(lv9Run)).party[0];
   assert.equal(lv10.tactics.includes("guwu"), true, "10 级领悟鼓舞");
+  assert.equal(lv10.tactics.includes("yehuo"), true, "10 级领悟业火计");
 });
 
-test("策略点：主要随智力浮动，等级再补几点，封顶 12 点", () => {
+test("策略点：主要随智力浮动，等级再补几点，封顶 16 点", () => {
   const pangAt7 = tacticsFor(SAGA_GENERAL_BY_ID.get("pangtong"), 7);
   const pangAt8 = tacticsFor(SAGA_GENERAL_BY_ID.get("pangtong"), 8);
   assert.equal(pangAt7.includes("huoji"), true);
-  assert.equal(pangAt7.includes("hunluan"), true);
-  assert.equal(pangAt7.includes("guwu"), false, "7 级庞统还没领悟鼓舞");
+  assert.equal(pangAt7.includes("hunluan"), false, "疑心计要到 8 级（原版 15 级收拢）才领悟");
+  assert.equal(pangAt7.includes("guwu"), false, "庞统的鼓舞记在 8 级成长表里");
+  assert.equal(pangAt8.includes("hunluan"), true, "8 级领悟疑心计");
   assert.equal(pangAt8.includes("guwu"), true, "8 级领悟鼓舞");
   assert.equal(pangAt7.every((id) => SAGA_TACTIC_BY_ID.has(id)), true, "计策表里都有这些计策");
 
@@ -1977,7 +1979,7 @@ test("策略点：主要随智力浮动，等级再补几点，封顶 12 点", (
   const atLv30 = startBattle(run, 0, createReplayState(run)).party[0];
   assert.equal(atLv10.tacticPoints > atLv1.tacticPoints, true, "升级增加策略点");
   assert.equal(atLv1.tacticPoints, 6, "刘备 1 级：基础 2 + 智力 72/20=3 + 仁德 1");
-  assert.equal(atLv30.tacticPoints, 12, "策略点封顶 12");
+  assert.equal(atLv30.tacticPoints, 16, "满级智力成长后顶到上限 16 点");
   assert.equal(atLv1.tactics.includes("huifu"), true, "仁德之主自带回复");
 
   const zhangfeiRun = {
@@ -2387,10 +2389,10 @@ test("计策按表里的消耗扣策略值，点数不够就发不出去", () =>
   assert.equal(hero.tactics.includes("huoshen"), true, "满级诸葛亮会火神计");
   assert.equal(hero.tactics.includes("jishi"), true, "智力封顶也记着激石计");
   const cost = SAGA_TACTIC_BY_ID.get("huoshen")?.cost ?? 0;
-  assert.equal(cost, 4);
+  assert.equal(cost, 8, "火神计按原版 SP 8");
   const before = hero.tacticPoints;
   resolveBattleRound(battle, [{ g: hero.id, a: "tactic", t: "huoshen" }], state);
-  assert.equal(hero.tacticPoints, Math.max(0, before - cost), "施放火神计扣 4 点");
+  assert.equal(hero.tacticPoints, Math.max(0, before - cost), "施放火神计扣 8 点");
 
   // 策略值清零后发计策：按普攻兜底，不会白扣也不会白放。
   const poor = initialTrialSave();
@@ -2417,10 +2419,10 @@ test("战斗内变阵：等级与策略值都够才布成，并扣掉变阵消�
   const hero = battle.party[0];
   const before = hero.tacticPoints;
   const cost = SAGA_FORMATION_BY_ID.get("bamen")?.cost ?? 0;
-  assert.equal(cost, 6);
+  assert.equal(cost, 8);
   resolveBattleRound(battle, [{ g: hero.id, a: "formation", f: "bamen" }], state);
   assert.equal(battle.playerFormation, "bamen", "满级军师布得下八门阵");
-  assert.equal(hero.tacticPoints, Math.max(0, before - cost), "变阵扣 6 点策略值");
+  assert.equal(hero.tacticPoints, Math.max(0, before - cost), "变阵扣 8 点策略值");
 
   // 等级不够：变阵作废，本回合照常出手。
   const low = initialTrialSave();

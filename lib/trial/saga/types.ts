@@ -206,7 +206,9 @@ export type TacticId =
   | "wanfu"
   | "jinxian"
   | "fusha"
-  | "xianjing";
+  | "xianjing"
+  | "jiezhen"
+  | "ansha";
 export type SagaItemKind = "weapon" | "armor" | "consumable" | "supply";
 
 /** 武将固有特性：数值、暴击与连击上的个人长板。 */
@@ -378,8 +380,9 @@ export interface SagaTacticDef {
   cost: number;
   /** 领悟等级：0 为入门计策，其余要练到这个等级才出现在计策表里。 */
   level: number;
-  /** 计策系别，决定结算口径（火 / 水打全体，石打单体，回复与特殊各自一套）。 */
-  kind: "fire" | "water" | "rock" | "heal" | "healAll" | "confuse" | "buff" | "trap";
+  /** 计策系别，决定结算口径（火 / 水打全体，石打单体，回复与特殊各自一套）。
+   *  `break` = 破阵（敌阵回散开），`assassin` = 单体即死。 */
+  kind: "fire" | "water" | "rock" | "heal" | "healAll" | "confuse" | "buff" | "trap" | "break" | "assassin";
   /** 威力系数：火 / 水 / 石按它放大伤害，回复按它放大回兵量。 */
   power?: number;
   /** 混乱 / 缚杀这类计策持续几回合。 */

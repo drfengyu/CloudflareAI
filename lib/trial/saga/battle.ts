@@ -301,7 +301,7 @@ function applyWarband(
         unit.bondAtk += bond.attackPct ?? 0;
         unit.bondCut += bond.damageCut ?? 0;
         unit.speed += bond.speed ?? 0;
-        unit.tacticPoints = Math.min(12, unit.tacticPoints + (bond.tacticPoints ?? 0));
+        unit.tacticPoints = Math.min(16, unit.tacticPoints + (bond.tacticPoints ?? 0));
       }
     }
     for (const bond of bonds) {
@@ -376,11 +376,12 @@ function buildBattle(
       bonds: [],
       bondAtk: 0,
       bondCut: 0,
-      // v3 起策略点主要看智力：每 20 点智力 +1，等级每 4 级再 +1，封顶 12。
+      // v3 起策略点主要看智力：每 20 点智力 +1，等级每 4 级再 +1；v12 起上限抬到 16，
+      // 好让原版口径的高阶计策（6~12 点）放得动。
       tacticPoints:
         rules >= 3
           ? Math.min(
-              12,
+              16,
               2 +
                 Math.floor(stats.intellect / 20) +
                 Math.floor((saved.level - 1) / 4) +
@@ -389,7 +390,7 @@ function buildBattle(
             )
           : rules >= 2
             ? Math.min(
-                12,
+                16,
                 2 +
                   Math.floor(stats.intellect / 30) +
                   Math.floor((saved.level - 1) / 3) +
@@ -845,6 +846,72 @@ function executeTactic(
             actor: actor.name,
             target: target.name,
             text: `${target.name} 察觉了${name}，未曾上当`,
+          });
+        }
+      }
+      break;
+    }
+    case "break": {
+      // 解阵计：把敌军阵形打回散开（v12 起才有效）；敌军本来就散开时只算落空。
+      if (actor.side === "player") {
+        const broken = battle.enemyFormation;
+        if (broken === "yulin") {
+          events.push({
+            kind: "miss",
+            side: actor.side,
+            actor: actor.name,
+            text: `敌军本就没有布阵，${name}落空`,
+          });
+        } else {
+          battle.enemyFormation = "yulin";
+          events.push({
+            kind: "buff",
+            side: actor.side,
+            actor: actor.name,
+            text: `${actor.name} 施放${name}，敌军阵形散开`,
+          });
+        }
+      } else {
+        const broken = battle.playerFormation;
+        if (broken !== "yulin") {
+          battle.playerFormation = "yulin";
+          events.push({
+            kind: "buff",
+            side: actor.side,
+            actor: actor.name,
+            text: `${actor.name} 施放${name}，我军阵形被破`,
+          });
+        }
+      }
+      break;
+    }
+    case "assassin": {
+      // 暗杀计：单体即死，成算随智力差走，最高四成半。
+      const candidates = living(foes);
+      const target =
+        (typeof requestedTarget === "number" ? candidates[requestedTarget] : null) ??
+        candidates.sort((a, b) => b.troops - a.troops)[0];
+      if (target) {
+        const chance = clamp(12 + (actor.intellect - target.intellect) / 4, 4, 45);
+        if (roll(battle) * 100 < chance) {
+          const lost = target.troops;
+          target.troops = 0;
+          target.downed = true;
+          events.push({
+            kind: "down",
+            side: target.side,
+            actor: actor.name,
+            target: target.name,
+            amount: lost,
+            text: `${actor.name} 施放${name}，${target.name} 当场毙命`,
+          });
+        } else {
+          events.push({
+            kind: "miss",
+            side: actor.side,
+            actor: actor.name,
+            target: target.name,
+            text: `${target.name} 逃过${name}`,
           });
         }
       }

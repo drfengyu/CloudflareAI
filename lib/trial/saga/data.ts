@@ -161,60 +161,63 @@ export const SAGA_GENERAL_BY_ID = new Map(SAGA_GENERALS.map((g) => [g.id, g]));
 export const SAGA_STARTER_IDS = ["liubei", "guanyu", "zhangfei"] as const;
 
 /**
- * 计策表：照《吞食天地2》那套做——火 / 水 / 石 / 回复各分阶梯，
- * 每阶有威力系数、习得等级与策略值消耗；等级按本作 30 级上限压缩。
+ * 计策表：照《吞食天地2》原版口径做——习得等级与 SP 消耗尽量贴原表，
+ * 只把超出本作 30 级上限的部分收拢到 30 级（顶阶恰好练满才学会）。
+ * 威力按原版伤害比（炼火 100 / 业火 360 / 炎热 1000 / 大热 2500 / 火神 4000 一类）折成系数。
  *
  * 入门四计（炼火 / 赤心 / 疑心 / 鼓舞）沿用旧 id，旧战报里的指令仍能重放。
  */
 export const SAGA_TACTICS: SagaTacticDef[] = [
-  // 火系：打全体，威力逐阶上升
-  { id: "huoji", name: "炼火计", desc: "火计初阶，灼烧全体敌军", cost: 1, level: 1, kind: "fire", power: 1 },
-  { id: "yehuo", name: "业火计", desc: "火势加倍，全体敌军重伤", cost: 2, level: 7, kind: "fire", power: 1.7 },
-  { id: "yanre", name: "炎热计", desc: "烈焰覆阵，全体敌军大损", cost: 3, level: 13, kind: "fire", power: 2.6 },
-  { id: "dare", name: "大热计", desc: "四面成火海，全体敌军重创", cost: 3, level: 20, kind: "fire", power: 3.8 },
-  { id: "huoshen", name: "火神计", desc: "火神降世，火系最强一击", cost: 4, level: 27, kind: "fire", power: 5.2 },
-  // 水系：打全体，威力略低于火但消耗更高，不受阵形克制
-  { id: "shutu", name: "水途计", desc: "掘堤放水，冲散全体敌军", cost: 2, level: 9, kind: "water", power: 1.1 },
-  { id: "shuixing", name: "水星计", desc: "水势暴涨，全体敌军受伤", cost: 3, level: 15, kind: "water", power: 2 },
-  { id: "shuilei", name: "水雷计", desc: "聚流成雷，全体敌军大损", cost: 3, level: 18, kind: "water", power: 3 },
-  { id: "hongshui", name: "洪水计", desc: "引来洪水，全军水没", cost: 4, level: 24, kind: "water", power: 4.4 },
-  { id: "shuilong", name: "水龙计", desc: "水龙翻江，水系最强一击", cost: 5, level: 28, kind: "water", power: 5.6 },
-  // 石系：砸单体，本作里单体最重
-  { id: "luomu", name: "落木计", desc: "滚木砸阵，单体受创", cost: 1, level: 5, kind: "rock", power: 1.2 },
-  { id: "liushui", name: "流木计", desc: "乱木倾泻，单体重伤", cost: 2, level: 11, kind: "rock", power: 2.2 },
-  { id: "luoshi", name: "落石计", desc: "巨石自崖顶砸下，单体重创", cost: 3, level: 17, kind: "rock", power: 3.4 },
-  { id: "toushi", name: "投石计", desc: "投石车齐发，单体大损", cost: 3, level: 22, kind: "rock", power: 4.4 },
-  { id: "jishi", name: "激石计", desc: "山石崩落，石系最强一击", cost: 4, level: 29, kind: "rock", power: 6 },
-  // 回复系：赤心 / 铜仙 / 银仙 / 完复补单体，金仙补全队
-  { id: "huifu", name: "赤心计", desc: "为兵力最少的友军回兵", cost: 1, level: 1, kind: "heal", power: 1 },
-  { id: "tongxian", name: "铜仙计", desc: "为兵力最少的友军回一批兵", cost: 2, level: 10, kind: "heal", power: 2.4 },
-  { id: "yinxian", name: "银仙计", desc: "为兵力最少的友军回大量兵", cost: 3, level: 16, kind: "heal", power: 4 },
-  { id: "wanfu", name: "完复计", desc: "一名友军兵力几乎回满", cost: 3, level: 21, kind: "heal", power: 6 },
-  { id: "jinxian", name: "金仙计", desc: "全队一起回兵", cost: 4, level: 26, kind: "healAll", power: 2.6 },
-  // 特殊系
-  { id: "hunluan", name: "疑心计", desc: "令一名敌将生疑，2 回合不能行动", cost: 1, level: 4, kind: "confuse", turns: 2 },
-  { id: "fusha", name: "缚杀计", desc: "以术缚住敌将，3 回合不能行动", cost: 3, level: 19, kind: "confuse", turns: 3 },
-  { id: "xianjing", name: "陷阱计", desc: "诱敌入坑，削掉目标当前四成兵力", cost: 4, level: 23, kind: "trap", power: 0.4 },
-  { id: "guwu", name: "鼓舞", desc: "全队攻击提升 3 回合", cost: 1, level: 3, kind: "buff" },
+  // 火系：原版 炼火2/业火4/炎热6/大热6/火神8，习得 1/11/20/34/40
+  { id: "huoji", name: "炼火计", desc: "火计初阶，灼烧全体敌军", cost: 2, level: 1, kind: "fire", power: 1 },
+  { id: "yehuo", name: "业火计", desc: "火势四倍，全体敌军重伤", cost: 4, level: 10, kind: "fire", power: 2.2 },
+  { id: "yanre", name: "炎热计", desc: "烈焰覆阵，全体敌军大损", cost: 6, level: 18, kind: "fire", power: 4.4 },
+  { id: "dare", name: "大热计", desc: "四面成火海，全体敌军重创", cost: 6, level: 25, kind: "fire", power: 8 },
+  { id: "huoshen", name: "火神计", desc: "火神降世，火系最强一击", cost: 8, level: 30, kind: "fire", power: 14 },
+  // 水系：原版 水途3/水星5/水雷6/洪水8/水龙10，习得 3/12/24/36/44
+  { id: "shutu", name: "水途计", desc: "掘堤放水，冲散全体敌军", cost: 3, level: 3, kind: "water", power: 1 },
+  { id: "shuixing", name: "水星计", desc: "水势暴涨，全体敌军受伤", cost: 5, level: 11, kind: "water", power: 2.4 },
+  { id: "shuilei", name: "水雷计", desc: "聚流成雷，全体敌军大损", cost: 6, level: 18, kind: "water", power: 4.6 },
+  { id: "hongshui", name: "洪水计", desc: "引来洪水，全军水没", cost: 8, level: 25, kind: "water", power: 8.6 },
+  { id: "shuilong", name: "水龙计", desc: "水龙翻江，水系最强一击", cost: 10, level: 30, kind: "water", power: 14.5 },
+  // 石系：原版 落木4/流木4/落石6/投石8/激石10，习得 15/26/37/47（收拢到 30）
+  { id: "luomu", name: "落木计", desc: "滚木砸阵，单体受创", cost: 4, level: 5, kind: "rock", power: 1.2 },
+  { id: "liushui", name: "流木计", desc: "乱木倾泻，单体重伤", cost: 4, level: 13, kind: "rock", power: 2.6 },
+  { id: "luoshi", name: "落石计", desc: "巨石自崖顶砸下，单体重创", cost: 6, level: 20, kind: "rock", power: 5.2 },
+  { id: "toushi", name: "投石计", desc: "投石车齐发，单体大损", cost: 8, level: 26, kind: "rock", power: 9 },
+  { id: "jishi", name: "激石计", desc: "山石崩落，石系最强一击", cost: 10, level: 30, kind: "rock", power: 16 },
+  // 回复系：原版 赤心2/铜仙4/银仙6/完复8/金仙4，习得 2/17/28/38/46
+  { id: "huifu", name: "赤心计", desc: "为兵力最少的友军回兵", cost: 2, level: 1, kind: "heal", power: 1 },
+  { id: "tongxian", name: "铜仙计", desc: "为兵力最少的友军回一批兵", cost: 4, level: 12, kind: "heal", power: 4 },
+  { id: "yinxian", name: "银仙计", desc: "为兵力最少的友军回大量兵", cost: 6, level: 20, kind: "heal", power: 10 },
+  { id: "wanfu", name: "完复计", desc: "一名友军兵力几乎回满", cost: 8, level: 26, kind: "heal", power: 25 },
+  { id: "jinxian", name: "金仙计", desc: "全队一起回兵（原版 SP 反而低）", cost: 4, level: 29, kind: "healAll", power: 6 },
+  // 特殊系：原版 疑心6/缚杀12/陷阱12/解阵16/暗杀16
+  { id: "hunluan", name: "疑心计", desc: "令一名敌将生疑，2 回合不能行动", cost: 6, level: 8, kind: "confuse", turns: 2 },
+  { id: "fusha", name: "缚杀计", desc: "以术缚住敌将，3 回合不能行动", cost: 12, level: 22, kind: "confuse", turns: 3 },
+  { id: "xianjing", name: "陷阱计", desc: "诱敌入坑，削掉目标当前四成兵力", cost: 12, level: 25, kind: "trap", power: 0.4 },
+  { id: "jiezhen", name: "解阵计", desc: "破去敌军阵形，打回散开", cost: 10, level: 29, kind: "break" },
+  { id: "ansha", name: "暗杀计", desc: "直接取一名敌将性命，成算不高", cost: 10, level: 28, kind: "assassin" },
+  { id: "guwu", name: "鼓舞", desc: "全队攻击提升 3 回合", cost: 2, level: 3, kind: "buff" },
 ];
 
 export const SAGA_TACTIC_BY_ID = new Map(SAGA_TACTICS.map((t) => [t.id, t]));
 
 /**
- * 阵形表：照《吞食天地2》的口径——基础阵人人可摆，进阶阵要练到等级才解锁，
- * 战斗内变阵还要付策略值（`cost`）。等级按本作 30 级上限压缩。
+ * 阵形表：照《吞食天地2》原版——鹤翼6 / 冲方10 / 白马16 / 鱼鳞21 / 锋矢27 / 一字37 / 背水43 / 静寂45 / 八卦48，
+ * 本作 30 级上限下收拢到 6 / 10 / 16 / 21 / 27；消耗按原版 8 / 12 / 8 / 16 / 24 折到策略值池。
  */
 export const SAGA_FORMATIONS: SagaFormationDef[] = [
   { id: "yulin", name: "鱼鳞", desc: "攻击 +15%，防御 -5%", atk: 115, def: 95, spd: 100, beats: "heyi", level: 0, cost: 1 },
-  { id: "heyi", name: "鹤翼", desc: "速度 +15%，攻击 +5%", atk: 105, def: 100, spd: 115, beats: "fengshi", level: 0, cost: 1 },
-  { id: "fengshi", name: "锋矢", desc: "攻击 +25%，防御 -15%", atk: 125, def: 85, spd: 105, beats: "fangyuan", level: 0, cost: 1 },
-  { id: "fangyuan", name: "方圆", desc: "防御 +25%，速度 -10%", atk: 90, def: 125, spd: 90, beats: "changshe", level: 0, cost: 1 },
-  { id: "changshe", name: "长蛇", desc: "速度 +25%，防御 -10%", atk: 100, def: 90, spd: 125, beats: "yulin", level: 0, cost: 1 },
-  { id: "yanxing", name: "雁行", desc: "攻击 +8%，防御 +2%，速度 +12%，克鱼鳞", atk: 108, def: 102, spd: 112, beats: "yulin", level: 6, cost: 2 },
-  { id: "hengzhe", name: "衡轭", desc: "攻击 +18%，防御 +5%，速度 -8%，克锋矢", atk: 118, def: 105, spd: 92, beats: "fengshi", level: 10, cost: 2 },
-  { id: "chexuan", name: "车悬", desc: "攻击 +22%，防御 -8%，速度 +18%，克长蛇", atk: 122, def: 92, spd: 118, beats: "changshe", level: 14, cost: 3 },
-  { id: "beishui", name: "背水", desc: "攻击 +30%，防御 -20%，速度 +8%，克方圆", atk: 130, def: 80, spd: 108, beats: "fangyuan", level: 18, cost: 4 },
-  { id: "bamen", name: "八门", desc: "攻击 -5%，防御 +30%，速度 -15%，克鹤翼", atk: 95, def: 130, spd: 85, beats: "heyi", level: 24, cost: 6 },
+  { id: "heyi", name: "鹤翼", desc: "速度 +15%，攻击 +5%", atk: 105, def: 100, spd: 115, beats: "fengshi", level: 0, cost: 2 },
+  { id: "fengshi", name: "锋矢", desc: "攻击 +25%，防御 -15%", atk: 125, def: 85, spd: 105, beats: "fangyuan", level: 0, cost: 2 },
+  { id: "fangyuan", name: "方圆", desc: "防御 +25%，速度 -10%", atk: 90, def: 125, spd: 90, beats: "changshe", level: 0, cost: 2 },
+  { id: "changshe", name: "长蛇", desc: "速度 +25%，防御 -10%", atk: 100, def: 90, spd: 125, beats: "yulin", level: 0, cost: 2 },
+  { id: "yanxing", name: "雁行", desc: "攻击 +8%，防御 +2%，速度 +12%，克鱼鳞", atk: 108, def: 102, spd: 112, beats: "yulin", level: 6, cost: 3 },
+  { id: "hengzhe", name: "衡轭", desc: "攻击 +18%，防御 +5%，速度 -8%，克锋矢", atk: 118, def: 105, spd: 92, beats: "fengshi", level: 10, cost: 4 },
+  { id: "chexuan", name: "车悬", desc: "攻击 +22%，防御 -8%，速度 +18%，克长蛇", atk: 122, def: 92, spd: 118, beats: "changshe", level: 16, cost: 4 },
+  { id: "beishui", name: "背水", desc: "攻击 +30%，防御 -20%，速度 +8%，克方圆", atk: 130, def: 80, spd: 108, beats: "fangyuan", level: 21, cost: 6 },
+  { id: "bamen", name: "八门", desc: "攻击 -5%，防御 +30%，速度 -15%，克鹤翼", atk: 95, def: 130, spd: 85, beats: "heyi", level: 27, cost: 8 },
 ];
 
 export const SAGA_FORMATION_BY_ID = new Map(SAGA_FORMATIONS.map((f) => [f.id, f]));
