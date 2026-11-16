@@ -28,7 +28,7 @@ export interface SagaMaintenanceWindow {
 }
 
 /** 游戏内公告版本号（与站点版本对齐）。 */
-export const SAGA_NOTICE_VERSION = "0.89.1";
+export const SAGA_NOTICE_VERSION = "0.89.2";
 
 /** 公告面板只展示最新三条，更早的留档不删。 */
 export const SAGA_NOTICE_VISIBLE = 3;
@@ -36,8 +36,8 @@ export const SAGA_NOTICE_VISIBLE = 3;
 /** 最新公告：按版本从新到旧。 */
 export const SAGA_NOTICES: SagaNoticeEntry[] = [
   {
-    id: "notice-0.89.1",
-    version: "0.89.1",
+    id: "notice-0.89.2",
+    version: "0.89.2",
     date: "2026-11-16",
     kind: "update",
     title: "城里重新排布：四个城口、民居、皇宫水渠",
@@ -47,6 +47,7 @@ export const SAGA_NOTICES: SagaNoticeEntry[] = [
       "一排最多四座房子，屋与屋之间留出空当，中间夹着民居与隐士庐，不再挤成一长溜。",
       "皇宫搬去城东，四面围一圈水渠，正南架一道石桥进宫门；宫门口加了禁军甲士。",
       "屋顶挂上正方形单字匾（宿 / 武 / 药 / 训 / 道 / 记 / 宅），照原版一眼能认出是哪家店。",
+      "城里每个人头顶都挂名字牌（卖花女 / 里正 / 小童 / 门卒甲 / 门卒乙 / 禁军甲 / 禁军乙），走近就对上号。",
       "城南口、皇宫门前都站了甲士，可以上前说话；城里人整体照原版比例放大了一圈。",
       "队伍走动时，身后会跟着队里其余武将（人数与编成所一致），站着不动也按朝向排成一列。",
     ],

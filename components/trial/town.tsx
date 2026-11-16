@@ -191,7 +191,7 @@ const STREET_WALKERS: StreetWalker[] = [
   // 城口与皇宫门前的甲士：站定不动，只做拦问与对话
   {
     npcId: "guard-south",
-    name: "门卒",
+    name: "门卒甲",
     title: "城南门卒",
     color: "#4a4f3c",
     accent: "#d9c48a",
@@ -208,7 +208,7 @@ const STREET_WALKERS: StreetWalker[] = [
   },
   {
     npcId: "guard-south-b",
-    name: "门卒",
+    name: "门卒乙",
     title: "城南门卒",
     color: "#4a4f3c",
     accent: "#d9c48a",
@@ -225,7 +225,7 @@ const STREET_WALKERS: StreetWalker[] = [
   },
   {
     npcId: "guard-palace",
-    name: "禁军",
+    name: "禁军甲",
     title: "宫门甲士",
     color: "#5a4030",
     accent: "#e0c070",
@@ -242,7 +242,7 @@ const STREET_WALKERS: StreetWalker[] = [
   },
   {
     npcId: "guard-palace-b",
-    name: "禁军",
+    name: "禁军乙",
     title: "宫门甲士",
     color: "#5a4030",
     accent: "#e0c070",
@@ -494,15 +494,19 @@ function roundRectPath(
 }
 
 function paintNameTag(ctx: CanvasRenderingContext2D, x: number, y: number, text: string): void {
-  ctx.font = townFont(10);
-  const width = ctx.measureText(text).width + 12;
-  ctx.fillStyle = "rgba(14,11,8,0.72)";
-  roundRectPath(ctx, x - width / 2, y - 11, width, 16, 8);
+  ctx.font = townFont(11);
+  const width = ctx.measureText(text).width + 14;
+  ctx.fillStyle = "rgba(10,8,6,0.82)";
+  roundRectPath(ctx, x - width / 2, y - 12, width, 17, 8);
   ctx.fill();
-  ctx.fillStyle = "rgba(246,230,196,0.93)";
+  ctx.strokeStyle = "rgba(246,230,196,0.5)";
+  ctx.lineWidth = 1;
+  roundRectPath(ctx, x - width / 2, y - 12, width, 17, 8);
+  ctx.stroke();
+  ctx.fillStyle = "#f6e6c4";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, x, y - 2.5);
+  ctx.fillText(text, x, y - 3);
   ctx.textBaseline = "alphabetic";
 }
 
@@ -1491,7 +1495,7 @@ function paintStreet(
           basket: walker.basket,
           time,
         });
-        paintNameTag(ctx, wx, walker.y - 44 * walker.scale - 10, walker.name);
+        paintNameTag(ctx, wx, walker.y - 40 * walker.scale - 9, walker.name);
       },
     });
   }
