@@ -3,6 +3,9 @@ import type {
   SagaBattleState,
   SagaField,
   SagaFieldCamp,
+  SagaFieldCity,
+  SagaFieldFerry,
+  SagaFieldGate,
   SagaFieldPoi,
 } from "@/lib/trial/saga/types";
 import {
@@ -876,19 +879,20 @@ function paintPoi(
   ctx.fillText(poi.name, cx, cy - 30);
 }
 
-function paintCityGate(
+/** 州治门楼：大地图上每区一座，按屏幕坐标画。 */
+function paintCityGateAt(
   ctx: CanvasRenderingContext2D,
-  field: SagaField,
+  city: SagaFieldCity,
+  tile: number,
+  camX: number,
+  camY: number,
   time: number,
-  townName: string,
 ): void {
-  const tile = field.tile;
-  const gx = (field.city.gateTx + 0.5) * tile;
-  const gy = (field.city.gateTy + 0.5) * tile;
-  // 门楼压在城门格上方
+  const gx = (city.gateTx + 0.5) * tile - camX;
+  const gy = (city.gateTy + 0.5) * tile - camY;
+  const wallTop = city.ty * tile - camY;
   ctx.fillStyle = "rgba(0,0,0,0.35)";
   ctx.fillRect(gx - 20, gy - 6, 40, 30);
-  const wallTop = (field.city.ty) * tile;
   ctx.fillStyle = "#4a443b";
   ctx.fillRect(gx - 26, wallTop - 34, 52, 40);
   ctx.fillStyle = "#6b4a34";
@@ -901,12 +905,65 @@ function paintCityGate(
   ctx.fillStyle = "#ecd39a";
   ctx.font = uiFont(12);
   ctx.textAlign = "center";
-  ctx.fillText(townName.slice(0, 4), gx, wallTop - 22);
+  ctx.fillText(city.name.slice(0, 4), gx, wallTop - 24);
   const glow = ctx.createRadialGradient(gx, gy + 6, 2, gx, gy + 6, 40 + Math.sin(time * 2) * 3);
   glow.addColorStop(0, "rgba(255,214,140,0.3)");
   glow.addColorStop(1, "rgba(255,180,90,0)");
   ctx.fillStyle = glow;
   ctx.fillRect(gx - 44, gy - 34, 88, 80);
+}
+
+/** 区界关卡：闸门关着是横栏，开了就只留两根门柱。 */
+function paintFieldGate(
+  ctx: CanvasRenderingContext2D,
+  gate: SagaFieldGate,
+  tile: number,
+  camX: number,
+  camY: number,
+): void {
+  const x = gate.tx * tile - camX;
+  const y = gate.ty * tile - camY;
+  const w = gate.w * tile;
+  const h = gate.h * tile;
+  ctx.fillStyle = "#5b4632";
+  ctx.fillRect(x - 6, y - 6, 8, h + 12);
+  ctx.fillRect(x + w - 2, y - 6, 8, h + 12);
+  if (!gate.open) {
+    ctx.fillStyle = "#8a8478";
+    ctx.fillRect(x, y + 4, w, h - 8);
+    ctx.fillStyle = "rgba(24,20,16,0.85)";
+    for (let i = 0; i < 4; i++) ctx.fillRect(x + 3, y + 10 + i * 12, w - 6, 3);
+  }
+  ctx.fillStyle = gate.open ? "#8fd3a2" : "#d98a8a";
+  ctx.font = uiFont(11);
+  ctx.textAlign = "center";
+  ctx.fillText(gate.open ? "关卡·开" : "关卡·闭", x + w / 2, y - 12);
+}
+
+/** 渡口：栈桥 + 小船，走上去能花船票摆到对岸。 */
+function paintFerryDock(
+  ctx: CanvasRenderingContext2D,
+  ferry: SagaFieldFerry,
+  tile: number,
+  camX: number,
+  camY: number,
+  time: number,
+): void {
+  const x = ferry.x - camX;
+  const y = ferry.y - camY;
+  ctx.fillStyle = "#6b4a34";
+  ctx.fillRect(x - 14, y - 3, 28, 6);
+  ctx.fillStyle = "#3d2b1c";
+  ctx.fillRect(x - 10, y + 3, 3, 8);
+  ctx.fillRect(x + 7, y + 3, 3, 8);
+  ctx.fillStyle = "#d9c08a";
+  ctx.beginPath();
+  ctx.ellipse(x, y - 10 + Math.sin(time * 1.6) * 1.5, 11, 4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = "#ecd39a";
+  ctx.font = uiFont(11);
+  ctx.textAlign = "center";
+  ctx.fillText(`${ferry.name} ${ferry.tickets}金`, x, y - 24);
 }
 
 /** 主角小人：大地图和城中街景共用，坐标是脚底。 */
@@ -1063,7 +1120,19 @@ function drawMinimap(
     }
   }
   ctx.fillStyle = "#e8d5ab";
-  ctx.fillRect(x + field.city.gateTx * sx - 1, y + field.city.gateTy * sy - 1, 4, 4);
+  for (const city of field.cities ?? []) {
+    ctx.fillRect(x + city.gateTx * sx - 1, y + city.gateTy * sy - 1, 4, 4);
+  }
+  for (const gate of field.gates ?? []) {
+    ctx.fillStyle = gate.open ? "#9ad7c0" : "#c65a6a";
+    ctx.fillRect(x + gate.tx * sx - 1, y + gate.ty * sy - 1, 3, 3);
+  }
+  for (const ferry of field.ferries ?? []) {
+    ctx.fillStyle = "#7fb6e0";
+    ctx.beginPath();
+    ctx.arc(x + (ferry.x / field.worldW) * w, y + (ferry.y / field.worldH) * h, 1.6, 0, Math.PI * 2);
+    ctx.fill();
+  }
   for (const camp of field.camps) {
     const state = options.cleared.includes(camp.node)
       ? "#8a8578"
@@ -1190,12 +1259,31 @@ export function paintField(ctx: CanvasRenderingContext2D, options: FieldPaintOpt
       draw: () => paintPoi(ctx, { ...poi, x: sx, y: sy }, time),
     });
   }
-  const gx = field.city.gateTx * tile - camX;
-  const gy = field.city.gateTy * tile - camY;
-  if (gx > -120 && gx < view.w + 120 && gy > -160 && gy < view.h + 120) {
+  for (const city of field.cities ?? []) {
+    const gx = city.gateTx * tile - camX;
+    const gy = city.gateTy * tile - camY;
+    if (gx < -140 || gx > view.w + 140 || gy < -200 || gy > view.h + 140) continue;
     sprites.push({
       y: gy + tile,
-      draw: () => paintCityGate(ctx, field, time, options.townName),
+      draw: () => paintCityGateAt(ctx, city, tile, camX, camY, time),
+    });
+  }
+  for (const gate of field.gates ?? []) {
+    const gx = gate.x - camX;
+    const gy = gate.y - camY;
+    if (gx < -120 || gx > view.w + 120 || gy < -120 || gy > view.h + 120) continue;
+    sprites.push({
+      y: gy + tile,
+      draw: () => paintFieldGate(ctx, gate, tile, camX, camY),
+    });
+  }
+  for (const ferry of field.ferries ?? []) {
+    const gx = ferry.x - camX;
+    const gy = ferry.y - camY;
+    if (gx < -120 || gx > view.w + 120 || gy < -120 || gy > view.h + 120) continue;
+    sprites.push({
+      y: gy + 8,
+      draw: () => paintFerryDock(ctx, ferry, tile, camX, camY, time),
     });
   }
   sprites.push({

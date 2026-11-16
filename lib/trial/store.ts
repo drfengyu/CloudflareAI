@@ -310,6 +310,8 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
       nodeCount: config.questionCount,
       seed: newSeed(),
       bank,
+      // 一趟行军贯穿八区：地图是一张连续大图，跨区靠关卡与渡口。
+      world: true,
     });
 
   if (stale[0]) {

@@ -3,6 +3,7 @@ import {
   SAGA_FIELD_COLS,
   SAGA_FIELD_ROWS,
   SAGA_FIELD_TILE,
+  SAGA_FERRY_TICKETS,
   SAGA_HIT_HALF_H,
   SAGA_HIT_HALF_W,
   SAGA_TILE_FOREST,
@@ -14,8 +15,12 @@ import {
   SAGA_TILE_YARD,
   type SagaField,
   type SagaFieldCamp,
+  type SagaFieldCity,
+  type SagaFieldFerry,
+  type SagaFieldGate,
   type SagaFieldPoi,
   type SagaFieldPoiKind,
+  type SagaFieldRegion,
   type SagaRun,
   type SagaTerrainFlavor,
 } from "./types";
@@ -399,6 +404,23 @@ export function generateSagaField(options: {
       x: (gateTx + 2.5) * tile,
       y: (gateTy + 0.5) * tile,
     },
+    regions: [{ chapter: chapterIndex, name: chapter.name, tx: 0, ty: 0, w: cols, h: rows }],
+    cities: [
+      {
+        chapter: chapterIndex,
+        name: chapter.name,
+        tx: cityTx,
+        ty: cityTy,
+        w: cityW,
+        h: cityH,
+        gateTx,
+        gateTy,
+        x: (gateTx + 2.5) * tile,
+        y: (gateTy + 0.5) * tile,
+      },
+    ],
+    gates: [],
+    ferries: [],
     spawn,
     camps,
     pois,
@@ -408,16 +430,253 @@ export function generateSagaField(options: {
 
 const cache = new Map<string, SagaField>();
 
-/** 同一局行军的地图按种子复现；这里缓存一份，供每帧渲染与碰撞查询复用。 */
-export function sagaFieldFor(run: SagaRun): SagaField {
-  const key = `${run.startSave.chapter}:${run.nodes.length}:${run.seed}`;
+/** 有序去重后的章节号；空则退回起始区。 */
+function chaptersOf(run: SagaRun): number[] {
+  const seen: number[] = [];
+  for (const node of run.nodes) {
+    if (!seen.includes(node.chapter)) seen.push(node.chapter);
+  }
+  if (!seen.length) seen.push(run.startSave.chapter);
+  return seen.sort((a, b) => a - b);
+}
+
+/** 每区节点在大图上的全局下标（与该区营寨顺序一一对应）。 */
+function nodeIndexByChapter(run: SagaRun): Record<number, number[]> {
+  const map: Record<number, number[]> = {};
+  run.nodes.forEach((node, index) => {
+    (map[node.chapter] ??= []).push(index);
+  });
+  return map;
+}
+
+/**
+ * 八区拼成一张连续大地图：每章一块，横向排成一条讨逆路线，
+ * 区界处各留一道关卡（前区本阵被破才开闸）和一处渡口（花船票直达隔壁）。
+ */
+export function generateSagaWorld(options: {
+  chapters: number[];
+  /** 每区营寨数（等于该区节点数）。 */
+  nodeCounts: Record<number, number>;
+  /** 每区节点在大图上的全局下标，按该区节点顺序。 */
+  nodeIndexByChapter: Record<number, number[]>;
+  seed: number;
+  /** 已平定（本阵被破）的区，决定关卡是否开闸。 */
+  openChapters: number[];
+}): SagaField {
+  const chapters = options.chapters.length ? options.chapters : [0];
+  const regionCols = SAGA_FIELD_COLS;
+  const rows = SAGA_FIELD_ROWS;
+  const tile = SAGA_FIELD_TILE;
+  const cols = regionCols * chapters.length;
+  const terrain = new Array<number>(cols * rows).fill(SAGA_TILE_GRASS);
+
+  const cities: SagaFieldCity[] = [];
+  const regions: SagaFieldRegion[] = [];
+  const camps: SagaFieldCamp[] = [];
+  const pois: SagaFieldPoi[] = [];
+  let spawn: { x: number; y: number } = { x: tile * 6, y: tile * 8 };
+
+  const setTile = (tx: number, ty: number, kind: number): void => {
+    if (tx < 0 || ty < 0 || tx >= cols || ty >= rows) return;
+    terrain[ty * cols + tx] = kind;
+  };
+  /** 一格宽的直角通路：先横后竖，免得在地形上断掉。 */
+  const carvePath = (x1: number, y1: number, x2: number, y2: number): void => {
+    const xa = Math.min(x1, x2);
+    const xb = Math.max(x1, x2);
+    for (let x = xa; x <= xb; x++) {
+      setTile(x, y1, SAGA_TILE_ROAD);
+      setTile(x, y1 + 1, SAGA_TILE_ROAD);
+    }
+    const ya = Math.min(y1, y2);
+    const yb = Math.max(y1, y2);
+    for (let y = ya; y <= yb; y++) {
+      setTile(x2, y, SAGA_TILE_ROAD);
+    }
+  };
+
+  for (let i = 0; i < chapters.length; i++) {
+    const chapter = chapters[i];
+    const offsetX = i * regionCols;
+    const region = generateSagaField({
+      chapter,
+      nodeCount: options.nodeCounts[chapter] ?? 5,
+      seed: (options.seed ^ Math.imul(chapter + 1, 0x9e3779b1)) >>> 0,
+    });
+    for (let ty = 0; ty < rows; ty++) {
+      for (let tx = 0; tx < regionCols; tx++) {
+        terrain[ty * cols + offsetX + tx] = region.terrain[ty * regionCols + tx];
+      }
+    }
+    if (i === 0) spawn = { x: region.spawn.x + offsetX * tile, y: region.spawn.y };
+    const city: SagaFieldCity = {
+      chapter,
+      name: region.regions?.[0]?.name ?? "",
+      tx: region.city.tx + offsetX,
+      ty: region.city.ty,
+      w: region.city.w,
+      h: region.city.h,
+      gateTx: region.city.gateTx + offsetX,
+      gateTy: region.city.gateTy,
+      x: region.city.x + offsetX * tile,
+      y: region.city.y,
+    };
+    cities.push(city);
+    regions.push({ chapter, name: city.name, tx: offsetX, ty: 0, w: regionCols, h: rows });
+    const base = options.nodeIndexByChapter[chapter] ?? [];
+    for (const camp of region.camps) {
+      const globalNode = base[camp.node] ?? base[base.length - 1] ?? camp.node;
+      camps.push({
+        node: globalNode,
+        tx: camp.tx + offsetX,
+        ty: camp.ty,
+        x: camp.x + offsetX * tile,
+        y: camp.y,
+      });
+    }
+    for (const poi of region.pois) {
+      pois.push({
+        kind: poi.kind,
+        name: poi.name,
+        tx: poi.tx + offsetX,
+        ty: poi.ty,
+        x: poi.x + offsetX * tile,
+        y: poi.y,
+      });
+    }
+  }
+
+  // 区界：开一道关卡，再配一处渡口；关卡在前区本阵被破之前是墙。
+  const gates: SagaFieldGate[] = [];
+  const ferries: SagaFieldFerry[] = [];
+  for (let i = 0; i < chapters.length - 1; i++) {
+    const from = chapters[i];
+    const to = chapters[i + 1];
+    const boundaryX = (i + 1) * regionCols;
+    const gy = clamp(
+      Math.round((cities[i].gateTy + cities[i + 1].gateTy) / 2),
+      6,
+      rows - 12,
+    );
+    // 两侧城门口到关口的通路，保证城门、关卡、渡口连成一条线
+    carvePath(cities[i].gateTx, cities[i].gateTy, boundaryX - 6, gy);
+    carvePath(boundaryX + 6, gy, cities[i + 1].gateTx, cities[i + 1].gateTy);
+    for (let x = boundaryX - 6; x <= boundaryX + 6; x++) {
+      setTile(x, gy, SAGA_TILE_ROAD);
+      setTile(x, gy + 1, SAGA_TILE_ROAD);
+    }
+    const open = options.openChapters.includes(from);
+    if (!open) {
+      for (let x = boundaryX - 1; x <= boundaryX + 1; x++) {
+        for (let y = gy - 1; y <= gy + 2; y++) setTile(x, y, SAGA_TILE_WALL);
+      }
+    }
+    gates.push({
+      from,
+      to,
+      tx: boundaryX - 1,
+      ty: gy - 1,
+      w: 3,
+      h: 4,
+      x: (boundaryX + 0.5) * tile,
+      y: (gy + 0.5) * tile,
+      open,
+    });
+
+    // 渡口：区界两侧各一处码头，中间切成水面，走水路可直接摆到对岸
+    const fy = clamp(gy + 10, 8, rows - 6);
+    for (const dir of [-1, 1] as const) {
+      const dockX = boundaryX + dir * 3;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) setTile(dockX + dx, fy + dy, SAGA_TILE_WATER);
+      }
+      for (let y = gy + 3; y <= fy + 3; y++) setTile(dockX, y, SAGA_TILE_ROAD);
+    }
+    // 两岸各一处码头：站在哪边都能上船，回来也坐得回去。
+    const ferryName = `${SAGA_CHAPTERS[from]?.stages?.[4] ?? "界河"}渡口`;
+    const leftX = (boundaryX - 3 + 0.5) * tile;
+    const rightX = (boundaryX + 3 + 0.5) * tile;
+    const dockY = (fy + 2 + 0.5) * tile;
+    ferries.push(
+      {
+        from,
+        to,
+        name: ferryName,
+        tickets: SAGA_FERRY_TICKETS,
+        x: leftX,
+        y: dockY,
+        toX: rightX,
+        toY: dockY,
+      },
+      {
+        from: to,
+        to: from,
+        name: ferryName,
+        tickets: SAGA_FERRY_TICKETS,
+        x: rightX,
+        y: dockY,
+        toX: leftX,
+        toY: dockY,
+      },
+    );
+  }
+
+  return {
+    cols,
+    rows,
+    tile,
+    worldW: cols * tile,
+    worldH: rows * tile,
+    terrain,
+    flavor: SAGA_CHAPTERS[chapters[0]]?.terrain ?? "plain",
+    city: {
+      tx: cities[0].tx,
+      ty: cities[0].ty,
+      w: cities[0].w,
+      h: cities[0].h,
+      gateTx: cities[0].gateTx,
+      gateTy: cities[0].gateTy,
+      x: cities[0].x,
+      y: cities[0].y,
+    },
+    regions,
+    cities,
+    gates,
+    ferries,
+    spawn,
+    camps,
+    pois,
+  };
+}
+
+/**
+ * 同一局行军的地图按种子复现；这里缓存一份，供每帧渲染与碰撞查询复用。
+ * 跨区的世界图会随「哪些区已平定」换一次地形（关卡开闸），所以开闸状态要进缓存键。
+ */
+export function sagaFieldFor(run: SagaRun, openChapters: number[] = []): SagaField {
+  const chapters = chaptersOf(run);
+  const counts: Record<number, number> = {};
+  for (const chapter of chapters) {
+    counts[chapter] = run.nodes.filter((node) => node.chapter === chapter).length || 1;
+  }
+  const open = [...openChapters].sort((a, b) => a - b);
+  const key = `${chapters.join(",")}:${chapters.map((c) => counts[c]).join(",")}:${run.seed}:${open.join(",")}`;
   const hit = cache.get(key);
   if (hit) return hit;
-  const field = generateSagaField({
-    chapter: run.startSave.chapter,
-    nodeCount: run.nodes.length,
-    seed: run.seed,
-  });
+  const field =
+    chapters.length <= 1
+      ? generateSagaField({
+          chapter: chapters[0],
+          nodeCount: run.nodes.length,
+          seed: run.seed,
+        })
+      : generateSagaWorld({
+          chapters,
+          nodeCounts: counts,
+          nodeIndexByChapter: nodeIndexByChapter(run),
+          seed: run.seed,
+          openChapters: open,
+        });
   cache.set(key, field);
   if (cache.size > 12) {
     const oldest = cache.keys().next().value;
@@ -427,16 +686,19 @@ export function sagaFieldFor(run: SagaRun): SagaField {
 }
 
 export interface FieldHotspot {
-  kind: "city" | "camp" | "poi";
+  kind: "city" | "camp" | "poi" | "gate" | "ferry";
   camp?: SagaFieldCamp;
   poi?: SagaFieldPoi;
+  city?: SagaFieldCity;
+  gate?: SagaFieldGate;
+  ferry?: SagaFieldFerry;
   x: number;
   y: number;
   /** 交互半径（世界像素）。 */
   radius: number;
 }
 
-/** 找出脚边可交互的城、营或乡野点位：营地优先，其次点位，最后城门。 */
+/** 找出脚边可交互的营、渡口、点位、关卡或城门：营地优先，其次渡口，最后城门。 */
 export function fieldHotspotNear(field: SagaField, x: number, y: number): FieldHotspot | null {
   let best: FieldHotspot | null = null;
   let bestDist = Number.POSITIVE_INFINITY;
@@ -448,10 +710,34 @@ export function fieldHotspotNear(field: SagaField, x: number, y: number): FieldH
     }
   }
   if (best) return best;
+  for (const ferry of field.ferries ?? []) {
+    const dist = Math.hypot(ferry.x - x, ferry.y - (y - 6));
+    if (dist < 34 && dist < bestDist) {
+      best = { kind: "ferry", ferry, x: ferry.x, y: ferry.y, radius: 34 };
+      bestDist = dist;
+    }
+  }
+  if (best) return best;
   for (const poi of field.pois) {
     const dist = Math.hypot(poi.x - x, poi.y - (y - 6));
     if (dist < 28 && dist < bestDist) {
       best = { kind: "poi", poi, x: poi.x, y: poi.y, radius: 28 };
+      bestDist = dist;
+    }
+  }
+  if (best) return best;
+  for (const gate of field.gates ?? []) {
+    const dist = Math.hypot(gate.x - x, gate.y - (y - 6));
+    if (dist < 38 && dist < bestDist) {
+      best = { kind: "gate", gate, x: gate.x, y: gate.y, radius: 38 };
+      bestDist = dist;
+    }
+  }
+  if (best) return best;
+  for (const city of field.cities ?? []) {
+    const dist = Math.hypot(city.x - x, city.y - (y - 6));
+    if (dist < 44 && dist < bestDist) {
+      best = { kind: "city", city, x: city.x, y: city.y, radius: 44 };
       bestDist = dist;
     }
   }

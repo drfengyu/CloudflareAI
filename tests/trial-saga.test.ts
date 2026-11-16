@@ -353,7 +353,7 @@ test("对局 JSON：版本校验严格，旧玩法与损坏数据一律当没有
   assert.equal(parseSagaRun(JSON.stringify({ ...run, kind: "dungeon" })), null);
   assert.equal(parseSagaRun(JSON.stringify({ ...run, activityKey: "" })), null);
   assert.equal(parseSagaRun(JSON.stringify({ ...run, nodes: [] })), null);
-  assert.equal(parseSagaRun(JSON.stringify({ ...run, nodes: Array(10).fill(run.nodes[0]) })), null);
+  assert.equal(parseSagaRun(JSON.stringify({ ...run, nodes: Array(81).fill(run.nodes[0]) })), null);
   // v5 浮游城/答题存档不会被误认成讨逆传。
   assert.equal(parseSagaRun(JSON.stringify({ version: 5, seed: 1, heroHp: 100, floors: [] })), null);
 });
@@ -386,7 +386,7 @@ test("指令清洗：未知字段、旧金币商店与错槽装备都被丢弃",
     },
     { k: "leave" },
     // 营地下标越界、缺失或不是数字：整条战斗指令丢弃。
-    { k: "battle", node: 9, rounds: [[]] },
+    { k: "battle", node: 80, rounds: [[]] },
     { k: "battle", node: -1, rounds: [[]] },
     { k: "battle", rounds: [[]] },
     "junk",
@@ -2056,4 +2056,78 @@ test("战斗点选：人多时命中框重叠，按距离取最近的敌将", ()
   assert.equal(battleEnemyAtPoint(view, battle, 722, 160), 0, "点第 1 个敌将");
   assert.equal(battleEnemyAtPoint(view, battle, 682, 277), 3, "点第 4 个敌将，不能被前面的框截走");
   assert.equal(battleEnemyAtPoint(view, battle, 20, 20), -1, "点空地不选人");
+});
+
+test("大地图：一趟行军贯穿八区，地图拼成一张连续大图", () => {
+  const save = initialTrialSave();
+  const run = generateSagaRun({ activityKey: "trial-test", save, nodeCount: 5, seed: 4242, world: true });
+  assert.equal(run.nodes.length, SAGA_CHAPTERS.length * 7, "每区 5 座营 + 岔路两条");
+  assert.deepEqual(
+    [...new Set(run.nodes.map((node) => node.chapter))],
+    SAGA_CHAPTERS.map((chapter) => chapter.index),
+  );
+
+  const field = sagaFieldFor(run, []);
+  assert.equal(field.cols, SAGA_FIELD_COLS * SAGA_CHAPTERS.length);
+  assert.equal(field.rows, SAGA_FIELD_ROWS);
+  assert.equal(field.cities.length, SAGA_CHAPTERS.length);
+  assert.equal(field.gates.length, SAGA_CHAPTERS.length - 1);
+  assert.equal(field.ferries.length, (SAGA_CHAPTERS.length - 1) * 2, "两岸各一处码头，来去都能坐");
+  assert.equal(field.camps.length, run.nodes.length);
+  assert.equal(field.camps[0].node, 0);
+  assert.equal(field.camps[field.camps.length - 1].node, run.nodes.length - 1);
+
+  // 关卡未开：闸位是墙；前区平定后换成官道，来回都能走。
+  const gate = field.gates[0];
+  assert.equal(gate.open, false);
+  assert.equal(fieldTileAt(field, gate.tx + 1, gate.ty + 1), SAGA_TILE_WALL);
+  const opened = sagaFieldFor(run, [0]);
+  assert.equal(opened.gates[0].open, true);
+  assert.notEqual(fieldTileAt(opened, gate.tx + 1, gate.ty + 1), SAGA_TILE_WALL);
+});
+
+test("大地图：前区本阵没破，后区营寨不放行", () => {
+  const run = generateSagaRun({
+    activityKey: "trial-test",
+    save: initialTrialSave(),
+    nodeCount: 5,
+    seed: 99,
+    world: true,
+  });
+  const state = replaySagaRun(run, []).state;
+  const boss0 = run.nodes.findIndex((node) => node.chapter === 0 && node.kind === "boss");
+  const chapter1Node = run.nodes.findIndex((node) => node.chapter === 1 && node.kind !== "boss");
+  assert.equal(canEngageNode(run, state, boss0), false, "本区外围营没拔净，本阵不开");
+  for (let index = 0; index < run.nodes.length; index++) {
+    if (run.nodes[index].chapter === 0 && index !== boss0) state.clearedNodes.push(index);
+  }
+  assert.equal(canEngageNode(run, state, boss0), true);
+  assert.equal(canEngageNode(run, state, chapter1Node), false, "第 0 区本阵未破，第 1 区不开");
+  state.clearedNodes.push(boss0);
+  assert.equal(canEngageNode(run, state, chapter1Node), true);
+  assert.deepEqual(openNodes(run, state).includes(boss0), false);
+});
+
+test("大地图：乘船指令能存能读，越界目标被丢掉", () => {
+  const commands = sanitizeSagaCommands([
+    { k: "ferry", to: 1 },
+    { k: "ferry", to: -1 },
+    { k: "ferry", to: 99 },
+    { k: "ferry", to: "2" },
+  ]);
+  assert.deepEqual(commands, [
+    { k: "ferry", to: 1 },
+    { k: "ferry", to: 2 },
+  ]);
+  const run = generateSagaRun({
+    activityKey: "trial-test",
+    save: initialTrialSave(),
+    nodeCount: 5,
+    seed: 77,
+    world: true,
+  });
+  const parsed = parseSagaRun(JSON.stringify({ ...run, commands: [{ k: "ferry", to: 1 }] }));
+  assert.ok(parsed);
+  const state = replaySagaRun(parsed, [{ k: "ferry", to: 1 }]).state;
+  assert.equal(state.save.gold, parsed.startSave.gold, "前一区没平定，船开不了也不扣票钱");
 });

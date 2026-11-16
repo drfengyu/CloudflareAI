@@ -30,6 +30,7 @@ import {
   setFormation,
 } from "./state";
 import {
+  SAGA_FERRY_TICKETS,
   SAGA_MAX_COMMANDS,
   SAGA_MAX_LEVEL,
   SAGA_MAX_ROUNDS_PER_BLOCK,
@@ -63,8 +64,8 @@ import {
 /** 一次行军最多买多少份军需；防止行军 JSON 被无限撑大。 */
 export const SAGA_MAX_PURCHASES = 100;
 
-/** 指令里允许出现的营地下标上限（与 `TRIAL_MAX_FLOORS` 对齐，这里不引配置以免破坏纯函数复用）。 */
-const SAGA_MAX_NODE_INDEX = 8;
+/** 指令里允许出现的营地下标上限（大地图一趟最多八区 × 9 座营，取整留余量）。 */
+const SAGA_MAX_NODE_INDEX = 79;
 
 const clampInt = (value: number, min: number, max: number): number =>
   Math.min(max, Math.max(min, Math.trunc(value)));
@@ -162,21 +163,9 @@ function enemyIds(
   return unique([...chapter.field, ...chapter.elite], count);
 }
 
-export function generateSagaRun(options: {
-  activityKey: string;
-  save: TrialSave;
-  nodeCount: number;
-  seed?: number;
-  bank?: SagaBankPolicy;
-}): SagaRun {
-  const save = normalizeTrialSave(options.save);
-  const seed =
-    typeof options.seed === "number" && Number.isFinite(options.seed)
-      ? options.seed >>> 0
-      : Math.floor(Math.random() * 0xffffffff) >>> 0;
-  const rng = mulberry32(seed);
-  const chapter = SAGA_CHAPTERS[clampInt(save.chapter, 0, SAGA_CHAPTERS.length - 1)];
-  const nodeCount = clampInt(options.nodeCount, 2, 7);
+/** 一章的节点：若干野战 / 精锐 + 本阵，中间按需岔出两条只能走一条的路。 */
+function buildChapterNodes(chapterIndex: number, nodeCount: number, rng: () => number): SagaNode[] {
+  const chapter = SAGA_CHAPTERS[chapterIndex];
   const nodes: SagaNode[] = [];
   for (let index = 0; index < nodeCount; index++) {
     const kind: SagaNodeKind =
@@ -216,7 +205,6 @@ export function generateSagaRun(options: {
     });
   }
   // 剧情分支：初战之后岔出两处营，只能走一条（打通一条，另一条自动闭营）。
-  // 两条路敌将、名称、文案与奖励都不同：守正的一条多给金币，奇袭的一条多给经验。
   if (nodeCount >= 4 && chapter.branch) {
     const options: [0 | 1, NonNullable<typeof chapter.branch>["a"]][] = [
       [0, chapter.branch.a],
@@ -241,6 +229,33 @@ export function generateSagaRun(options: {
       };
     });
     nodes.splice(1, 0, ...branchNodes);
+  }
+  return nodes;
+}
+
+export function generateSagaRun(options: {
+  activityKey: string;
+  save: TrialSave;
+  nodeCount: number;
+  seed?: number;
+  bank?: SagaBankPolicy;
+  /** 大地图模式：一趟行军从当前区一路推到最后一章，八区共享一张连续大图。 */
+  world?: boolean;
+}): SagaRun {
+  const save = normalizeTrialSave(options.save);
+  const seed =
+    typeof options.seed === "number" && Number.isFinite(options.seed)
+      ? options.seed >>> 0
+      : Math.floor(Math.random() * 0xffffffff) >>> 0;
+  const rng = mulberry32(seed);
+  const startChapter = clampInt(save.chapter, 0, SAGA_CHAPTERS.length - 1);
+  const nodeCount = clampInt(options.nodeCount, 2, 7);
+  const chapters = options.world
+    ? SAGA_CHAPTERS.slice(startChapter).map((item) => item.index)
+    : [startChapter];
+  const nodes: SagaNode[] = [];
+  for (const chapterIndex of chapters) {
+    nodes.push(...buildChapterNodes(chapterIndex, nodeCount, rng));
   }
   return {
     version: SAGA_RUN_VERSION,
@@ -460,7 +475,7 @@ export function parseSagaRun(raw: string | null | undefined): SagaRun | null {
   if (it.version !== SAGA_RUN_VERSION || it.kind !== "saga") return null;
   const activityKey = typeof it.activityKey === "string" ? it.activityKey.trim() : "";
   if (!activityKey) return null;
-  if (!Array.isArray(it.nodes) || it.nodes.length === 0 || it.nodes.length > 9) return null;
+  if (!Array.isArray(it.nodes) || it.nodes.length === 0 || it.nodes.length > 80) return null;
   const nodes: SagaNode[] = [];
   for (const item of it.nodes) {
     const node = parseNode(item);
@@ -638,6 +653,12 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
         out.push({ k: "skirmish", rounds });
         break;
       }
+      case "ferry": {
+        const to = Math.trunc(Number(it.to));
+        if (!Number.isFinite(to) || to < 0 || to >= SAGA_CHAPTERS.length) break;
+        out.push({ k: "ferry", to });
+        break;
+      }
       default:
         break;
     }
@@ -769,12 +790,37 @@ export function canEngageNode(run: SagaRun, state: SagaReplayState, node: number
   const index = Math.trunc(node);
   if (!Number.isFinite(index) || index < 0 || index >= run.nodes.length) return false;
   if (state.clearedNodes.includes(index)) return false;
-  if (run.nodes[index]?.kind !== "boss") return true;
-  // 主帅本阵扎在最后，外围营地没拔干净就冲进去，重放时直接忽略。
-  return run.nodes.every((item, itemIndex) => item.kind === "boss" || state.clearedNodes.includes(itemIndex));
+  const target = run.nodes[index];
+  if (!target) return false;
+  // 大地图：前区本阵没破，后面的区不放行（关卡未开、也无从摆渡过去）。
+  const chapterSet = [...new Set(run.nodes.map((item) => item.chapter))].sort((a, b) => a - b);
+  const position = chapterSet.indexOf(target.chapter);
+  for (let i = 0; i < position; i++) {
+    const bossIndex = run.nodes.findIndex(
+      (item, itemIndex) => item.chapter === chapterSet[i] && item.kind === "boss" && !state.clearedNodes.includes(itemIndex),
+    );
+    if (bossIndex >= 0) return false;
+  }
+  if (target.kind !== "boss") return true;
+  // 主帅本阵扎在本区最后：本区外围营地没拔干净就冲进去，重放时直接忽略。
+  return run.nodes.every(
+    (item, itemIndex) =>
+      item.chapter !== target.chapter || item.kind === "boss" || state.clearedNodes.includes(itemIndex),
+  );
 }
 
-/** 还没拔掉的营地（首领营要等其余全清），供地图标记与自动行军使用。 */
+/** 破本区本阵：本区平定，存档区号推进、该区解锁武将即时发放，关卡随之双向通行。 */
+function pacifyChapter(state: SagaReplayState, chapter: number): void {
+  const def = SAGA_CHAPTERS[chapter];
+  if (!def) return;
+  applyChapterUnlock(state.save, def.unlock);
+  if (chapter + 1 > state.save.chapter) {
+    state.save.chapter = Math.min(SAGA_CHAPTERS.length - 1, chapter + 1);
+  }
+}
+
+
+/** 还没拔掉的营地（首领营要等本区其余全清），供地图标记与自动行军使用。 */
 export function openNodes(run: SagaRun, state: SagaReplayState): number[] {
   const out: number[] = [];
   for (let index = 0; index < run.nodes.length; index++) {
@@ -837,6 +883,21 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
       case "leave":
         index = total;
         break;
+      case "ferry": {
+        // 摆渡：只在两区之间来回，前一区已平定才准往前开，回走不设限；票价照扣。
+        if (state.scene !== "field") break;
+        const target = Math.trunc(command.to);
+        if (!run.nodes.some((item) => item.chapter === target)) break;
+        const pacified = (chapter: number): boolean =>
+          run.nodes.some(
+            (item, itemIndex) =>
+              item.chapter === chapter && item.kind === "boss" && state.clearedNodes.includes(itemIndex),
+          );
+        if (!pacified(target - 1) && !pacified(target)) break;
+        if (state.save.gold < SAGA_FERRY_TICKETS) break;
+        state.save.gold -= SAGA_FERRY_TICKETS;
+        break;
+      }
       case "battle": {
         // 败退回城后必须先住店重整，零兵力再出兵只会白送一场。
         if (state.scene === "lost") break;
@@ -866,6 +927,8 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
           state.completed = state.clearedNodes.length;
           state.scene = state.completed >= run.nodes.length ? "won" : "field";
           state.victory = state.completed >= run.nodes.length;
+          // 大地图：破本区本阵＝本区平定，城堡与关卡同步开通，区号推进到下一区。
+          if (clearedNode?.kind === "boss") pacifyChapter(state, clearedNode.chapter);
         } else if (battle.phase === "lost") {
           state.scene = "lost";
         }
@@ -901,16 +964,30 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
 
 export function finalizeSagaSave(run: SagaRun, state: SagaReplayState): TrialSave {
   const save = cloneSave(state.save);
-  const clearedChapter = clampInt(save.chapter, 0, SAGA_CHAPTERS.length - 1);
+  const chapterBefore = clampInt(run.startSave.chapter, 0, SAGA_CHAPTERS.length - 1);
+  const lastClearedChapter = run.nodes.reduce(
+    (acc, node, index) =>
+      node.kind === "boss" && state.clearedNodes.includes(index) ? Math.max(acc, node.chapter) : acc,
+    chapterBefore,
+  );
   save.stats.runs += 1;
   save.stats.battlesWon += state.battlesWon;
   save.stats.bestCleared = Math.max(save.stats.bestCleared, state.completed);
   let unlock: string | null = null;
   if (state.victory) {
-    save.stats.wins += 1;
+    // 一趟大地图可能一次平定好几区：通关次数按「这一次平定了几区」记，八区全清才算全剧终。
+    const clearedChapters = new Set(
+      run.nodes
+        .filter((node, index) => node.kind === "boss" && state.clearedNodes.includes(index))
+        .map((node) => node.chapter),
+    );
+    save.stats.wins += Math.max(1, clearedChapters.size);
     save.clears += 1;
-    unlock = SAGA_CHAPTERS[clearedChapter]?.unlock ?? null;
-    if (clearedChapter < SAGA_CHAPTERS.length - 1) save.chapter = clearedChapter + 1;
+    unlock = SAGA_CHAPTERS[lastClearedChapter]?.unlock ?? null;
+  }
+  // 大地图可以一趟连跨几区：区号在破本阵时就推进过了，收兵时只保证停在已平定区的下一区。
+  if (lastClearedChapter > chapterBefore) {
+    save.chapter = Math.max(save.chapter, Math.min(SAGA_CHAPTERS.length - 1, lastClearedChapter + 1));
   }
   applyChapterUnlock(save, unlock);
   return normalizeTrialSave(save);

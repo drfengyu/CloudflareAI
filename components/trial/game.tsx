@@ -395,17 +395,32 @@ export function TrialGame(props: TrialGameProps) {
       ? `全军败退 · 住店重整（${SAGA_INN_PRICE_TICKETS} 张券）`
       : `住店（${SAGA_INN_PRICE_TICKETS} 张券）`);
 
+  // 已平定的区：破掉本区本阵就算，关卡随之开闸、渡口照常摆渡。
+  const pacifiedChapters = useMemo(() => {
+    if (!run || !state) return [];
+    const out: number[] = [];
+    run.nodes.forEach((node, index) => {
+      if (node.kind === "boss" && state.clearedNodes.includes(index) && !out.includes(node.chapter)) {
+        out.push(node.chapter);
+      }
+    });
+    return out;
+  }, [run, state]);
+  const pacifiedKey = pacifiedChapters.join(",");
+
   // 大地图按「章节 + 节点数 + 种子」纯函数复现：没开局时也画一张同一个地方的图当作预告。
   const field: SagaField = useMemo(
     () =>
       run
-        ? sagaFieldFor(run)
+        ? sagaFieldFor(run, pacifiedChapters)
         : generateSagaField({
             chapter: props.save.chapter,
             nodeCount: props.nodeCount,
             seed: (props.save.chapter + 1) * 7919,
           }),
-    [run, props.save.chapter, props.nodeCount],
+    // pacifiedKey 并入依赖：开闸会让地形换一次，但同一份缓存的图对象不变，走位不会被打回城门。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [run, props.save.chapter, props.nodeCount, pacifiedKey],
   );
   const clearedNodes = useMemo(() => state?.clearedNodes ?? [], [state]);
   const openNodeList = useMemo(
@@ -817,8 +832,13 @@ export function TrialGame(props: TrialGameProps) {
   }, [dialogue]);
 
   // 换地方或开局：把主角放回城门外，走过的路不做记录（进度只看指令）。
+  // 关卡开闸时地形会换一份新图，但那不是「换地方」，走位不能被打回城门。
+  const fieldIdentity = `${run?.seed ?? -1}:${run?.startSave.chapter ?? props.save.chapter}`;
+  const fieldIdentityRef = useRef("");
   useEffect(() => {
     fieldRef.current = field;
+    if (fieldIdentityRef.current === fieldIdentity) return;
+    fieldIdentityRef.current = fieldIdentity;
     const player = playerRef.current;
     player.x = field.spawn.x;
     player.y = field.spawn.y;
@@ -828,12 +848,50 @@ export function TrialGame(props: TrialGameProps) {
     hotspotRef.current = null;
     encounterLockRef.current = false;
     walkTileRef.current = null;
-  }, [field]);
+  }, [field, fieldIdentity]);
 
   useEffect(() => {
     interactRef.current = (hotspot) => {
       if (settlementRef.current) return;
+      if (hotspot.kind === "ferry" && hotspot.ferry) {
+        const ferry = hotspot.ferry;
+        const canForward = pacifiedChapters.includes(ferry.from);
+        const canBack = pacifiedChapters.includes(ferry.to);
+        if (!canForward && !canBack) {
+          toast.error("前一区还没平定，关卡与渡口都不放行");
+          return;
+        }
+        if ((state?.save.gold ?? 0) < ferry.tickets) {
+          toast.error(`船票要 ${ferry.tickets} 金，金子不够`);
+          return;
+        }
+        const name = SAGA_CHAPTERS[ferry.to]?.name ?? "对岸";
+        if (!window.confirm(`乘船去第 ${ferry.to + 1} 区·${name}？船票 ${ferry.tickets} 金。`)) return;
+        appendCommand({ k: "ferry", to: ferry.to });
+        const player = playerRef.current;
+        player.x = ferry.toX;
+        player.y = ferry.toY;
+        player.walkTo = null;
+        player.stuck = 0;
+        return;
+      }
+      if (hotspot.kind === "gate" && hotspot.gate) {
+        toast.error(
+          hotspot.gate.open
+            ? "关卡已开，直接走过去即可"
+            : "关卡闭着：先破本区本阵，闸门才会双向通行",
+        );
+        return;
+      }
       if (hotspot.kind === "city") {
+        const startChapter = run?.startSave.chapter ?? props.save.chapter;
+        const cityChapter = hotspot.city?.chapter;
+        if (cityChapter !== undefined && cityChapter !== startChapter) {
+          toast.error(
+            `这里是第 ${cityChapter + 1} 区州治，行军途中不能进城整备；整备请回${SAGA_CHAPTERS[startChapter]?.name ?? "本区"}`,
+          );
+          return;
+        }
         setInTown(true);
         return;
       }
@@ -849,7 +907,7 @@ export function TrialGame(props: TrialGameProps) {
         setPanel("camp");
       }
     };
-  }, [props.save.chapter, run]);
+  }, [appendCommand, pacifiedChapters, props.save.chapter, run, state]);
 
   /** 同一趟行军里，每个营的阵前喊话只自动播一次；之后可从营前画面重看。 */
   const markSceneSeen = useCallback((key: string): boolean => {
@@ -1253,8 +1311,9 @@ export function TrialGame(props: TrialGameProps) {
         exp: session.battle.rewardExp,
       });
       if (won && run && session.node >= 0 && run.nodes[session.node]?.kind === "boss") {
-        const key = `victory:${run.startSave.chapter}`;
-        if (markSceneSeen(key)) setDialogue(chapterVictoryScene(run.startSave.chapter));
+        const chapter = run.nodes[session.node]?.chapter ?? run.startSave.chapter;
+        const key = `victory:${chapter}`;
+        if (markSceneSeen(key)) setDialogue(chapterVictoryScene(chapter));
       }
       setBattle(null);
       setAnim(null);
@@ -1340,8 +1399,9 @@ export function TrialGame(props: TrialGameProps) {
         exp: battleState.rewardExp,
       });
       if (won && run.nodes[node]?.kind === "boss") {
-        const key = `victory:${run.startSave.chapter}`;
-        if (markSceneSeen(key)) setDialogue(chapterVictoryScene(run.startSave.chapter));
+        const chapter = run.nodes[node]?.chapter ?? run.startSave.chapter;
+        const key = `victory:${chapter}`;
+        if (markSceneSeen(key)) setDialogue(chapterVictoryScene(chapter));
       }
       setPanel(null);
     },

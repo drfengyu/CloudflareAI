@@ -74,6 +74,60 @@ export interface SagaFieldPoi {
   y: number;
 }
 
+export interface SagaFieldCity {
+  chapter: number;
+  name: string;
+  /** 城墙外框左上角与尺寸（格）。 */
+  tx: number;
+  ty: number;
+  w: number;
+  h: number;
+  gateTx: number;
+  gateTy: number;
+  /** 城门外的交互点（像素）。 */
+  x: number;
+  y: number;
+}
+
+/** 大地图上的区域块（一章一块）。 */
+export interface SagaFieldRegion {
+  chapter: number;
+  name: string;
+  tx: number;
+  ty: number;
+  w: number;
+  h: number;
+}
+
+/** 两区之间的关卡：前区本阵被破后才开闸，双向通行。 */
+export interface SagaFieldGate {
+  from: number;
+  to: number;
+  /** 闸门占的格（画一道横墙）。 */
+  tx: number;
+  ty: number;
+  w: number;
+  h: number;
+  x: number;
+  y: number;
+  open: boolean;
+}
+
+/** 两区之间的渡口：花船票直达隔壁，回走也行。 */
+export interface SagaFieldFerry {
+  from: number;
+  to: number;
+  name: string;
+  /** 船票（金币）。 */
+  tickets: number;
+  /** 本区上船点（像素）。 */
+  x: number;
+  y: number;
+  /** 对岸落点（像素）。 */
+  toX: number;
+  toY: number;
+}
+
 export interface SagaField {
   cols: number;
   rows: number;
@@ -95,13 +149,20 @@ export interface SagaField {
     x: number;
     y: number;
   };
+  /** 八区大图上各区域与州治；单区图只有一条。 */
+  regions: SagaFieldRegion[];
+  cities: SagaFieldCity[];
+  gates: SagaFieldGate[];
+  ferries: SagaFieldFerry[];
   spawn: { x: number; y: number };
   camps: SagaFieldCamp[];
   pois: SagaFieldPoi[];
 }
 
-export const SAGA_MAX_COMMANDS = 4000;
-export const SAGA_MAX_ROUNDS_PER_BLOCK = 200;
+/** 渡口船票（金币）：水路是捷径，不是白坐。 */
+export const SAGA_FERRY_TICKETS = 120;
+
+export const SAGA_MAX_COMMANDS = 4000;export const SAGA_MAX_ROUNDS_PER_BLOCK = 200;
 export const SAGA_MAX_TOTAL_ROUNDS = 2400;
 
 export type FormationId =
@@ -405,7 +466,9 @@ export type SagaCommand =
   /** 打的是图上哪座营：大地图上可以自由挑顺序，首领营要先破其余营。 */
   | { k: "battle"; node: number; rounds: SagaRoundCommand[][] }
   /** 野外遭遇战：不占营地进度，编成由种子与这是第几场遭遇推出。 */
-  | { k: "skirmish"; rounds: SagaRoundCommand[][] };
+  | { k: "skirmish"; rounds: SagaRoundCommand[][] }
+  /** 乘船：在两区渡口之间摆渡，扣船票（金币）。走位本身不入指令，这里只管钱与关卡口径。 */
+  | { k: "ferry"; to: number };
 
 export interface SagaBattleGeneral {
   id: string;
