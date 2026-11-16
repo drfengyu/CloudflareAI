@@ -65,29 +65,31 @@ interface StreetSpot {
   kind: "shop" | "palace" | "monument" | "tent" | "gate" | "house";
   accent: string;
   roof: string;
+  /** 屋顶上的单字方匾（照原版写法：宿 / 武 / 药 / 训 / 记）。 */
+  sign?: string;
 }
 
 const STREET_SPOTS: StreetSpot[] = [
-  // 北排：坐北朝南（在走位区上沿之外，不挡走位），皇宫居中，两侧各两座
-  { id: "forge", label: "铁匠铺", x: 200, y: 300, width: 172, height: 180, kind: "shop", accent: "#b5522a", roof: "#c8561f" },
-  { id: "herb", label: "药铺", x: 410, y: 300, width: 172, height: 180, kind: "shop", accent: "#5f7a36", roof: "#cf6a2a" },
-  { id: "palace", label: "皇宫", x: 900, y: 300, width: 320, height: 220, kind: "palace", accent: "#a33327", roof: "#b83a24" },
-  { id: "inn", label: "客栈", x: 1200, y: 300, width: 172, height: 180, kind: "shop", accent: "#b06a30", roof: "#ce6d2c" },
-  // 中排：横街两侧，各两座，让出中轴与东西两个城口
-  { id: "supply", label: "军需帐", x: 200, y: 520, width: 172, height: 180, kind: "shop", accent: "#9a6a30", roof: "#c85f22" },
-  { id: "bank", label: "钱庄", x: 400, y: 520, width: 172, height: 180, kind: "shop", accent: "#9a7a34", roof: "#c65f21" },
-  { id: "tavern", label: "酒馆", x: 1000, y: 520, width: 172, height: 180, kind: "shop", accent: "#a35f34", roof: "#c8621f" },
-  { id: "coupon", label: "活动券", x: 1200, y: 520, width: 172, height: 180, kind: "shop", accent: "#a05a6a", roof: "#c0684f" },
-  // 民居排：两座民居 + 一座隐士草庐，夹在街心两侧当街景
-  { id: "house-a", label: "民居", x: 320, y: 740, width: 172, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a" },
-  { id: "hermit", label: "隐士庐", x: 460, y: 740, width: 172, height: 170, kind: "house", accent: "#6f5a3a", roof: "#b0703c" },
-  { id: "house-b", label: "民居", x: 950, y: 740, width: 172, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a" },
-  { id: "house-c", label: "民居", x: 1150, y: 740, width: 172, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a" },
+  // 北排：坐北朝南（在走位区上沿之外，不挡走位），皇宫在城东，两边各留宽间距
+  { id: "forge", label: "铁匠铺", x: 175, y: 300, width: 168, height: 180, kind: "shop", accent: "#b5522a", roof: "#c8561f", sign: "武" },
+  { id: "herb", label: "药铺", x: 400, y: 300, width: 168, height: 180, kind: "shop", accent: "#5f7a36", roof: "#cf6a2a", sign: "药" },
+  { id: "palace", label: "皇宫", x: 930, y: 300, width: 320, height: 220, kind: "palace", accent: "#a33327", roof: "#b83a24" },
+  { id: "inn", label: "客栈", x: 1260, y: 300, width: 168, height: 180, kind: "shop", accent: "#b06a30", roof: "#ce6d2c", sign: "宿" },
+  // 中排：横街两侧各两座，间距拉开，让出中轴与东西两个城口
+  { id: "supply", label: "军需帐", x: 175, y: 520, width: 168, height: 180, kind: "shop", accent: "#9a6a30", roof: "#c85f22", sign: "军" },
+  { id: "bank", label: "钱庄", x: 395, y: 520, width: 168, height: 180, kind: "shop", accent: "#9a7a34", roof: "#c65f21", sign: "钱" },
+  { id: "tavern", label: "酒馆", x: 1040, y: 520, width: 168, height: 180, kind: "shop", accent: "#a35f34", roof: "#c8621f", sign: "酒" },
+  { id: "coupon", label: "活动券", x: 1260, y: 520, width: 168, height: 180, kind: "shop", accent: "#a05a6a", roof: "#c0684f", sign: "券" },
+  // 民居排：民居与隐士庐隔得更开，当街景散着摆
+  { id: "house-a", label: "民居", x: 290, y: 740, width: 168, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a", sign: "宅" },
+  { id: "hermit", label: "隐士庐", x: 500, y: 740, width: 168, height: 170, kind: "house", accent: "#6f5a3a", roof: "#b0703c", sign: "道" },
+  { id: "house-b", label: "民居", x: 950, y: 740, width: 168, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a", sign: "宅" },
+  { id: "house-c", label: "民居", x: 1170, y: 740, width: 168, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a", sign: "宅" },
   // 南排：门脸朝南，中轴让出出城口
-  { id: "train", label: "训练场", x: 200, y: 920, width: 172, height: 180, kind: "shop", accent: "#9a5230", roof: "#c85c20" },
-  { id: "hall", label: "编成所", x: 400, y: 920, width: 172, height: 180, kind: "shop", accent: "#5f7440", roof: "#ca6b2b" },
-  { id: "tent", label: "营帐", x: 1020, y: 920, width: 200, height: 150, kind: "tent", accent: "#9a6a30", roof: "#c07a3a" },
-  { id: "record", label: "桃园碑", x: 1280, y: 920, width: 92, height: 120, kind: "monument", accent: "#8d7434", roof: "#a89a6a" },
+  { id: "train", label: "训练场", x: 190, y: 920, width: 168, height: 180, kind: "shop", accent: "#9a5230", roof: "#c85c20", sign: "训" },
+  { id: "hall", label: "编成所", x: 410, y: 920, width: 168, height: 180, kind: "shop", accent: "#5f7440", roof: "#ca6b2b", sign: "编" },
+  { id: "tent", label: "营帐", x: 1060, y: 920, width: 200, height: 150, kind: "tent", accent: "#9a6a30", roof: "#c07a3a" },
+  { id: "record", label: "桃园碑", x: 1300, y: 920, width: 92, height: 120, kind: "monument", accent: "#8d7434", roof: "#a89a6a", sign: "记" },
   // 南面院墙中段留出城口，触发点在墙口前（不可见，只做交互）
   { id: "gate", label: "出城口", x: 700, y: 1108, width: 110, height: 60, kind: "gate", accent: "#9a6a30", roof: "#a97a44" },
 ];
@@ -607,21 +609,6 @@ function paintShopFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: num
   ctx.fillStyle = "#b0895a";
   ctx.fillRect(sx - doorW / 2 - 5, base - 4, doorW + 10, 5);
 
-  // 匾额：屋檐下的小横匾，白底黑框，字照原版那种正楷横排（民居不挂匾）
-  if (spot.kind !== "house") {
-    const plaqueW = Math.min(w - 24, 18 + spot.label.length * 13);
-    ctx.fillStyle = "#1c1a15";
-    ctx.fillRect(sx - plaqueW / 2 - 2, wallTop - 15, plaqueW + 4, 22);
-    ctx.fillStyle = "#f8eed2";
-    ctx.fillRect(sx - plaqueW / 2, wallTop - 13, plaqueW, 18);
-    ctx.fillStyle = "#241a10";
-    ctx.font = townFont(12);
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(spot.label, sx, wallTop - 3);
-    ctx.textBaseline = "alphabetic";
-  }
-
   paintLantern(ctx, left + 4, base - wallH - 2, time, sx * 0.01);
   paintLantern(ctx, left + w - 4, base - wallH - 2, time, sx * 0.01 + 1.9);
 
@@ -660,6 +647,22 @@ function paintShopFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: num
   ctx.fillRect(left + 6, roofTop - 5, w - 12, 6);
   ctx.fillStyle = "#1c1a15";
   ctx.fillRect(left + 6, roofTop - 7, w - 12, 2);
+
+  // 屋顶方匾：白底黑框，一个字（宿 / 武 / 药 / 训 / 道 / 记），照原版挂在屋脊上方
+  if (spot.sign) {
+    const sbW = 28;
+    const sbTop = roofTop - 36;
+    ctx.fillStyle = "#1c1a15";
+    ctx.fillRect(sx - sbW / 2 - 2, sbTop - 2, sbW + 4, sbW + 4);
+    ctx.fillStyle = "#f8eed2";
+    ctx.fillRect(sx - sbW / 2, sbTop, sbW, sbW);
+    ctx.fillStyle = "#241a10";
+    ctx.font = townFont(18);
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(spot.sign, sx, sbTop + sbW / 2 + 1);
+    ctx.textBaseline = "alphabetic";
+  }
 }
 
 function paintPalaceFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: number, time: number): void {
