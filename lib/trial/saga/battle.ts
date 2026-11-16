@@ -189,7 +189,7 @@ function buildSoldier(
     rules >= 13
       ? Math.max(
           120,
-          Math.round(troopBaseline(level) * (1.4 + (slot % 3) * 0.2) * jitter),
+          Math.round(troopBaseline(level, rules) * (1.4 + (slot % 3) * 0.2) * jitter),
         )
       : Math.max(60, Math.round((90 + level * 9) * (1 + chapter * 0.05) * jitter));
   const intellect = Math.max(12, Math.round(20 + level * 0.5));
@@ -249,9 +249,42 @@ function buildSoldier(
   };
 }
 
-/** 等级越高出手越重：1 级为基准，30 级约 +29%。 */
+/** 等级越高出手越重：1 级为基准，50 级约 +49%。 */
 function skillFactor(level: number): number {
-  return 1 + clamp(level - 1, 0, 29) * 0.01;
+  return 1 + clamp(level - 1, 0, 49) * 0.01;
+}
+
+/**
+ * v14 起兵力从 1 级 100 一路涨到 50 级 20000，伤害 / 回复若还按绝对值算，
+ * 一场仗要打上百回合。这里跟着兵力的量级一起抬：伤害 ≈ 系数 × 同等级兵力基准 × 攻防比 × 等级差。
+ * 兵力多的一方只是更能挨，不会被「同级 1.2~6 倍兵力」直接压成秒杀。
+ * 旧规则（v13 及更早）返回 null，仍走原来的绝对值，旧战报重放不翻账。
+ */
+function forceDamage(
+  rules: number,
+  actorLevel: number,
+  raw: number,
+  targetLevel: number,
+  factor: number,
+  ratioFloor = 0.1,
+  ratioCeil = 2.5,
+): number | null {
+  if (rules < 14) return null;
+  const typical = 67 + actorLevel * 1.7;
+  const ratio = clamp(raw / typical, ratioFloor, ratioCeil);
+  const lvAdj = clamp(1 + (actorLevel - targetLevel) * 0.02, 0.7, 1.15);
+  return Math.max(1, Math.round(troopBaseline(actorLevel) * factor * ratio * lvAdj));
+}
+
+/** 回复口径：一次单体回复约一成半，全体回复约一成（仍按施术者等级的量级）。 */
+function forceHeal(
+  rules: number,
+  actorLevel: number,
+  raw: number,
+  targetLevel: number,
+  factor: number,
+): number | null {
+  return forceDamage(rules, actorLevel, raw, targetLevel, factor, 0.05, 3);
 }
 
 /** 命中率按双方智力差浮动：智力压制最多九成八，被压制至少六成五。 */
@@ -586,10 +619,13 @@ function dealDamage(
   const cut = 1 - Math.min(0.5, traitTotal(target, "damageCut") + target.bondCut);
   const corps = corpsCounterFactor(battle.rules, actor.corps, target.corps);
   const skill = battle.rules >= 3 ? skillFactor(actor.level) : 1;
+  // v14 起伤害跟着兵力量级走，兵力多的一方只是更能挨。
+  const core =
+    forceDamage(battle.rules, actor.level, base, target.level, 0.17) ?? base;
   let damage = Math.max(
     4,
     Math.round(
-      base *
+      core *
         formationAtk(attackerFormation) *
         formationDef(defenderFormation) *
         counterMod(attackerFormation, defenderFormation) *
@@ -669,7 +705,10 @@ function executeTactic(
   const hitFoe = (foe: SagaBattleGeneral, raw: number, countered: number, allowHalf: boolean, skill: number) => {
     const resist = foe.intellect * (kind === "water" ? 0.5 : 0.4);
     const variance = 0.85 + roll(battle) * 0.3;
-    let damage = Math.max(6, Math.round((raw - resist) * variance * countered * tacticPct * skill));
+    const core =
+      forceDamage(battle.rules, actor.level, raw - resist, foe.level, 0.17, 0.05, 3) ??
+      Math.max(6, raw - resist);
+    let damage = Math.max(6, Math.round(core * variance * countered * tacticPct * skill));
     if (allowHalf && roll(battle) < 0.22) damage = Math.round(damage * 0.5);
     foe.troops = Math.max(0, foe.troops - damage);
     events.push({
@@ -757,7 +796,10 @@ function executeTactic(
       const candidates = living(allies).sort((a, b) => a.troops / a.maxTroops - b.troops / b.maxTroops);
       const target = candidates[0];
       if (target) {
-        const heal = Math.max(20, Math.round(power * (actor.intellect * 0.8 + actor.level * 2 + 30) * tacticPct));
+        const raw = power * (actor.intellect * 0.8 + actor.level * 2 + 30);
+        const heal =
+          forceHeal(battle.rules, actor.level, raw, target.level, 0.16) ??
+          Math.max(20, Math.round(raw * tacticPct));
         const before = target.troops;
         target.troops = Math.min(target.maxTroops, target.troops + heal);
         events.push({
@@ -772,8 +814,11 @@ function executeTactic(
       break;
     }
     case "healAll": {
-      const heal = Math.max(20, Math.round(power * (actor.intellect * 0.6 + actor.level * 2 + 20) * tacticPct));
+      const raw = power * (actor.intellect * 0.6 + actor.level * 2 + 20);
       for (const ally of living(allies)) {
+        const heal =
+          forceHeal(battle.rules, actor.level, raw, ally.level, 0.1) ??
+          Math.max(20, Math.round(raw * tacticPct));
         const before = ally.troops;
         ally.troops = Math.min(ally.maxTroops, ally.troops + heal);
         const gained = ally.troops - before;
@@ -969,11 +1014,15 @@ function executeItem(
   const candidates = living(battle.party).sort((a, b) => a.troops / a.maxTroops - b.troops / b.maxTroops);
   const target = candidates[0];
   if (!target) return false;
-  const heal = item.supply === "heal" || item.id === "secret_medicine"
-    ? target.maxTroops
-    : battle.rules >= 9
-      ? item.heal ?? 0
-      : LEGACY_HEAL[item.id] ?? item.heal ?? 0;
+  const baseHeal =
+    battle.rules >= 9 ? item.heal ?? 0 : LEGACY_HEAL[item.id] ?? item.heal ?? 0;
+  const heal =
+    item.supply === "heal" || item.id === "secret_medicine"
+      ? target.maxTroops
+      : battle.rules >= 14
+        ? // v14 兵力上万以后，药品按目标兵力上限折算（军粮约一成、灵芝约两成）。
+          Math.max(1, Math.round(target.maxTroops * clamp(baseHeal / 4000, 0.04, 0.6)))
+        : baseHeal;
   const before = target.troops;
   target.troops = Math.min(target.maxTroops, target.troops + heal);
   events.push({

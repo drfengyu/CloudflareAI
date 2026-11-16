@@ -19,6 +19,12 @@ import {
 } from "./types";
 import { forgeStat, normalizeGearLevels } from "./forge";
 
+/**
+ * 兵力基准的参照武将 `baseTroops`（张飞 210，全表最高）。
+ * v14 起「1 级 100 兵 → 50 级 20000 兵」的曲线以它为 1.0，其余武将按 baseTroops 比例微调。
+ */
+export const SAGA_TROOP_REF_BASE = 210;
+
 export function createGeneralState(id: string, level = 1): SagaGeneralState {
   return { id, level: Math.max(1, Math.min(SAGA_MAX_LEVEL, Math.trunc(level))), exp: 0, weapon: null, armor: null };
 }
@@ -190,16 +196,21 @@ export function generalStats(
   const weapon = state.weapon ? SAGA_ITEM_BY_ID.get(state.weapon) : null;
   const armor = state.armor ? SAGA_ITEM_BY_ID.get(state.armor) : null;
   const bonus = traitStats(def);
-  // v9 起每级成长翻三倍、四维封顶 255，兵力翻一倍；旧规则仍按原成长重放，已打过的仗不翻盘。
-  const growth = rules >= 9 ? 3 : 1;
+  // v9 起每级成长翻三倍、四维封顶 255，兵力翻一倍；v14 起等级封顶提到 50，
+  // 每级成长降到 ×2（50 级时吕布武力 253，正好压在 255 以下），兵力改走几何曲线。
+  const growth = rules >= 14 ? 2 : rules >= 9 ? 3 : 1;
   const troopScale = rules >= 9 ? 2 : 1;
   const cap = (value: number): number => Math.min(SAGA_STAT_CAP, Math.round(value));
+  const maxTroops =
+    rules >= 14
+      ? Math.round((troopBaseline(level, rules) * def.baseTroops) / SAGA_TROOP_REF_BASE)
+      : (def.baseTroops + (level - 1) * def.growth) * troopScale;
   return {
     force: cap(def.force + bonus.force + Math.floor((level - 1) * 1.5 * growth)),
     intellect: cap(def.intellect + bonus.intellect + Math.floor((level - 1) * 1.2 * growth)),
     defense: cap(def.defense + bonus.defense + Math.floor((level - 1) * 1.3 * growth)),
     speed: cap(def.speed + bonus.speed + Math.floor((level - 1) * 0.8 * growth)),
-    maxTroops: (def.baseTroops + (level - 1) * def.growth) * troopScale,
+    maxTroops,
     weaponAtk: weapon ? forgeStat(weapon.id, gearLevels?.[weapon.id] ?? 0) : 0,
     armorDef: armor ? forgeStat(armor.id, gearLevels?.[armor.id] ?? 0) : 0,
   };
@@ -210,11 +221,17 @@ export function expToNext(level: number): number {
 }
 
 /**
- * 同等级我方兵力基准（关羽曲线）：1 级 400、30 级 1096。
- * v13 起敌军兵力按这条基准 × 1.2~6 倍给，不再各按武将自己的 baseTroops 开小差。
+ * 同等级我方兵力基准。
+ *
+ * - v13（旧的线性口径）：1 级 400、30 级 1096，敌军按它 × 1.2~6。
+ * - v14（50 级封顶）：几何曲线，1 级 100 → 50 级 20000（每级约 ×1.113），
+ *   `generalStats` 再按武将自身 `baseTroops / 210` 微调强弱（张飞满级 20000、庞统约 14286）；
+ *   敌军同样按这条基准 × 1.2~6，两边口径永远对齐。
  */
-export function troopBaseline(level: number): number {
-  return 400 + Math.max(0, Math.trunc(level) - 1) * 24;
+export function troopBaseline(level: number, rules = SAGA_RULESET): number {
+  const lv = Math.max(1, Math.trunc(level));
+  if (rules >= 14) return Math.round(100 * Math.pow(200, (lv - 1) / (SAGA_MAX_LEVEL - 1)));
+  return 400 + (lv - 1) * 24;
 }
 
 export function grantGeneralExp(state: SagaGeneralState, amount: number): number {

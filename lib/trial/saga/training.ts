@@ -12,9 +12,9 @@ import { SAGA_MAX_LEVEL, type TrialSave } from "./types";
 export const SAGA_TRAINING_ITEM_ID = "training";
 export const SAGA_TRAINING_TICKETS_PER_LEVEL = 2;
 
-/** 训练场上限：初到涿郡可练到 9 级，每平定一处地方 +3，最高 30 级。 */
+/** 训练场上限：初到涿郡可练到 9 级，每平定一处地方 +6，最高 50 级。 */
 export function trainingLevelCap(save: TrialSave): number {
-  return Math.min(SAGA_MAX_LEVEL, 9 + Math.max(0, save.stats.wins) * 3);
+  return Math.min(SAGA_MAX_LEVEL, 9 + Math.max(0, save.stats.wins) * 6);
 }
 
 export function trainingCost(fromLevel: number, toLevel: number): number {

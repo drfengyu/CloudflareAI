@@ -108,8 +108,13 @@ function makeEnemy(
   const def = SAGA_GENERAL_BY_ID.get(defId);
   const fallback = SAGA_GENERAL_BY_ID.get("huangjin_lishi")!;
   const raw = def ?? fallback;
-  const level = 1 + chapterIndex * 4 + nodeIndex + (kind === "elite" ? 1 : 0) + (kind === "boss" ? 3 : 0);
-  // v13 起敌军兵力按「同等级我方基准」给：基准 = 关羽曲线 400 + 24×(等级-1)，
+  // v14 起封顶 50 级，敌军也跟着章节一路练到 50 级（原来每章 +4 最多到 25 级上下，
+// 后半程玩家满级就再无对手）。第 7 章本阵正好贴到 50 级。
+  const level = Math.min(
+    SAGA_MAX_LEVEL,
+    1 + chapterIndex * 7 + nodeIndex + (kind === "elite" ? 1 : 0) + (kind === "boss" ? 3 : 0),
+  );
+  // v13 起敌军兵力按「同等级我方基准」给：基准 = 1 级 100 兵 → 50 级 20000 兵的几何曲线，
   // 再按身份 ×1.2~6（本阵主将最高 6 倍，随身份强弱浮动），不再用武将自身的 baseTroops 开小差。
   const refTroops = troopBaseline(level);
   const strength = Math.min(1, Math.max(0, (raw.baseTroops - 120) / 140));
@@ -119,7 +124,10 @@ function makeEnemy(
       : kind === "elite"
         ? 2.2 + 1.8 * strength
         : 1.5 + 1.2 * strength;
-  const troops = Math.max(80, Math.round(refTroops * Math.min(6, Math.max(1.2, mult))));
+  // v14 起玩家 1 级只有 100 兵，敌军倍率随章节逐步放开：首章 1.2 倍起步，
+// 到第 7 章才放满 6 倍，免得开局就被同级 6 倍兵压死。
+  const ceiling = Math.min(6, 1.2 + Math.max(0, chapterIndex) * 0.8);
+  const troops = Math.max(80, Math.round(refTroops * Math.min(ceiling, Math.max(1.2, mult))));
   const bonus = traitStats(raw);
   const cap = (value: number): number => Math.min(SAGA_STAT_CAP, Math.round(value));
   return {

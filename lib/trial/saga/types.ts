@@ -30,16 +30,19 @@ export const SAGA_SAVE_VERSION = 1;
  * 战斗内可发变阵指令（消耗下令武将的策略值）；v11 及更早的行军仍按旧账重放。
  * v13 起敌军兵力按「同等级我方基准 × 1.2~6 倍」给（营寨 / 精锐 / 本阵 / 野外各占一档），
  * 不再用武将自身 baseTroops 的旧曲线；v12 及更早的行军仍按旧账重放。
+ * v14 起等级封顶抬到 50、兵力改几何曲线（1 级 100 兵 → 50 级 20000 兵），
+ * 每级四维成长由 ×3 收到 ×2；v13 及更早的行军仍按旧账重放。
  * 旧行军没有这个字段，重放时按 v1 走，避免改版把还没收兵的对局打乱。
  */
-export const SAGA_RULESET = 13;
+export const SAGA_RULESET = 14;
 
 /** 四维上限：v9 起武力 / 智力 / 防御 / 速度可以一路长到 255（基础值不动，长的是等级与特性加成）。 */
 export const SAGA_STAT_CAP = 255;
 
 export const SAGA_PARTY_SIZE = 5;
 export const SAGA_RESERVE_SIZE = 12;
-export const SAGA_MAX_LEVEL = 30;
+/** 武将等级封顶：v14 起从 30 抬到 50（兵力曲线 1 级 100 兵 → 50 级 20000 兵）。 */
+export const SAGA_MAX_LEVEL = 50;
 
 /** 行军大地图：俯视格网，镜头跟随主角在图上自由行走。 */
 export const SAGA_FIELD_COLS = 76;

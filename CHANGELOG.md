@@ -5,6 +5,41 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.92.0] - 2026-11-16
+
+### 变更
+
+- **等级封顶 30 → 50（`SAGA_RULESET` 13 → 14）**：`types.ts` 的 `SAGA_MAX_LEVEL` 抬到 50，
+  文件头补 v14 段（50 级封顶 + 几何兵力曲线 + 四维成长 ×3→×2，v13 及更早按旧账重放）。
+- **兵力改几何曲线（`state.ts`）**：新增 `SAGA_TROOP_REF_BASE = 210`（张飞 `baseTroops`，
+  全表最高，作曲线 1.0 基准）；`troopBaseline(level, rules)` 在 `rules >= 14` 时返回
+  `round(100 × 200^((level-1)/49))`——1 级 100 兵、50 级 20000 兵、约每级 ×1.113；
+  旧规则仍走 `400 + 24 × (level-1)`。`generalStats.maxTroops` 改为
+  `round(troopBaseline × baseTroops / 210)`，各将满级：张飞 20000、关羽 / 马超 19048、
+  赵云 18571、黄忠 18095、魏延 17619、刘备 17143、庞统 14286。
+- **四维成长 ×3 → ×2**：`generalStats` 的 `growth` 在 `rules >= 14` 时取 2（v9~v13 仍 3、
+  更早取 1），仍封顶 255；满级吕布武力 253，等级成为把属性顶到上限的主通道。
+- **训练场上限改「每平定一处 +6」**：`training.ts trainingLevelCap = min(50, 9 + wins × 6)`
+  （原 +3）；面板文案改成「每平定一处地方 +6，最高 50 级」，练满约 98 券。
+- **敌军等级跟到 50 级（`run.ts makeEnemy`）**：原来每章 +4，第 7 章也只有二十五级上下，
+  玩家满级后没有对手；改为每章 +7（`min(50, 1 + chapter × 7 + 节点序号 + 精锐/本阵加成)`），
+  第 7 章本阵正好 50 级。同级带兵仍是 1.2~6 倍，但倍率随章节放开：
+  首章 1.2 倍起步，第 7 章放满 6 倍（`min(6, 1.2 + chapter × 0.8)`），开局不会被同级 6 倍兵压死。
+- **伤害 / 回复改按兵力量级折算（`battle.ts`）**：新增 `forceDamage(rules, level, raw, targetLevel, factor)`
+  ——`rules >= 14` 时返回 `troopBaseline(level) × factor × clamp(raw / (67 + 1.7 × level)) × 等级差修正`
+  （等级差钳 0.7~1.15），否则返回 `null` 走旧的绝对值。接入普攻（系数 0.17）、计策伤害
+  （0.17，攻防比钳 0.05~3）、单体回复（0.16）、全体回复（0.10）；药品回复改成
+  「按目标兵力上限折算」（军粮约一成、灵芝约两成，仍夹在 4%~60%）。
+  兵力一万以上的战斗仍稳定在几回合，不会因为兵多了百倍而拖成上百回合。
+- **`skillFactor` 扩容**：`1 + clamp(level - 1, 0, 49) × 0.01`（50 级 +49%）。
+- **注释与文档**：`data.ts` 计策表头 / 阵形表头改口径——30 级即可练满顶阶计策、
+  后 20 级靠四维与兵力继续长（解锁等级本身刻意未动，`tests/trial-saga.test.ts` 的学习节奏断言依赖它们）。
+- **测试**：`tests/trial-saga.test.ts` 的「v9 属性口径」整段改写为「v14 属性口径：50 级封顶、
+  四维成长 ×2 不越 255，兵力走 100→20000 曲线」；训练场 `wins=3 → 27`、封顶断言改 50；
+  规则档断言改 `SAGA_RULESET === 14`。76 个用例全绿。
+- **公告与版本**：`notice.ts` `SAGA_NOTICE_VERSION` 升到 0.92.0 并补首条公告；
+  `package.json` / `package-lock.json` 同步 0.92.0。
+
 ## [0.91.0] - 2026-11-16
 
 ### 变更

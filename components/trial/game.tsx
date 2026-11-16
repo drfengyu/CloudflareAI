@@ -75,6 +75,7 @@ import {
   trainingCost,
   trainingLevelCap,
 } from "@/lib/trial/saga/training";
+import { SAGA_MAX_LEVEL } from "@/lib/trial/saga/types";
 import {
   campScene,
   chapterIntroScene,
@@ -2873,7 +2874,7 @@ export function TrialGame(props: TrialGameProps) {
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>
                       每级 {SAGA_TRAINING_TICKETS_PER_LEVEL} 张活动券，一次练到目标等级；
-                      训练场上限 {trainingLevelCap(save)} 级（每平定一处地方 +3，最高 30 级）。
+                      训练场上限 {trainingLevelCap(save)} 级（每平定一处地方 +6，最高 {SAGA_MAX_LEVEL} 级）。
                     </span>
                     <span className="flex items-center gap-1 tabular-nums">
                       <CouponIcon kind="trial" className="h-3.5 w-3.5" />

@@ -534,9 +534,20 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.91.0（2026-11-16，敌军 1.2~6 倍带兵 + 计策全阶 + 民居可进门 + 血条按实兵）
+**当前版本**：v0.92.0（2026-11-16，50 级封顶 + 兵力 100→20000 曲线 + 伤害按兵力量级折算）
 **下一版本**：待定
 
+- v0.92.0 等级封顶 30 → 50（`SAGA_RULESET` 13 → 14）：`types.ts` `SAGA_MAX_LEVEL = 50`；
+  `state.ts` 新增 `SAGA_TROOP_REF_BASE = 210`（张飞 `baseTroops`，曲线 1.0 基准），
+  `troopBaseline(level, rules)` 在 `rules >= 14` 时给 `round(100 × 200^((level-1)/49))`
+  （1 级 100 / 50 级 20000 / 约每级 ×1.113），旧规则仍 `400 + 24 × (level-1)`；
+  `generalStats.maxTroops = round(troopBaseline × baseTroops / 210)`，四维成长
+  `growth = rules >= 14 ? 2 : ...`（仍封顶 255）。`training.ts trainingLevelCap = min(50, 9 + wins × 6)`。
+  `battle.ts` 新增 `forceDamage()`（`troopBaseline(level) × factor × 攻防比 × 等级差`，
+  等级差钳 0.7~1.15），接入普攻 0.17 / 计策伤害 0.17 / 单体回复 0.16 / 全体回复 0.10，
+  药品回复改按目标上限折算；`skillFactor` 扩到 49 级。`run.ts makeEnemy` 敌军等级
+  每章 +7（封顶 50，第 7 章本阵正好 50 级），带兵倍率上限随章节放开
+  `min(6, 1.2 + chapter × 0.8)`。`notice.ts` 版本号与首条公告升到 0.92.0。
 - v0.91.0 敌军兵力换口径（`SAGA_RULESET` 12 → 13）：`state.ts` 新增
   `troopBaseline(level) = 400 + 24 × (level-1)`（关羽曲线，1 级 400 / 30 级 1096）；
   `run.ts makeEnemy` 野战 1.5~2.7 / 精锐 2.2~4.0 / 本阵主将 3.6~6.0（倍率按武将自身

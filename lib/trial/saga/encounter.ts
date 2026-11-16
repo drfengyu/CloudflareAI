@@ -129,7 +129,7 @@ function leaderEnemy(leaderId: string, chapterIndex: number, ordinal: number, ru
   const troops =
     rules >= 13
       ? Math.round(
-          troopBaseline(level) *
+          troopBaseline(level, rules) *
             (1.3 + 1.0 * Math.min(1, Math.max(0, (def.baseTroops - 120) / 140))),
         )
       : Math.max(
@@ -176,7 +176,7 @@ function squadEnemy(
   const troops =
     rules >= 13
       ? Math.round(
-          troopBaseline(level) *
+          troopBaseline(level, rules) *
             (1.2 + 0.5 * Math.min(1, Math.max(0, (foe.baseTroops - 60) / 120))) *
             (withLeader ? 1.05 : 1),
         )
