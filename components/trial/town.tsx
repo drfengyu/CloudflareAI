@@ -22,12 +22,12 @@ import { SagaPortrait } from "./scenes";
  * 镜头双向跟随走位。交互点、遮挡与柜台位置都在此文件里，服务端不参与。
  */
 
-const TOWN_W = 1440;
-const TOWN_H = 1180;
-const WALK_LEFT = 40;
-const WALK_RIGHT = 1400;
+const TOWN_W = 2400;
+const TOWN_H = 1900;
+const WALK_LEFT = 60;
+const WALK_RIGHT = 2320;
 const WALK_TOP = 336;
-const WALK_BOTTOM = 1150;
+const WALK_BOTTOM = 1700;
 const SHOP_WALK_TOP = 340;
 const ROOM_WALK_TOP = 340;
 const ROOM_WALK_BOTTOM = 512;
@@ -36,6 +36,20 @@ const SHOP_LEFT = 104;
 const SHOP_RIGHT = 856;
 const PALACE_LEFT = 130;
 const PALACE_RIGHT = 830;
+
+/** 四个城口的出城判定区（走进就出城，不按回车）：南 / 北 / 西 / 东。 */
+const TOWN_EXITS: { x: number; y: number; w: number; h: number }[] = [
+  { x: 1180, y: 1688, w: 260, h: 24 },
+  { x: 1180, y: 350, w: 300, h: 28 },
+  { x: 76, y: 850, w: 32, h: 180 },
+  { x: 2304, y: 850, w: 32, h: 180 },
+];
+
+const atExit = (x: number, y: number): boolean =>
+  TOWN_EXITS.some(
+    (zone) =>
+      x > zone.x - zone.w / 2 && x < zone.x + zone.w / 2 && y > zone.y - zone.h / 2 && y < zone.y + zone.h / 2,
+  );
 
 const townFont = (size: number): string =>
   `600 ${size}px "Noto Serif SC", "Songti SC", "STSong", serif`;
@@ -70,28 +84,26 @@ interface StreetSpot {
 }
 
 const STREET_SPOTS: StreetSpot[] = [
-  // 北排：坐北朝南（在走位区上沿之外，不挡走位），皇宫在城东，两边各留宽间距
-  { id: "forge", label: "铁匠铺", x: 175, y: 300, width: 168, height: 180, kind: "shop", accent: "#b5522a", roof: "#c8561f", sign: "武" },
-  { id: "herb", label: "药铺", x: 400, y: 300, width: 168, height: 180, kind: "shop", accent: "#5f7a36", roof: "#cf6a2a", sign: "药" },
-  { id: "palace", label: "皇宫", x: 930, y: 300, width: 320, height: 220, kind: "palace", accent: "#a33327", roof: "#b83a24" },
-  { id: "inn", label: "客栈", x: 1260, y: 300, width: 168, height: 180, kind: "shop", accent: "#b06a30", roof: "#ce6d2c", sign: "宿" },
-  // 中排：横街两侧各两座，间距拉开，让出中轴与东西两个城口
-  { id: "supply", label: "军需帐", x: 175, y: 520, width: 168, height: 180, kind: "shop", accent: "#9a6a30", roof: "#c85f22", sign: "军" },
-  { id: "bank", label: "钱庄", x: 395, y: 520, width: 168, height: 180, kind: "shop", accent: "#9a7a34", roof: "#c65f21", sign: "钱" },
-  { id: "tavern", label: "酒馆", x: 1040, y: 520, width: 168, height: 180, kind: "shop", accent: "#a35f34", roof: "#c8621f", sign: "酒" },
-  { id: "coupon", label: "活动券", x: 1260, y: 520, width: 168, height: 180, kind: "shop", accent: "#a05a6a", roof: "#c0684f", sign: "券" },
-  // 民居排：民居与隐士庐隔得更开，当街景散着摆
-  { id: "house-a", label: "民居", x: 290, y: 740, width: 168, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a", sign: "宅" },
-  { id: "hermit", label: "隐士庐", x: 500, y: 740, width: 168, height: 170, kind: "house", accent: "#6f5a3a", roof: "#b0703c", sign: "道" },
-  { id: "house-b", label: "民居", x: 950, y: 740, width: 168, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a", sign: "宅" },
-  { id: "house-c", label: "民居", x: 1170, y: 740, width: 168, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a", sign: "宅" },
-  // 南排：门脸朝南，中轴让出出城口
-  { id: "train", label: "训练场", x: 190, y: 920, width: 168, height: 180, kind: "shop", accent: "#9a5230", roof: "#c85c20", sign: "训" },
-  { id: "hall", label: "编成所", x: 410, y: 920, width: 168, height: 180, kind: "shop", accent: "#5f7440", roof: "#ca6b2b", sign: "编" },
-  { id: "tent", label: "营帐", x: 1060, y: 920, width: 200, height: 150, kind: "tent", accent: "#9a6a30", roof: "#c07a3a" },
-  { id: "record", label: "桃园碑", x: 1300, y: 920, width: 92, height: 120, kind: "monument", accent: "#8d7434", roof: "#a89a6a", sign: "记" },
-  // 南面院墙中段留出城口，触发点在墙口前（不可见，只做交互）
-  { id: "gate", label: "出城口", x: 700, y: 1108, width: 110, height: 60, kind: "gate", accent: "#9a6a30", roof: "#a97a44" },
+  // 四排 × 四座：中心线 220 / 860 / 1500 / 2140，屋宽 320，相邻净空正好 320，
+  // 一横一竖两条石板路从空当里穿城，四个方向各留一个城口。
+  { id: "forge", label: "铁匠铺", x: 220, y: 300, width: 320, height: 180, kind: "shop", accent: "#b5522a", roof: "#c8561f", sign: "武" },
+  { id: "herb", label: "药铺", x: 860, y: 300, width: 320, height: 180, kind: "shop", accent: "#5f7a36", roof: "#cf6a2a", sign: "药" },
+  { id: "inn", label: "客栈", x: 1500, y: 300, width: 320, height: 180, kind: "shop", accent: "#b06a30", roof: "#ce6d2c", sign: "宿" },
+  { id: "coupon", label: "活动券", x: 2140, y: 300, width: 320, height: 180, kind: "shop", accent: "#a05a6a", roof: "#c0684f", sign: "券" },
+  { id: "supply", label: "军需帐", x: 220, y: 700, width: 320, height: 180, kind: "shop", accent: "#9a6a30", roof: "#c85f22", sign: "军" },
+  { id: "bank", label: "钱庄", x: 860, y: 700, width: 320, height: 180, kind: "shop", accent: "#9a7a34", roof: "#c65f21", sign: "钱" },
+  { id: "palace", label: "皇宫", x: 1500, y: 700, width: 320, height: 220, kind: "palace", accent: "#a33327", roof: "#b83a24", sign: "宫" },
+  { id: "tavern", label: "酒馆", x: 2140, y: 700, width: 320, height: 180, kind: "shop", accent: "#a35f34", roof: "#c8621f", sign: "酒" },
+  { id: "train", label: "训练场", x: 220, y: 1100, width: 320, height: 180, kind: "shop", accent: "#9a5230", roof: "#c85c20", sign: "训" },
+  { id: "hall", label: "编成所", x: 860, y: 1100, width: 320, height: 180, kind: "shop", accent: "#5f7440", roof: "#ca6b2b", sign: "编" },
+  { id: "house-a", label: "民居", x: 1500, y: 1100, width: 320, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a", sign: "宅" },
+  { id: "hermit", label: "隐士庐", x: 2140, y: 1100, width: 320, height: 170, kind: "house", accent: "#6f5a3a", roof: "#b0703c", sign: "道" },
+  { id: "tent", label: "营帐", x: 220, y: 1500, width: 240, height: 150, kind: "tent", accent: "#9a6a30", roof: "#c07a3a" },
+  { id: "house-b", label: "民居", x: 860, y: 1500, width: 320, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a", sign: "宅" },
+  { id: "record", label: "桃园碑", x: 1500, y: 1500, width: 120, height: 140, kind: "monument", accent: "#8d7434", roof: "#a89a6a", sign: "记" },
+  { id: "house-c", label: "民居", x: 2140, y: 1500, width: 320, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a", sign: "宅" },
+  // 南面院墙中段留出南城口，触发点在墙口前（不可见，只做交互）
+  { id: "gate", label: "出城口", x: 1180, y: 1660, width: 200, height: 60, kind: "gate", accent: "#9a6a30", roof: "#a97a44" },
 ];
 
 const SPOT_BY_ID = new Map(STREET_SPOTS.map((spot) => [spot.id, spot]));
@@ -137,9 +149,9 @@ const STREET_WALKERS: StreetWalker[] = [
     title: "街口里正",
     color: "#6f5a3a",
     accent: "#e3c98e",
-    baseX: 740,
-    range: 190,
-    y: 500,
+    baseX: 1180,
+    range: 300,
+    y: 860,
     speed: 0.24,
     phase: 0.4,
     scale: 1.5,
@@ -157,9 +169,9 @@ const STREET_WALKERS: StreetWalker[] = [
     title: "街边小贩",
     color: "#8f4a52",
     accent: "#f2c9c0",
-    baseX: 500,
-    range: 90,
-    y: 660,
+    baseX: 740,
+    range: 150,
+    y: 860,
     speed: 0.34,
     phase: 1.9,
     scale: 1.42,
@@ -177,9 +189,9 @@ const STREET_WALKERS: StreetWalker[] = [
     title: "街口孩童",
     color: "#4e6a8a",
     accent: "#cfe4f2",
-    baseX: 960,
-    range: 90,
-    y: 660,
+    baseX: 1620,
+    range: 150,
+    y: 860,
     speed: 0.46,
     phase: 4.2,
     scale: 1.2,
@@ -195,9 +207,9 @@ const STREET_WALKERS: StreetWalker[] = [
     title: "城南门卒",
     color: "#4a4f3c",
     accent: "#d9c48a",
-    baseX: 648,
+    baseX: 1090,
     range: 0,
-    y: 1096,
+    y: 1646,
     speed: 0,
     phase: 0,
     scale: 1.5,
@@ -212,9 +224,9 @@ const STREET_WALKERS: StreetWalker[] = [
     title: "城南门卒",
     color: "#4a4f3c",
     accent: "#d9c48a",
-    baseX: 752,
+    baseX: 1270,
     range: 0,
-    y: 1096,
+    y: 1646,
     speed: 0,
     phase: 0,
     scale: 1.5,
@@ -229,9 +241,9 @@ const STREET_WALKERS: StreetWalker[] = [
     title: "宫门甲士",
     color: "#5a4030",
     accent: "#e0c070",
-    baseX: 848,
+    baseX: 1420,
     range: 0,
-    y: 352,
+    y: 720,
     speed: 0,
     phase: 0,
     scale: 1.5,
@@ -246,9 +258,9 @@ const STREET_WALKERS: StreetWalker[] = [
     title: "宫门甲士",
     color: "#5a4030",
     accent: "#e0c070",
-    baseX: 952,
+    baseX: 1580,
     range: 0,
-    y: 352,
+    y: 720,
     speed: 0,
     phase: 0,
     scale: 1.5,
@@ -277,8 +289,8 @@ const STREET_PROPS: StreetProp[] = [
     label: "告示牌",
     npcId: "street-notice",
     title: "城中告示",
-    x: 884,
-    y: 620,
+    x: 1260,
+    y: 880,
     w: 28,
     h: 30,
     lines: ["榜文上写着募兵的名目，墨迹被露水洇开了一角。", "落款是本地县衙，末尾还按着一方朱印。"],
@@ -288,8 +300,8 @@ const STREET_PROPS: StreetProp[] = [
     label: "水井",
     npcId: "street-well",
     title: "街口水井",
-    x: 596,
-    y: 620,
+    x: 1030,
+    y: 880,
     w: 44,
     h: 30,
     lines: ["井台边的青石被绳子磨出了槽。", "木桶还挂在轱辘上，井水映着一小片天。"],
@@ -578,15 +590,17 @@ function paintShopFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: num
   ctx.fillRect(left + 6, wallTop + 2, 6, wallH - 2);
   ctx.fillRect(left + w - 12, wallTop + 2, 6, wallH - 2);
 
-  // 两扇小窗：黑框 + 木棂十字
-  for (const wx of [left + 18, left + w - 36]) {
+  // 两扇窗：黑框 + 木棂十字，做成大开窗（原版铺面窗子占墙面近一半）
+  for (const wx of [left + 22, left + w - 48]) {
     ctx.fillStyle = "#1c1a15";
-    ctx.fillRect(wx, wallTop + 16, 18, 16);
+    ctx.fillRect(wx, wallTop + 14, 26, 22);
     ctx.fillStyle = "#f4e6c2";
-    ctx.fillRect(wx + 2, wallTop + 18, 14, 12);
+    ctx.fillRect(wx + 2, wallTop + 16, 22, 18);
     ctx.fillStyle = "#7c5326";
-    ctx.fillRect(wx + 8, wallTop + 18, 2, 12);
-    ctx.fillRect(wx + 2, wallTop + 23, 14, 2);
+    ctx.fillRect(wx + 12, wallTop + 16, 2, 18);
+    ctx.fillRect(wx + 2, wallTop + 24, 22, 2);
+    ctx.fillStyle = "#1c1a15";
+    ctx.fillRect(wx, wallTop + 35, 26, 2);
   }
 
   // 门：一整扇双开木门，比窗高出一头，黑框 + 门楣 + 门钉，不做窗棂
@@ -652,16 +666,16 @@ function paintShopFront(ctx: CanvasRenderingContext2D, spot: StreetSpot, sx: num
   ctx.fillStyle = "#1c1a15";
   ctx.fillRect(left + 6, roofTop - 7, w - 12, 2);
 
-  // 屋顶方匾：白底黑框，一个字（宿 / 武 / 药 / 训 / 道 / 记），照原版挂在屋脊上方
+  // 屋顶方匾：白底黑框，一个字（宿 / 武 / 药 / 训 / 道 / 记）；匾的下边与屋檐下边齐平
   if (spot.sign) {
-    const sbW = 28;
-    const sbTop = roofTop - 36;
+    const sbW = 30;
+    const sbTop = wallTop + 3 - sbW;
     ctx.fillStyle = "#1c1a15";
     ctx.fillRect(sx - sbW / 2 - 2, sbTop - 2, sbW + 4, sbW + 4);
     ctx.fillStyle = "#f8eed2";
     ctx.fillRect(sx - sbW / 2, sbTop, sbW, sbW);
     ctx.fillStyle = "#241a10";
-    ctx.font = townFont(18);
+    ctx.font = townFont(19);
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     ctx.fillText(spot.sign, sx, sbTop + sbW / 2 + 1);
@@ -975,18 +989,18 @@ function paintTree(ctx: CanvasRenderingContext2D, x: number, y: number, scale: n
 
 /** 城内几处树位：只摆在铺面之间的空当与南排街边，不挡走位。 */
 const STREET_TREES: [number, number, number][] = [
-  [250, 306, 0.92],
-  [410, 306, 0.86],
-  [905, 302, 0.98],
-  [1248, 306, 0.88],
-  [1388, 340, 0.7],
-  [92, 352, 0.72],
-  [286, 906, 0.82],
-  [446, 906, 0.8],
-  [614, 1092, 0.9],
-  [860, 1092, 0.9],
-  [1006, 944, 0.76],
-  [1196, 940, 0.78],
+  [430, 420, 0.92],
+  [650, 420, 0.86],
+  [1720, 420, 0.9],
+  [1900, 420, 0.84],
+  [430, 990, 0.9],
+  [1720, 990, 0.86],
+  [430, 1230, 0.88],
+  [1720, 1230, 0.82],
+  [430, 1440, 0.84],
+  [560, 1440, 0.78],
+  [1720, 1440, 0.86],
+  [1840, 1440, 0.8],
 ];
 
 function paintLampPost(ctx: CanvasRenderingContext2D, x: number, y: number, time: number, phase: number): void {
@@ -1237,26 +1251,26 @@ function paintStreet(
       ctx.fillRect(x, 22 - camY, 62, 4);
     }
     // 北城口：在城墙上开一道门洞，正对南北主街（走位只到墙面，口子当出城方向）
-    const gateX = 640 - camX;
+    const gateX = 1080 - camX;
     const gateTop = 232 - camY;
-    if (gateX < VIEW_W && gateX + 120 > 0 && gateTop < wallBottom) {
+    if (gateX < VIEW_W && gateX + 320 > 0 && gateTop < wallBottom) {
       ctx.fillStyle = "#1c1a15";
-      ctx.fillRect(gateX, gateTop, 120, wallBottom - gateTop);
+      ctx.fillRect(gateX, gateTop, 320, wallBottom - gateTop);
       const tunnel = ctx.createLinearGradient(0, gateTop, 0, wallBottom);
       tunnel.addColorStop(0, "#2b241c");
       tunnel.addColorStop(1, "#4a3a28");
       ctx.fillStyle = tunnel;
-      ctx.fillRect(gateX + 6, gateTop + 8, 108, wallBottom - gateTop - 8);
+      ctx.fillRect(gateX + 8, gateTop + 8, 304, wallBottom - gateTop - 8);
       ctx.fillStyle = "#8d9082";
       ctx.beginPath();
       ctx.moveTo(gateX, gateTop);
-      ctx.lineTo(gateX + 60, gateTop - 26);
-      ctx.lineTo(gateX + 120, gateTop);
+      ctx.lineTo(gateX + 160, gateTop - 34);
+      ctx.lineTo(gateX + 320, gateTop);
       ctx.closePath();
       ctx.fill();
       ctx.fillStyle = "#a5a898";
-      ctx.fillRect(gateX - 10, gateTop - 6, 18, wallBottom - gateTop + 6);
-      ctx.fillRect(gateX + 112, gateTop - 6, 18, wallBottom - gateTop + 6);
+      ctx.fillRect(gateX - 12, gateTop - 6, 20, wallBottom - gateTop + 6);
+      ctx.fillRect(gateX + 312, gateTop - 6, 20, wallBottom - gateTop + 6);
     }
   }
 
@@ -1278,9 +1292,9 @@ function paintStreet(
     // 铺面跟前的沙土带：一整条，上下压深色边，边缘再撒几块凸起
     const dirtBands: [number, number, number, number][] = [
       [0, 292, TOWN_W, 54],
-      [0, 512, TOWN_W, 44],
-      [0, 732, TOWN_W, 44],
-      [0, 912, TOWN_W, 44],
+      [0, 692, TOWN_W, 44],
+      [0, 1092, TOWN_W, 44],
+      [0, 1492, TOWN_W, 44],
     ];
     for (const [dx, dy, dw, dh] of dirtBands) {
       const sx = dx - camX;
@@ -1321,21 +1335,21 @@ function paintStreet(
       ctx.fillRect(wx, wy, Math.min(9, w - 6), 2);
     }
   };
-  paintCanal(712, 40, 26, 258);
-  paintCanal(1062, 40, 26, 258);
-  paintCanal(712, 292, 198, 26);
-  paintCanal(966, 292, 122, 26);
+  paintCanal(1310, 420, 26, 280);
+  paintCanal(1664, 420, 26, 280);
+  paintCanal(1310, 692, 130, 26);
+  paintCanal(1560, 692, 130, 26);
   // 石桥：压在正南渠上，桥面带两道石栏
-  const bx = 852 - camX;
-  const by = 290 - camY;
+  const bx = 1440 - camX;
+  const by = 690 - camY;
   ctx.fillStyle = "#1c1a15";
-  ctx.fillRect(bx, by, 106, 30);
+  ctx.fillRect(bx, by, 120, 30);
   ctx.fillStyle = "#b4b7a8";
-  ctx.fillRect(bx + 2, by + 2, 102, 26);
+  ctx.fillRect(bx + 2, by + 2, 116, 26);
   ctx.fillStyle = "#bcbfb0";
-  for (let i = 0; i < 102; i += 26) ctx.fillRect(bx + 4 + i, by + 4, 22, 10);
+  for (let i = 0; i < 116; i += 26) ctx.fillRect(bx + 4 + i, by + 4, 22, 10);
   ctx.fillStyle = "#8d9082";
-  ctx.fillRect(bx + 2, by + 16, 102, 3);
+  ctx.fillRect(bx + 2, by + 16, 116, 3);
 
   const paintRoad = (x: number, y: number, w: number, h: number) => {
     const rx = x - camX;
@@ -1379,11 +1393,11 @@ function paintStreet(
     ctx.fillRect(rx, ry + h - 3, w, 3);
   };
   // 路网：一横一竖两条石板路十字穿过全城，四个方向各自接到城口的缺口上
-  paintRoad(640, 336, 120, 814);
-  paintRoad(0, 600, TOWN_W, 100);
+  paintRoad(1020, 336, 320, 1364);
+  paintRoad(0, 760, TOWN_W, 180);
 
   // 广场：南北主街与东西横街交汇处一块方砖地，压黑边
-  const plaza = { x: 566, y: 566, w: 268, h: 168 };
+  const plaza = { x: 1000, y: 740, w: 360, h: 220 };
   const px = plaza.x - camX;
   const py = plaza.y - camY;
   if (px < VIEW_W && px + plaza.w > 0 && py < VIEW_H && py + plaza.h > 0) {
@@ -1404,12 +1418,9 @@ function paintStreet(
     ctx.fillRect(px + plaza.w - 3, py, 3, plaza.h);
   }
 
-  // 主街中线：一条窄石带顺着南北主街铺到南面城口
-  ctx.fillStyle = "#cfd2c2";
-  ctx.fillRect(684 - camX, 344, 28, 806);
-  ctx.fillStyle = "#22201a";
-  ctx.fillRect(684 - camX, 344, 2, 806);
-  ctx.fillRect(710 - camX, 344, 2, 806);
+  // 主街中线不再铺浅色石带（会在石路上拖出一条白痕），只留一道深缝分左右
+  ctx.fillStyle = "#8d9082";
+  ctx.fillRect(1178 - camX, 348, 2, 1348);
 
   // 北排门脸前的阶沿
   ctx.fillStyle = "#b4b7a8";
@@ -1449,21 +1460,27 @@ function paintStreet(
     bodies.push({ y: ty, draw: () => paintTree(ctx, tx, ty, ts) });
   }
   for (const [lx, ly] of [
-    [300, 470],
-    [620, 470],
-    [860, 470],
-    [1180, 470],
-    [430, 980],
-    [1050, 980],
+    [400, 356],
+    [1080, 356],
+    [1660, 356],
+    [2200, 356],
+    [400, 790],
+    [1080, 790],
+    [1660, 790],
+    [2200, 790],
+    [400, 1560],
+    [1080, 1560],
+    [1660, 1560],
+    [2200, 1560],
   ] as [number, number][]) {
     if (!inView(lx, ly)) continue;
     bodies.push({ y: ly, draw: () => paintLampPost(ctx, lx, ly, time, lx * 0.013) });
   }
   for (const [bx, by] of [
-    [608, 400],
-    [872, 400],
-    [632, 1040],
-    [848, 1040],
+    [1040, 730],
+    [1320, 730],
+    [1040, 1560],
+    [1320, 1560],
   ] as [number, number][]) {
     if (!inView(bx, by)) continue;
     bodies.push({ y: by, draw: () => paintBannerPost(ctx, bx, by, time, bx * 0.01) });
@@ -1516,12 +1533,28 @@ function paintStreet(
               ? { x: 1, y: 0 }
               : { x: -1, y: 0 };
       for (let i = followers; i >= 1; i--) {
-        const sample = trail[Math.min(trail.length - 1, i * 12)];
+        // 按「走过的距离」取点，不再按帧号跳着取：队友紧跟在前一个人身后，不会越走越散
+        const want = i * 40;
+        let acc = 0;
+        let sample: { x: number; y: number; facing: FieldFacing } | null = null;
+        for (let k = trail.length - 1; k > 0; k -= 1) {
+          const now = trail[k];
+          const prev = trail[k - 1];
+          acc += Math.hypot(now.x - prev.x, now.y - prev.y);
+          if (acc >= want) {
+            sample = prev;
+            break;
+          }
+        }
         const mem = members[i] ?? members[members.length - 1];
-        const far = !sample || Math.hypot(sample.x - player.x, sample.y - player.y) < i * 12;
-        const at = far
-          ? { x: player.x + back.x * i * 20, y: player.y + back.y * i * 20, facing: player.facing }
-          : sample;
+        const base = sample ?? { x: player.x + back.x * i * 30, y: player.y + back.y * i * 30, facing: player.facing };
+        // 一人靠左一人靠右，五个人排成两列整齐队列，不会像糖葫芦一样叠成一串
+        const side = i % 2 === 1 ? 1 : -1;
+        const at = {
+          x: base.x + (back.x === 0 ? side * 13 : 0),
+          y: base.y + (back.y === 0 ? side * 13 : 0),
+          facing: base.facing,
+        };
         bodies.push({
           y: at.y,
           draw: () => {
@@ -1580,22 +1613,22 @@ function paintStreet(
       }
     }
   };
-  // 南墙分左右两段，中段 120 宽留出南城口
-  paintYardWall(0, 1150, 640, 26, true);
-  paintYardWall(760, 1150, 680, 26, true);
-  // 东西两道墙，各在横街中线（y 600~700）开一个城口
-  paintYardWall(14, 336, 22, 264, false);
-  paintYardWall(14, 700, 22, 450, false);
-  paintYardWall(1404, 336, 22, 264, false);
-  paintYardWall(1404, 700, 22, 450, false);
+  // 南墙分左右两段，中段 320 宽留出南城口
+  paintYardWall(0, 1700, 1020, 26, true);
+  paintYardWall(1340, 1700, 1060, 26, true);
+  // 东西两道墙，各在横街（y 760~940）开一个城口
+  paintYardWall(20, 336, 26, 424, false);
+  paintYardWall(20, 940, 26, 760, false);
+  paintYardWall(2354, 336, 26, 424, false);
+  paintYardWall(2354, 940, 26, 760, false);
   // 城口两侧的门柱，比墙高出一截
   for (const [px, py, ph] of [
-    [628, 1128, 48],
-    [772, 1128, 48],
-    [8, 596, 48],
-    [8, 704, 48],
-    [1398, 596, 48],
-    [1398, 704, 48],
+    [1008, 1678, 48],
+    [1352, 1678, 48],
+    [14, 752, 48],
+    [14, 948, 48],
+    [2352, 752, 48],
+    [2352, 948, 48],
   ] as [number, number, number][]) {
     const sx = px - camX;
     const sy = py - camY;
@@ -1920,10 +1953,6 @@ function paintShopInterior(
   roundRectPath(ctx, 416, 508, 128, 12, 4);
   ctx.fill();
 
-  ctx.fillStyle = "#3f2d1c";
-  roundRectPath(ctx, 296, 338, 368, 16, 4);
-  ctx.fill();
-
   if (npc) {
     paintWalkerSprite(ctx, 480, 384, {
       facing: "down",
@@ -1936,28 +1965,31 @@ function paintShopInterior(
       basket: false,
       time,
     });
-    paintNameTag(ctx, 480, 320, npc.name);
+    paintNameTag(ctx, 480, 316, npc.name);
   }
 
+  // 柜台沿墙拉通整间铺面（左右抵到墙根）：掌柜站在台后，台后区域走不进去
   ctx.fillStyle = "#2c2015";
-  roundRectPath(ctx, 288, 356, 384, 58, 5);
+  roundRectPath(ctx, 28, 392, 904, 74, 4);
   ctx.fill();
   ctx.fillStyle = "#6b4a2c";
-  roundRectPath(ctx, 296, 356, 368, 12, 3);
+  roundRectPath(ctx, 28, 392, 904, 14, 3);
   ctx.fill();
   ctx.fillStyle = room.accent;
-  ctx.fillRect(296, 370, 368, 4);
+  ctx.fillRect(28, 410, 904, 4);
+  ctx.fillStyle = "#241a10";
+  ctx.fillRect(28, 460, 904, 6);
   ctx.strokeStyle = "rgba(20,14,9,0.45)";
   ctx.lineWidth = 1;
-  for (let x = 320; x < 660; x += 44) {
+  for (let x = 60; x < 924; x += 58) {
     ctx.beginPath();
-    ctx.moveTo(x, 376);
-    ctx.lineTo(x, 412);
+    ctx.moveTo(x, 414);
+    ctx.lineTo(x, 458);
     ctx.stroke();
   }
   ctx.fillStyle = "#d8c9a4";
-  ctx.fillRect(388, 348, 30, 8);
-  ctx.fillRect(542, 348, 24, 8);
+  ctx.fillRect(360, 388, 34, 8);
+  ctx.fillRect(566, 388, 28, 8);
 
   paintHeroSprite(ctx, player.x, player.y, {
     time,
@@ -2283,7 +2315,7 @@ function streetSolidAt(x: number, y: number): boolean {
 
 /** 内景里的柜台与御案是一整块障碍，只能绕着走。 */
 function roomSolidAt(x: number, y: number, scene: Scene): boolean {
-  if (scene.kind === "shop") return x > 282 && x < 678 && y > 332 && y < 418;
+  if (scene.kind === "shop") return x > 18 && x < 942 && y > 384 && y < 472;
   if (scene.kind === "palace") return x > 330 && x < 630 && y > 296 && y < 382;
   return false;
 }
@@ -2299,8 +2331,8 @@ function roomTargetAt(scene: Scene, player: WalkState): RoomTarget | null {
     if (dist < 84) return { kind: "dais", label: "上前奏事", walkX: 480, walkY: 388 };
     return null;
   }
-  const dist = Math.hypot(player.x - 480, player.y - 406);
-  if (dist < 62) return { kind: "counter", label: "与掌柜交谈", walkX: 480, walkY: 422 };
+  const dist = Math.hypot(player.x - 480, player.y - 486);
+  if (dist < 74) return { kind: "counter", label: "与掌柜交谈", walkX: 480, walkY: 484 };
   return null;
 }
 
@@ -2328,8 +2360,8 @@ export function WalkTown({
   const activeRef = useRef(active);
   const propsRef = useRef({ chapterIndex, townName, partyColor, partyAccent, partyMembers, onFacility, onLeave, onCouncil, onArmy });
   const playerRef = useRef<WalkState>({
-    x: 740,
-    y: 1140,
+    x: 1180,
+    y: 1660,
     facing: "up",
     moving: false,
     walkTo: null,
@@ -2339,8 +2371,9 @@ export function WalkTown({
   const targetRef = useRef<TownTarget | null>(null);
   const promptRef = useRef<string | null>(null);
   const timeRef = useRef(0);
-  const returnRef = useRef({ x: 700, y: 1140 });
+  const returnRef = useRef({ x: 1180, y: 1660 });
   const trailRef = useRef<{ x: number; y: number; facing: FieldFacing }[]>([]);
+  const exitedRef = useRef(false);
 
   useEffect(() => {
     propsRef.current = { chapterIndex, townName, partyColor, partyAccent, partyMembers, onFacility, onLeave, onCouncil, onArmy };
@@ -2560,14 +2593,14 @@ export function WalkTown({
         player.pending = null;
         return;
       }
-      if (sy > 466 && Math.abs(sx - ROOM_EXIT_X) < 86) {
-        player.walkTo = { x: ROOM_EXIT_X, y: 508 };
-        player.pending = { kind: "exit", label: "回到街上", walkX: ROOM_EXIT_X, walkY: 508 };
+      if (sy > 500 && Math.abs(sx - ROOM_EXIT_X) < 86) {
+        player.walkTo = { x: ROOM_EXIT_X, y: 512 };
+        player.pending = { kind: "exit", label: "回到街上", walkX: ROOM_EXIT_X, walkY: 512 };
         return;
       }
-      if (sy < 424 && Math.abs(sx - 480) < 210) {
-        player.walkTo = { x: 480, y: 422 };
-        player.pending = { kind: "counter", label: "与掌柜交谈", walkX: 480, walkY: 422 };
+      if (sy < 490 && Math.abs(sx - 480) < 300) {
+        player.walkTo = { x: 480, y: 484 };
+        player.pending = { kind: "counter", label: "与掌柜交谈", walkX: 480, walkY: 484 };
         return;
       }
       player.walkTo = {
@@ -2695,8 +2728,8 @@ export function WalkTown({
         }
         if (vx !== 0 || vy !== 0) {
           const len = Math.hypot(vx, vy) || 1;
-          const stepX = (vx / len) * 158 * dt;
-          const stepY = (vy / len) * 158 * dt;
+          const stepX = (vx / len) * 235 * dt;
+          const stepY = (vy / len) * 235 * dt;
           const bounds =
             current.kind === "street"
               ? { left: WALK_LEFT, right: WALK_RIGHT, top: WALK_TOP, bottom: WALK_BOTTOM }
@@ -2718,6 +2751,12 @@ export function WalkTown({
         }
       }
       player.moving = moved && !frozen;
+
+      // 四个城口：走进去就出城（南北东西都通，不用按回车）
+      if (!frozen && !exitedRef.current && current.kind === "street" && atExit(player.x, player.y)) {
+        exitedRef.current = true;
+        propsRef.current.onLeave();
+      }
 
       // 城里的门不再等 E：走到门口（朝北贴近门脸）就切进铺子 / 皇宫内景
       if (!frozen && current.kind === "street") {

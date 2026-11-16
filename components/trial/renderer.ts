@@ -1059,19 +1059,19 @@ export function paintHeroSprite(
     ctx.fillRect(dir * 2 - 1, -34, 2, 2);
   }
 
-  // 长枪
+  // 长枪：枪杆压到膝盖以上收住，别让枪尾插到地面上成一条白痕
   const dir = facing === "left" ? -1 : facing === "right" ? 1 : 1;
-  ctx.strokeStyle = "#cfc6ae";
+  ctx.strokeStyle = "#7a6b4a";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(dir * 9, -26);
-  ctx.lineTo(dir * 16, 2);
+  ctx.moveTo(dir * 10, -30);
+  ctx.lineTo(dir * 14, -8);
   ctx.stroke();
-  ctx.fillStyle = "#e6ddc6";
+  ctx.fillStyle = "#cfc6ae";
   ctx.beginPath();
-  ctx.moveTo(dir * 9, -26);
-  ctx.lineTo(dir * 6, -32);
-  ctx.lineTo(dir * 12, -30);
+  ctx.moveTo(dir * 10, -30);
+  ctx.lineTo(dir * 7, -36);
+  ctx.lineTo(dir * 13, -34);
   ctx.closePath();
   ctx.fill();
   ctx.restore();

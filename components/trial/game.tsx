@@ -55,6 +55,7 @@ import {
   fieldHitsSolid,
   fieldHotspotNear,
   fieldSpeedAt,
+  fieldWalkPoint,
   generateSagaField,
   sagaFieldFor,
   type FieldHotspot,
@@ -1743,7 +1744,10 @@ export function TrialGame(props: TrialGameProps) {
               enterTown();
               return;
             }
-            // 野外点空白：不再弹「军中一览」，免得走位途中被打断；要看队伍走城里的编成所。
+            // 野外点空地：直接走到那一点（落点在山 / 水 / 城墙里就吸到最近一格可走处）。
+            // 不再弹「军中一览」，免得走位途中被打断；要看队伍走城里的编成所。
+            const point = fieldWalkPoint(field, wx, wy);
+            if (point) walkTo(point.x, point.y);
           }}
         />
 

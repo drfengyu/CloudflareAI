@@ -89,6 +89,26 @@ export function fieldHitsSolid(
   return false;
 }
 
+/** 点击走位：落在实心格上就往四周挪到最近的一格空地，全被挡住时返回 null。 */
+export function fieldWalkPoint(field: SagaField, x: number, y: number): { x: number; y: number } | null {
+  const tile = field.tile;
+  const cx = clamp(x, tile, field.worldW - tile);
+  const cy = clamp(y, tile, field.worldH - tile);
+  if (!fieldHitsSolid(field, cx, cy)) return { x: cx, y: cy };
+  for (let ring = 1; ring <= 6; ring += 1) {
+    for (let dy = -ring; dy <= ring; dy += 1) {
+      for (let dx = -ring; dx <= ring; dx += 1) {
+        if (Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+        const px = cx + dx * tile;
+        const py = cy + dy * tile;
+        if (px < tile || py < tile || px > field.worldW - tile || py > field.worldH - tile) continue;
+        if (!fieldHitsSolid(field, px, py)) return { x: px, y: py };
+      }
+    }
+  }
+  return null;
+}
+
 /** 树林里行军放慢，其余地形全速。 */
 export function fieldSpeedAt(field: SagaField, x: number, y: number): number {
   const tile = field.tile;
