@@ -5,6 +5,20 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.87.2] - 2026-11-16
+
+### 变更
+
+- **游戏内公告栏只显示最近三条**：`notice.ts` 新增 `SAGA_NOTICE_VISIBLE = 3` 与
+  `visibleNotices()`，设置页从整串 `SAGA_NOTICES` 改读前三段，面板底部补一行提示旧版本查
+  CHANGELOG。
+- 公告数据仍按版本倒序全量留档，红点比对仍以 `latestNoticeId()`（首条）为准，不受可见条数影响。
+
+### 验证
+
+- 单测新增公告可见条数断言（`visibleNotices()` 恰为前三条、旧条目仍在数据里），76/76 通过；
+  `tsc --noEmit` 0、ESLint 0、`next build` 通过。
+
 ## [0.87.1] - 2026-11-16
 
 ### 变更

@@ -106,10 +106,10 @@ import type { ActiveTrialRun, TrialSettlement } from "@/lib/trial/store";
 import { SAGA_RULESET } from "@/lib/trial/saga/types";
 import {
   SAGA_MAINTENANCE,
-  SAGA_NOTICES,
   SAGA_NOTICE_VERSION,
   latestNoticeId,
   maintenancePhaseAt,
+  visibleNotices,
 } from "@/lib/trial/saga/notice";
 import type { ActivityCouponView } from "@/lib/activity/coupons";
 import {
@@ -4032,7 +4032,7 @@ function NoticeBoard() {
       </p>
 
       <div className="space-y-2">
-        {SAGA_NOTICES.map((entry) => (
+        {visibleNotices().map((entry) => (
           <div key={entry.id} className="rounded-lg border border-border p-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="font-medium">
@@ -4052,6 +4052,9 @@ function NoticeBoard() {
             </ul>
           </div>
         ))}
+        <p className="text-[11px] text-muted-foreground">
+          这里只列最近三条更新，更早的版本收在仓库的 CHANGELOG 里。
+        </p>
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ import {
   hasPortraitAsset,
   portraitAssetSrc,
 } from "../components/trial/portrait-assets";
-import { SAGA_NOTICES, SAGA_NOTICE_VERSION, latestNoticeId, maintenanceActiveAt, maintenancePhaseAt } from "../lib/trial/saga/notice";
+import { SAGA_NOTICES, SAGA_NOTICE_VERSION, SAGA_NOTICE_VISIBLE, latestNoticeId, maintenanceActiveAt, maintenancePhaseAt, visibleNotices } from "../lib/trial/saga/notice";
 import {
   SAGA_FIELD_COLS,
   SAGA_FIELD_ROWS,
@@ -2298,6 +2298,14 @@ test("公告与维护窗口判定", () => {
   assert.equal(latestNoticeId(), SAGA_NOTICES[0].id);
   assert.equal(new Set(SAGA_NOTICES.map((row) => row.id)).size, SAGA_NOTICES.length, "公告 id 不能重复");
   assert.ok(SAGA_NOTICES.every((row) => row.lines.length > 0 && row.version && row.date));
+  // 面板只展示最新三条，更早的留档仍在数据里。
+  assert.equal(SAGA_NOTICE_VISIBLE, 3);
+  assert.deepEqual(
+    visibleNotices().map((row) => row.id),
+    SAGA_NOTICES.slice(0, 3).map((row) => row.id),
+    "公告面板只取最新三条",
+  );
+  assert.ok(SAGA_NOTICES.length > SAGA_NOTICE_VISIBLE, "旧公告仍留档可查");
 
   // 维护窗口：开始与结束都算在内，窗口边界外不算，没有窗口一律不在维护。
   const at = (iso: string) => new Date(iso);

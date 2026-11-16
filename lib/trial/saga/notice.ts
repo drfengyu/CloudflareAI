@@ -28,10 +28,24 @@ export interface SagaMaintenanceWindow {
 }
 
 /** 游戏内公告版本号（与站点版本对齐）。 */
-export const SAGA_NOTICE_VERSION = "0.87.1";
+export const SAGA_NOTICE_VERSION = "0.87.2";
+
+/** 公告面板只展示最新三条，更早的留档不删。 */
+export const SAGA_NOTICE_VISIBLE = 3;
 
 /** 最新公告：按版本从新到旧。 */
 export const SAGA_NOTICES: SagaNoticeEntry[] = [
+  {
+    id: "notice-0.87.2",
+    version: "0.87.2",
+    date: "2026-11-16",
+    kind: "update",
+    title: "公告栏只留最近三条",
+    lines: [
+      "设置里的更新公告改成只显示最近三条，不再一长串往下翻。",
+      "更早的版本记录仍在仓库的 CHANGELOG 里，需要回查往期改动去那儿看。",
+    ],
+  },
   {
     id: "notice-0.87.1",
     version: "0.87.1",
@@ -248,4 +262,9 @@ export function maintenancePhaseAt(
 /** 最新一条公告的 id；界面拿它跟本机已读记录比对，决定要不要点红点。 */
 export function latestNoticeId(): string | null {
   return SAGA_NOTICES[0]?.id ?? null;
+}
+
+/** 公告面板要展示的几条：最新三条，旧的留档不显示。 */
+export function visibleNotices(): SagaNoticeEntry[] {
+  return SAGA_NOTICES.slice(0, SAGA_NOTICE_VISIBLE);
 }

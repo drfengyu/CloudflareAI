@@ -284,6 +284,9 @@
 - 维护窗口两端都算在内；时间解析失败或窗口缺失一律按「不在维护」。
 - 已读按「最新一条公告 id」存 `localStorage`（键 `trial-saga-notice-seen`），
   通过 `useSyncExternalStore` 订阅，读写都在本机，不参与结算、不影响存档。
+- **面板只列最近三条（v0.87.2）**：`SAGA_NOTICE_VISIBLE = 3` + `visibleNotices()`，
+  设置页读前者，数据里更早的条目照旧留档（`latestNoticeId()` 仍取首条做红点比对），
+  面板底部一行提示旧版本查 `CHANGELOG.md`。
 
 改公告只动数据文件；要真停机，把 `SAGA_MAINTENANCE` 填成计划窗口即可，界面会自动显示
 「计划中 / 维护中 / 已结束」，无需改组件。
