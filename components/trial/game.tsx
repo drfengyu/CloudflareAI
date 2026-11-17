@@ -1737,6 +1737,21 @@ export function TrialGame(props: TrialGameProps) {
     [appendCommand],
   );
 
+  const giveInventoryItem = useCallback(
+    (fromId: string, toId: string, itemId: string) => {
+      if (fromId === toId) return;
+      const target = [...save.party, ...save.reserve].find((entry) => entry.id === toId);
+      const targetItems = target?.items ?? {};
+      if (!targetItems[itemId] && Object.keys(targetItems).length >= SAGA_CARRY_LIMIT) {
+        toast.error(`${generalName(toId)}身上已带满 ${SAGA_CARRY_LIMIT} 种道具`);
+        return;
+      }
+      appendCommand({ k: "give", from: fromId, to: toId, i: itemId });
+      toast.success(`把 ${itemName(itemId)} 转交给${generalName(toId)}`);
+    },
+    [appendCommand, save.party, save.reserve],
+  );
+
   const sellInventoryItem = useCallback(
     (itemId: string, ownerId?: string) => {
       appendCommand({ k: "sell", i: itemId, g: ownerId });
@@ -3369,6 +3384,30 @@ export function TrialGame(props: TrialGameProps) {
                                       >
                                         卖
                                       </Button>
+                                      <select
+                                        value=""
+                                        aria-label={`把${item.name}转交他人`}
+                                        onChange={(event) => {
+                                          const to = event.target.value;
+                                          event.target.value = "";
+                                          if (to) giveInventoryItem(member.id, to, itemId);
+                                        }}
+                                        className="h-7 rounded border border-border bg-background px-1 text-[11px] text-muted-foreground"
+                                      >
+                                        <option value="">转交</option>
+                                        {[...save.party, ...save.reserve]
+                                          .filter((target) => target.id !== member.id)
+                                          .map((target) => {
+                                            const full =
+                                              carrySlots(target) >= SAGA_CARRY_LIMIT &&
+                                              !(target.items?.[itemId] ?? 0);
+                                            return (
+                                              <option key={target.id} value={target.id} disabled={full}>
+                                                {generalName(target.id)}
+                                              </option>
+                                            );
+                                          })}
+                                      </select>
                                     </div>
                                   );
                                 })}

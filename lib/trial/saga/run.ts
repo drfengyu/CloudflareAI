@@ -35,6 +35,7 @@ import {
 } from "./state";
 import {
   SAGA_BATTLE_SIZE,
+  SAGA_CARRY_LIMIT,
   SAGA_FERRY_TICKETS,
   SAGA_MAX_COMMANDS,
   SAGA_MAX_LEVEL,
@@ -637,6 +638,13 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
         if (g && i) out.push({ k: "drop", g, i });
         break;
       }
+      case "give": {
+        const from = typeof it.from === "string" ? it.from.slice(0, 32) : "";
+        const to = typeof it.to === "string" ? it.to.slice(0, 32) : "";
+        const i = typeof it.i === "string" ? it.i.slice(0, 32) : "";
+        if (from && to && from !== to && SAGA_ITEM_BY_ID.has(i)) out.push({ k: "give", from, to, i });
+        break;
+      }
       case "sell": {
         const i = typeof it.i === "string" ? it.i.slice(0, 32) : "";
         const g = typeof it.g === "string" ? it.g.slice(0, 32) : undefined;
@@ -986,6 +994,20 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
         owner.items = { ...(owner.items ?? {}) };
         if (left > 0) owner.items[item.id] = left;
         else delete owner.items[item.id];
+        break;
+      }
+      case "give": {
+        const from = findGeneral(state.save, command.from);
+        const to = findGeneral(state.save, command.to);
+        const item = SAGA_ITEM_BY_ID.get(command.i);
+        if (!from || !to || !item || (from.items?.[item.id] ?? 0) <= 0) break;
+        const targetItems = to.items ?? {};
+        if (!targetItems[item.id] && Object.keys(targetItems).length >= SAGA_CARRY_LIMIT) break;
+        from.items = { ...(from.items ?? {}) };
+        const left = (from.items[item.id] ?? 0) - 1;
+        if (left > 0) from.items[item.id] = left;
+        else delete from.items[item.id];
+        to.items = { ...targetItems, [item.id]: (targetItems[item.id] ?? 0) + 1 };
         break;
       }
       case "drop": {

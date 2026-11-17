@@ -2638,3 +2638,32 @@ test("分城货架：前一章只卖当季兵器，后一章才上偃月刀与�
   assert.equal(shopStock("mount", 0).length, 0, "第一章没有马市现货");
   assert.equal(shopStock("mount", 1).some((item) => item.id === "white_horse"), true);
 });
+
+test("道具可转交给其他武将，目标满 8 种时不收", () => {
+  const run = freshRun(31, 3);
+  const save = initialTrialSave();
+  save.party[0].items = { herb: 2 };
+  const next = replaySagaRun({ ...run, startSave: save }, [
+    { k: "give", from: "liubei", to: "guanyu", i: "herb" },
+  ]).state;
+  assert.equal(next.save.party[0].items?.herb, 1);
+  assert.equal(next.save.party[1].items?.herb, 1);
+
+  const full = initialTrialSave();
+  full.party[0].items = { qingxin: 1 };
+  full.party[1].items = {
+    herb: 1,
+    medicine: 1,
+    jinchuang: 1,
+    dahuan: 1,
+    junliang: 1,
+    lingzhi: 1,
+    zhaohun_dan: 1,
+    huihun_dan: 1,
+  };
+  const blocked = replaySagaRun({ ...freshRun(32, 3), startSave: full }, [
+    { k: "give", from: "liubei", to: "guanyu", i: "qingxin" },
+  ]).state;
+  assert.equal(blocked.save.party[0].items?.qingxin, 1, "目标满格时转交不生效");
+  assert.equal(blocked.save.party[1].items?.qingxin, undefined);
+});

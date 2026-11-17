@@ -591,6 +591,8 @@ export type SagaCommand =
   | { k: "use"; g: string; i: string; target?: string }
   /** 丢弃随身道具，给 8 件上限腾位置。 */
   | { k: "drop"; g: string; i: string }
+  /** 把随身道具转交给队中另一名武将。 */
+  | { k: "give"; from: string; to: string; i: string }
   /** 折价卖出装备或道具，按原价一半折成金币。 */
   | { k: "sell"; i: string; g?: string }
   | { k: "party"; active: string[] }

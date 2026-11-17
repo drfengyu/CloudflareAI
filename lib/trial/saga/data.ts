@@ -297,6 +297,7 @@ export const SAGA_ITEMS: SagaItemDef[] = [
   { id: "herb", name: "伤药", kind: "consumable", priceTickets: 1, heal: 120, chapter: 0, desc: "回复 120 兵力", stack: true },
   { id: "medicine", name: "良药", kind: "consumable", priceTickets: 2, heal: 300, chapter: 0, desc: "回复 300 兵力", stack: true },
   { id: "jinchuang", name: "金疮药", kind: "consumable", priceTickets: 3, heal: 600, chapter: 1, desc: "回复 600 兵力", stack: true },
+  { id: "qingxin", name: "清心散", kind: "consumable", priceTickets: 2, heal: 220, chapter: 1, desc: "回复 220 兵力，行军途中安神", stack: true },
   { id: "dahuan", name: "大还丹", kind: "consumable", priceTickets: 5, heal: 1200, chapter: 2, desc: "回复 1200 兵力", stack: true },
   { id: "junliang", name: "军粮", kind: "consumable", priceTickets: 2, heal: 400, chapter: 0, desc: "回复 400 兵力，随军携带的干粮", stack: true },
   { id: "lingzhi", name: "灵芝", kind: "consumable", priceTickets: 4, heal: 900, chapter: 2, desc: "回复 900 兵力，山中所采的灵药", stack: true },
