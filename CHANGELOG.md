@@ -33,7 +33,7 @@
 ### 变更
 
 - `SAGA_RULESET = 16`；旧行军仍按各自 `rules` 重放。
-- 门禁：`tsc 0`、`eslint 0`、单测 **86/86**、`next build` 通过。
+- 门禁：`tsc 0`、`eslint 0`、单测 **87/87**、`next build` 通过。
 
 ## [0.95.0] - 2026-11-17
 
