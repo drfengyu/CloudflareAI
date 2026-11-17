@@ -33,6 +33,7 @@ import {
   troopBaseline,
 } from "./state";
 import {
+  SAGA_BATTLE_SIZE,
   SAGA_FERRY_TICKETS,
   SAGA_MAX_COMMANDS,
   SAGA_MAX_LEVEL,
@@ -334,7 +335,7 @@ function parseNode(raw: unknown): SagaNode | null {
   const it = raw as Partial<SagaNode>;
   const kind = it.kind;
   if (kind !== "battle" && kind !== "elite" && kind !== "boss") return null;
-  if (!Array.isArray(it.enemies) || it.enemies.length === 0 || it.enemies.length > SAGA_PARTY_SIZE) return null;
+  if (!Array.isArray(it.enemies) || it.enemies.length === 0 || it.enemies.length > SAGA_BATTLE_SIZE) return null;
   const enemies: SagaEnemy[] = [];
   for (const item of it.enemies) {
     const enemy = parseEnemy(item);

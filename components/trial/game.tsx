@@ -147,8 +147,9 @@ import {
   SceneCanvas,
 } from "./scenes";
 import { WalkTown } from "./town";
+import { settlementFor, type Settlement } from "./settlement";
 
-type PanelId = FieldFacilityId | "camp" | "army" | "status" | "dex" | "notice" | "archive" | null;
+type PanelId = FieldFacilityId | "camp" | "army" | "status" | "dex" | "notice" | "archive" | "site" | null;
 
 /** 公告已读标记：按「最新一条公告 id」记在本机。 */
 const NOTICE_SEEN_KEY = "trial-saga-notice-seen";
@@ -359,6 +360,10 @@ export function TrialGame(props: TrialGameProps) {
   const [saveCleared, setSaveCleared] = useState(false);
   /** 城中街道场景：进城后把大地图盖住，铺子从街景里进。 */
   const [inTown, setInTown] = useState(false);
+  /** 其他州治与野外村庄：按地方与种子现生成聚落，铺面与乡人每次一致、各地不同。 */
+  const [site, setSite] = useState<Settlement | null>(null);
+  /** 聚落里点乡人说话：只在本机显示，不进剧情存档。 */
+  const [siteLine, setSiteLine] = useState<string | null>(null);
   /** 打开版本公告：先把城景/战场让开，再记已读。 */
   const openNotice = () => {
     setInTown(false);
@@ -998,21 +1003,46 @@ export function TrialGame(props: TrialGameProps) {
         return;
       }
       if (hotspot.kind === "city") {
-        const startChapter = run?.startSave.chapter ?? props.save.chapter;
-        const cityChapter = hotspot.city?.chapter;
-        if (cityChapter !== undefined && cityChapter !== startChapter) {
-          toast.error(
-            `这里是第 ${cityChapter + 1} 区州治，行军途中不能进城整备；整备请回${SAGA_CHAPTERS[startChapter]?.name ?? "本区"}`,
-          );
+        const cityChapter = hotspot.city?.chapter ?? chapter.index;
+        // 本区州治才走完整街景；别的州治与属县走生成的聚落，铺面与乡人各不相同。
+        if (cityChapter === chapter.index) {
+          setInTown(true);
           return;
         }
-        setInTown(true);
+        const name =
+          hotspot.city?.name ?? SAGA_CHAPTERS[cityChapter]?.town ?? `第 ${cityChapter + 1} 区州治`;
+        setSite(
+          settlementFor({
+            kind: "town",
+            name,
+            chapter: cityChapter,
+            seed: run?.seed ?? 0,
+          }),
+        );
+        setSiteLine(null);
+        setInTown(false);
+        setPanel("site");
         return;
       }
       if (hotspot.kind === "poi" && hotspot.poi) {
         const poi = hotspot.poi;
         const key = `${poi.kind}:${poi.name}`;
         setVisitedPois((prev) => (prev.includes(key) ? prev : [...prev, key]));
+        // 野外村庄能推门进去：宿店、药棚与乡人按村子现生成；祠堂与渡口仍是问路对话。
+        if (poi.kind === "village") {
+          setSite(
+            settlementFor({
+              kind: "village",
+              name: poi.name,
+              chapter: run?.startSave.chapter ?? props.save.chapter,
+              seed: run?.seed ?? 0,
+            }),
+          );
+          setSiteLine(null);
+          setInTown(false);
+          setPanel("site");
+          return;
+        }
         setDialogue(poiScene(run?.startSave.chapter ?? props.save.chapter, poi));
         return;
       }
@@ -1021,7 +1051,7 @@ export function TrialGame(props: TrialGameProps) {
         setPanel("camp");
       }
     };
-  }, [appendCommand, pacifiedChapters, props.save.chapter, run, state]);
+  }, [appendCommand, chapter.index, pacifiedChapters, props.save.chapter, run, state]);
 
   /** 同一趟行军里，每个营的阵前喊话只自动播一次；之后可从营前画面重看。 */
   const markSceneSeen = useCallback((key: string): boolean => {
@@ -1683,7 +1713,11 @@ export function TrialGame(props: TrialGameProps) {
         : panel === "camp"
           ? `敌营 · ${run?.nodes[campNode ?? 0]?.name ?? ""}`
           : panel === "army"
-            ? "军情"
+          ? "军情"
+          : panel === "site"
+            ? site
+              ? `${site.name} · ${site.kind === "town" ? "城镇" : "村庄"}`
+              : "聚落"
             : panel === "tavern"
               ? `${chapter.town} · 酒馆`
               : panel === "tent"
@@ -1804,8 +1838,13 @@ export function TrialGame(props: TrialGameProps) {
               );
               return;
             }
-            if (Math.hypot(field.city.x - wx, field.city.y - wy) < 44) {
-              enterTown();
+            const city = (field.cities ?? [field.city]).find(
+              (row) => Math.hypot(row.x - wx, row.y - wy) < 44,
+            );
+            if (city) {
+              walkTo(city.x, city.y + 30, () =>
+                interactRef.current({ kind: "city", city, x: city.x, y: city.y, radius: 44 }),
+              );
               return;
             }
             // 野外点空地：直接走到那一点（落点在山 / 水 / 城墙里就吸到最近一格可走处）。
@@ -3232,7 +3271,6 @@ export function TrialGame(props: TrialGameProps) {
                   run={run}
                   state={state}
                   node={campNode}
-                  maxReward={props.maxReward}
                   onBattle={beginBattle}
                   onAuto={autoBattle}
                   onClose={() => setPanel(null)}
@@ -3247,12 +3285,25 @@ export function TrialGame(props: TrialGameProps) {
                 />
               ) : null}
 
+              {panel === "site" && site ? (
+                <SettlementBoard
+                  site={site}
+                  line={siteLine}
+                  onTalk={(npc) => setSiteLine(`${npc.name}：${npc.line}`)}
+                  onFacility={(id) => setPanel(id)}
+                  onClose={() => {
+                    setPanel(null);
+                    setSite(null);
+                    setSiteLine(null);
+                  }}
+                />
+              ) : null}
+
               {panel === "army" ? (
                 <ArmyPanel
                   run={run}
                   state={state}
                   field={field}
-                  maxReward={props.maxReward}
                   cleared={clearedNodes}
                   open={openNodeList}
                   quests={quests}
@@ -3587,16 +3638,9 @@ function StatusPanel({
       </section>
 
       {save.reserve.filter((row) => !save.party.some((p) => p.id === row.id)).length > 0 ? (
-        <section className="space-y-2">
-          <p className="text-sm font-medium">待命武将</p>
-          <StatusRoster
-            members={save.reserve.filter((row) => !save.party.some((p) => p.id === row.id))}
-            active={false}
-            state={state}
-            rules={rules}
-            gearLevels={save.gearLevels}
-          />
-        </section>
+        <p className="text-xs text-muted-foreground">
+          另有 {save.reserve.length} 名武将在待命席，军中一览不再展开；回城进编成所可以看详情、换人。
+        </p>
       ) : null}
 
       <section className="space-y-1.5">
@@ -3630,38 +3674,25 @@ function StatusPanel({
       </section>
 
       <section className="space-y-1.5">
-        <p className="text-sm font-medium">队伍</p>
-        {(
-          [
-            { label: "上阵", members: save.party, active: true },
-            {
-              label: "待命",
-              members: save.reserve.filter((row) => !save.party.some((p) => p.id === row.id)),
-              active: false,
-            },
-          ] as const
-        ).map((group) => (
-          <div key={group.label} className="space-y-1">
-            <p className="text-xs text-muted-foreground">
-              {group.label} · {group.members.length} 人
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {group.members.map((member) => (
-                <span
-                  key={member.id}
-                  className={cn(
-                    "rounded border px-2 py-0.5 text-xs",
-                    group.active
-                      ? "border-primary/50 bg-primary/5"
-                      : "border-border text-muted-foreground",
-                  )}
-                >
-                  {generalName(member.id)} Lv{member.level}
-                </span>
-              ))}
-            </div>
-          </div>
-        ))}
+        <p className="text-sm font-medium">
+          队伍
+          <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+            上阵 {save.party.length}/{SAGA_PARTY_SIZE} 人
+          </span>
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {save.party.map((member) => (
+            <span
+              key={member.id}
+              className="rounded border border-primary/50 bg-primary/5 px-2 py-0.5 text-xs"
+            >
+              {generalName(member.id)} Lv{member.level}
+            </span>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          待命 {save.reserve.length} 人 · 其余招降与来投的武将都在待命席，回城进编成所看详情、办入队出队。
+        </p>
       </section>
     </div>
   );
@@ -3753,14 +3784,8 @@ function StatusRoster({
 }
 
 function PartyList({ save, rules = SAGA_RULESET }: { save: TrialSave; rules?: number }) {
-  const groups = [
-    { key: "party", label: "上阵", members: save.party },
-    {
-      key: "reserve",
-      label: "待命",
-      members: save.reserve.filter((row) => !save.party.some((p) => p.id === row.id)),
-    },
-  ] as const;
+  // 队伍只展开上阵的这几人；待命席的人回城进编成所再看详情。
+  const groups = [{ key: "party", label: "上阵", members: save.party }] as const;
   return (
     <div className="space-y-2">
       {groups.map((group) => (
@@ -3825,6 +3850,11 @@ function PartyList({ save, rules = SAGA_RULESET }: { save: TrialSave; rules?: nu
           </div>
         </div>
       ))}
+      {save.reserve.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          待命席另有 {save.reserve.length} 人，详情与入队出队请回城进编成所办理。
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -3926,7 +3956,6 @@ function CampPanel({
   run,
   state,
   node,
-  maxReward,
   onBattle,
   onAuto,
   onClose,
@@ -3937,7 +3966,6 @@ function CampPanel({
   run: SagaRun | null;
   state: SagaReplayState | null;
   node: number | null;
-  maxReward: number;
   onBattle: (node: number) => void;
   onAuto: (node: number) => void;
   onClose: () => void;
@@ -4005,7 +4033,7 @@ function CampPanel({
             .join("、")}
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          战利品约 {target.rewardGold} 金 / {target.rewardExp} 经验；平定此处最高 {formatCredits(maxReward)} 金（未平定不发）。
+          战利品：经验 {target.rewardExp}。
         </p>
         {cleared ? (
           <p className="mt-2 text-xs text-success">此营已破，无需再攻。</p>
@@ -4071,11 +4099,84 @@ function CampPanel({
   );
 }
 
+function SettlementBoard({
+  site,
+  line,
+  onTalk,
+  onFacility,
+  onClose,
+}: {
+  site: Settlement;
+  line: string | null;
+  onTalk: (npc: Settlement["npcs"][number]) => void;
+  onFacility: (id: FieldFacilityId) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="rounded-lg border border-border p-3">
+        <p className="font-medium">
+          {site.name}
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
+            {site.kind === "town" ? "城镇" : "村庄"} · 第 {site.chapter + 1} 区
+          </span>
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">{site.blurb}</p>
+      </div>
+
+      <div className="rounded-lg border border-border p-3">
+        <p className="font-medium">铺面</p>
+        <p className="mt-1 text-xs text-muted-foreground">点门脸就能进店办事，每处的铺子不太一样。</p>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          {site.facilities.map((facility) => (
+            <Button
+              key={facility.id}
+              variant="outline"
+              className="h-auto justify-start gap-2.5 px-2.5 py-2 text-left"
+              onClick={() => onFacility(facility.id)}
+            >
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-border bg-muted text-sm font-medium">
+                {facility.sign}
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm">{facility.label}</span>
+                <span className="block truncate text-[11px] font-normal text-muted-foreground">
+                  {facility.npc}：{facility.line}
+                </span>
+              </span>
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border p-3">
+        <p className="font-medium">乡人</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {site.npcs.map((npc) => (
+            <Button key={npc.name} size="sm" variant="outline" onClick={() => onTalk(npc)}>
+              {npc.name}
+              <span className="ml-1 text-[11px] font-normal text-muted-foreground">{npc.title}</span>
+            </Button>
+          ))}
+        </div>
+        {line ? (
+          <p className="mt-2 rounded border border-border bg-muted/50 px-2.5 py-2 text-xs">{line}</p>
+        ) : null}
+      </div>
+
+      <div className="flex justify-end">
+        <Button size="sm" variant="outline" onClick={onClose}>
+          离开{site.kind === "town" ? "城镇" : "村庄"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function ArmyPanel({
   run,
   state,
   field,
-  maxReward,
   cleared,
   open,
   quests,
@@ -4087,7 +4188,6 @@ function ArmyPanel({
   run: SagaRun | null;
   state: SagaReplayState | null;
   field: SagaField;
-  maxReward: number;
   cleared: number[];
   open: number[];
   quests: SagaQuest[];
@@ -4099,8 +4199,15 @@ function ArmyPanel({
   if (!run || !state) {
     return <p className="text-sm text-muted-foreground">还没有进行中的行军。</p>;
   }
-  const chapter = SAGA_CHAPTERS[Math.min(SAGA_CHAPTERS.length - 1, run.nodes[0]?.chapter ?? 0)];
-  const total = run.nodes.length;
+  const ctx = sagaQuestContext(run, state);
+  const chapter = SAGA_CHAPTERS[Math.min(SAGA_CHAPTERS.length - 1, ctx.chapter)];
+  // 八区大图：军情只看当前正在讨伐的那一区，跟着本阵进度往前推。
+  const chapterNodes = run.nodes
+    .map((node, index) => ({ node, index }))
+    .filter((row) => row.node.chapter === ctx.chapter);
+  const scope = chapterNodes.length > 0 ? chapterNodes : run.nodes.map((node, index) => ({ node, index }));
+  const total = scope.length;
+  const clearedInScope = scope.filter((row) => cleared.includes(row.index)).length;
   const won = state.scene === "won";
   const lost = state.scene === "lost";
   return (
@@ -4111,8 +4218,8 @@ function ArmyPanel({
         </p>
         <p className="mt-1 text-xs text-muted-foreground">{chapter?.blurb}</p>
         <p className="mt-2 text-xs text-muted-foreground">
-          行军大地图上可自由走位，先打哪座营由你决定 · 已破 {cleared.length}/{total} 座，
-          当前可攻 {open.length} 座 · 平定此地最高 {formatCredits(maxReward)} 金
+          行军大地图上可自由走位，先打哪座营由你决定 · 本区已破 {clearedInScope}/{total} 座，
+          当前可攻 {open.length} 座
         </p>
       </div>
 
@@ -4124,11 +4231,12 @@ function ArmyPanel({
       </div>
 
       <div className="space-y-1">
-        {run.nodes.map((node, index) => {
+        {scope.map(({ node, index }) => {
           const done = cleared.includes(index);
           const available = open.includes(index);
           const camp = field.camps.find((row) => row.node === index);
-          const li = camp ? Math.max(1, Math.round((camp.x - field.city.x) / field.tile)) : 0;
+          const home = (field.cities ?? []).find((row) => row.chapter === node.chapter) ?? field.city;
+          const li = camp ? Math.max(1, Math.round((camp.x - home.x) / field.tile)) : 0;
           return (
             <div
               key={index}

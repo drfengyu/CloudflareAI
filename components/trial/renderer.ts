@@ -1439,22 +1439,40 @@ export function battleHpCellCount(barWidth: number): number {
  */
 function unitSlots(count: number, side: "player" | "enemy", k = 1, seed = 0): UnitSlot[] {
   const slots: UnitSlot[] = [];
+  // 七人满编：两列交错排开，免得竖着一列把人叠成一坨；五人以内仍是原文的一列。
+  const columns = count >= 6 ? 2 : 1;
+  const perColumn = Math.max(1, Math.ceil(count / columns));
   const scale =
-    count >= 5 ? 0.52 : count === 4 ? 0.58 : count === 3 ? 0.66 : count === 2 ? 0.76 : 0.86;
+    count >= 7
+      ? 0.44
+      : count >= 6
+        ? 0.48
+        : count >= 5
+          ? 0.52
+          : count === 4
+            ? 0.58
+            : count === 3
+              ? 0.66
+              : count === 2
+                ? 0.76
+                : 0.86;
   const rand = battleRandom(seed ^ (side === "player" ? 0x9e3779b9 : 0x85ebca6b));
-  // 纵向铺满：顶端越过内景上沿也允许，底端压在地面之上，五人满编也不会挤成一坨。
-  const top = 150;
-  const bottom = 440;
-  const step = count > 1 ? (bottom - top) / (count - 1) : 0;
-  const start = top + ((bottom - top) - step * (count - 1)) / 2;
+  // 纵向铺满：顶端越过内景上沿也允许，底端压在地面之上。
+  const top = columns > 1 ? 120 : 150;
+  const bottom = columns > 1 ? 452 : 440;
+  const step = perColumn > 1 ? (bottom - top) / (perColumn - 1) : 0;
   for (let i = 0; i < count; i++) {
+    const column = i % columns;
+    const row = Math.floor(i / columns);
     // 阵位带一点按种子固定的错落，不同营地的队列不会像复制粘贴
-    const jitterX = (rand() - 0.5) * 16;
-    const jitterY = (rand() - 0.5) * 10;
-    const stagger = count >= 4 ? (i % 2 === 0 ? -18 : 18) : 0;
+    const jitterX = (rand() - 0.5) * 14;
+    const jitterY = (rand() - 0.5) * 8;
+    const stagger =
+      columns > 1 ? (column === 0 ? -30 : 30) : count >= 4 ? (i % 2 === 0 ? -18 : 18) : 0;
+    const baseX = side === "player" ? 208 : 752;
     slots.push({
-      x: side === "player" ? 208 + stagger + jitterX : 752 - stagger + jitterX,
-      y: (start + i * step + jitterY) * k,
+      x: baseX + (side === "player" ? stagger : -stagger) + jitterX,
+      y: (top + row * step + jitterY) * k,
       scale,
     });
   }

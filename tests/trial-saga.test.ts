@@ -16,10 +16,12 @@ import {
   portraitAssetSrc,
 } from "../components/trial/portrait-assets";
 import { SAGA_NOTICES, SAGA_NOTICE_VERSION, SAGA_NOTICE_VISIBLE, latestNoticeId, maintenanceActiveAt, maintenancePhaseAt, visibleNotices } from "../lib/trial/saga/notice";
+import { settlementFor } from "../components/trial/settlement";
 import {
   SAGA_FIELD_COLS,
   SAGA_FIELD_ROWS,
   SAGA_MAX_LEVEL,
+  SAGA_PARTY_SIZE,
   SAGA_RULESET,
   SAGA_RUN_VERSION,
   SAGA_STAT_CAP,
@@ -401,6 +403,39 @@ test("待命席放宽：队伍满 5 人、待命 20 人时仍能把在队武将�
   );
   assert.equal(findGeneral(save, leaving) !== undefined, true, "移出的武将还在麾下");
   assert.equal(save.party.some((row) => row.id === leaving), false);
+});
+
+test("军令跟着已经打到的区往前走：破了前区本阵就换下一区的讨伐路线", () => {
+  const save = initialTrialSave();
+  const run = generateSagaRun({ activityKey: "probe", save, nodeCount: 5, seed: 31, world: true });
+  const state = createReplayState(run);
+  run.nodes.forEach((node, index) => {
+    if (node.chapter === 0) state.clearedNodes.push(index);
+  });
+  state.completed = state.clearedNodes.length;
+  const ctx = sagaQuestContext(run, state);
+  assert.equal(ctx.chapter, 1, "首区平定后军令进到第 2 区");
+  assert.equal(ctx.cleared, 0, "新一区还没破营");
+  assert.equal(ctx.total >= 1, true, "主线只统计当前一区的营寨");
+  assert.equal(ctx.bossCleared, false);
+});
+
+test("聚落生成：村庄至少有客栈与乡人，同处稳定、各地不同", () => {
+  const village = settlementFor({ kind: "village", name: "杏花村", chapter: 2, seed: 7 });
+  assert.equal(settlementFor({ kind: "village", name: "杏花村", chapter: 2, seed: 7 }).key, village.key);
+  assert.equal(village.facilities.some((row) => row.id === "inn"), true, "每处村庄都有宿店");
+  assert.equal(village.facilities.length >= 2, true);
+  assert.equal(village.npcs.length >= 1, true, "至少有乡人可以说话");
+  const town = settlementFor({ kind: "town", name: "下邳", chapter: 3, seed: 7 });
+  assert.equal(town.facilities.some((row) => row.id === "inn"), true, "城镇也有宿店");
+  assert.equal(town.facilities.length >= 4, true, "城镇铺面比村庄多");
+  assert.notEqual(
+    town.facilities.map((row) => row.id).join(","),
+    settlementFor({ kind: "town", name: "许都", chapter: 4, seed: 7 })
+      .facilities.map((row) => row.id)
+      .join(","),
+    "不同城镇的铺面不同",
+  );
 });
 
 test("对局 JSON：版本校验严格，旧玩法与损坏数据一律当没有对局", () => {
@@ -2062,7 +2097,8 @@ test("营寨增兵：按种子补士兵位，双方最多 5 人，敌将带装�
     assert.equal(battle.rules, SAGA_RULESET);
     assert.equal(battle.enemies.length <= 5, true, "敌军连同士兵最多 5 人");
     assert.equal(battle.enemies.length >= run.nodes[node].enemies.length, true, "原有敌将一个不少");
-    assert.equal(battle.party.length <= 5, true, "我军最多 5 人");
+    assert.equal(battle.party.length <= SAGA_PARTY_SIZE, true, "我军最多 7 人");
+    assert.equal(SAGA_PARTY_SIZE, 7, "上阵上限抬到 7 人");
     const again = startBattle(run, node, createReplayState(run));
     assert.deepEqual(
       again.enemies.map((enemy) => `${enemy.name}:${enemy.troops}:${enemy.intellect}`),

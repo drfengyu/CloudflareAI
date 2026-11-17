@@ -5,6 +5,39 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.94.0] - 2026-11-17
+
+### 新增
+
+- **上阵 7 人、待命 120 人**（`lib/trial/saga/types.ts`）：`SAGA_PARTY_SIZE` 5 → 7，
+  `SAGA_RESERVE_SIZE` 60 → 120；新增 `SAGA_BATTLE_SIZE = 5` 只管敌军每场席位数，
+  我方七人一起上场。`normalizeTrialSave`、`setActiveParty`、`recruitToSave` 跟随新上限。
+- **七人战场排布**（`components/trial/renderer.ts`）：`unitSlots` 在 6 人以上改两列交错、
+  `scale 0.44~0.48`、纵向 120~452 px，七人满编时名签与血条不再互相压住。
+- **其他州治与野外村庄可进入**（`components/trial/settlement.ts` + `game.tsx`）：
+  新增纯函数 `settlementFor({ kind, name, chapter, seed })`，按地方名、章节与种子生成铺面与乡人；
+  客栈（宿）每处必有，村镇其余铺面从药铺 / 铁匠 / 军需 / 钱庄 / 酒馆 / 训练 / 编成 / 活动券 / 桃园碑中抽，
+  村庄至少一处宿店与一位可说话的乡人；不同地方铺面不同、同一地方每次一致。
+  点其他州治或村庄里的村落图标 → 打开「聚落」面板（新 `PanelId = "site"`），
+  铺面直接进对应设施面板；本区州治仍走原来的可走动街景（`WalkTown`）。
+  城市场景点用改为遍历 `field.cities`，不再只认 `field.city`。
+- **军令随讨伐推进**（`lib/trial/saga/quests.ts`）：`sagaQuestContext` 的章节改为
+  「开局章 + 已破本阵的各区」，每破一处本阵推进一区；`cleared / total / bossCleared`
+  只统计当前一区的节点，八区大图不再把前几区已破的营算进主线。
+  `ArmyPanel` 概括与营地列表同步只列当前一区，城距按本区州治算。
+
+### 改进
+
+- **队伍名单收口**：军中一览只展开上阵的七人，待命人数只留一行提示；存档面板 `PartyList`
+  同样只列上阵，待命详情统一回城进编成所看。
+- **营寨详情不再标金币**：`CampPanel` 战利品只写经验；`ArmyPanel` 去掉「平定此地最高 N 金」。
+  金币仍按战报缴获，只是预览里不再写数。
+
+### 测试
+
+- 单测 80/80：新增「军令跟着已打到的区推进」「聚落生成（村庄有宿店与乡人、各地不同）」两例；
+  「营寨增兵」断言改为敌军 ≤5、我军 ≤`SAGA_PARTY_SIZE`（7）。
+
 ## [0.93.1] - 2026-11-17
 
 ### 修复

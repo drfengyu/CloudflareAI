@@ -39,9 +39,12 @@ export const SAGA_RULESET = 14;
 /** 四维上限：v9 起武力 / 智力 / 防御 / 速度可以一路长到 255（基础值不动，长的是等级与特性加成）。 */
 export const SAGA_STAT_CAP = 255;
 
-export const SAGA_PARTY_SIZE = 5;
-/** 待命席上限：12 张卡就会把「移出在队武将」堵死（后备满了就换不动人），放宽到 60。 */
-export const SAGA_RESERVE_SIZE = 60;
+/** 上阵队伍上限：v15 起从 5 人抬到 7 人，战场两列排开一起上。 */
+export const SAGA_PARTY_SIZE = 7;
+/** 待命席上限：12 张卡就会把「移出在队武将」堵死，v15 起放宽到 120，招降的人都有地方放。 */
+export const SAGA_RESERVE_SIZE = 120;
+/** 敌方每场最多五席（吞食天地口径），我方七人可以一起上。 */
+export const SAGA_BATTLE_SIZE = 5;
 /** 武将等级封顶：v14 起从 30 抬到 50（兵力曲线 1 级 100 兵 → 50 级 20000 兵）。 */
 export const SAGA_MAX_LEVEL = 50;
 

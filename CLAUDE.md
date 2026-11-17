@@ -534,9 +534,20 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.93.1（2026-11-17，本阵解锁与编成所修复）
+**当前版本**：v0.94.0（2026-11-17，七将上阵 / 聚落可进 / 军令随区推进）
 **下一版本**：待定
 
+- v0.94.0 队伍与聚落（`SAGA_RULESET` 仍 14）：
+  `types.ts` `SAGA_PARTY_SIZE = 7`（原 5）、`SAGA_RESERVE_SIZE = 120`（原 60），新增
+  `SAGA_BATTLE_SIZE = 5` 只约束敌方席位数；`battle.ts` 敌军切片 / 补士兵位改用
+  `SAGA_BATTLE_SIZE`，我方 7 人全上；`renderer.ts` `unitSlots` 6 人以上两列交错。
+  `components/trial/settlement.ts` 新增 `settlementFor({kind, name, chapter, seed})`：
+  客栈必在，村镇其余铺面按种子抽；`game.tsx` 新增 `PanelId = "site"` 与 `SettlementBoard`，
+  其他州治 / 村落 → 聚落面板，本区州治仍走 `WalkTown`；城市场景点改为遍历 `field.cities`。
+  军中一览 / `PartyList` 只列上阵 7 人，待命只留人数提示。
+  `quests.ts` 章节改为「开局章 + 已破本阵的区」，`cleared/total/bossCleared` 只算当前区；
+  `ArmyPanel` 同步只列当前区。`CampPanel` 战利品只写经验，不再写金币；`ArmyPanel` 去掉最高金。
+  `notice.ts` / `package.json` / `package-lock.json` 升到 0.94.0。
 - v0.93.1 本阵解锁 / 编成所修复（不动战斗规则，`SAGA_RULESET` 仍 14）：
   `run.ts` `canEngageNode` 的本阵判定改成「同章非本阵节点逐个已破，**或**属岔路且同组任一侧已破」；
   `replaySagaRun` 收尾按岔路组补记缺的另一侧、重算 `completed`，全清而 `scene==="field"` 时收口为

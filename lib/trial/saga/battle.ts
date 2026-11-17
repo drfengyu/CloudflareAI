@@ -12,7 +12,7 @@ import { sagaEncounterFor } from "./encounter";
 import { forgeStat } from "./forge";
 import { generalStats, grantGeneralExp, recruitToSave, findGeneral, troopBaseline } from "./state";
 import {
-  SAGA_PARTY_SIZE,
+  SAGA_BATTLE_SIZE,
   type SagaBattleEvent,
   type SagaBattleGeneral,
   type SagaBattleState,
@@ -463,7 +463,7 @@ function buildBattle(
   // 只有 `poor` 的杂兵和「黄巾力士」这种兵种型通用杂号不收。
   // v7 的行军仍按旧白名单重放，避免已经落下的招降指令结果翻盘。
   const fieldEncounter = nodeIndex < 0;
-  const enemies: SagaBattleGeneral[] = node.enemies.slice(0, SAGA_PARTY_SIZE).map((enemy) => {
+  const enemies: SagaBattleGeneral[] = node.enemies.slice(0, SAGA_BATTLE_SIZE).map((enemy) => {
     const baseDef = SAGA_GENERAL_BY_ID.get(enemy.id);
     const fieldLeader = fieldEncounter && !enemy.poor && enemy.id !== "huangjin_lishi";
     const fieldLeaderV7 = fieldLeader && Boolean(baseDef?.recruitable);
@@ -527,7 +527,7 @@ function buildBattle(
   });
   // 营寨与攻城战：按种子给敌方补 1~N 个士兵位，连同武将最多 5 人上场。
   if (rules >= 3 && nodeIndex >= 0) {
-    const room = SAGA_PARTY_SIZE - enemies.length;
+    const room = SAGA_BATTLE_SIZE - enemies.length;
     if (room > 0) {
       const rng = seedRng((rngState ^ Math.imul(nodeIndex + 17, 0x27d4eb2f)) >>> 0);
       const count = 1 + Math.floor(rng() * room);

@@ -394,6 +394,27 @@
   只有当次行军节点数 ≥ 4 时才岔，短途局不岔。
 - **旧局不受影响**：`branch` 是可选字段，旧行军的节点没有它，重放与进度判定照原样；
   对战报结算、军令与钱庄都没有影响。
+## 七将上阵、聚落可进与军令推进（v0.94.0）
+
+- **队伍上限**：`SAGA_PARTY_SIZE = 7`、`SAGA_RESERVE_SIZE = 120`；`battle.ts` 用
+  `SAGA_BATTLE_SIZE = 5` 只约束敌方席位数与补士兵位，我方七人全部上阵。
+  `renderer.ts` `unitSlots` 在 6 人以上改两列交错（scale 0.44~0.48、纵向 120~452）。
+- **其他州治 / 野外村庄**：`components/trial/settlement.ts` 的
+  `settlementFor({ kind, name, chapter, seed })` 按地方名 + 章节 + 种子生成聚落：
+  客栈（`inn`，招牌「宿」）必有；城镇从药铺 / 铁匠 / 军需 / 钱庄 / 酒馆 / 训练 / 编成 /
+  活动券 / 桃园碑再抽 3~5 家，村庄抽 1~2 家；乡人 1~3 位，各有招呼语。
+  同一地方每次一致，不同地方铺面与乡人不同。
+- **进入方式**：`game.tsx` 新增 `PanelId = "site"` 与 `SettlementBoard`；
+  点其他州治（`city.chapter !== 当前章`）或村落（`poi.kind === "village"`）→ 聚落面板，
+  铺面按钮直接进对应设施面板；本区州治仍走可走动街景 `WalkTown`。
+  城市场景点从只认 `field.city` 改为遍历 `field.cities`，其他州治也能点。
+- **军中一览 / 存档名单**：只展开上阵七人，待命只显示人数提示；待命详情统一回城进编成所。
+- **军令推进**：`sagaQuestContext` 的章节 = 开局章 + 已破本阵的各个「下一区」；
+  `cleared / total / bossCleared` 只统计当前一区节点。`ArmyPanel` 的概况、营地列表、
+  城距同样按当前一区算。
+- **营寨详情**：`CampPanel` 战利品只写「经验 N」，不再写金币；`ArmyPanel` 去掉
+  「平定此地最高 N 金」。金币照常在战报里缴获。
+
 ## 本阵解锁与编成所修复（v0.93.1）
 
 - **本阵不再被岔路锁死**：`canEngageNode` 对 `kind === "boss"` 的判定由「同章非本阵节点全在

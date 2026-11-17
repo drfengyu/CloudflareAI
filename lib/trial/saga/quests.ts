@@ -43,13 +43,29 @@ export function sagaQuestContext(
   state: SagaReplayState,
   extra: { visitedPois?: number; totalPois?: number } = {},
 ): SagaQuestContext {
-  const chapterIndex = Math.max(
+  const startChapter = Math.max(
     0,
     Math.min(SAGA_CHAPTERS.length - 1, Math.trunc(run.startSave.chapter) || 0),
   );
-  const total = run.nodes.length;
-  const bossIndex = run.nodes.findIndex((node) => node.kind === "boss");
-  const cleared = state.clearedNodes.length;
+  // 八区大图一趟走到底：军令要跟着「已经打到哪一区」走，不能一直停在开局那一章。
+  // 每破一处本阵，讨伐路线就往前推一区；还没破本阵时仍停在开局区。
+  let chapterIndex = startChapter;
+  for (const [index, node] of run.nodes.entries()) {
+    if (node.kind !== "boss" || !state.clearedNodes.includes(index)) continue;
+    chapterIndex = Math.max(chapterIndex, node.chapter + 1);
+  }
+  chapterIndex = Math.max(
+    0,
+    Math.min(SAGA_CHAPTERS.length - 1, Math.trunc(chapterIndex) || 0),
+  );
+  // 主线进度只算当前这一区的营寨，别把前几区已破的营算进「拔除外营」。
+  const chapterIndices = run.nodes
+    .map((node, index) => ({ node, index }))
+    .filter((row) => row.node.chapter === chapterIndex);
+  const scope = chapterIndices.length > 0 ? chapterIndices : run.nodes.map((node, index) => ({ node, index }));
+  const total = scope.length;
+  const cleared = scope.filter((row) => state.clearedNodes.includes(row.index)).length;
+  const bossIndex = scope.find((row) => row.node.kind === "boss")?.index ?? -1;
   const save = state.save;
   const party = save.party;
   return {
