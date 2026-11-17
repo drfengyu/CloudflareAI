@@ -4,9 +4,12 @@ import {
   SAGA_GENERAL_BY_ID,
   SAGA_ITEM_BY_ID,
   SAGA_STARTER_IDS,
+  gearSlotOf,
   traitStats,
+  weaponTypesFor,
 } from "./data";
 import {
+  SAGA_CARRY_LIMIT,
   SAGA_MAX_LEVEL,
   SAGA_PARTY_SIZE,
   SAGA_RESERVE_SIZE,
@@ -14,6 +17,7 @@ import {
   SAGA_SAVE_VERSION,
   SAGA_STAT_CAP,
   type FormationId,
+  type GearSlot,
   type SagaGeneralState,
   type TrialSave,
 } from "./types";
@@ -26,16 +30,30 @@ import { forgeStat, normalizeGearLevels } from "./forge";
 export const SAGA_TROOP_REF_BASE = 210;
 
 export function createGeneralState(id: string, level = 1): SagaGeneralState {
-  return { id, level: Math.max(1, Math.min(SAGA_MAX_LEVEL, Math.trunc(level))), exp: 0, weapon: null, armor: null };
+  return {
+    id,
+    level: Math.max(1, Math.min(SAGA_MAX_LEVEL, Math.trunc(level))),
+    exp: 0,
+    weapon: null,
+    armor: null,
+    helmet: null,
+    belt: null,
+    pendant: null,
+    boots: null,
+    mount: null,
+    items: {},
+  };
 }
 
 export function initialTrialSave(): TrialSave {
   const liubei = createGeneralState("liubei");
+  liubei.weapon = "iron_sword";
   liubei.armor = "cloth";
+  liubei.items = { herb: 2, zhaohun_dan: 1 };
   const guanyu = createGeneralState("guanyu");
-  guanyu.weapon = "iron_sword";
+  guanyu.weapon = "blade";
   const zhangfei = createGeneralState("zhangfei");
-  zhangfei.weapon = "iron_sword";
+  zhangfei.weapon = "spear";
   return {
     version: SAGA_SAVE_VERSION,
     chapter: 0,
@@ -44,7 +62,7 @@ export function initialTrialSave(): TrialSave {
     formation: "yulin",
     party: [liubei, guanyu, zhangfei],
     reserve: [],
-    bag: { herb: 2 },
+    bag: {},
     gear: {},
     gearLevels: {},
     met: [...SAGA_STARTER_IDS],
@@ -80,10 +98,24 @@ function normalizeGeneral(raw: unknown): SagaGeneralState | null {
   if (!def || def.enemyOnly) return null;
   const state = createGeneralState(def.id, Number(it.level));
   state.exp = clampInt(it.exp, 0, 999_999, 0);
-  const weapon = typeof it.weapon === "string" ? SAGA_ITEM_BY_ID.get(it.weapon) : null;
-  if (weapon?.kind === "weapon") state.weapon = weapon.id;
-  const armor = typeof it.armor === "string" ? SAGA_ITEM_BY_ID.get(it.armor) : null;
-  if (armor?.kind === "armor") state.armor = armor.id;
+  for (const slot of ["weapon", "armor", "helmet", "belt", "pendant", "boots", "mount"] as GearSlot[]) {
+    const id = it[slot];
+    if (typeof id !== "string") continue;
+    const item = SAGA_ITEM_BY_ID.get(id);
+    if (item && gearSlotOf(item) === slot) state[slot] = item.id;
+  }
+  const items: Record<string, number> = {};
+  if (it.items && typeof it.items === "object") {
+    for (const [id, count] of Object.entries(it.items as Record<string, unknown>)) {
+      const item = SAGA_ITEM_BY_ID.get(id);
+      if (!item || item.kind !== "consumable") continue;
+      const n = clampInt(count, 0, 999, 0);
+      if (n > 0 && Object.keys(items).length < SAGA_CARRY_LIMIT) items[id] = n;
+    }
+  }
+  state.items = items;
+  const troops = clampInt(it.troops, 0, 99_999, 0);
+  if (troops > 0) state.troops = troops;
   return state;
 }
 
@@ -133,7 +165,7 @@ export function normalizeTrialSave(raw: unknown): TrialSave {
   const formation = SAGA_FORMATION_BY_ID.get(String(it.formation ?? "") as FormationId)?.id ?? base.formation;
   const chapter = clampInt(it.chapter, 0, SAGA_CHAPTERS.length - 1, 0);
   const bagAllowed = (id: string) => SAGA_ITEM_BY_ID.get(id)?.kind === "consumable";
-  const gearAllowed = (id: string) => ["weapon", "armor"].includes(SAGA_ITEM_BY_ID.get(id)?.kind ?? "");
+  const gearAllowed = (id: string) => Boolean(gearSlotOf(SAGA_ITEM_BY_ID.get(id)));
   const met = new Set(
     (Array.isArray(it.met) ? it.met : []).filter(
       (id): id is string => typeof id === "string" && Boolean(SAGA_GENERAL_BY_ID.get(id)),
@@ -149,7 +181,7 @@ export function normalizeTrialSave(raw: unknown): TrialSave {
     recruited.add(g.id);
   }
   const stats = (it.stats && typeof it.stats === "object" ? it.stats : {}) as Partial<TrialSave["stats"]>;
-  return {
+  const save: TrialSave = {
     version: SAGA_SAVE_VERSION,
     chapter,
     clears: clampInt(it.clears, 0, 999, 0),
@@ -170,6 +202,8 @@ export function normalizeTrialSave(raw: unknown): TrialSave {
       recruited: clampInt(stats.recruited, 0, 9_999, 0),
     },
   };
+  redistributeBag(save);
+  return save;
 }
 
 export interface SagaGeneralStats {
@@ -180,6 +214,8 @@ export interface SagaGeneralStats {
   maxTroops: number;
   weaponAtk: number;
   armorDef: number;
+  /** 坐骑 / 靴 / 吊坠带来的速度加成。 */
+  gearSpeed: number;
 }
 
 /** 武将属性；传入存档的 `gearLevels` 时，兵器 / 甲胄按铁匠铺强化等级加成。 */
@@ -190,7 +226,16 @@ export function generalStats(
 ): SagaGeneralStats {
   const def = SAGA_GENERAL_BY_ID.get(state.id);
   if (!def) {
-    return { force: 1, intellect: 1, defense: 1, speed: 1, maxTroops: 1, weaponAtk: 0, armorDef: 0 };
+    return {
+      force: 1,
+      intellect: 1,
+      defense: 1,
+      speed: 1,
+      maxTroops: 1,
+      weaponAtk: 0,
+      armorDef: 0,
+      gearSpeed: 0,
+    };
   }
   const level = clampInt(state.level, 1, SAGA_MAX_LEVEL, 1);
   const weapon = state.weapon ? SAGA_ITEM_BY_ID.get(state.weapon) : null;
@@ -205,6 +250,14 @@ export function generalStats(
     rules >= 14
       ? Math.round((troopBaseline(level, rules) * def.baseTroops) / SAGA_TROOP_REF_BASE)
       : (def.baseTroops + (level - 1) * def.growth) * troopScale;
+  const extraDef = (["helmet", "belt", "pendant", "boots"] as const).reduce((sum, slot) => {
+    const item = state[slot] ? SAGA_ITEM_BY_ID.get(state[slot] as string) : null;
+    return sum + (item ? forgeStat(item.id, gearLevels?.[item.id] ?? 0) : 0);
+  }, 0);
+  const gearSpeed = (["mount", "boots", "pendant"] as const).reduce((sum, slot) => {
+    const item = state[slot] ? SAGA_ITEM_BY_ID.get(state[slot] as string) : null;
+    return sum + (item?.speed ?? 0);
+  }, 0);
   return {
     force: cap(def.force + bonus.force + Math.floor((level - 1) * 1.5 * growth)),
     intellect: cap(def.intellect + bonus.intellect + Math.floor((level - 1) * 1.2 * growth)),
@@ -212,7 +265,8 @@ export function generalStats(
     speed: cap(def.speed + bonus.speed + Math.floor((level - 1) * 0.8 * growth)),
     maxTroops,
     weaponAtk: weapon ? forgeStat(weapon.id, gearLevels?.[weapon.id] ?? 0) : 0,
-    armorDef: armor ? forgeStat(armor.id, gearLevels?.[armor.id] ?? 0) : 0,
+    armorDef: armor ? forgeStat(armor.id, gearLevels?.[armor.id] ?? 0) + extraDef : extraDef,
+    gearSpeed,
   };
 }
 
@@ -292,44 +346,86 @@ export function applyChapterUnlock(save: TrialSave, unlock: string | null): stri
   return result.ok ? unlock : null;
 }
 
+/** 武将随身道具的已用格数。 */
+export function carrySlots(g: SagaGeneralState): number {
+  return Object.values(g.items ?? {}).filter((n) => n > 0).length;
+}
+
+/** 找一个还能再装一种道具的武将：先上阵，再待命。 */
+export function carryRecipient(save: TrialSave, itemId: string): SagaGeneralState | null {
+  const exists = (g: SagaGeneralState) => (g.items?.[itemId] ?? 0) > 0;
+  for (const g of [...save.party, ...save.reserve]) {
+    if (exists(g) || carrySlots(g) < SAGA_CARRY_LIMIT) return g;
+  }
+  return null;
+}
+
+/** 买药前先看有没有人能带，满了就让玩家去物品栏舍弃。 */
+export function canCarryItem(save: TrialSave, itemId: string): boolean {
+  const item = SAGA_ITEM_BY_ID.get(itemId);
+  if (!item) return false;
+  if (item.kind !== "consumable") return true;
+  return Boolean(carryRecipient(save, itemId));
+}
+
 /** 用活动券买下的装备 / 药品：券已在服务端扣过，重放只负责入库。 */
 export function grantItem(save: TrialSave, itemId: string): boolean {
   const item = SAGA_ITEM_BY_ID.get(itemId);
   if (!item || item.kind === "supply") return false;
   if (item.kind === "consumable") {
-    save.bag[item.id] = (save.bag[item.id] ?? 0) + 1;
+    const owner = carryRecipient(save, item.id);
+    if (!owner) return false;
+    owner.items = { ...(owner.items ?? {}), [item.id]: (owner.items?.[item.id] ?? 0) + 1 };
   } else {
     save.gear[item.id] = (save.gear[item.id] ?? 0) + 1;
   }
   return true;
 }
 
+/** 把旧存档的共用行囊拆给各武将，每人最多 8 种。 */
+export function redistributeBag(save: TrialSave): void {
+  for (const [id, count] of Object.entries(save.bag)) {
+    const item = SAGA_ITEM_BY_ID.get(id);
+    if (!item || item.kind !== "consumable" || count <= 0) continue;
+    let left = count;
+    while (left > 0) {
+      const owner = carryRecipient(save, id);
+      if (!owner) break;
+      owner.items = { ...(owner.items ?? {}), [id]: (owner.items?.[id] ?? 0) + 1 };
+      left -= 1;
+    }
+    if (left > 0) save.bag[id] = left;
+    else delete save.bag[id];
+  }
+}
+
 export function equipGeneral(
   save: TrialSave,
   generalId: string,
-  slot: "weapon" | "armor",
+  slot: GearSlot,
   itemId: string | null,
 ): boolean {
   const general = findGeneral(save, generalId);
   if (!general) return false;
+  const current = general[slot] ?? null;
   if (itemId === null) {
-    const current = slot === "weapon" ? general.weapon : general.armor;
     if (current) {
       save.gear[current] = (save.gear[current] ?? 0) + 1;
-      if (slot === "weapon") general.weapon = null;
-      else general.armor = null;
+      general[slot] = null;
     }
     return true;
   }
   const item = SAGA_ITEM_BY_ID.get(itemId);
-  if (!item || item.kind !== slot) return false;
+  if (!item || gearSlotOf(item) !== slot) return false;
+  if (slot === "weapon" && item.weaponType) {
+    const def = SAGA_GENERAL_BY_ID.get(general.id);
+    if (!weaponTypesFor(def).includes(item.weaponType)) return false;
+  }
   if ((save.gear[item.id] ?? 0) <= 0) return false;
-  const current = slot === "weapon" ? general.weapon : general.armor;
   if (current) save.gear[current] = (save.gear[current] ?? 0) + 1;
   save.gear[item.id] = (save.gear[item.id] ?? 0) - 1;
   if (save.gear[item.id] <= 0) delete save.gear[item.id];
-  if (slot === "weapon") general.weapon = item.id;
-  else general.armor = item.id;
+  general[slot] = item.id;
   return true;
 }
 

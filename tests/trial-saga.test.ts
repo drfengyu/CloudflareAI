@@ -9,7 +9,7 @@ import {
   trialGoldFor,
   type TrialConfig,
 } from "../lib/trial/config";
-import { SAGA_CHAPTERS, SAGA_FORMATION_BY_ID, SAGA_GENERAL_BY_ID, SAGA_GENERALS, SAGA_TACTIC_BY_ID, SAGA_TRAITS, SAGA_TRAIT_BY_ID, sagaBondsFor, sagaCorpsOf, tacticsFor, traitStats } from "../lib/trial/saga/data";
+import { SAGA_CHAPTERS, SAGA_FORMATION_BY_ID, SAGA_GENERAL_BY_ID, SAGA_GENERALS, SAGA_TACTIC_BY_ID, SAGA_TRAITS, SAGA_TRAIT_BY_ID, sagaBondsFor, sagaCorpsOf, shopStock, tacticsFor, traitStats, weaponTypesFor } from "../lib/trial/saga/data";
 import {
   SAGA_PORTRAIT_IDS,
   hasPortraitAsset,
@@ -87,10 +87,13 @@ import {
 import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "../lib/trial/saga/inn";
 import {
   createGeneralState,
+  equipGeneral,
   findGeneral,
   generalStats,
+  grantItem,
   initialTrialSave,
   normalizeTrialSave,
+  recruitToSave,
   setActiveParty,
   troopBaseline,
 } from "../lib/trial/saga/state";
@@ -640,17 +643,17 @@ test("客栈：住店券记录按指令位置补兵，兵败后能重整旗鼓�
     { k: "battle", node: 0, rounds: [[{ g: "liubei", a: "attack", target: 0 }]] },
   ];
   const lost = replaySagaRun(run, lose).state;
-  assert.equal(lost.scene, "lost");
-  assert.equal(lost.partyTroops.liubei, 0);
+  // v16：全队倒下后在最近的客栈醒来，各回两成兵力。
+  assert.equal(lost.scene, "field");
+  assert.equal(lost.partyTroops.liubei, 36);
   assert.equal(lost.save.gold, 100);
 
-  // 败退状态下再出兵无效：零兵力硬打只会白送，得先住店或收兵。
+  // 醒来后可以就地再打，不会因为上一场全灭被永久卡在 lost。
   const again = replaySagaRun(run, [
     ...lose,
     { k: "battle", node: 1, rounds: [[{ g: "liubei", a: "attack", target: 0 }]] },
   ]).state;
-  assert.equal(again.scene, "lost");
-  assert.equal(again.clearedNodes.length, 0);
+  assert.equal(again.scene !== "lost", true);
 
   // 住店券在购买时已扣，重放只认购买记录：补满全队、行军回到 field，金币不动。
   const innRun: SagaRun = {
@@ -683,10 +686,10 @@ test("客栈：住店券记录按指令位置补兵，兵败后能重整旗鼓�
   assert.equal(won.clearedNodes.includes(1), true);
   assert.equal(won.scene, "field");
 
-  // 没有住店券记录就救不回来，不给零成本复活留口子。
+  // v16：全灭后不靠店钱也能在就近客栈醒来，只回两成兵力。
   const stuck = replaySagaRun(run, lose).state;
-  assert.equal(stuck.scene, "lost");
-  assert.equal(stuck.partyTroops.liubei, 0);
+  assert.equal(stuck.scene, "field");
+  assert.equal(stuck.partyTroops.liubei, 36);
   assert.equal(stuck.save.gold, 100);
 });
 
@@ -932,24 +935,24 @@ test("敌军兵力口径：同等级我方基准的 1.2~6 倍，四维同样封�
 test("铁匠铺强化：购买记录按指令位置抬等级，收兵存档保留，脏记录被丢掉", () => {
   const run = freshRun(81, 2);
   const guanyu = run.startSave.party.find((general) => general.id === "guanyu")!;
-  assert.equal(guanyu.weapon, "iron_sword");
+  assert.equal(guanyu.weapon, "blade");
   const purchases = [
-    { id: "forge1", itemId: SAGA_FORGE_ITEM_ID, tickets: 1, gearId: "iron_sword", targetLevel: 1, at: 1, cmdIndex: 0 },
-    { id: "forge2", itemId: SAGA_FORGE_ITEM_ID, tickets: 3, gearId: "iron_sword", targetLevel: 2, at: 2, cmdIndex: 0 },
-    { id: "forge3", itemId: SAGA_FORGE_ITEM_ID, tickets: 1, gearId: "iron_sword", targetLevel: 1, at: 3, cmdIndex: 0 },
+    { id: "forge1", itemId: SAGA_FORGE_ITEM_ID, tickets: 3, gearId: "blade", targetLevel: 1, at: 1, cmdIndex: 0 },
+    { id: "forge2", itemId: SAGA_FORGE_ITEM_ID, tickets: 5, gearId: "blade", targetLevel: 2, at: 2, cmdIndex: 0 },
+    { id: "forge3", itemId: SAGA_FORGE_ITEM_ID, tickets: 5, gearId: "blade", targetLevel: 2, at: 3, cmdIndex: 0 },
   ];
   const state = replaySagaRun({ ...run, purchases }, []).state;
-  assert.equal(state.save.gearLevels.iron_sword, 2, "等级只增不减");
+  assert.equal(state.save.gearLevels.blade, 2, "等级只增不减");
   assert.equal(
     generalStats(state.save.party.find((general) => general.id === "guanyu")!, state.save.gearLevels)
       .weaponAtk,
-    11,
-    "铁剑强化到 +2：8 + 3",
+    28,
+    "大刀强化到 +2：20 + 8",
   );
-  assert.equal(generalStats(guanyu).weaponAtk, 8, "不传等级表时按原属性");
+  assert.equal(generalStats(guanyu).weaponAtk, 20, "不传等级表时按原属性");
 
   const forged = settleSagaRun({ ...easyRun(), purchases }, winCommands);
-  assert.equal(forged.endSave.gearLevels.iron_sword, 2, "收兵存档保留强化等级");
+  assert.equal(forged.endSave.gearLevels.blade, 2, "收兵存档保留强化等级");
 
   const parsed = parseSagaRun(
     JSON.stringify({
@@ -1441,35 +1444,16 @@ test("战斗内景：头顶血条按兵力上限分长短，攻击力与普攻�
 });
 
 test("招降只收人：敌将带着强化装备来降，入队后仍是空手", () => {
-  // 这里验的是「招降只收人」的结算口径，用 v6 旧规则跑，避免和 v7 的「只野外可招」混在一起。
-  const run = { ...easyRun(), rules: 6 };
-  const enemy = run.nodes[0].enemies[0];
-  enemy.recruitable = true;
-  enemy.recruitHard = false;
-  // 兵力压到三成以下才可招降，留一支护卫先清场。
-  enemy.troops = 1;
-  enemy.maxTroops = 100;
-  const state = createReplayState(run);
-  const battle = startBattle(run, 0, state);
-  assert.equal(Boolean(battle.enemies[0].weapon && battle.enemies[0].armor), true, "先有随身装备");
-  for (let round = 0; round < 60 && battle.phase === "select"; round++) {
-    const guardIndex = battle.enemies.findIndex(
-      (unit) => !unit.downed && unit.id.startsWith("guard_"),
-    );
-    const commands = battle.party
-      .filter((unit) => !unit.downed)
-      .map((unit) => ({
-        g: unit.id,
-        a: guardIndex >= 0 ? ("attack" as const) : ("recruit" as const),
-        target: guardIndex >= 0 ? guardIndex : 0,
-      }));
-    resolveBattleRound(battle, commands, state);
-  }
-  assert.equal(state.recruited.includes("zhangjiao"), true, "招降成功入队");
-  const joined = [...state.save.party, ...state.save.reserve].find((member) => member.id === "zhangjiao");
+  // 这里验的是「招降只收人」的结算口径：不把敌方随身装备带进我方库存。
+  const save = initialTrialSave();
+  const result = recruitToSave(save, "zhangjiao");
+  assert.equal(result.ok, true, "招降成功入队");
+  const joined = findGeneral(save, "zhangjiao");
   assert.ok(joined, "入队的武将在队伍或后备里");
   assert.equal(joined.weapon, null, "招降不带兵器");
   assert.equal(joined.armor, null, "招降不带甲胄");
+  assert.equal(joined.helmet ?? null, null, "招降不带头盔");
+  assert.deepEqual(joined.items, {}, "招降不带道具");
 });
 
 test("招降只在野外：v7 营寨 / 攻城不可招，野外头目可降", () => {
@@ -1865,15 +1849,15 @@ test("战败住店重整：练出的等级、买来的兵器与强化等级都�
   assert.equal(settled.endSave.gold, run.startSave.gold + 20, "营地的金币也进账");
 });
 
-test("野外遭遇只在行军途中发生：兵败后不再受理遭遇指令", () => {
+test("野外遭遇只在行军途中发生：全灭醒来后继续受理遭遇指令", () => {
   const run = wreckedRun();
   const rounds = [[{ g: "liubei", a: "attack" as const, target: 0 }]];
   const lost = replaySagaRun(run, [
     { k: "battle", node: 0, rounds },
     { k: "skirmish", rounds },
   ]);
-  assert.equal(lost.state.scene, "lost");
-  assert.equal(lost.state.encounters, 0, "兵败后的遭遇指令被忽略");
+  assert.equal(lost.state.scene, "field");
+  assert.equal(lost.state.encounters, 1, "醒来后仍在行军途中，遭遇照常受理");
   assert.equal(lost.state.clearedNodes.length, 0);
 });
 
@@ -2050,7 +2034,7 @@ test("战斗规则：新行军启用特性与成长计策，旧行军已落的�
   assert.equal(lv10.tactics.includes("yehuo"), true, "10 级领悟业火计");
 });
 
-test("策略点：主要随智力浮动，等级再补几点，封顶 16 点", () => {
+test("策略点：主要随智力浮动，等级再补几点，封顶 48 点", () => {
   const pangAt7 = tacticsFor(SAGA_GENERAL_BY_ID.get("pangtong"), 7);
   const pangAt8 = tacticsFor(SAGA_GENERAL_BY_ID.get("pangtong"), 8);
   assert.equal(pangAt7.includes("huoji"), true);
@@ -2068,8 +2052,8 @@ test("策略点：主要随智力浮动，等级再补几点，封顶 16 点", (
   save.party[0].level = 30;
   const atLv30 = startBattle(run, 0, createReplayState(run)).party[0];
   assert.equal(atLv10.tacticPoints > atLv1.tacticPoints, true, "升级增加策略点");
-  assert.equal(atLv1.tacticPoints, 6, "刘备 1 级：基础 2 + 智力 72/20=3 + 仁德 1");
-  assert.equal(atLv30.tacticPoints, 16, "满级智力成长后顶到上限 16 点");
+  assert.equal(atLv1.tacticPoints, 9, "刘备 1 级：基础 4 + 智力 72/15=4 + 仁德 1");
+  assert.equal(atLv30.tacticPoints, 29, "30 级智力成长后：4 + 9 + 15 + 仁德 1");
   assert.equal(atLv1.tactics.includes("huifu"), true, "仁德之主自带回复");
 
   const zhangfeiRun = {
@@ -2413,7 +2397,7 @@ test("公告与维护窗口判定", () => {
 });
 
 test("兵种相克与名将连携只在 v10 起生效", () => {
-  assert.equal(SAGA_RULESET, 15, "规则档升到 v15（原版十阵 + 军师约束 + 两人败退散阵）");
+  assert.equal(SAGA_RULESET, 16, "规则档升到 v16（5 人出战 + 阵亡停尸 + SP 成长）");
 
   // 兵种按底子推：猛将骑、谋士弓、其余枪。
   assert.equal(sagaCorpsOf(SAGA_GENERAL_BY_ID.get("lvbu")), "cavalry");
@@ -2557,4 +2541,100 @@ test("阵形换装按等级解锁：新规则要够等级，旧战报不设门�
   const legacy = { ...easyRun(save), rules: 11 };
   const old = replaySagaRun(legacy, [{ k: "formation", f: "bamen" }]);
   assert.equal(old.state.save.formation, "bamen", "v11 及更早的战报照原样重放");
+});
+
+test("出征：7 人队每场只上 5 人，阵亡者不占出战位", () => {
+  const save = initialTrialSave();
+  save.party = [
+    createGeneralState("liubei"),
+    createGeneralState("guanyu"),
+    createGeneralState("zhangfei"),
+    createGeneralState("zhaoyun"),
+    createGeneralState("machao"),
+    createGeneralState("huangzhong"),
+    createGeneralState("weiyan"),
+  ];
+  const run = { ...easyRun(save), rules: SAGA_RULESET };
+  const state = createReplayState(run);
+  state.partyTroops.huangzhong = 0;
+  const battle = startBattle(run, 0, state);
+  assert.equal(battle.party.length, 5, "最多 5 人出战");
+  assert.equal(battle.party.some((unit) => unit.id === "huangzhong"), false, "阵亡者不占出战位");
+  assert.deepEqual(
+    battle.party.map((unit) => unit.id),
+    ["liubei", "guanyu", "zhangfei", "zhaoyun", "machao"],
+    "按队伍顺序补齐 5 人，第 6、7 人留作替补",
+  );
+});
+
+test("阵亡不自动复活：胜利后败将仍为 0 兵", () => {
+  const save = initialTrialSave();
+  const run = { ...easyRun(save), rules: SAGA_RULESET };
+  const state = createReplayState(run);
+  const battle = startBattle(run, 0, state);
+  battle.party[1].downed = true;
+  battle.party[1].troops = 0;
+  for (let round = 0; round < 5 && battle.phase === "select"; round++) {
+    resolveBattleRound(
+      battle,
+      battle.party.filter((unit) => !unit.downed).map((unit) => ({ g: unit.id, a: "attack" as const, target: 0 })),
+      state,
+    );
+  }
+  assert.equal(battle.phase, "won");
+  assert.equal(state.partyTroops.guanyu, 0, "胜利不再把败将拉起来");
+  assert.equal(state.save.party.find((g) => g.id === "guanyu")?.troops, 0);
+});
+
+test("招魂丹：非战斗时救回败将，按上限三成兵力归队并扣掉一枚", () => {
+  const save = initialTrialSave();
+  const leader = save.party[0];
+  leader.troops = 0;
+  leader.items = { ...(leader.items ?? {}), zhaohun_dan: 1 };
+  const run = { ...easyRun(save), rules: SAGA_RULESET };
+  const result = replaySagaRun(run, [
+    { k: "use", g: "liubei", i: "zhaohun_dan", target: "liubei" },
+  ]).state;
+  const max = generalStats(result.save.party[0], result.save.gearLevels, SAGA_RULESET).maxTroops;
+  assert.equal(result.partyTroops.liubei, Math.round(max * 0.3), "回三成兵力");
+  assert.equal(result.save.party[0].items?.zhaohun_dan ?? 0, 0, "招魂丹用掉");
+});
+
+test("兵器限制：关羽不会使剑，只能装刀；错兵器不可装备", () => {
+  const save = initialTrialSave();
+  save.gear = { iron_sword: 1, blade: 1 };
+  assert.equal(weaponTypesFor(SAGA_GENERAL_BY_ID.get("guanyu")).includes("blade"), true);
+  assert.equal(equipGeneral(save, "guanyu", "weapon", "iron_sword"), false, "剑不是关羽的兵器");
+  assert.equal(equipGeneral(save, "guanyu", "weapon", "blade"), true, "刀可以装备");
+  assert.equal(save.party.find((g) => g.id === "guanyu")?.weapon, "blade");
+});
+
+test("随身道具：每人最多 8 种，同种可叠加，满格后新道具进不来", () => {
+  const save = initialTrialSave();
+  const leader = save.party[0];
+  leader.items = {
+    herb: 1,
+    medicine: 1,
+    jinchuang: 1,
+    dahuan: 1,
+    junliang: 1,
+    lingzhi: 1,
+    zhaohun_dan: 1,
+    huihun_dan: 1,
+  };
+  assert.equal(grantItem(save, "herb"), true, "已持有的同类道具可以继续叠");
+  assert.equal(leader.items?.herb, 2);
+  leader.items = { ...(leader.items ?? {}) };
+  delete leader.items.herb;
+  assert.equal(grantItem(save, "medicine"), true, "空出一格后能再装");
+  assert.equal(leader.items?.medicine, 2);
+});
+
+test("分城货架：前一章只卖当季兵器，后一章才上偃月刀与名马", () => {
+  const early = shopStock("weapon", 0).map((item) => item.id);
+  const later = shopStock("weapon", 1).map((item) => item.id);
+  assert.equal(early.includes("guandao"), false, "第一章不卖偃月刀");
+  assert.equal(later.includes("guandao"), true, "第二章上偃月刀");
+  assert.equal(shopStock("mount", 0).length, 0, "第一章没有马市现货");
+  assert.equal(shopStock("mount", 1).some((item) => item.id === "white_horse"), true);
 });

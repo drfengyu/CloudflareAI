@@ -41,7 +41,7 @@ import {
   settleSagaRun,
   SAGA_MAX_PURCHASES,
 } from "./saga/run";
-import { initialTrialSave, findGeneral, normalizeTrialSave } from "./saga/state";
+import { canCarryItem, initialTrialSave, findGeneral, normalizeTrialSave } from "./saga/state";
 import {
   SAGA_TRAINING_ITEM_ID,
   trainingCost,
@@ -603,11 +603,17 @@ export async function buyTrialItem(input: {
   const cmdIndex = Math.max(0, Math.min(SAGA_MAX_COMMANDS, Math.trunc(Number(input.cmdIndex) || 0)));
   const incomingCommands = mergeRunCommands(run, input.commands);
   const commands = incomingCommands ?? run.commands ?? [];
+  const progress = replaySagaRun({ ...run, commands }, commands).state;
+  if (item && !isInn && !isTraining && (item.chapter ?? 0) > progress.save.chapter) {
+    throw new TrialError(`${item.name}还没到本城货架，先平定前面的地方`);
+  }
+  if (item?.kind === "consumable" && !canCarryItem(progress.save, item.id)) {
+    throw new TrialError(`每名武将最多带 8 种道具，先舍弃一件再买`);
+  }
   let tickets = priceTickets;
   let training: { generalId: string; targetLevel: number } | null = null;
   if (isTraining) {
     const generalId = String(input.generalId ?? "");
-    const progress = replaySagaRun({ ...run, commands }, commands).state;
     const general = findGeneral(progress.save, generalId);
     if (!general) throw new TrialError("查无此将");
     const cap = trainingLevelCap(progress.save);

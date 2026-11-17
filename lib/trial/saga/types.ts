@@ -34,17 +34,22 @@ export const SAGA_SAVE_VERSION = 1;
  * 每级四维成长由 ×3 收到 ×2；v13 及更早的行军仍按旧账重放。
  * 旧行军没有这个字段，重放时按 v1 走，避免改版把还没收兵的对局打乱。
  */
-export const SAGA_RULESET = 15;
+export const SAGA_RULESET = 16;
 
 /** 四维上限：v9 起武力 / 智力 / 防御 / 速度可以一路长到 255（基础值不动，长的是等级与特性加成）。 */
 export const SAGA_STAT_CAP = 255;
 
 /** 上阵队伍上限：v15 起从 5 人抬到 7 人，战场两列排开一起上。 */
+/** 上阵 7 人，但每场最多 5 人出战，其余两人留作替补。 */
 export const SAGA_PARTY_SIZE = 7;
+/** 每场战斗实际上阵人数。 */
+export const SAGA_DEPLOY_SIZE = 5;
+/** 兼容旧代码：敌军席位数与上阵人数共用同一上限。 */
+export const SAGA_BATTLE_SIZE = SAGA_DEPLOY_SIZE;
 /** 待命席上限：12 张卡就会把「移出在队武将」堵死，v15 起放宽到 120，招降的人都有地方放。 */
 export const SAGA_RESERVE_SIZE = 120;
-/** 敌方每场最多五席（吞食天地口径），我方七人可以一起上。 */
-export const SAGA_BATTLE_SIZE = 5;
+/** 每名武将最多携带 8 种不同道具，同种道具叠数量。 */
+export const SAGA_CARRY_LIMIT = 8;
 /** 武将等级封顶：v14 起从 30 抬到 50（兵力曲线 1 级 100 兵 → 50 级 20000 兵）。 */
 export const SAGA_MAX_LEVEL = 50;
 
@@ -228,7 +233,16 @@ export type TacticId =
   | "miance"
   | "zhaohun"
   | "xinluan";
-export type SagaItemKind = "weapon" | "armor" | "consumable" | "supply";
+export type SagaItemKind =
+  | "weapon"
+  | "armor"
+  | "helmet"
+  | "belt"
+  | "pendant"
+  | "boots"
+  | "mount"
+  | "consumable"
+  | "supply";
 
 /** 武将固有特性：数值、暴击与连击上的个人长板。 */
 export type SagaTraitId =
@@ -283,6 +297,8 @@ export interface SagaGeneralDef {
   defense: number;
   speed: number;
   tactics: TacticId[];
+  /** 会使的兵器；不填按默认剑。 */
+  arms?: WeaponType[];
   /** 智将随等级领悟的计策：达到等级后并入可用计策表。 */
   learn?: { level: number; tactic: TacticId }[];
   traits?: SagaTraitId[];
@@ -295,12 +311,25 @@ export interface SagaGeneralDef {
   enemyOnly?: boolean;
 }
 
+export type WeaponType = "sword" | "axe" | "spear" | "bow" | "blade" | "halberd";
+export type GearSlot = "weapon" | "armor" | "helmet" | "belt" | "pendant" | "boots" | "mount";
+
 export interface SagaGeneralState {
   id: string;
   level: number;
   exp: number;
   weapon: string | null;
   armor: string | null;
+  /** v0.96：新增护具与坐骑槽，未穿时为空。 */
+  helmet?: string | null;
+  belt?: string | null;
+  pendant?: string | null;
+  boots?: string | null;
+  mount?: string | null;
+  /** 每名武将随身最多 8 种道具，值为叠加数量。 */
+  items?: Record<string, number>;
+  /** 当前剩余兵力；0 表示阵亡，需招魂计或复活道具才归队。 */
+  troops?: number;
 }
 
 export interface SagaStats {
@@ -336,7 +365,16 @@ export interface SagaItemDef {
   priceTickets: number;
   atk?: number;
   def?: number;
+  speed?: number;
   heal?: number;
+  /** 复活：按目标兵力上限的比例回兵，0 表示不是复活道具。 */
+  revive?: number;
+  /** 攻击类武器的兵种；武将只能装备自己会使的兵器。 */
+  weaponType?: WeaponType;
+  /** 坐骑 / 护具的装备槽；不填时按 kind 推断。 */
+  slot?: GearSlot;
+  /** 上架章节：后面的城才卖更好的货。 */
+  chapter?: number;
   desc: string;
   /** 军需品效果：passive 在出城后生效，consumable 进这次行军的行囊。 */
   supply?: "troops" | "attack" | "speed" | "tactic" | "revive" | "heal";
@@ -548,7 +586,13 @@ export interface SagaRoundCommand {
 
 export type SagaCommand =
   | { k: "formation"; f: FormationId }
-  | { k: "equip"; g: string; slot: "weapon" | "armor"; i: string | null }
+  | { k: "equip"; g: string; slot: GearSlot; i: string | null }
+  /** 非战斗时用道具：回复兵力、复活败将等。 */
+  | { k: "use"; g: string; i: string; target?: string }
+  /** 丢弃随身道具，给 8 件上限腾位置。 */
+  | { k: "drop"; g: string; i: string }
+  /** 折价卖出装备或道具，按原价一半折成金币。 */
+  | { k: "sell"; i: string; g?: string }
   | { k: "party"; active: string[] }
   /** 钱庄存金：按本次行军的存金价整档扣，收兵时统一折成 tcr 发放。 */
   | { k: "bank"; g: number }
@@ -704,6 +748,8 @@ export interface SagaReplayState {
   inventory: SagaInventory;
   buffs: SagaRunBuffs;
   partyTroops: Record<string, number>;
+  /** 全灭后已在就近客栈醒来：重放层据此把 scene 留在 field，而不是回城。 */
+  wokeAtInn?: boolean;
   battle: SagaBattleState | null;
   goldGained: number;
   expGained: number;

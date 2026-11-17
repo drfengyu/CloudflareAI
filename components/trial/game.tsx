@@ -33,8 +33,10 @@ import {
   SAGA_TACTIC_BY_ID,
   SAGA_TRAIT_BY_ID,
   SAGA_CORPS_LABEL,
+  gearSlotOf,
   sagaCorpsOf,
   tacticsFor,
+  weaponTypesFor,
 } from "@/lib/trial/saga/data";
 import {
   battleAttackPower,
@@ -60,7 +62,7 @@ import {
   sagaFieldFor,
   type FieldHotspot,
 } from "@/lib/trial/saga/map";
-import { expToNext, generalStats, partyPower } from "@/lib/trial/saga/state";
+import { expToNext, generalStats, partyPower, canCarryItem, carrySlots } from "@/lib/trial/saga/state";
 import { SAGA_COUPON_ITEM_ID, bankCreditsForGold, couponGoldCost, couponsForGold, type SagaBankPolicy } from "@/lib/trial/saga/bank";
 import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "@/lib/trial/saga/inn";
 import {
@@ -75,7 +77,7 @@ import {
   trainingCost,
   trainingLevelCap,
 } from "@/lib/trial/saga/training";
-import { SAGA_MAX_LEVEL, SAGA_PARTY_SIZE } from "@/lib/trial/saga/types";
+import { SAGA_CARRY_LIMIT, SAGA_DEPLOY_SIZE, SAGA_MAX_LEVEL, SAGA_PARTY_SIZE } from "@/lib/trial/saga/types";
 import {
   campScene,
   chapterIntroScene,
@@ -93,6 +95,7 @@ import {
 } from "@/lib/trial/saga/quests";
 import type {
   FormationId,
+  GearSlot,
   SagaBattleEvent,
   SagaBattleState,
   SagaCommand,
@@ -267,12 +270,14 @@ function availableItems(state: SagaReplayState): { id: string; name: string; cou
   const ids = new Set([
     ...Object.keys(state.inventory.bonus),
     ...Object.keys(state.save.bag),
+    ...state.save.party.flatMap((general) => Object.keys(general.items ?? {})),
   ]);
   const list: { id: string; name: string; count: number }[] = [];
   for (const id of ids) {
     const def = SAGA_ITEM_BY_ID.get(id);
     if (!def || (def.kind !== "consumable" && def.kind !== "supply")) continue;
-    const count = (state.inventory.bonus[id] ?? 0) + (state.save.bag[id] ?? 0);
+    const carried = state.save.party.reduce((sum, general) => sum + (general.items?.[id] ?? 0), 0);
+    const count = (state.inventory.bonus[id] ?? 0) + (state.save.bag[id] ?? 0) + carried;
     if (count > 0) list.push({ id, name: def.name, count });
   }
   return list;
@@ -331,10 +336,14 @@ export function TrialGame(props: TrialGameProps) {
     setTickets(props.initialTickets);
   }
   const [panel, setPanel] = useState<PanelId>(null);
+  /** 武库分柜：兵器 / 甲胄 / 盔带 / 马市，各卖各的货。 */
+  const [shopTab, setShopTab] = useState<"weapon" | "armor" | "gear" | "mount">("weapon");
+  /** 强化时选定的武将：只让玩家强化此人身上的装备。 */
+  const [forgeOwner, setForgeOwner] = useState<string | null>(null);
   const [depositGold, setDepositGold] = useState("");
   /** 钱庄换券：想换多少张活动券。 */
   const [exchangeTickets, setExchangeTickets] = useState("");
-  const [hallTab, setHallTab] = useState<"party" | "gear" | "formation">("party");
+  const [hallTab, setHallTab] = useState<"party" | "gear" | "items" | "formation">("party");
   const [dexTab, setDexTab] = useState<"save" | "dex">("save");
   const [campNode, setCampNode] = useState<number | null>(null);
   const [battle, setBattle] = useState<BattleSession | null>(null);
@@ -349,7 +358,13 @@ export function TrialGame(props: TrialGameProps) {
   const [offerDecisions, setOfferDecisions] = useState<Record<string, boolean>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [settlement, setSettlement] = useState<TrialSettlement | null>(null);
-  const [banner, setBanner] = useState<{ kind: "won" | "lost"; name: string; gold: number; exp: number } | null>(null);
+  const [banner, setBanner] = useState<{
+    kind: "won" | "lost";
+    name: string;
+    gold: number;
+    exp: number;
+    learned?: string[];
+  } | null>(null);
   /** 公告红点：只读本机已读记录，服务端渲染时按已读处理。 */
   const noticeUnread = useSyncExternalStore(subscribeNoticeSeen, noticeUnreadSnapshot, () => false);
   /** 入口封面：进页面先停在封面，选「继续游戏 / 新的征途」再进关；结算完也回到这里。 */
@@ -421,18 +436,43 @@ export function TrialGame(props: TrialGameProps) {
     (sum, purchase) => (purchase.itemId === SAGA_COUPON_ITEM_ID ? sum + (purchase.coupons ?? 0) : sum),
     0,
   );
-  /** 铁匠铺可强化的装备：库存里的 + 武将身上穿着的，按 ID 去重。 */
+  /** 铁匠铺可强化的装备：当前选中的武将身上的 + 库存，按 ID 去重。 */
   const forgeGearIds = useMemo(() => {
     const ids = new Set(Object.keys(save.gear));
-    for (const member of [...save.party, ...save.reserve]) {
-      if (member.weapon) ids.add(member.weapon);
-      if (member.armor) ids.add(member.armor);
+    const members = forgeOwner
+      ? [...save.party, ...save.reserve].filter((member) => member.id === forgeOwner)
+      : [...save.party, ...save.reserve];
+    for (const member of members) {
+      for (const slot of ["weapon", "armor", "helmet", "belt", "pendant", "boots", "mount"] as GearSlot[]) {
+        const id = member[slot];
+        if (id) ids.add(id);
+      }
     }
-    return [...ids].filter((id) => {
-      const kind = SAGA_ITEM_BY_ID.get(id)?.kind;
-      return kind === "weapon" || kind === "armor";
-    });
-  }, [save]);
+    return [...ids].filter((id) => Boolean(gearSlotOf(SAGA_ITEM_BY_ID.get(id))));
+  }, [forgeOwner, save]);
+
+  /** 武库分柜的现货：不同章节的城只卖当年到货的兵器、甲胄、盔带与坐骑。 */
+  const shopItems = useMemo(() => {
+    if (panel === "forge") {
+      const kinds =
+        shopTab === "weapon"
+          ? ["weapon" as const]
+          : shopTab === "armor"
+            ? ["armor" as const]
+            : shopTab === "mount"
+              ? ["mount" as const]
+              : (["helmet", "belt", "pendant", "boots"] as const);
+      return SAGA_ITEMS.filter(
+        (item) => kinds.some((kind) => kind === item.kind) && (item.chapter ?? 0) <= save.chapter,
+      );
+    }
+    if (panel === "herb") {
+      return SAGA_ITEMS.filter(
+        (item) => item.kind === "consumable" && (item.chapter ?? 0) <= save.chapter,
+      );
+    }
+    return [];
+  }, [panel, save.chapter, shopTab]);
 
   /** 界面上的属性 / 兵力一律按当前对局的规则档算：图鉴、编队、出战面板与战场不能各说各话。 */
   const uiRules = state?.rules ?? run?.rules ?? SAGA_RULESET;
@@ -704,6 +744,10 @@ export function TrialGame(props: TrialGameProps) {
           ? SAGA_INN_PRICE_TICKETS
           : SAGA_ITEM_BY_ID.get(itemId)?.priceTickets ?? 0;
       if (priceTickets < 1) return;
+      if (SAGA_ITEM_BY_ID.get(itemId)?.kind === "consumable" && !canCarryItem(save, itemId)) {
+        toast.error(`每名武将最多带 ${SAGA_CARRY_LIMIT} 种道具，先到物品栏舍弃一件再买`);
+        return;
+      }
       if (tickets < priceTickets) {
         toast.error(`活动券不足（要 ${priceTickets} 张）`);
         return;
@@ -729,7 +773,7 @@ export function TrialGame(props: TrialGameProps) {
         setBusy(null);
       }
     },
-    [busy, commands.length, run, runId, tickets],
+    [busy, commands.length, run, runId, save, tickets],
   );
 
   /** 训练场：目标等级由玩家填，价格按「当前等级 → 目标等级」算，服务端重放后核对。 */
@@ -1390,6 +1434,11 @@ export function TrialGame(props: TrialGameProps) {
         toast.error("要先拔掉其余营地，才能直取主帅本阵");
         return;
       }
+      const alive = save.party.filter((member) => (state.partyTroops[member.id] ?? 1) > 0).length;
+      if (alive === 0) {
+        toast.error("全队阵亡，先用招魂丹或回魂丹救人，再出兵");
+        return;
+      }
       const scratch = JSON.parse(JSON.stringify(state)) as SagaReplayState;
       const battleState = startBattle(run, node, scratch);
       const session: BattleSession = {
@@ -1408,7 +1457,7 @@ export function TrialGame(props: TrialGameProps) {
       setShowEnemyInfo(false);
       gameAudio.play("encounter");
     },
-    [run, state],
+    [run, save, state],
   );
 
   /**
@@ -1419,6 +1468,8 @@ export function TrialGame(props: TrialGameProps) {
     if (!run || !state) return;
     if (battle || settlement || panel) return;
     if (state.scene !== "field") return;
+    const alive = save.party.filter((member) => (state.partyTroops[member.id] ?? 1) > 0).length;
+    if (alive === 0) return;
     encounterLockRef.current = true;
     playerRef.current.walkTo = null;
     arriveRef.current = null;
@@ -1439,7 +1490,7 @@ export function TrialGame(props: TrialGameProps) {
     setShowEnemyInfo(false);
     gameAudio.play("encounter");
     toast(`野外遇敌 · ${battleState.nodeName}`);
-  }, [battle, panel, run, settlement, state]);
+  }, [battle, panel, run, save, settlement, state]);
 
   useEffect(() => {
     const ready =
@@ -1460,6 +1511,20 @@ export function TrialGame(props: TrialGameProps) {
           : { k: "battle", node: session.node, rounds: session.rounds },
       );
       const won = session.battle.phase === "won";
+      const fallen = session.scratch.save.party.filter(
+        (member) => (session.scratch.partyTroops[member.id] ?? 1) <= 0,
+      );
+      if (won && fallen.length > 0) {
+        toast.error(
+          `${fallen.map((member) => generalName(member.id)).join("、")} 阵亡，需招魂计或复活丹才归队`,
+        );
+      }
+      const allFallen = session.scratch.save.party.every(
+        (member) => (session.scratch.partyTroops[member.id] ?? 1) <= 0,
+      );
+      if (!won && allFallen) {
+        toast(`全军覆没，已在最近的客栈醒来，各回两成兵力`);
+      }
       // 胜利后的归降回应紧跟本场战斗指令：接受按标价扣聘金，婉拒无成本。
       if (won) {
         for (const offer of session.battle.recruitOffers) {
@@ -1478,6 +1543,10 @@ export function TrialGame(props: TrialGameProps) {
         name: session.battle.nodeName,
         gold: session.battle.rewardGold,
         exp: session.battle.rewardExp,
+        learned: session.battle.log
+          .filter((event) => event.kind === "level" || event.text.includes("领悟"))
+          .map((event) => event.text)
+          .slice(-6),
       });
       if (won && run && session.node >= 0 && run.nodes[session.node]?.kind === "boss") {
         const chapter = run.nodes[session.node]?.chapter ?? run.startSave.chapter;
@@ -1637,8 +1706,41 @@ export function TrialGame(props: TrialGameProps) {
   }, [buyItem, run, state]);
 
   const equipItem = useCallback(
-    (generalId: string, slot: "weapon" | "armor", itemId: string | null) => {
+    (generalId: string, slot: GearSlot, itemId: string | null) => {
+      const item = itemId ? SAGA_ITEM_BY_ID.get(itemId) : null;
+      if (slot === "weapon" && item?.weaponType) {
+        const general = save.party.find((entry) => entry.id === generalId);
+        const allowed = general
+          ? weaponTypesFor(SAGA_GENERAL_BY_ID.get(general.id)).includes(item.weaponType)
+          : false;
+        if (!allowed) {
+          toast.error(`${SAGA_GENERAL_BY_ID.get(generalId)?.name ?? "此人"}不会使${item.name}`);
+          return;
+        }
+      }
       appendCommand({ k: "equip", g: generalId, slot, i: itemId });
+    },
+    [appendCommand, save.party],
+  );
+
+  const applyInventoryItem = useCallback(
+    (ownerId: string, itemId: string, targetId?: string) => {
+      appendCommand({ k: "use", g: ownerId, i: itemId, target: targetId });
+    },
+    [appendCommand],
+  );
+
+  const dropInventoryItem = useCallback(
+    (ownerId: string, itemId: string) => {
+      appendCommand({ k: "drop", g: ownerId, i: itemId });
+    },
+    [appendCommand],
+  );
+
+  const sellInventoryItem = useCallback(
+    (itemId: string, ownerId?: string) => {
+      appendCommand({ k: "sell", i: itemId, g: ownerId });
+      toast.success(`折价卖出 ${itemName(itemId)}`);
     },
     [appendCommand],
   );
@@ -2589,13 +2691,35 @@ export function TrialGame(props: TrialGameProps) {
                       {tickets} 张
                     </span>
                   </div>
+                  {panel === "forge" ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {([
+                        ["weapon", "兵器"],
+                        ["armor", "甲胄"],
+                        ["gear", "盔带"],
+                        ["mount", "马市"],
+                      ] as const).map(([id, label]) => (
+                        <Button
+                          key={id}
+                          size="sm"
+                          variant={shopTab === id ? "primary" : "outline"}
+                          onClick={() => setShopTab(id)}
+                        >
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
+                  ) : null}
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {SAGA_ITEMS.filter((item) =>
-                      panel === "forge" ? item.kind === "weapon" || item.kind === "armor" : item.kind === "consumable",
-                    ).map((item) => {
+                    {shopItems.map((item) => {
                       const price = item.priceTickets;
                       const owned =
-                        item.kind === "consumable" ? save.bag[item.id] ?? 0 : save.gear[item.id] ?? 0;
+                        item.kind === "consumable"
+                          ? [...save.party, ...save.reserve].reduce(
+                              (sum, member) => sum + (member.items?.[item.id] ?? 0),
+                              0,
+                            ) + (save.bag[item.id] ?? 0)
+                          : save.gear[item.id] ?? 0;
                       return (
                         <div key={item.id} className="rounded-lg border border-border p-2.5">
                           <div className="flex items-center justify-between text-sm">
@@ -2622,8 +2746,20 @@ export function TrialGame(props: TrialGameProps) {
                   {panel === "forge" ? (
                     <div className="space-y-2 border-t border-border pt-3">
                       <p className="text-xs text-muted-foreground">
-                        强化：每级提升两成基础属性，最高 +{SAGA_FORGE_MAX_LEVEL} 级；换将、卸装都不掉级。
+                        强化先选人：只给这名武将身上的兵器、甲胄与护具升级，换将卸装都不掉级。
                       </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[...save.party, ...save.reserve].slice(0, 12).map((member) => (
+                          <Button
+                            key={member.id}
+                            size="sm"
+                            variant={forgeOwner === member.id ? "primary" : "outline"}
+                            onClick={() => setForgeOwner(member.id)}
+                          >
+                            {generalName(member.id)}
+                          </Button>
+                        ))}
+                      </div>
                       {forgeGearIds.length === 0 ? (
                         <p className="rounded-lg border border-border p-2 text-xs text-muted-foreground">
                           先备一件兵器或甲胄，再来铁匠铺开炉。
@@ -2676,10 +2812,30 @@ export function TrialGame(props: TrialGameProps) {
                           })}
                         </div>
                       )}
+                      {Object.keys(save.gear).length > 0 ? (
+                        <div className="space-y-1.5 border-t border-border pt-2">
+                          <p className="text-xs text-muted-foreground">
+                            折价卖出：按原价一半折成金币，错兵器的武器也能卖回武库。
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {Object.entries(save.gear).map(([gearId, count]) => (
+                              <Button
+                                key={gearId}
+                                size="sm"
+                                variant="outline"
+                                disabled={Boolean(busy)}
+                                onClick={() => sellInventoryItem(gearId)}
+                              >
+                                卖 {itemName(gearId)} ×{count}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
                   ) : null}
                   <p className="text-xs text-muted-foreground">
-                    买入的装备进编成所穿戴，伤药在战斗中取用；装备可以换给任何武将。
+                    买入的装备进武库穿戴；伤药、招魂丹按武将随身携带，每人最多 {SAGA_CARRY_LIMIT} 种，可在物品栏与战斗中使用。
                   </p>
                 </div>
               ) : null}
@@ -2695,9 +2851,13 @@ export function TrialGame(props: TrialGameProps) {
                     </span>
                   </div>
                   <div className="grid gap-2 sm:grid-cols-2">
-                    {SAGA_ITEMS.filter((item) => item.kind === "supply").map((item) => {
+                    {SAGA_ITEMS.filter(
+                      (item) =>
+                        (item.kind === "supply" || (item.kind === "consumable" && Boolean(item.revive)))
+                        && (item.chapter ?? 0) <= save.chapter,
+                    ).map((item) => {
                       const bought = run?.purchases.filter((purchase) => purchase.itemId === item.id) ?? [];
-                      const passive = item.supply !== "heal" && item.supply !== "revive";
+                      const passive = item.kind === "supply" && item.supply !== "heal" && item.supply !== "revive";
                       const maxed = passive && bought.length > 0;
                       return (
                         <div key={item.id} className="rounded-lg border border-border p-2.5">
@@ -2913,6 +3073,9 @@ export function TrialGame(props: TrialGameProps) {
                     <Button size="sm" variant={hallTab === "gear" ? "primary" : "outline"} onClick={() => setHallTab("gear")}>
                       装备
                     </Button>
+                    <Button size="sm" variant={hallTab === "items" ? "primary" : "outline"} onClick={() => setHallTab("items")}>
+                      物品
+                    </Button>
                     <Button size="sm" variant={hallTab === "formation" ? "primary" : "outline"} onClick={() => setHallTab("formation")}>
                       阵型
                     </Button>
@@ -2921,7 +3084,8 @@ export function TrialGame(props: TrialGameProps) {
                   {hallTab === "party" ? (
                     <div className="space-y-3">
                       <p className="text-xs text-muted-foreground">
-                        上阵 {save.party.length}/{SAGA_PARTY_SIZE} 人、待命{" "}
+                        上阵 {save.party.length}/{SAGA_PARTY_SIZE} 人（每场前 {SAGA_DEPLOY_SIZE} 人出战，其余
+                        2 人替补）、待命{" "}
                         {save.reserve.filter((row) => !save.party.some((p) => p.id === row.id)).length} 人。
                         点「移出」把在队武将放回待命席，点「上阵」把待命武将补进队伍；
                         阵亡只在战斗中发生，换人之后按满编算。
@@ -2953,7 +3117,7 @@ export function TrialGame(props: TrialGameProps) {
                             </p>
                           ) : (
                             <div className="grid gap-2 sm:grid-cols-2">
-                              {group.members.map((member) => {
+                              {group.members.map((member, index) => {
                                 const def = SAGA_GENERAL_BY_ID.get(member.id);
                                 const stats = generalStats(member, save.gearLevels, uiRules);
                                 const need =
@@ -2976,6 +3140,11 @@ export function TrialGame(props: TrialGameProps) {
                                             <span className="ml-1.5 text-xs text-muted-foreground">
                                               Lv{member.level}
                                             </span>
+                                            {group.active ? (
+                                              <span className="ml-1.5 rounded bg-muted px-1 text-[10px] text-muted-foreground">
+                                                {index < SAGA_DEPLOY_SIZE ? "出战" : "替补"}
+                                              </span>
+                                            ) : null}
                                           </span>
                                           <Button
                                             size="sm"
@@ -3020,8 +3189,22 @@ export function TrialGame(props: TrialGameProps) {
                                           </p>
                                         ) : null}
                                         <p className="mt-0.5 text-xs text-muted-foreground">
-                                          武器 {member.weapon ? itemName(member.weapon) : "无"} · 防具{" "}
-                                          {member.armor ? itemName(member.armor) : "无"}
+                                          {(
+                                            [
+                                              ["weapon", "兵器"],
+                                              ["armor", "甲胄"],
+                                              ["helmet", "盔"],
+                                              ["belt", "带"],
+                                              ["pendant", "坠"],
+                                              ["boots", "靴"],
+                                              ["mount", "马"],
+                                            ] as const
+                                          )
+                                            .map(([slot, label]) =>
+                                              member[slot] ? `${label} ${itemName(member[slot] as string)}` : "",
+                                            )
+                                            .filter(Boolean)
+                                            .join(" · ") || "未着装备"}
                                         </p>
                                       </div>
                                     </div>
@@ -3054,12 +3237,29 @@ export function TrialGame(props: TrialGameProps) {
                               {generalName(member.id)} <span className="text-xs text-muted-foreground">Lv{member.level}</span>
                             </p>
                             <div className="mt-1 grid gap-2 sm:grid-cols-2">
-                              {(["weapon", "armor"] as const).map((slot) => {
-                                const worn = slot === "weapon" ? member.weapon : member.armor;
-                                const options = SAGA_ITEMS.filter((item) => item.kind === slot);
+                              {(
+                                [
+                                  ["weapon", "兵器"],
+                                  ["armor", "甲胄"],
+                                  ["helmet", "盔"],
+                                  ["belt", "腰带"],
+                                  ["pendant", "吊坠"],
+                                  ["boots", "靴"],
+                                  ["mount", "坐骑"],
+                                ] as const
+                              ).map(([slot, label]) => {
+                                const worn = member[slot] ?? null;
+                                const def = SAGA_GENERAL_BY_ID.get(member.id);
+                                const options = SAGA_ITEMS.filter(
+                                  (item) =>
+                                    gearSlotOf(item) === slot
+                                    && (slot !== "weapon"
+                                      || !item.weaponType
+                                      || weaponTypesFor(def).includes(item.weaponType)),
+                                );
                                 return (
                                   <label key={slot} className="flex items-center gap-1.5 text-xs">
-                                    <span className="w-8 text-muted-foreground">{slot === "weapon" ? "武器" : "防具"}</span>
+                                    <span className="w-8 shrink-0 text-muted-foreground">{label}</span>
                                     <select
                                       value={worn ?? ""}
                                       onChange={(event) => equipItem(member.id, slot, event.target.value || null)}
@@ -3070,7 +3270,10 @@ export function TrialGame(props: TrialGameProps) {
                                         const available = worn === item.id || (save.gear[item.id] ?? 0) > 0;
                                         return (
                                           <option key={item.id} value={item.id} disabled={!available}>
-                                            {item.name}（{slot === "weapon" ? `攻+${item.atk}` : `防+${item.def}`}）
+                                            {item.name}
+                                            {item.atk ? `（攻+${item.atk}）` : ""}
+                                            {item.def ? `（防+${item.def}）` : ""}
+                                            {item.speed ? `（速+${item.speed}）` : ""}
                                             {worn === item.id ? " · 已装备" : ""}
                                           </option>
                                         );
@@ -3083,6 +3286,97 @@ export function TrialGame(props: TrialGameProps) {
                           </div>
                         ))}
                       </div>
+                    </div>
+                  ) : null}
+
+                  {hallTab === "items" ? (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        每名武将随身最多 {SAGA_CARRY_LIMIT} 种道具，同种叠数量。阵亡后可用招魂丹救回，
+                        回魂丹回得更多；用不上的可以舍弃或折价卖出。
+                      </p>
+                      {[...save.party, ...save.reserve].map((member) => {
+                        const stats = generalStats(member, save.gearLevels, uiRules);
+                        const current = Math.min(
+                          stats.maxTroops,
+                          state?.partyTroops[member.id] ?? member.troops ?? stats.maxTroops,
+                        );
+                        const entries = Object.entries(member.items ?? {}).filter(([, count]) => count > 0);
+                        return (
+                          <div key={member.id} className="rounded-lg border border-border p-2.5 text-sm">
+                            <div className="flex items-center justify-between">
+                              <span className="font-medium">
+                                {generalName(member.id)}
+                                <span className="ml-1.5 text-xs text-muted-foreground">
+                                  {carrySlots(member)}/{SAGA_CARRY_LIMIT} 种
+                                </span>
+                              </span>
+                              <span className={cn("text-xs tabular-nums", current <= 0 ? "text-red-500" : "text-muted-foreground")}>
+                                {current <= 0 ? "阵亡" : `兵力 ${current}/${stats.maxTroops}`}
+                              </span>
+                            </div>
+                            {entries.length === 0 ? (
+                              <p className="mt-1 text-xs text-muted-foreground">身上没有道具。</p>
+                            ) : (
+                              <div className="mt-1.5 space-y-1">
+                                {entries.map(([itemId, count]) => {
+                                  const item = SAGA_ITEM_BY_ID.get(itemId);
+                                  if (!item) return null;
+                                  return (
+                                    <div key={itemId} className="flex flex-wrap items-center gap-1.5 text-xs">
+                                      <span className="min-w-24 font-medium">
+                                        {item.name} ×{count}
+                                      </span>
+                                      <span className="flex-1 text-muted-foreground">{item.desc}</span>
+                                      {item.revive ? (
+                                        save.party
+                                          .filter(
+                                            (target) =>
+                                              (state?.partyTroops[target.id] ?? target.troops ?? 1) <= 0,
+                                          )
+                                          .map((target) => (
+                                            <Button
+                                              key={`revive-${target.id}`}
+                                              size="sm"
+                                              variant="outline"
+                                              onClick={() => applyInventoryItem(member.id, itemId, target.id)}
+                                            >
+                                              救 {generalName(target.id)}
+                                            </Button>
+                                          ))
+                                      ) : null}
+                                      {item.heal ? (
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          disabled={current <= 0}
+                                          onClick={() => applyInventoryItem(member.id, itemId)}
+                                        >
+                                          用
+                                        </Button>
+                                      ) : null}
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => dropInventoryItem(member.id, itemId)}
+                                      >
+                                        弃
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => sellInventoryItem(itemId, member.id)}
+                                      >
+                                        卖
+                                      </Button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : null}
 
@@ -3385,9 +3679,14 @@ export function TrialGame(props: TrialGameProps) {
                       </span>
                     </>
                   ) : (
-                    <span className="text-rose-200/80">回城住店可重整旗鼓</span>
+                    <span className="text-rose-200/80">全灭会在就近客栈醒来，其余败退回城</span>
                   )}
                 </div>
+                {banner.learned && banner.learned.length > 0 ? (
+                  <p className="mt-0.5 line-clamp-2 text-[11px] text-amber-200/85">
+                    {banner.learned.join(" · ")}
+                  </p>
+                ) : null}
               </div>
               <button
                 type="button"

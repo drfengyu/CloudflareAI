@@ -22,7 +22,11 @@ function clampLevel(value: unknown): number {
 
 function forgeable(itemId: string): boolean {
   const item = SAGA_ITEM_BY_ID.get(itemId);
-  return Boolean(item && (item.kind === "weapon" || item.kind === "armor"));
+  return Boolean(
+    item
+    && (item.kind === "weapon" || item.kind === "armor" || item.kind === "helmet"
+      || item.kind === "belt" || item.kind === "pendant" || item.kind === "boots"),
+  );
 }
 
 /** 从多少级强化到下一级要几张券；满级、非装备或查无此物返回 0。 */

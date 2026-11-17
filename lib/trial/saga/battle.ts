@@ -13,6 +13,7 @@ import { forgeStat } from "./forge";
 import { generalStats, grantGeneralExp, recruitToSave, findGeneral, troopBaseline } from "./state";
 import {
   SAGA_BATTLE_SIZE,
+  SAGA_DEPLOY_SIZE,
   type SagaBattleEvent,
   type SagaBattleGeneral,
   type SagaBattleState,
@@ -343,7 +344,7 @@ function applyWarband(
         unit.bondAtk += bond.attackPct ?? 0;
         unit.bondCut += bond.damageCut ?? 0;
         unit.speed += bond.speed ?? 0;
-        unit.tacticPoints = Math.min(16, unit.tacticPoints + (bond.tacticPoints ?? 0));
+        unit.tacticPoints = Math.min(48, unit.tacticPoints + (bond.tacticPoints ?? 0));
       }
     }
     for (const bond of bonds) {
@@ -391,7 +392,12 @@ function buildBattle(
 ): SagaBattleState {
   const buffs = state.buffs;
   const rules = state.rules ?? 1;
-  const party: SagaBattleGeneral[] = state.save.party.map((saved) => {
+  state.wokeAtInn = false;
+  // v0.96：队伍最多 7 人，但每场只让前 5 名还活着的武将上阵，其余两人作替补。
+  const deployed = state.save.party
+    .filter((saved) => (state.partyTroops[saved.id] ?? 1) > 0)
+    .slice(0, SAGA_DEPLOY_SIZE);
+  const party: SagaBattleGeneral[] = deployed.map((saved) => {
     const def = SAGA_GENERAL_BY_ID.get(saved.id);
     const stats = generalStats(saved, state.save.gearLevels, rules);
     const maxTroops = Math.max(
@@ -411,22 +417,21 @@ function buildBattle(
       force: stats.force,
       intellect: stats.intellect,
       defense: stats.defense,
-      speed: stats.speed + buffs.speed,
+      speed: stats.speed + stats.gearSpeed + buffs.speed,
       tactics: rules >= 2 ? tacticsFor(def, saved.level) : def?.tactics ?? [],
       traits: rules >= 2 ? def?.traits ?? [] : [],
       corps: "spear",
       bonds: [],
       bondAtk: 0,
       bondCut: 0,
-      // v3 起策略点主要看智力：每 20 点智力 +1，等级每 4 级再 +1；v12 起上限抬到 16，
-      // 好让原版口径的高阶计策（6~12 点）放得动。
+      // v0.96：策略点大幅抬高，且随等级成长；50 级智将可攒到 40+ 点。
       tacticPoints:
         rules >= 3
           ? Math.min(
-              16,
-              2 +
-                Math.floor(stats.intellect / 20) +
-                Math.floor((saved.level - 1) / 4) +
+              48,
+              4 +
+                Math.floor(stats.intellect / 15) +
+                Math.floor(saved.level / 2) +
                 buffs.tacticPoints +
                 traitTotalOf(def?.traits, "tacticPoints"),
             )
@@ -575,6 +580,14 @@ function consumeItem(state: SagaReplayState, itemId: string): boolean {
   if ((state.save.bag[itemId] ?? 0) > 0) {
     state.save.bag[itemId] -= 1;
     if (state.save.bag[itemId] <= 0) delete state.save.bag[itemId];
+    return true;
+  }
+  for (const general of state.save.party) {
+    if ((general.items?.[itemId] ?? 0) <= 0) continue;
+    const left = (general.items?.[itemId] ?? 0) - 1;
+    general.items = { ...(general.items ?? {}) };
+    if (left > 0) general.items[itemId] = left;
+    else delete general.items[itemId];
     return true;
   }
   return false;
@@ -1119,8 +1132,7 @@ function executeItem(
   state: SagaReplayState,
   events: SagaBattleEvent[],
 ): boolean {
-  if (!consumeItem(state, item.id)) return false;
-  if (item.supply === "revive") {
+  if (item.supply === "revive" || item.revive) {
     const target = battle.party
       .filter((g) => g.downed)
       .sort((a, b) => b.maxTroops - a.maxTroops)[0];
@@ -1128,21 +1140,23 @@ function executeItem(
       events.push({ kind: "miss", side: actor.side, actor: actor.name, text: "没有需要复活的武将" });
       return true;
     }
+    if (!consumeItem(state, item.id)) return false;
     target.downed = false;
-    target.troops = Math.max(1, Math.round(target.maxTroops * 0.4));
+    target.troops = Math.max(1, Math.round(target.maxTroops * (item.revive ?? 0.4)));
     events.push({
       kind: "heal",
       side: actor.side,
       actor: actor.name,
       target: target.name,
       amount: target.troops,
-      text: `${actor.name} 使用兵符，${target.name} 以 ${target.troops} 兵力归队`,
+      text: `${actor.name} 使用${item.name}，${target.name} 以 ${target.troops} 兵力归队`,
     });
     return true;
   }
   const candidates = living(battle.party).sort((a, b) => a.troops / a.maxTroops - b.troops / b.maxTroops);
   const target = candidates[0];
   if (!target) return false;
+  if (!consumeItem(state, item.id)) return false;
   const baseHeal =
     battle.rules >= 9 ? item.heal ?? 0 : LEGACY_HEAL[item.id] ?? item.heal ?? 0;
   const heal =
@@ -1456,8 +1470,8 @@ function finishBattle(
     }
     for (const general of battle.party) {
       if (general.downed) {
-        general.troops = Math.max(1, Math.round(general.maxTroops * 0.2));
-        general.downed = false;
+        // v0.96：胜利不再自动复活，阵亡者兵力写 0，等招魂计或复活丹。
+        general.troops = 0;
       } else {
         general.troops = Math.min(
           general.maxTroops,
@@ -1465,12 +1479,45 @@ function finishBattle(
         );
       }
       state.partyTroops[general.id] = general.troops;
+      const saved = state.save.party.find((g) => g.id === general.id);
+      if (saved) saved.troops = general.troops;
+    }
+    const fallen = state.save.party.filter((g) => (state.partyTroops[g.id] ?? 0) <= 0);
+    if (fallen.length > 0) {
+      events.push({
+        kind: "down",
+        side: "player",
+        actor: "战报",
+        text: `${fallen.map((g) => SAGA_GENERAL_BY_ID.get(g.id)?.name ?? g.id).join("、")} 阵亡，需招魂计或复活丹`,
+      });
     }
   } else {
     for (const general of battle.party) {
       state.partyTroops[general.id] = general.downed ? 0 : general.troops;
+      const saved = state.save.party.find((g) => g.id === general.id);
+      if (saved) saved.troops = state.partyTroops[general.id];
     }
-    events.push({ kind: "down", side: "player", actor: "战报", text: "全军败退，回城休整" });
+    // 全队都倒下时，剧情武将不删档：在最近的客栈醒来，各回两成兵力。
+    const allDown = battle.party.every((general) => general.downed);
+    if (allDown) {
+      for (const saved of state.save.party) {
+        const stats = generalStats(saved, state.save.gearLevels, battle.rules);
+        const maxTroops = Math.max(1, Math.round(stats.maxTroops * (1 + state.buffs.troopPct / 100)));
+        saved.troops = Math.max(1, Math.round(maxTroops * 0.2));
+        state.partyTroops[saved.id] = saved.troops;
+      }
+      state.scene = "field";
+      state.wokeAtInn = true;
+      state.battle = null;
+      events.push({
+        kind: "down",
+        side: "player",
+        actor: "战报",
+        text: "全军覆没，在最近的城镇客栈醒来，各回两成兵力",
+      });
+    } else {
+      events.push({ kind: "down", side: "player", actor: "战报", text: "全军败退，回城休整" });
+    }
   }
 }
 

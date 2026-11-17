@@ -1,13 +1,16 @@
 import type {
   FormationId,
+  GearSlot,
   SagaChapterDef,
   SagaCorps,
   SagaFormationDef,
   SagaGeneralDef,
   SagaItemDef,
+  SagaItemKind,
   SagaTacticDef,
   SagaTraitDef,
   TacticId,
+  WeaponType,
 } from "./types";
 
 /** 武将固有特性：民间改版里那种「此人独一份」的长板。 */
@@ -203,7 +206,7 @@ export const SAGA_TACTICS: SagaTacticDef[] = [
   // 辅助计：原版里的免击 / 免策 / 招魂 / 心乱，补成四支可实战的策。
   { id: "mianji", name: "免击计", desc: "一队友军 2 回合内不受普攻伤害", cost: 8, level: 20, kind: "ward", turns: 2 },
   { id: "miance", name: "免策计", desc: "一队友军 2 回合内不受攻击计策伤害", cost: 10, level: 28, kind: "wardTactic", turns: 2 },
-  { id: "zhaohun", name: "招魂计", desc: "唤回一名败退友军，以三成兵力归队", cost: 12, level: 34, kind: "revive" },
+  { id: "zhaohun", name: "招魂计", desc: "唤回一名败退友军，以三成兵力归队", cost: 12, level: 36, kind: "revive" },
   { id: "xinluan", name: "心乱计", desc: "扰乱敌将心神，削去 30 点策略值", cost: 6, level: 40, kind: "drain", power: 30 },
 ];
 
@@ -250,39 +253,205 @@ export function formationUnlocked(formation: FormationId, maxLevel: number): boo
 }
 
 export const SAGA_ITEMS: SagaItemDef[] = [
-  { id: "iron_sword", name: "铁剑", kind: "weapon", priceTickets: 1, atk: 8, desc: "攻击 +8" },
-  { id: "spear", name: "长枪", kind: "weapon", priceTickets: 2, atk: 14, desc: "攻击 +14" },
-  { id: "blade", name: "大刀", kind: "weapon", priceTickets: 3, atk: 20, desc: "攻击 +20" },
-  { id: "guandao", name: "偃月刀", kind: "weapon", priceTickets: 5, atk: 27, desc: "攻击 +27" },
-  { id: "cloth", name: "布甲", kind: "armor", priceTickets: 1, def: 6, desc: "防御 +6" },
-  { id: "leather", name: "皮甲", kind: "armor", priceTickets: 2, def: 11, desc: "防御 +11" },
-  { id: "iron_armor", name: "铁甲", kind: "armor", priceTickets: 3, def: 17, desc: "防御 +17" },
-  { id: "heavy_armor", name: "重铠", kind: "armor", priceTickets: 5, def: 23, desc: "防御 +23" },
-  { id: "herb", name: "伤药", kind: "consumable", priceTickets: 1, heal: 120, desc: "回复 120 兵力", stack: true },
-  { id: "medicine", name: "良药", kind: "consumable", priceTickets: 2, heal: 300, desc: "回复 300 兵力", stack: true },
-  { id: "jinchuang", name: "金疮药", kind: "consumable", priceTickets: 3, heal: 600, desc: "回复 600 兵力", stack: true },
-  { id: "dahuan", name: "大还丹", kind: "consumable", priceTickets: 5, heal: 1200, desc: "回复 1200 兵力", stack: true },
+  // 兵器：剑 / 斧 / 枪 / 弓 / 刀 / 戟分开，武将只会使其中几类。
+  { id: "iron_sword", name: "铁剑", kind: "weapon", priceTickets: 1, atk: 8, weaponType: "sword", chapter: 0, desc: "攻击 +8" },
+  { id: "spear", name: "长枪", kind: "weapon", priceTickets: 2, atk: 14, weaponType: "spear", chapter: 0, desc: "攻击 +14" },
+  { id: "blade", name: "大刀", kind: "weapon", priceTickets: 3, atk: 20, weaponType: "blade", chapter: 0, desc: "攻击 +20" },
+  { id: "guandao", name: "偃月刀", kind: "weapon", priceTickets: 5, atk: 27, weaponType: "blade", chapter: 1, desc: "攻击 +27" },
+  { id: "huan_shou", name: "环首刀", kind: "weapon", priceTickets: 7, atk: 34, weaponType: "sword", chapter: 2, desc: "攻击 +34" },
+  { id: "shuangji", name: "双戟", kind: "weapon", priceTickets: 8, atk: 40, weaponType: "axe", chapter: 3, desc: "攻击 +40" },
+  { id: "dafu", name: "大斧", kind: "weapon", priceTickets: 9, atk: 48, weaponType: "axe", chapter: 3, desc: "攻击 +48" },
+  { id: "qinglong", name: "青龙偃月刀", kind: "weapon", priceTickets: 12, atk: 58, weaponType: "blade", chapter: 4, desc: "攻击 +58，关将军的成名之器" },
+  { id: "zhangba_shemao", name: "丈八蛇矛", kind: "weapon", priceTickets: 12, atk: 56, weaponType: "spear", chapter: 4, desc: "攻击 +56，燕人手中那条蛇" },
+  { id: "yitian", name: "倚天剑", kind: "weapon", priceTickets: 11, atk: 52, weaponType: "sword", chapter: 5, desc: "攻击 +52，剑长三尺，锋芒照人" },
+  { id: "fangtian", name: "方天画戟", kind: "weapon", priceTickets: 14, atk: 64, weaponType: "halberd", chapter: 5, desc: "攻击 +64，温侯的招牌" },
+  { id: "crescent_bow", name: "半月弓", kind: "weapon", priceTickets: 10, atk: 44, weaponType: "bow", chapter: 3, desc: "攻击 +44，远射之器" },
+  // 甲胄：胸甲一系。
+  { id: "cloth", name: "布甲", kind: "armor", priceTickets: 1, def: 6, chapter: 0, desc: "防御 +6" },
+  { id: "leather", name: "皮甲", kind: "armor", priceTickets: 2, def: 11, chapter: 0, desc: "防御 +11" },
+  { id: "iron_armor", name: "铁甲", kind: "armor", priceTickets: 3, def: 17, chapter: 1, desc: "防御 +17" },
+  { id: "heavy_armor", name: "重铠", kind: "armor", priceTickets: 5, def: 23, chapter: 2, desc: "防御 +23" },
+  { id: "yulinjia", name: "鱼鳞甲", kind: "armor", priceTickets: 7, def: 30, chapter: 3, desc: "防御 +30" },
+  { id: "mingguang", name: "明光铠", kind: "armor", priceTickets: 9, def: 38, chapter: 4, desc: "防御 +38" },
+  { id: "shoumian", name: "兽面吞头铠", kind: "armor", priceTickets: 12, def: 46, chapter: 5, desc: "防御 +46" },
+  // 盔 / 腰带 / 吊坠 / 靴：各占一个槽，后城卖得更好。
+  { id: "cloth_helm", name: "布盔", kind: "helmet", priceTickets: 1, def: 3, chapter: 0, desc: "防御 +3" },
+  { id: "iron_helm", name: "铁盔", kind: "helmet", priceTickets: 3, def: 7, chapter: 1, desc: "防御 +7" },
+  { id: "silver_helm", name: "银盔", kind: "helmet", priceTickets: 6, def: 12, chapter: 3, desc: "防御 +12" },
+  { id: "gold_helm", name: "金盔", kind: "helmet", priceTickets: 10, def: 18, chapter: 5, desc: "防御 +18" },
+  { id: "leather_belt", name: "皮带", kind: "belt", priceTickets: 1, def: 2, chapter: 0, desc: "防御 +2" },
+  { id: "bronze_belt", name: "铜带", kind: "belt", priceTickets: 4, def: 5, chapter: 2, desc: "防御 +5" },
+  { id: "jade_belt", name: "玉带", kind: "belt", priceTickets: 9, def: 10, chapter: 5, desc: "防御 +10" },
+  { id: "jade_pendant", name: "玉佩", kind: "pendant", priceTickets: 2, def: 1, speed: 1, chapter: 0, desc: "防御 +1，速度 +1" },
+  { id: "tiger_pendant", name: "虎符坠", kind: "pendant", priceTickets: 7, def: 4, speed: 2, chapter: 3, desc: "防御 +4，速度 +2" },
+  { id: "straw_boots", name: "草鞋", kind: "boots", priceTickets: 1, speed: 1, chapter: 0, desc: "速度 +1" },
+  { id: "leather_boots", name: "皮靴", kind: "boots", priceTickets: 3, speed: 2, chapter: 1, desc: "速度 +2" },
+  { id: "cloud_boots", name: "云靴", kind: "boots", priceTickets: 8, speed: 4, chapter: 4, desc: "速度 +4" },
+  // 名马：只加小额速度，不抢兵器的主导地位。
+  { id: "white_horse", name: "白马", kind: "mount", priceTickets: 3, speed: 2, chapter: 1, desc: "速度 +2" },
+  { id: "dilu", name: "的卢", kind: "mount", priceTickets: 6, speed: 3, chapter: 2, desc: "速度 +3，越涧如飞" },
+  { id: "jueying", name: "绝影", kind: "mount", priceTickets: 9, speed: 4, chapter: 3, desc: "速度 +4，奔逸绝尘" },
+  { id: "zhuahuang", name: "爪黄飞电", kind: "mount", priceTickets: 11, speed: 4, chapter: 4, desc: "速度 +4，御驾之名驹" },
+  { id: "chitu", name: "赤兔", kind: "mount", priceTickets: 15, speed: 6, chapter: 5, desc: "速度 +6，日行千里" },
+  // 药品：新增可随身携带的复活丹，药铺与军需都有售。
+  { id: "herb", name: "伤药", kind: "consumable", priceTickets: 1, heal: 120, chapter: 0, desc: "回复 120 兵力", stack: true },
+  { id: "medicine", name: "良药", kind: "consumable", priceTickets: 2, heal: 300, chapter: 0, desc: "回复 300 兵力", stack: true },
+  { id: "jinchuang", name: "金疮药", kind: "consumable", priceTickets: 3, heal: 600, chapter: 1, desc: "回复 600 兵力", stack: true },
+  { id: "dahuan", name: "大还丹", kind: "consumable", priceTickets: 5, heal: 1200, chapter: 2, desc: "回复 1200 兵力", stack: true },
+  { id: "junliang", name: "军粮", kind: "consumable", priceTickets: 2, heal: 400, chapter: 0, desc: "回复 400 兵力，随军携带的干粮", stack: true },
+  { id: "lingzhi", name: "灵芝", kind: "consumable", priceTickets: 4, heal: 900, chapter: 2, desc: "回复 900 兵力，山中所采的灵药", stack: true },
+  { id: "zhaohun_dan", name: "招魂丹", kind: "consumable", priceTickets: 4, revive: 0.3, chapter: 0, desc: "复活一名败将，回三成兵力", stack: true },
+  { id: "huihun_dan", name: "回魂丹", kind: "consumable", priceTickets: 8, revive: 0.5, chapter: 4, desc: "复活一名败将，回五成兵力", stack: true },
+  // 军需：只在本次行军生效的补给。
   { id: "secret_medicine", name: "秘药", kind: "supply", priceTickets: 1, supply: "heal", desc: "此行：一名武将兵力回满", stack: true },
   { id: "revive_token", name: "兵符", kind: "supply", priceTickets: 2, supply: "revive", desc: "此行：复活一名败将（四成兵力）", stack: true },
   { id: "tiger_tally", name: "虎符", kind: "supply", priceTickets: 2, supply: "troops", desc: "此行：全队兵力上限 +10%" },
   { id: "wind_talisman", name: "风行符", kind: "supply", priceTickets: 1, supply: "speed", desc: "此行：全队速度 +3" },
   { id: "war_drum", name: "战鼓", kind: "supply", priceTickets: 2, supply: "attack", desc: "此行：全队攻击 +15%" },
   { id: "stratagem", name: "锦囊", kind: "supply", priceTickets: 1, supply: "tactic", desc: "此行：每名武将开局计策点 +2" },
-  { id: "huan_shou", name: "环首刀", kind: "weapon", priceTickets: 7, atk: 34, desc: "攻击 +34" },
-  { id: "shuangji", name: "双戟", kind: "weapon", priceTickets: 8, atk: 40, desc: "攻击 +40" },
-  { id: "dafu", name: "大斧", kind: "weapon", priceTickets: 9, atk: 48, desc: "攻击 +48" },
-  { id: "qinglong", name: "青龙偃月刀", kind: "weapon", priceTickets: 12, atk: 58, desc: "攻击 +58，关将军的成名之器" },
-  { id: "zhangba_shemao", name: "丈八蛇矛", kind: "weapon", priceTickets: 12, atk: 56, desc: "攻击 +56，燕人手中那条蛇" },
-  { id: "yitian", name: "倚天剑", kind: "weapon", priceTickets: 11, atk: 52, desc: "攻击 +52，剑长三尺，锋芒照人" },
-  { id: "fangtian", name: "方天画戟", kind: "weapon", priceTickets: 14, atk: 64, desc: "攻击 +64，温侯的招牌" },
-  { id: "yulinjia", name: "鱼鳞甲", kind: "armor", priceTickets: 7, def: 30, desc: "防御 +30" },
-  { id: "mingguang", name: "明光铠", kind: "armor", priceTickets: 9, def: 38, desc: "防御 +38" },
-  { id: "shoumian", name: "兽面吞头铠", kind: "armor", priceTickets: 12, def: 46, desc: "防御 +46" },
-  { id: "junliang", name: "军粮", kind: "consumable", priceTickets: 2, heal: 400, desc: "回复 400 兵力，随军携带的干粮", stack: true },
-  { id: "lingzhi", name: "灵芝", kind: "consumable", priceTickets: 4, heal: 900, desc: "回复 900 兵力，山中所采的灵药", stack: true },
 ];
 
 export const SAGA_ITEM_BY_ID = new Map(SAGA_ITEMS.map((i) => [i.id, i]));
+
+/** 一只手的兵器谱：按武将 id 给出会使的兵器，未列的按剑。 */
+const SAGA_ARMS_BY_ID: Record<string, WeaponType[]> = {
+  liubei: ["sword"],
+  guanyu: ["blade"],
+  zhangfei: ["spear"],
+  zhaoyun: ["spear"],
+  huangzhong: ["bow", "blade"],
+  machao: ["spear"],
+  weiyan: ["blade"],
+  pangtong: ["sword"],
+  fazheng: ["sword"],
+  yanyan: ["blade"],
+  zhangren: ["spear"],
+  taishici: ["spear", "bow"],
+  ganning: ["blade"],
+  lvbu: ["halberd"],
+  caocao: ["sword"],
+  xiahoudun: ["spear"],
+  xiahouyuan: ["bow"],
+  caoren: ["blade"],
+  dianwei: ["axe"],
+  xuchu: ["axe"],
+  xuhuang: ["axe"],
+  zhangliao: ["halberd"],
+  sunce: ["spear"],
+  sunquan: ["sword"],
+  zhouyu: ["sword"],
+  huanggai: ["blade"],
+  luxun: ["sword"],
+  simayi: ["sword"],
+  jiangwei: ["spear"],
+  dengai: ["spear"],
+  wenchou: ["spear"],
+  yanliang: ["blade"],
+  huaxiong: ["blade"],
+  dongzhuo: ["sword"],
+  yuanshao: ["sword"],
+  yuanshu: ["sword"],
+  gongsunzan: ["spear"],
+  madai: ["spear"],
+  guanping: ["blade"],
+  guanxing: ["blade"],
+  zhangbao: ["spear"],
+  zhugedan: ["sword"],
+  mengda: ["sword"],
+  liuzhang: ["sword"],
+  liubiao: ["sword"],
+  zhangjiao: ["sword"],
+  zhangliang: ["sword"],
+  chengyuanzhi: ["sword"],
+  dengmao: ["spear"],
+  lisu: ["sword"],
+  huzhen: ["sword"],
+  caobao: ["sword"],
+  chezhou: ["sword"],
+  gaolan: ["spear"],
+  caimao: ["sword"],
+  zhangyun: ["spear"],
+  liukui: ["sword"],
+  lengbao: ["spear"],
+  caohong: ["blade"],
+  guohuai: ["halberd"],
+  sunli: ["sword"],
+  jiling: ["sword"],
+  qiaorui: ["sword"],
+  zhangxun: ["spear"],
+  gaoshun: ["spear"],
+  chengong: ["sword"],
+  caoxing: ["sword"],
+  wangping: ["spear"],
+  liaohua: ["spear"],
+  zhoucang: ["blade"],
+  guanhai: ["blade"],
+  peiyuanshao: ["sword"],
+  yujin: ["spear"],
+  yuejin: ["spear"],
+  lidian: ["spear"],
+  pangde: ["spear", "blade"],
+  zhangxiu: ["spear"],
+  caozhen: ["halberd"],
+  guojia: ["sword"],
+  xunyu: ["sword"],
+  zhonghui: ["sword"],
+  haozhao: ["sword"],
+  wangshuang: ["halberd"],
+  sunjian: ["blade"],
+  lusu: ["sword"],
+  lvmeng: ["blade"],
+  chengpu: ["spear"],
+  handang: ["blade"],
+  zhoutai: ["blade"],
+  lingtong: ["blade"],
+  xusheng: ["blade"],
+  dingfeng: ["blade"],
+  liru: ["sword"],
+  lijue: ["spear"],
+  guosi: ["spear"],
+  fanchou: ["spear"],
+  niufu: ["axe"],
+  zhangji: ["spear"],
+  shenpei: ["sword"],
+  jushou: ["sword"],
+  tianfeng: ["sword"],
+  chunyuqiong: ["spear"],
+  yuanshang: ["sword"],
+  yuanxi: ["sword"],
+  yangfeng: ["spear"],
+  leibo: ["spear"],
+  chenlan: ["spear"],
+  liuxun: ["sword"],
+  zangba: ["spear"],
+  houcheng: ["spear"],
+  weixu: ["spear"],
+  songxian: ["spear"],
+  wenpin: ["spear"],
+  kuaiyue: ["sword"],
+};
+
+/** 武将会使的兵器；没有专门配置的按剑算。 */
+export function weaponTypesFor(def: SagaGeneralDef | undefined): WeaponType[] {
+  if (!def) return ["sword"];
+  return def.arms ?? SAGA_ARMS_BY_ID[def.id] ?? ["sword"];
+}
+
+/** 装备类物品的槽位；消耗品与军需返回 null。 */
+export function gearSlotOf(item: SagaItemDef | undefined): GearSlot | null {
+  if (!item) return null;
+  if (item.slot) return item.slot;
+  if (item.kind === "weapon" || item.kind === "armor" || item.kind === "helmet" || item.kind === "belt"
+    || item.kind === "pendant" || item.kind === "boots" || item.kind === "mount") {
+    return item.kind;
+  }
+  return null;
+}
+
+/** 店铺上架：按当前章节只放已到年份的货，后面的城自然卖得更好。 */
+export function shopStock(kind: SagaItemKind, chapter: number): SagaItemDef[] {
+  return SAGA_ITEMS.filter((item) => item.kind === kind && (item.chapter ?? 0) <= chapter);
+}
 
 /**
  * 智将随等级领悟计策：基础计策 + 已到等级的领悟计策，

@@ -534,8 +534,23 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.95.0（2026-11-17，原版十阵 / 军师 / 聚落入口清单）
+**当前版本**：v0.96.0（2026-11-17，五人出战 / 阵亡与复活 / 武库分柜）
 **下一版本**：待定
+
+- v0.96.0 五人出战与阵亡停尸（`SAGA_RULESET` 15 → 16）：
+  `types.ts` 新增 `SAGA_DEPLOY_SIZE = 5`、`SAGA_CARRY_LIMIT = 8`、`WeaponType`、`GearSlot`；
+  `SagaGeneralState` 增加盔 / 带 / 坠 / 靴 / 马五槽与 `items` / `troops`；
+  `SagaCommand` 增加 `use` / `drop` / `sell`，`equip` 槽改为 `GearSlot`。
+  `data.ts` 物品表补兵器类型、章节门槛、盔带坠靴与五匹名马、招魂丹 / 回魂丹；
+  新增 `SAGA_ARMS_BY_ID`、`weaponTypesFor`、`gearSlotOf`、`shopStock`。
+  `state.ts` 初始关羽改刀、张飞改矛；归一化支持全部装备槽、每人 8 种道具与残兵；
+  `grantItem` 改发到武将随身，旧 `bag` 自动拆分；`equipGeneral` 校验兵器类型；
+  `generalStats` 合计护具防御与坐骑速度。
+  `battle.ts` 每场只取前 5 名活着的武将；SP 改为 4 + 智力/15 + 等级/2、上限 48；
+  胜利不复活败将，全灭则在最近客栈醒来各回两成。
+  `run.ts` 重放支持 `use` / `drop` / `sell`，客栈只补活着的武将，`wokeAtInn` 保持 `field`。
+  `game.tsx` 武库四柜、分城货架、七槽换装、武将物品页、5 人出战 / 替补标记与阵亡提示。
+  `notice.ts` / `package.json` / `package-lock.json` 升到 0.96.0。
 
 - v0.95.0 阵形与军师（`SAGA_RULESET` 14 → 15）：
   `types.ts` `FormationId` 增加 `sankai/chongfang/baima/yizi/jingji/bagua`，`SagaFormationDef`

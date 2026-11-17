@@ -6,6 +6,7 @@ import {
   SAGA_ITEM_BY_ID,
   SAGA_TACTICS,
   SAGA_TRAIT_BY_ID,
+  gearSlotOf,
   tacticsFor,
   traitStats,
 } from "./data";
@@ -610,16 +611,36 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
       }
       case "equip": {
         const slot = it.slot;
-        if (slot !== "weapon" && slot !== "armor") break;
+        if (slot !== "weapon" && slot !== "armor" && slot !== "helmet" && slot !== "belt"
+          && slot !== "pendant" && slot !== "boots" && slot !== "mount") break;
         const g = typeof it.g === "string" ? it.g.slice(0, 32) : "";
         if (!g) break;
         const itemId =
           it.i === null || it.i === undefined
             ? null
-            : typeof it.i === "string" && SAGA_ITEM_BY_ID.get(it.i)?.kind === slot
+            : typeof it.i === "string" && gearSlotOf(SAGA_ITEM_BY_ID.get(it.i)) === slot
               ? it.i
               : undefined;
         if (itemId !== undefined) out.push({ k: "equip", g, slot, i: itemId });
+        break;
+      }
+      case "use": {
+        const g = typeof it.g === "string" ? it.g.slice(0, 32) : "";
+        const i = typeof it.i === "string" && SAGA_ITEM_BY_ID.get(it.i)?.kind === "consumable" ? it.i : "";
+        const target = typeof it.target === "string" ? it.target.slice(0, 32) : undefined;
+        if (g && i) out.push({ k: "use", g, i, target });
+        break;
+      }
+      case "drop": {
+        const g = typeof it.g === "string" ? it.g.slice(0, 32) : "";
+        const i = typeof it.i === "string" ? it.i.slice(0, 32) : "";
+        if (g && i) out.push({ k: "drop", g, i });
+        break;
+      }
+      case "sell": {
+        const i = typeof it.i === "string" ? it.i.slice(0, 32) : "";
+        const g = typeof it.g === "string" ? it.g.slice(0, 32) : undefined;
+        if (i && SAGA_ITEM_BY_ID.has(i)) out.push({ k: "sell", i, g });
         break;
       }
       case "party": {
@@ -708,6 +729,13 @@ export function sagaRunUntouched(run: SagaRun): boolean {
 }
 
 export function createReplayState(run: SagaRun): SagaReplayState {
+  const save = cloneSave(run.startSave);
+  const partyTroops: Record<string, number> = {};
+  for (const general of save.party) {
+    const stats = generalStats(general, save.gearLevels, run.rules ?? 1);
+    partyTroops[general.id] =
+      typeof general.troops === "number" ? general.troops : Math.max(1, stats.maxTroops);
+  }
   return {
     scene: "field",
     // 旧规则行军从旧规则重放，到 `rulesFrom` 再切到当前规则。
@@ -715,10 +743,10 @@ export function createReplayState(run: SagaRun): SagaReplayState {
     clearedNodes: [],
     completed: 0,
     victory: false,
-    save: cloneSave(run.startSave),
+    save,
     inventory: { bonus: {} },
     buffs: { troopPct: 0, attackPct: 0, speed: 0, tacticPoints: 0 },
-    partyTroops: {},
+    partyTroops,
     battle: null,
     goldGained: 0,
     expGained: 0,
@@ -748,14 +776,17 @@ export function bankSagaGold(state: SagaReplayState, gold: number, bank: SagaBan
 export function restAtInn(state: SagaReplayState): boolean {
   let healed = 0;
   for (const general of state.save.party) {
-    const stats = generalStats(general, undefined, state.rules);
+    const stats = generalStats(general, state.save.gearLevels, state.rules);
     const maxTroops = Math.max(
       1,
       Math.round(stats.maxTroops * (1 + state.buffs.troopPct / 100)),
     );
     const current = Math.min(maxTroops, state.partyTroops[general.id] ?? maxTroops);
+    // 阵亡者不会因为住店自动复活，得用招魂计或复活丹。
+    if (current <= 0) continue;
     if (current >= maxTroops) continue;
     state.partyTroops[general.id] = maxTroops;
+    general.troops = maxTroops;
     healed += maxTroops - current;
   }
   return healed > 0;
@@ -931,6 +962,59 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
       case "equip":
         equipGeneral(state.save, command.g, command.slot, command.i);
         break;
+      case "use": {
+        const owner = findGeneral(state.save, command.g);
+        const item = SAGA_ITEM_BY_ID.get(command.i);
+        if (!owner || !item || (owner.items?.[item.id] ?? 0) <= 0) break;
+        const target = findGeneral(state.save, command.target ?? command.g);
+        if (!target) break;
+        const stats = generalStats(target, state.save.gearLevels, state.rules);
+        const maxTroops = Math.max(1, Math.round(stats.maxTroops * (1 + state.buffs.troopPct / 100)));
+        const current = state.partyTroops[target.id] ?? target.troops ?? maxTroops;
+        if (item.revive && current <= 0) {
+          const revived = Math.max(1, Math.round(maxTroops * item.revive));
+          state.partyTroops[target.id] = revived;
+          target.troops = revived;
+        } else if (item.heal && current > 0) {
+          const healed = Math.min(maxTroops, current + item.heal);
+          state.partyTroops[target.id] = healed;
+          target.troops = healed;
+        } else {
+          break;
+        }
+        const left = (owner.items?.[item.id] ?? 0) - 1;
+        owner.items = { ...(owner.items ?? {}) };
+        if (left > 0) owner.items[item.id] = left;
+        else delete owner.items[item.id];
+        break;
+      }
+      case "drop": {
+        const owner = findGeneral(state.save, command.g);
+        if (!owner || (owner.items?.[command.i] ?? 0) <= 0) break;
+        const left = (owner.items?.[command.i] ?? 0) - 1;
+        owner.items = { ...(owner.items ?? {}) };
+        if (left > 0) owner.items[command.i] = left;
+        else delete owner.items[command.i];
+        break;
+      }
+      case "sell": {
+        const item = SAGA_ITEM_BY_ID.get(command.i);
+        if (!item) break;
+        const owner = command.g ? findGeneral(state.save, command.g) : null;
+        if (owner && (owner.items?.[item.id] ?? 0) > 0) {
+          const left = (owner.items?.[item.id] ?? 0) - 1;
+          owner.items = { ...(owner.items ?? {}) };
+          if (left > 0) owner.items[item.id] = left;
+          else delete owner.items[item.id];
+        } else if ((state.save.gear[item.id] ?? 0) > 0) {
+          state.save.gear[item.id] -= 1;
+          if (state.save.gear[item.id] <= 0) delete state.save.gear[item.id];
+        } else {
+          break;
+        }
+        state.save.gold = Math.min(9_999_999, state.save.gold + Math.max(1, Math.floor(item.priceTickets / 2)));
+        break;
+      }
       case "party":
         setActiveParty(state.save, command.active);
         break;
@@ -987,7 +1071,7 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
           // 大地图：破本区本阵＝本区平定，城堡与关卡同步开通，区号推进到下一区。
           if (clearedNode?.kind === "boss") pacifyChapter(state, clearedNode.chapter);
         } else if (battle.phase === "lost") {
-          state.scene = "lost";
+          state.scene = state.wokeAtInn ? "field" : "lost";
         }
         break;
       }
@@ -1006,7 +1090,7 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
         if (battle.phase === "won") {
           state.scene = "field";
         } else if (battle.phase === "lost") {
-          state.scene = "lost";
+          state.scene = state.wokeAtInn ? "field" : "lost";
         }
         break;
       }
@@ -1124,7 +1208,9 @@ export function autoBattleRounds(
   const rounds: SagaRoundCommand[][] = [];
   let guard = 0;
   const itemCount = (itemId: string): number =>
-    (scratch.inventory.bonus[itemId] ?? 0) + (scratch.save.bag[itemId] ?? 0);
+    (scratch.inventory.bonus[itemId] ?? 0) +
+    (scratch.save.bag[itemId] ?? 0) +
+    scratch.save.party.reduce((sum, general) => sum + (general.items?.[itemId] ?? 0), 0);
   while (battle.phase === "select" && guard < SAGA_MAX_ROUNDS_PER_BLOCK) {
     guard += 1;
     const round: SagaRoundCommand[] = [];
