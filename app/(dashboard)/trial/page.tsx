@@ -249,6 +249,7 @@ export default async function TrialPage() {
             <TrialGame
               initialRun={activeRun}
               save={save}
+              hasSave={saveState.sourceRunId !== null || activeRun !== null}
               initialTickets={coupon.tickets}
               coupon={coupon}
               bank={{

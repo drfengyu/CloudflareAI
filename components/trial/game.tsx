@@ -118,6 +118,7 @@ import {
   autoSaveTrialAction,
   buyTrialCouponsAction,
   buyTrialItemAction,
+  settleTrialArchiveAction,
   startTrialAction,
   upgradeTrialGearAction,
 } from "@/app/(dashboard)/trial/actions";
@@ -147,7 +148,7 @@ import {
 } from "./scenes";
 import { WalkTown } from "./town";
 
-type PanelId = FieldFacilityId | "camp" | "army" | "status" | "dex" | "notice" | null;
+type PanelId = FieldFacilityId | "camp" | "army" | "status" | "dex" | "notice" | "archive" | null;
 
 /** 公告已读标记：按「最新一条公告 id」记在本机。 */
 const NOTICE_SEEN_KEY = "trial-saga-notice-seen";
@@ -208,6 +209,8 @@ export interface TrialGameProps {
   initialRun: ActiveTrialRun | null;
   save: TrialSave;
   initialTickets: number;
+  /** 服务端是否已经有存档（含未收兵的行军）：入口封面据此决定「继续游戏」能不能点。 */
+  hasSave: boolean;
   /** 当前活动券视图：城中的活动券礼包入口直接复用，也用来随余额刷新。 */
   coupon: ActivityCouponView;
   /** 钱庄汇率：没有进行中的行军时按后台当前配置展示。 */
@@ -348,6 +351,12 @@ export function TrialGame(props: TrialGameProps) {
   const [banner, setBanner] = useState<{ kind: "won" | "lost"; name: string; gold: number; exp: number } | null>(null);
   /** 公告红点：只读本机已读记录，服务端渲染时按已读处理。 */
   const noticeUnread = useSyncExternalStore(subscribeNoticeSeen, noticeUnreadSnapshot, () => false);
+  /** 入口封面：进页面先停在封面，选「继续游戏 / 新的征途」再进关；结算完也回到这里。 */
+  const [coverOpen, setCoverOpen] = useState(true);
+  /** 档案商店：结算确认（问「是否结算所有金币为 tcr、结束游戏并清空存档」）。 */
+  const [settleAsk, setSettleAsk] = useState(false);
+  /** 本机刚结算过存档：服务端刷新回来之前先把「继续游戏」收起来，免得点到空档。 */
+  const [saveCleared, setSaveCleared] = useState(false);
   /** 城中街道场景：进城后把大地图盖住，铺子从街景里进。 */
   const [inTown, setInTown] = useState(false);
   /** 打开版本公告：先把城景/战场让开，再记已读。 */
@@ -381,6 +390,12 @@ export function TrialGame(props: TrialGameProps) {
   const heroDef = SAGA_GENERAL_BY_ID.get(save.party[0]?.id ?? "liubei");
   const chapter = SAGA_CHAPTERS[Math.min(SAGA_CHAPTERS.length - 1, save.chapter)];
   const finished = save.stats.wins >= SAGA_CHAPTERS.length;
+  /** 入口封面用：服务端有存档，或者这一局还没结算、本机也没刚清档。 */
+  const saveExists = props.hasSave && !saveCleared;
+  /** 档案商店的结算预览：整份存档金币按后台钱庄汇率折 tcr（与服务端同一口径）。 */
+  const archiveTcrPreview = Math.floor(
+    Math.max(0, Math.trunc(save.gold || 0)) / Math.max(1, props.bank.goldPerTcr),
+  );
   /** 进行中的行军用出城时冻结的汇率；没出城时按后台当前配置预览。 */
   const bank: SagaBankPolicy = useMemo(
     () => run?.bank ?? { ...props.bank, goldPerTcrBuy: 0 },
@@ -622,12 +637,58 @@ export function TrialGame(props: TrialGameProps) {
       setVisitedPois([]);
       setSeenScenes([]);
       setDialogue(chapterIntroScene(data.run.startSave.chapter));
+      setCoverOpen(false);
       gameAudio.play("encounter");
       toast.success(`前往 ${SAGA_CHAPTERS[Math.min(SAGA_CHAPTERS.length - 1, data.run.startSave.chapter)].town}`);
     } finally {
       setBusy(null);
     }
   }, []);
+
+  /** 档案商店「结算并结束」：金币折 tcr 发到钱包、服务端清空存档，本机缓存一并清掉。 */
+  const settleArchive = useCallback(async () => {
+    if (busy) return;
+    setBusy("settle");
+    try {
+      const result = await settleTrialArchiveAction(
+        runId ? { runId, commands } : undefined,
+      );
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      if (run && runId) {
+        try {
+          window.localStorage.removeItem(`trial-saga:${runId}:${run.seed}`);
+          window.localStorage.removeItem(`trial-saga-town:${runId}:${run.seed}`);
+        } catch {
+          // 隐私模式下 localStorage 会抛，忽略即可。
+        }
+      }
+      setRun(null);
+      setRunId(null);
+      setCommands([]);
+      setSettlement(null);
+      setBanner(null);
+      setDialogue(null);
+      setPanel(null);
+      setInTown(false);
+      setCampNode(null);
+      setVisitedPois([]);
+      setSeenScenes([]);
+      setSettleAsk(false);
+      setSaveCleared(true);
+      setCoverOpen(true);
+      toast.success(
+        result.data.tcr > 0
+          ? `已结算 ${formatCredits(result.data.gold)} 金 → ${result.data.tcr} tcr，存档已清空`
+          : "存档已清空",
+      );
+      router.refresh();
+    } finally {
+      setBusy(null);
+    }
+  }, [busy, commands, run, runId, router]);
 
   /** 城内所有买卖都走活动券：装备、伤药、军需和客栈共用这一个入口。 */
   const buyItem = useCallback(
@@ -1615,7 +1676,9 @@ export function TrialGame(props: TrialGameProps) {
       ? "版本公告"
       : panel === "dex"
       ? "武将图鉴"
-      : panel === "status"
+      : panel === "archive"
+        ? "档案商店"
+        : panel === "status"
         ? "军中一览"
         : panel === "camp"
           ? `敌营 · ${run?.nodes[campNode ?? 0]?.name ?? ""}`
@@ -2305,6 +2368,111 @@ export function TrialGame(props: TrialGameProps) {
             </div>
             <div className={PANEL_BODY}>
               {panel === "notice" ? <NoticeBoard /> : null}
+
+              {panel === "archive" ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground">
+                    档案里记着这一路的战功：谁离下一级还差多少经验、金币能折多少 tcr，都在这里看。
+                    点「结算并结束」会把整份存档的金币折成 tcr 发到钱包，然后清空存档——
+                    清空之后就没有「继续游戏」了，下次只能「新的征途」。
+                  </p>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="rounded-lg border border-border p-2">
+                      <p className="text-xs text-muted-foreground">当前地方</p>
+                      <p className="mt-0.5 text-sm font-medium">
+                        {chapter.town} · {chapter.name}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-border p-2">
+                      <p className="text-xs text-muted-foreground">存档金币</p>
+                      <p className="mt-0.5 text-sm font-medium tabular-nums">
+                        {formatCredits(save.gold)} 金
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-border p-2">
+                      <p className="text-xs text-muted-foreground">可折 tcr</p>
+                      <p className="mt-0.5 text-sm font-medium tabular-nums">
+                        {archiveTcrPreview} tcr
+                        <span className="ml-1 text-[11px] font-normal text-muted-foreground">
+                          （{props.bank.goldPerTcr} 金 = 1 tcr）
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-sm font-medium">升级经验</p>
+                    <div className="space-y-1">
+                      {[...save.party, ...save.reserve].map((member) => {
+                        const need =
+                          member.level >= SAGA_MAX_LEVEL ? 0 : expToNext(member.level) - member.exp;
+                        return (
+                          <div
+                            key={member.id}
+                            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded border border-border px-2 py-1.5 text-xs"
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="font-medium">{generalName(member.id)}</span>
+                              <span className="rounded border border-border px-1 tabular-nums text-muted-foreground">
+                                Lv {member.level}
+                              </span>
+                            </span>
+                            <span className="tabular-nums text-muted-foreground">
+                              {member.level >= SAGA_MAX_LEVEL
+                                ? "已到 50 级封顶"
+                                : `经验 ${member.exp} / ${expToNext(member.level)} · 距下一级还差 ${Math.max(0, need)}`}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-amber-500/35 bg-amber-500/5 p-3">
+                    <p className="text-sm font-medium">结算并结束</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      把 {formatCredits(save.gold)} 金按 {props.bank.goldPerTcr} 金 = 1 tcr 折成{" "}
+                      {archiveTcrPreview} tcr 发到钱包，然后清空这份存档、回到游戏入口。
+                    </p>
+                    {settleAsk ? (
+                      <div className="mt-2 rounded border border-amber-500/40 bg-background/60 p-2.5">
+                        <p className="text-sm font-medium">
+                          是否结算所有金币为 tcr、结束游戏并清空存档？
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          选「是」结算并删档，回到入口，之后只能重新开始；选「否」继续游戏。
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy === "settle"}
+                            onClick={() => setSettleAsk(false)}
+                          >
+                            否，继续游戏
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={busy === "settle"}
+                            onClick={() => void settleArchive()}
+                          >
+                            {busy === "settle" ? "结算中…" : "是，结算并结束"}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="mt-2"
+                        disabled={Boolean(busy) || !saveExists}
+                        onClick={() => setSettleAsk(true)}
+                      >
+                        <Coins className="h-3.5 w-3.5" />
+                        结算并结束
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ) : null}
 
               {panel === "record" ? (
                 <div className="space-y-3">
@@ -3109,64 +3277,92 @@ export function TrialGame(props: TrialGameProps) {
           </div>
         ) : null}
 
-        {!run && !settlement ? (
-          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm sm:absolute sm:z-20">
-            <div className="max-h-full w-full max-w-lg overflow-y-auto overscroll-contain rounded-xl border border-border bg-card p-5 shadow-2xl">
-              <p className="text-xs uppercase tracking-[0.3em] text-muted-foreground">三国讨逆传</p>
-              <h3 className="mt-1 text-xl font-semibold">
-                {chapter.town} · {chapter.name}
-              </h3>
-              <p className="mt-2 text-sm text-muted-foreground">{chapter.blurb}</p>
-              <div className="mt-2 space-y-1 border-l-2 border-primary/40 pl-2 text-xs text-muted-foreground">
-                {chapter.story.map((line) => (
-                  <p key={line}>{line}</p>
-                ))}
-              </div>
-              {finished ? (
-                <div className="mt-3 rounded-lg border border-primary/40 bg-primary/5 p-3 text-xs">
-                  <p className="text-sm font-medium">全剧终</p>
-                  <p className="mt-1 text-muted-foreground">
-                    八处地方皆定，讨逆之路已经走完。武将、图鉴与战史都留在存档里。
+        {coverOpen && !settlement ? (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm sm:absolute sm:z-20">
+            <div className="max-h-full w-full max-w-xl overflow-y-auto overscroll-contain rounded-xl border border-amber-700/45 bg-[#120f0a] shadow-2xl">
+              <div className="relative">
+                <SceneCanvas backdrop="field" height={150} className="rounded-t-xl opacity-90" />
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-b from-black/60 via-black/45 to-[#120f0a] text-center">
+                  <p className="text-[10px] uppercase tracking-[0.5em] text-amber-200/60">SANGUO TRIAL</p>
+                  <h2
+                    className="mt-1 text-3xl font-semibold tracking-[0.25em] text-amber-100"
+                    style={{ fontFamily: '"Noto Serif SC", "Songti SC", "STSong", serif' }}
+                  >
+                    三国讨逆传
+                  </h2>
+                  <p className="mt-1.5 text-xs text-amber-200/70">
+                    {chapter.town} · {chapter.name}
                   </p>
                 </div>
-              ) : (
-                <>
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    行军一线：{chapter.stages.join(" · ")}
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                    <span className={HUD_CELL}>{save.party.length} 将上阵</span>
-                    <span className={HUD_CELL}>{formatCredits(save.gold)} 金</span>
-                    <span className={HUD_CELL}>战力 {partyPower(save)}</span>
-                    <span className={HUD_CELL}>{tickets} 张活动券</span>
+              </div>
+              <div className="space-y-3 p-5">
+                <p className="text-sm text-muted-foreground">{chapter.blurb}</p>
+                {finished ? (
+                  <div className="rounded-lg border border-primary/40 bg-primary/5 p-3 text-xs">
+                    <p className="text-sm font-medium">全剧终</p>
+                    <p className="mt-1 text-muted-foreground">
+                      八处地方皆定，讨逆之路已经走完。武将、图鉴与战史都留在存档里，
+                      可去档案商店把金币结算成 tcr 收个尾。
+                    </p>
                   </div>
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    从{chapter.town}出城免费。出城前可在城中街景里逛铁匠铺、药铺、军需帐、客栈、钱庄、
-                    酒馆、营帐、训练场、活动券与桃园碑，铺子里都有掌柜招呼，买卖仍用活动券。
-                    出城后是张俯视大地图，方向键/WASD 自由行走，沿官道会路过村庄、祠堂与渡口，
-                    走过去能听一段本地故事、记一条军令；走到哪座营跟前就打哪座，
-                    主帅本阵要先拔尽其余 {props.nodeCount - 1} 座营。营寨全部攻破、剧情才会推进到下一处地方。
-                    官道、草地、海边滩涂与树林会随机杀出散兵、山贼、海贼、盗贼，不设场次上限与冷却，
-                    只有城墙内与城门洞不会遇敌。每一步都会自动存档：撤退只结束当前这一场仗，
-                    兵败也能回城住店重整，等级、金币、装备与招降武将都不会丢。
-                  </p>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button onClick={() => void startRun()} disabled={busy === "start"}>
-                      {busy === "start" ? "出发中…" : `从${chapter.town}出发`}
-                    </Button>
-                    <Button variant="outline" onClick={() => setPanel("record")}>
-                      查看存档与图鉴
-                    </Button>
-                  </div>
-                </>
-              )}
-              {finished ? (
-                <div className="mt-4">
-                  <Button variant="outline" onClick={() => setPanel("record")}>
-                    查看存档与图鉴
+                ) : (
+                  <>
+                    <div className="space-y-1 border-l-2 border-primary/40 pl-2 text-xs text-muted-foreground">
+                      {chapter.story.map((line) => (
+                        <p key={line}>{line}</p>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      行军一线：{chapter.stages.join(" · ")}
+                    </p>
+                    <div className="flex flex-wrap gap-2 text-xs">
+                      <span className={HUD_CELL}>{save.party.length} 将上阵</span>
+                      <span className={HUD_CELL}>{formatCredits(save.gold)} 金</span>
+                      <span className={HUD_CELL}>战力 {partyPower(save)}</span>
+                      <span className={HUD_CELL}>{tickets} 张活动券</span>
+                    </div>
+                  </>
+                )}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <Button
+                    onClick={() => void startRun()}
+                    disabled={busy === "start" || saveExists}
+                    title={saveExists ? "已有存档：要重新开始，先在档案商店结算清空存档" : undefined}
+                  >
+                    <Swords className="h-4 w-4" />
+                    {busy === "start" ? "出发中…" : "新的征途"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      if (run) {
+                        setCoverOpen(false);
+                        return;
+                      }
+                      void startRun();
+                    }}
+                    disabled={busy === "start" || !saveExists}
+                  >
+                    <ScrollText className="h-4 w-4" />
+                    {busy === "start" ? "读取中…" : "继续游戏"}
                   </Button>
                 </div>
-              ) : null}
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  {saveExists
+                    ? "已有存档：「继续游戏」接着走当前剧情；要重新开始，先去档案商店把金币结算成 tcr、清空存档。"
+                    : "还没有存档：「继续游戏」要等有存档后才能用；点「新的征途」从桃园出发。"}
+                </p>
+                <div className="flex flex-wrap gap-2 border-t border-border/60 pt-3">
+                  <Button variant="ghost" size="sm" onClick={() => setPanel("archive")}>
+                    <Coins className="h-3.5 w-3.5" />
+                    档案商店
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setPanel("record")}>
+                    <ScrollText className="h-3.5 w-3.5" />
+                    存档与图鉴
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         ) : null}
@@ -3183,6 +3379,7 @@ export function TrialGame(props: TrialGameProps) {
               setInTown(false);
               setVisitedPois([]);
               setSeenScenes([]);
+              setCoverOpen(true);
               router.refresh();
             }}
           />
@@ -3226,6 +3423,18 @@ export function TrialGame(props: TrialGameProps) {
         >
           <Flag className="h-3.5 w-3.5" />
           军情
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={Boolean(battle) || Boolean(settlement)}
+          onClick={() => {
+            setInTown(false);
+            setPanel("archive");
+          }}
+        >
+          <Coins className="h-3.5 w-3.5" />
+          档案
         </Button>
         {(run ? field.camps : []).map((camp) => {
           const name = run?.nodes[camp.node]?.name ?? "敌营";

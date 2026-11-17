@@ -28,13 +28,27 @@ export interface SagaMaintenanceWindow {
 }
 
 /** 游戏内公告版本号（与站点版本对齐）。 */
-export const SAGA_NOTICE_VERSION = "0.92.0";
+export const SAGA_NOTICE_VERSION = "0.93.0";
 
 /** 公告面板只展示最新三条，更早的留档不删。 */
 export const SAGA_NOTICE_VISIBLE = 3;
 
 /** 最新公告：按版本从新到旧。 */
 export const SAGA_NOTICES: SagaNoticeEntry[] = [
+  {
+    id: "notice-0.93.0",
+    version: "0.93.0",
+    date: "2026-11-17",
+    kind: "update",
+    title: "入口封面、档案商店与结算删档：新的征途 / 继续游戏，金币一键折 tcr 收尾",
+    lines: [
+      "进游戏先停在入口封面：有存档才点得动「继续游戏」，没有存档时只有「新的征途」——从桃园或当前城镇开局。",
+      "游戏里多了「档案商店」：列出每名武将的等级、经验与「距下一级还差多少经验」，满 50 级会注明封顶。",
+      "档案商店底部是「结算并结束」：会把整份存档的金币按钱庄汇率折成 tcr 发到钱包，问一句「是否结算所有金币为 tcr、结束游戏并清空存档」——选否继续玩，选是结完账回入口。",
+      "结算删档后这一轮的存档就没了，下次进来只剩「新的征途」；钱包里的 tcr 不受影响。",
+      "身上带着没打完的行军也能结算：服务端会按已落档的指令重放一遍，把这趟挣到的金币一并算进去。",
+    ],
+  },
   {
     id: "notice-0.92.0",
     version: "0.92.0",

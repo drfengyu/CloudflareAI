@@ -8,9 +8,11 @@ import {
   buyTrialCoupons,
   buyTrialItem,
   saveTrialRunProgress,
+  settleTrialArchive,
   startTrialRun,
   submitTrialRun,
   upgradeTrialGear,
+  type ArchiveSettlementResult,
   type CouponPurchaseResult,
   type GearUpgradeResult,
   type ItemPurchaseResult,
@@ -89,6 +91,31 @@ export async function autoSaveTrialAction(input: {
     return { success: true, data };
   } catch (error) {
     return fail(error, "自动存档失败");
+  }
+}
+
+/** 档案商店：结算整份存档的金币为 tcr，并清空本轮活动的行军记录（下次只能重新开始）。 */
+export async function settleTrialArchiveAction(input?: {
+  runId?: string;
+  commands?: unknown[];
+}): Promise<ActionResult<ArchiveSettlementResult>> {
+  try {
+    const userId = await requireUser();
+    if (!(await checkRateLimit(`trial-settle:${userId}`, { window: 60_000, limit: 5 }))) {
+      return { success: false, error: "操作过于频繁，请稍后再试" };
+    }
+    const config = await getTrialConfig();
+    const data = await settleTrialArchive({
+      userId,
+      config,
+      runId: typeof input?.runId === "string" ? input.runId : undefined,
+      commands: Array.isArray(input?.commands) ? input.commands : undefined,
+    });
+    revalidatePath("/trial");
+    revalidatePath("/wallet");
+    return { success: true, data };
+  } catch (error) {
+    return fail(error, "结算失败");
   }
 }
 

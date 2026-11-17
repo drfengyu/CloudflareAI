@@ -888,3 +888,98 @@ export async function buyTrialCoupons(input: {
     gold: gold - goldCost,
   };
 }
+
+export interface ArchiveSettlementResult {
+  /** 结算掉的金币（整份存档的余额）。 */
+  gold: number;
+  /** 折成发到钱包的 tcr。 */
+  tcr: number;
+  /** 之前是否真的有存档；false 表示没有可结算的东西。 */
+  hadSave: boolean;
+}
+
+/**
+ * 档案商店「结算并结束」：把整份存档的金币按钱庄汇率折成 tcr 发到钱包，
+ * 再清空本轮活动的全部行军记录——刷新后只剩「新的征途」。
+ *
+ * 顺序是「先冻住行军 → 再发币 → 最后删行」：发币失败就把状态放回原样让用户重试；
+ * 发币成功后的删行只删被冻住的行，连点第二次找不到可结算的存档，直接返回 0。
+ */
+export async function settleTrialArchive(input: {
+  userId: string;
+  config: TrialConfig;
+  /** 客户端还没赶上自动存档的指令：能用就用，「这趟刚打下来的金币」不会漏。 */
+  runId?: string;
+  commands?: unknown[];
+}): Promise<ArchiveSettlementResult> {
+  const activityKey = trialActivityKey(input.config);
+  if (!activityKey) throw new TrialError("活动轮次无效");
+
+  // 未收兵的行军：按服务端已落档的指令重放，把这趟打来的金币一并算进结算。
+  const active = await findActiveTrialRun(input.userId, activityKey);
+  let save: TrialSave;
+  let hadSave: boolean;
+  if (active) {
+    // 客户端指令只有比库里长才采信，短的一截不会把已经打过的仗抹掉。
+    const incoming =
+      active.runId === input.runId ? mergeRunCommands(active.run, input.commands) : null;
+    save = replaySagaRun(active.run, incoming ?? sanitizeSagaCommands(active.run.commands ?? []))
+      .state.save;
+    hadSave = true;
+  } else {
+    const loaded = await loadTrialSave(input.userId, activityKey);
+    save = loaded.save;
+    hadSave = loaded.sourceRunId !== null;
+  }
+  if (!hadSave) return { gold: 0, tcr: 0, hadSave: false };
+
+  const gold = Math.max(0, Math.trunc(save.gold));
+  const goldPerTcr = Math.max(1, Math.trunc(input.config.bankGoldPerTcr));
+  const tcr = Math.floor(gold / goldPerTcr);
+
+  // 冻住本轮活动的全部行军：冻住的行不再被 loadTrialSave / findActiveTrialRun 读到，
+  // 并发或连点也不会重复结算。
+  const rows = await db
+    .select({ id: trialRuns.id, status: trialRuns.status })
+    .from(trialRuns)
+    .where(and(eq(trialRuns.userId, input.userId), eq(trialRuns.activityKey, activityKey)));
+  const frozen: { id: string; status: string }[] = [];
+  for (const row of rows) {
+    const updated = await d1Run(
+      "UPDATE trial_run SET status = 'settling' WHERE id = ? AND userId = ? AND status = ?",
+      [row.id, input.userId, row.status],
+    );
+    if (updated.changes === 1) frozen.push({ id: row.id, status: row.status });
+  }
+  if (frozen.length === 0) return { gold: 0, tcr: 0, hadSave: false };
+
+  if (tcr > 0) {
+    try {
+      await grantTempCredits({
+        userId: input.userId,
+        amount: tcr,
+        topupType: TOPUP_TYPE_TRIAL,
+        description: `三国讨逆传 档案结算 ${gold} 金`,
+        validDays: input.config.rewardValidDays,
+      });
+    } catch (error) {
+      // 发币没成，把冻住的行放回原状态，用户刷新后还能重试。
+      for (const row of frozen) {
+        await d1Run("UPDATE trial_run SET status = ? WHERE id = ? AND status = 'settling'", [
+          row.status,
+          row.id,
+        ]).catch(() => undefined);
+      }
+      throw error;
+    }
+  }
+
+  for (const row of frozen) {
+    await d1Run("DELETE FROM trial_run WHERE id = ? AND userId = ? AND status = 'settling'", [
+      row.id,
+      input.userId,
+    ]);
+  }
+
+  return { gold, tcr, hadSave: true };
+}

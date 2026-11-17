@@ -534,9 +534,21 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.92.0（2026-11-16，50 级封顶 + 兵力 100→20000 曲线 + 伤害按兵力量级折算）
+**当前版本**：v0.93.0（2026-11-17，入口封面 + 档案商店 + 结算删档）
 **下一版本**：待定
 
+- v0.93.0 入口封面 / 档案商店 / 结算删档（不动战斗规则，`SAGA_RULESET` 仍 14）：
+  `components/trial/game.tsx` 新增 `coverOpen`（进页面先停在封面，结算完再回来）、
+  `settleAsk`、`saveCleared`；`TrialGameProps` 新增 `hasSave`，由 `page.tsx` 按
+  `saveState.sourceRunId !== null || activeRun !== null` 传入。封面给「新的征途 / 继续游戏」
+  两个入口：有存档时「新的征途」置灰（要先在档案商店结算清档），没存档时「继续游戏」置灰。
+  `PanelId` 新增 `archive`（面板标题「档案商店」，HUD 也加了「档案」按钮）：列当前地方、
+  存档金币、可折 tcr，以及每名武将 `expToNext(level) - exp`；底部「结算并结束」先问
+  「是否结算所有金币为 tcr、结束游戏并清空存档」，选「是」调 `settleTrialArchiveAction`。
+  `lib/trial/store.ts` 新增 `settleTrialArchive()`：未收兵行军按服务端已落档指令重放补金币，
+  金币按 `bankGoldPerTcr` 全量折 tcr，`grantTempCredits` + `TOPUP_TYPE_TRIAL` 进钱包；
+  写入顺序「冻住行军（`status='settling'`）→ 发币 → 删行」，发币失败放回原状态可重试，
+  连点第二次直接返回 0。`notice.ts` / `package.json` / `package-lock.json` 升到 0.93.0。
 - v0.92.0 等级封顶 30 → 50（`SAGA_RULESET` 13 → 14）：`types.ts` `SAGA_MAX_LEVEL = 50`；
   `state.ts` 新增 `SAGA_TROOP_REF_BASE = 210`（张飞 `baseTroops`，曲线 1.0 基准），
   `troopBaseline(level, rules)` 在 `rules >= 14` 时给 `round(100 × 200^((level-1)/49))`

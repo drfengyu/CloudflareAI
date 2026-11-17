@@ -5,6 +5,32 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.93.0] - 2026-11-17
+
+### 新增
+
+- **游戏入口封面**：`components/trial/game.tsx` 新增 `coverOpen`，进页面先停在封面（像素山野底图 +
+  竖排标题 + 当前城镇），提供「新的征途」「继续游戏」两个入口。
+  「继续游戏」只在服务端有存档（含未收兵行军）时可点，点了直接接着当前剧情；
+  「新的征途」在有存档时置灰并提示「先在档案商店结算清空存档」，无存档时从桃园开局。
+  封面还挂了「档案商店」「存档与图鉴」两个入口。
+- **档案商店**（`PanelId` 新增 `archive`，HUD 也加了「档案」按钮）：列出当前地方、存档金币、
+  可折 tcr，以及每名上阵 / 待命武将的等级、经验与「距下一级还差多少经验」（`expToNext(level) - exp`，
+  满 50 级标注封顶）。
+- **结算并结束（清档）**：面板底部先问「是否结算所有金币为 tcr、结束游戏并清空存档」——
+  「否」继续游戏，「是」调 `settleTrialArchiveAction`：金币按钱庄汇率（`bankGoldPerTcr`）全量折成
+  tcr 发进钱包（`grantTempCredits` + `TOPUP_TYPE_TRIAL`），随后清空本轮活动的全部 `trial_run` 行，
+  客户端清本机缓存（`trial-saga:*` / `trial-saga-town:*`）并回到封面。下次进来 `hasSave` 为 false，
+  只剩「新的征途」。
+
+### 变更
+
+- `lib/trial/store.ts` 新增 `settleTrialArchive()`：未收兵的行军按服务端已落档指令重放，
+  把这趟金币一并算进结算；写入顺序是「先冻住行军（`status='settling'`）→ 发币 → 删行」，
+  发币失败把状态放回原样可重试，连点第二次找不到存档直接返回 0，不会重复发 tcr。
+- `app/(dashboard)/trial/page.tsx` 把 `hasSave`（`sourceRunId !== null || activeRun !== null`）传给 `TrialGame`。
+- `notice.ts` `SAGA_NOTICE_VERSION` 升到 0.93.0 并补首条公告；`package.json` / `package-lock.json` 同步。
+
 ## [0.92.0] - 2026-11-16
 
 ### 变更
