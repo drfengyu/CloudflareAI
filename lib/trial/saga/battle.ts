@@ -578,11 +578,13 @@ function consumeItem(state: SagaReplayState, itemId: string): boolean {
  * 攻击力口径：普攻结算、战斗面板与头顶标签共用一份，
  * 免得界面上标的攻和实际打出来的伤害对不上。
  */
-export function battleAttackPower(actor: SagaBattleGeneral): number {
+export function battleAttackPower(actor: SagaBattleGeneral, rules = 0): number {
   if (actor.side === "player") {
     return actor.force + actor.weaponAtk + actor.level * 2;
   }
-  return Math.round(actor.force * 1.15) + actor.level * 3 + actor.weaponAtk;
+  const legacy = Math.round(actor.force * 1.15) + actor.level * 3 + actor.weaponAtk;
+  // v14 起敌军整体攻下调一成半：兵力抬到两万以后，对面每一下都比我们重太多，开局尤其难受。
+  return rules >= 14 ? Math.max(1, Math.round(legacy * 0.85)) : legacy;
 }
 
 function defenderDef(target: SagaBattleGeneral): number {
@@ -608,10 +610,8 @@ function dealDamage(
     });
     return;
   }
-  const base = Math.max(
-    8,
-    battleAttackPower(actor) - Math.round(defenderDef(target) * 0.65),
-  );
+  // v14 起敌军攻击力已按新口径压了一截（见 battleAttackPower），这里不再二次折算。
+  const base = Math.max(8, battleAttackPower(actor, battle.rules) - Math.round(defenderDef(target) * 0.65));
   const variance = 0.85 + roll(battle) * 0.3;
   const buffed = actor.buff > 0 ? 1.2 : 1;
   const guarded = target.guard ? 0.5 : 1;
@@ -619,9 +619,10 @@ function dealDamage(
   const cut = 1 - Math.min(0.5, traitTotal(target, "damageCut") + target.bondCut);
   const corps = corpsCounterFactor(battle.rules, actor.corps, target.corps);
   const skill = battle.rules >= 3 ? skillFactor(actor.level) : 1;
-  // v14 起伤害跟着兵力量级走，兵力多的一方只是更能挨。
+  // v14 起伤害跟着兵力量级走，兵力多的一方只是更能挨；我方系数略高，用来补「三打四」的人数差。
   const core =
-    forceDamage(battle.rules, actor.level, base, target.level, 0.17) ?? base;
+    forceDamage(battle.rules, actor.level, base, target.level, actor.side === "player" ? 0.3 : 0.15) ??
+    base;
   let damage = Math.max(
     4,
     Math.round(
@@ -706,8 +707,15 @@ function executeTactic(
     const resist = foe.intellect * (kind === "water" ? 0.5 : 0.4);
     const variance = 0.85 + roll(battle) * 0.3;
     const core =
-      forceDamage(battle.rules, actor.level, raw - resist, foe.level, 0.17, 0.05, 3) ??
-      Math.max(6, raw - resist);
+      forceDamage(
+        battle.rules,
+        actor.level,
+        raw - resist,
+        foe.level,
+        actor.side === "player" ? 0.2 : 0.12,
+        0.05,
+        3,
+      ) ?? Math.max(6, raw - resist);
     let damage = Math.max(6, Math.round(core * variance * countered * tacticPct * skill));
     if (allowHalf && roll(battle) < 0.22) damage = Math.round(damage * 0.5);
     foe.troops = Math.max(0, foe.troops - damage);

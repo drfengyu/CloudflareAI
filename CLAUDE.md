@@ -544,8 +544,10 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   `generalStats.maxTroops = round(troopBaseline × baseTroops / 210)`，四维成长
   `growth = rules >= 14 ? 2 : ...`（仍封顶 255）。`training.ts trainingLevelCap = min(50, 9 + wins × 6)`。
   `battle.ts` 新增 `forceDamage()`（`troopBaseline(level) × factor × 攻防比 × 等级差`，
-  等级差钳 0.7~1.15），接入普攻 0.17 / 计策伤害 0.17 / 单体回复 0.16 / 全体回复 0.10，
-  药品回复改按目标上限折算；`skillFactor` 扩到 49 级。`run.ts makeEnemy` 敌军等级
+  等级差钳 0.7~1.15），接入普攻（我方 0.30 / 敌方 0.15）、计策伤害（我方 0.20 / 敌方 0.12）、
+  单体回复 0.16、全体回复 0.10；药品回复改按目标上限折算；`skillFactor` 扩到 49 级。
+  `battleAttackPower(actor, rules)` 在 v14 下把敌军攻击力压到原式 85%（`game.tsx` / `renderer.ts`
+  都把 `battle.rules` 传进去，界面与结算同口径）。`run.ts makeEnemy` 敌军等级
   每章 +7（封顶 50，第 7 章本阵正好 50 级），带兵倍率上限随章节放开
   `min(6, 1.2 + chapter × 0.8)`。`notice.ts` 版本号与首条公告升到 0.92.0。
 - v0.91.0 敌军兵力换口径（`SAGA_RULESET` 12 → 13）：`state.ts` 新增

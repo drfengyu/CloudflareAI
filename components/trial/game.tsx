@@ -1905,7 +1905,7 @@ export function TrialGame(props: TrialGameProps) {
                         </div>
                         <p className="mt-0.5 text-[10px] tabular-nums text-white/65">
                           武 {enemy.force} · 智 {enemy.intellect} · 防 {enemy.defense} · 速 {enemy.speed} · 攻{" "}
-                          {battleAttackPower(enemy)} · 策 {enemy.tacticPoints}
+                          {battleAttackPower(enemy, battle.battle.rules)} · 策 {enemy.tacticPoints}
                         </p>
                         <p className="text-[10px] text-white/55">
                           兵器{" "}
@@ -2000,7 +2000,7 @@ export function TrialGame(props: TrialGameProps) {
                           兵 {Math.max(0, unit.troops)}/{unit.maxTroops}
                         </span>
                         <span className="text-[11px] tabular-nums text-amber-100/80">
-                          攻 {battleAttackPower(unit)}
+                          攻 {battleAttackPower(unit, battle.battle.rules)}
                         </span>
                         <span className="text-[11px] tabular-nums text-emerald-100/75">
                           防 {unit.defense}

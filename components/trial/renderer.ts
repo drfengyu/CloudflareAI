@@ -2697,7 +2697,7 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
     const marks = `${unit.guard ? "守" : ""}${unit.buff > 0 ? "鼓" : ""}${unit.confused > 0 ? "乱" : ""}`;
     const troops = Math.max(0, Math.round(unit.troops));
     // 名签口径与「敌情」面板一致：攻取 battleAttackPower，防与武 / 智 / 速一样取基础防御值。
-    const label = `${unit.name}${marks ? `·${marks}` : ""}【${SAGA_CORPS_LABEL[unit.corps]}】攻${battleAttackPower(unit)} 防${unit.defense} 兵${troops}/${unit.maxTroops}`;
+    const label = `${unit.name}${marks ? `·${marks}` : ""}【${SAGA_CORPS_LABEL[unit.corps]}】攻${battleAttackPower(unit, options.battle.rules)} 防${unit.defense} 兵${troops}/${unit.maxTroops}`;
     const textW = ctx.measureText(label).width;
     // 名签同样贴边：我方左对齐到画幅左边距，敌军右对齐到右边距。
     const labelX = side === "player" ? margin : view.w - margin;
