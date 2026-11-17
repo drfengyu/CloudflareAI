@@ -2413,7 +2413,7 @@ test("公告与维护窗口判定", () => {
 });
 
 test("兵种相克与名将连携只在 v10 起生效", () => {
-  assert.equal(SAGA_RULESET, 14, "规则档升到 v14（50 级封顶 + 兵力 100→20000 几何曲线）");
+  assert.equal(SAGA_RULESET, 15, "规则档升到 v15（原版十阵 + 军师约束 + 两人败退散阵）");
 
   // 兵种按底子推：猛将骑、谋士弓、其余枪。
   assert.equal(sagaCorpsOf(SAGA_GENERAL_BY_ID.get("lvbu")), "cavalry");

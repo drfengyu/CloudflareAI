@@ -2138,6 +2138,7 @@ export function TrialGame(props: TrialGameProps) {
                             );
                             const usableFormations = SAGA_FORMATIONS.filter(
                               (row) =>
+                                !row.legacy &&
                                 row.level <= Math.max(...battle.battle.party.map((unit) => unit.level)) &&
                                 row.cost <= unit.tacticPoints &&
                                 row.id !== battle.battle.playerFormation,
@@ -2272,6 +2273,7 @@ export function TrialGame(props: TrialGameProps) {
                               <option value="" className="bg-[#14110d]">选择阵形</option>
                               {SAGA_FORMATIONS.filter(
                                 (row) =>
+                                  !row.legacy &&
                                   row.level <= Math.max(...battle.battle.party.map((unit) => unit.level)) &&
                                   row.cost <= unit.tacticPoints &&
                                   row.id !== battle.battle.playerFormation,
@@ -3085,8 +3087,16 @@ export function TrialGame(props: TrialGameProps) {
                   ) : null}
 
                   {hallTab === "formation" ? (
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {SAGA_FORMATIONS.map((formation) => {
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        军师：{save.party
+                          .map((member) => SAGA_GENERAL_BY_ID.get(member.id))
+                          .filter((member): member is NonNullable<typeof member> => Boolean(member))
+                          .sort((a, b) => b.intellect - a.intellect)[0]?.name ?? "—"}
+                        （队中智力最高者出任；两人败退则阵势自动散开）
+                      </p>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        {SAGA_FORMATIONS.filter((formation) => !formation.legacy).map((formation) => {
                         const active = save.formation === formation.id;
                         const beats = SAGA_FORMATIONS.find((row) => row.id === formation.beats)?.name ?? "";
                         const topLevel = save.party.reduce((top, member) => Math.max(top, member.level), 0);
@@ -3118,6 +3128,7 @@ export function TrialGame(props: TrialGameProps) {
                           </button>
                         );
                       })}
+                      </div>
                     </div>
                   ) : null}
                 </div>
@@ -3314,6 +3325,19 @@ export function TrialGame(props: TrialGameProps) {
                   }}
                   onCity={() => enterTown()}
                   onInn={goInn}
+                  onSite={(kind, chapterIndex, name) => {
+                    setSite(
+                      settlementFor({
+                        kind,
+                        name,
+                        chapter: chapterIndex,
+                        seed: run?.seed ?? 0,
+                      }),
+                    );
+                    setSiteLine(null);
+                    setInTown(false);
+                    setPanel("site");
+                  }}
                 />
               ) : null}
             </div>
@@ -4184,6 +4208,7 @@ function ArmyPanel({
   onVisit,
   onCity,
   onInn,
+  onSite,
 }: {
   run: SagaRun | null;
   state: SagaReplayState | null;
@@ -4195,6 +4220,7 @@ function ArmyPanel({
   onVisit: (node: number) => void;
   onCity: () => void;
   onInn: () => void;
+  onSite: (kind: "town" | "village", chapter: number, name: string) => void;
 }) {
   if (!run || !state) {
     return <p className="text-sm text-muted-foreground">还没有进行中的行军。</p>;
@@ -4210,6 +4236,20 @@ function ArmyPanel({
   const clearedInScope = scope.filter((row) => cleared.includes(row.index)).length;
   const won = state.scene === "won";
   const lost = state.scene === "lost";
+  // 城门口有时被营寨 / 关卡挡在前面；军情里再给一份完整清单，保证每座州治与村落都进得去。
+  const towns = Array.from(
+    new Map(
+      (field.cities ?? []).map((city) => [
+        `${city.chapter}:${city.name}`,
+        { chapter: city.chapter, name: city.name },
+      ]),
+    ).values(),
+  );
+  if (towns.length === 0) {
+    const home = SAGA_CHAPTERS[Math.min(SAGA_CHAPTERS.length - 1, run.startSave.chapter)];
+    towns.push({ chapter: run.startSave.chapter, name: home?.town ?? "州治" });
+  }
+  const villages = field.pois.filter((poi) => poi.kind === "village");
   return (
     <div className="space-y-3 text-sm">
       <div className="rounded-lg border border-border p-3">
@@ -4221,6 +4261,56 @@ function ArmyPanel({
           行军大地图上可自由走位，先打哪座营由你决定 · 本区已破 {clearedInScope}/{total} 座，
           当前可攻 {open.length} 座
         </p>
+      </div>
+
+      <div className="rounded-lg border border-border p-3">
+        <p className="font-medium">州治与村落</p>
+        <div className="mt-2 space-y-1">
+          {towns.map((city) => {
+            const isHome = city.chapter === ctx.chapter;
+            return (
+              <div
+                key={`${city.chapter}:${city.name}`}
+                className="flex items-center justify-between gap-2 rounded border border-border px-2.5 py-1.5 text-xs"
+              >
+                <span>
+                  州治 · {city.name}
+                  <span className="ml-1.5 text-muted-foreground">
+                    {isHome ? "本区州治，可走街串巷" : "他州州治，铺面按地方生成"}
+                  </span>
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    isHome
+                      ? onCity()
+                      : onSite("town", city.chapter, city.name)
+                  }
+                >
+                  {isHome ? "回城" : "进入"}
+                </Button>
+              </div>
+            );
+          })}
+          {villages.map((poi) => (
+            <div
+              key={`village:${poi.name}`}
+              className="flex items-center justify-between gap-2 rounded border border-border px-2.5 py-1.5 text-xs"
+            >
+              <span>
+                村落 · {poi.name}
+                <span className="ml-1.5 text-muted-foreground">宿店、药棚与乡人</span>
+              </span>
+              <Button size="sm" variant="outline" onClick={() => onSite("village", ctx.chapter, poi.name)}>
+                进入
+              </Button>
+            </div>
+          ))}
+          {towns.length === 0 && villages.length === 0 ? (
+            <p className="text-xs text-muted-foreground">这一带暂时没有可进的州治或村落。</p>
+          ) : null}
+        </div>
       </div>
 
       <div className="rounded-lg border border-border p-3">

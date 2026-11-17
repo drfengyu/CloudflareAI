@@ -534,9 +534,21 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.94.0（2026-11-17，七将上阵 / 聚落可进 / 军令随区推进）
+**当前版本**：v0.95.0（2026-11-17，原版十阵 / 军师 / 聚落入口清单）
 **下一版本**：待定
 
+- v0.95.0 阵形与军师（`SAGA_RULESET` 14 → 15）：
+  `types.ts` `FormationId` 增加 `sankai/chongfang/baima/yizi/jingji/bagua`，`SagaFormationDef`
+  增加 `legacy` / `noHeal`；`SagaTacticDef.kind` 增加 `ward/wardTactic/revive/drain`，
+  `SagaBattleGeneral` 增加 `ward` / `wardTactic` 两个回合计数。
+  `data.ts` `SAGA_FORMATIONS` 重排为原版十阵（散开 0 / 鹤翼 0 / 冲方 10 / 白马 16 / 鱼鳞 0 /
+  锋矢 0 / 一字 37 / 背水 43 / 静寂 45 / 八卦 48），旧六阵标 `legacy`；新增免击 / 免策 / 招魂 /
+  心乱四计并接入 `TACTIC_LINES`，记忆上限 26 → 30。
+  `battle.ts` 变阵要求阵中有未败退军师（智力最高者），两人败退自动回散开；普攻吃免击、计策吃免策，
+  静寂阵封回复计，破阵 / 解阵统一回 `sankai`。
+  `game.tsx` 变阵菜单过滤 legacy；编成所阵形页显示军师；`ArmyPanel` 新增「州治与村落」清单，
+  每座州治 / 村落直接开聚落。
+  `notice.ts` / `package.json` / `package-lock.json` 升到 0.95.0。
 - v0.94.0 队伍与聚落（`SAGA_RULESET` 仍 14）：
   `types.ts` `SAGA_PARTY_SIZE = 7`（原 5）、`SAGA_RESERVE_SIZE = 120`（原 60），新增
   `SAGA_BATTLE_SIZE = 5` 只约束敌方席位数；`battle.ts` 敌军切片 / 补士兵位改用

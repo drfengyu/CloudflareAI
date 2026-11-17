@@ -242,6 +242,8 @@ function buildSoldier(
     guard: false,
     confused: 0,
     buff: 0,
+    ward: 0,
+    wardTactic: 0,
     downed: false,
     recruitable: false,
     recruitHard: false,
@@ -447,6 +449,8 @@ function buildBattle(
       guard: false,
       confused: 0,
       buff: 0,
+      ward: 0,
+      wardTactic: 0,
       downed: troops <= 0,
       recruitable: false,
       recruitHard: false,
@@ -519,6 +523,8 @@ function buildBattle(
       guard: false,
       confused: 0,
       buff: 0,
+      ward: 0,
+      wardTactic: 0,
       downed: false,
       recruitable,
       recruitHard,
@@ -599,8 +605,20 @@ function dealDamage(
 ): void {
   const attackerFormation = actor.side === "player" ? battle.playerFormation : battle.enemyFormation;
   const defenderFormation = actor.side === "player" ? battle.enemyFormation : battle.playerFormation;
+  // 免击计：在护罩回合内，普攻与追击都伤不到这支队伍。
+  if (target.ward > 0) {
+    events.push({
+      kind: "miss",
+      side: actor.side,
+      actor: actor.name,
+      target: target.name,
+      text: `${target.name} 受免击计护持，${actor.name} 这一击无功`,
+    });
+    return;
+  }
   // v3 起普攻先判定命中：智力被压制的一方更容易被闪开。
-  if (battle.rules >= 3 && roll(battle) > hitChance(actor, target)) {
+  const hitFactor = defenderFormation === "jingji" ? 0.65 : 1;
+  if (battle.rules >= 3 && roll(battle) > hitChance(actor, target) * hitFactor) {
     events.push({
       kind: "miss",
       side: actor.side,
@@ -704,6 +722,16 @@ function executeTactic(
   const kind = def?.kind ?? "fire";
 
   const hitFoe = (foe: SagaBattleGeneral, raw: number, countered: number, allowHalf: boolean, skill: number) => {
+    if (foe.wardTactic > 0) {
+      events.push({
+        kind: "miss",
+        side: actor.side,
+        actor: actor.name,
+        target: foe.name,
+        text: `${foe.name} 受免策计护持，${name}未能伤及其部`,
+      });
+      return;
+    }
     const resist = foe.intellect * (kind === "water" ? 0.5 : 0.4);
     const variance = 0.85 + roll(battle) * 0.3;
     const core =
@@ -801,6 +829,15 @@ function executeTactic(
       break;
     }
     case "heal": {
+      if (SAGA_FORMATION_BY_ID.get(allyFormation)?.noHeal) {
+        events.push({
+          kind: "miss",
+          side: actor.side,
+          actor: actor.name,
+          text: `${actor.name} 身处静寂阵，回复之计被阵势压住`,
+        });
+        break;
+      }
       const candidates = living(allies).sort((a, b) => a.troops / a.maxTroops - b.troops / b.maxTroops);
       const target = candidates[0];
       if (target) {
@@ -822,6 +859,15 @@ function executeTactic(
       break;
     }
     case "healAll": {
+      if (SAGA_FORMATION_BY_ID.get(allyFormation)?.noHeal) {
+        events.push({
+          kind: "miss",
+          side: actor.side,
+          actor: actor.name,
+          text: `${actor.name} 身处静寂阵，回复之计被阵势压住`,
+        });
+        break;
+      }
       const raw = power * (actor.intellect * 0.6 + actor.level * 2 + 20);
       for (const ally of living(allies)) {
         const heal =
@@ -915,7 +961,7 @@ function executeTactic(
       // 解阵计：把敌军阵形打回散开（v12 起才有效）；敌军本来就散开时只算落空。
       if (actor.side === "player") {
         const broken = battle.enemyFormation;
-        if (broken === "yulin") {
+        if (broken === (battle.rules >= 15 ? "sankai" : "yulin")) {
           events.push({
             kind: "miss",
             side: actor.side,
@@ -923,7 +969,7 @@ function executeTactic(
             text: `敌军本就没有布阵，${name}落空`,
           });
         } else {
-          battle.enemyFormation = "yulin";
+          battle.enemyFormation = battle.rules >= 15 ? "sankai" : "yulin";
           events.push({
             kind: "buff",
             side: actor.side,
@@ -933,8 +979,8 @@ function executeTactic(
         }
       } else {
         const broken = battle.playerFormation;
-        if (broken !== "yulin") {
-          battle.playerFormation = "yulin";
+        if (broken !== (battle.rules >= 15 ? "sankai" : "yulin")) {
+          battle.playerFormation = battle.rules >= 15 ? "sankai" : "yulin";
           events.push({
             kind: "buff",
             side: actor.side,
@@ -984,6 +1030,81 @@ function executeTactic(
         side: actor.side,
         actor: actor.name,
         text: `${actor.name} 擂鼓${name}，全队攻击提升`,
+      });
+      break;
+    }
+    case "ward": {
+      const candidates = living(allies);
+      const target =
+        (typeof requestedTarget === "number" ? candidates[requestedTarget] : null) ??
+        candidates.sort((a, b) => a.troops / a.maxTroops - b.troops / b.maxTroops)[0];
+      if (!target) break;
+      target.ward = Math.max(1, def?.turns ?? 2);
+      events.push({
+        kind: "buff",
+        side: actor.side,
+        actor: actor.name,
+        target: target.name,
+        text: `${actor.name} 施放${name}，${target.name} ${target.ward} 回合内不惧普攻`,
+      });
+      break;
+    }
+    case "wardTactic": {
+      const candidates = living(allies);
+      const target =
+        (typeof requestedTarget === "number" ? candidates[requestedTarget] : null) ??
+        candidates.sort((a, b) => a.intellect - b.intellect)[0];
+      if (!target) break;
+      target.wardTactic = Math.max(1, def?.turns ?? 2);
+      events.push({
+        kind: "buff",
+        side: actor.side,
+        actor: actor.name,
+        target: target.name,
+        text: `${actor.name} 施放${name}，${target.name} ${target.wardTactic} 回合内不惧计策`,
+      });
+      break;
+    }
+    case "revive": {
+      const fallen = allies
+        .filter((ally) => ally.downed)
+        .sort((a, b) => b.maxTroops - a.maxTroops)[0];
+      if (!fallen) {
+        events.push({
+          kind: "miss",
+          side: actor.side,
+          actor: actor.name,
+          text: `${actor.name} 施放${name}，却没有可招回的亡魂`,
+        });
+        break;
+      }
+      fallen.downed = false;
+      fallen.troops = Math.max(1, Math.round(fallen.maxTroops * 0.3));
+      events.push({
+        kind: "heal",
+        side: actor.side,
+        actor: actor.name,
+        target: fallen.name,
+        amount: fallen.troops,
+        text: `${actor.name} 施放${name}，${fallen.name} 以 ${fallen.troops} 兵力归队`,
+      });
+      break;
+    }
+    case "drain": {
+      const candidates = living(foes);
+      const target =
+        (typeof requestedTarget === "number" ? candidates[requestedTarget] : null) ??
+        candidates.sort((a, b) => b.intellect - a.intellect)[0];
+      if (!target) break;
+      const drained = Math.min(target.tacticPoints, Math.max(1, Math.round(power)));
+      target.tacticPoints -= drained;
+      events.push({
+        kind: "tactic",
+        side: actor.side,
+        actor: actor.name,
+        target: target.name,
+        amount: drained,
+        text: `${actor.name} 施放${name}，${target.name} 心神大乱，策略值 -${drained}`,
       });
       break;
     }
@@ -1365,11 +1486,22 @@ function resolveFormationCommands(
 ): SagaRoundCommand[] {
   if (battle.rules < 12) return roundCommands;
   const maxLevel = battle.party.reduce((top, general) => Math.max(top, general.level), 0);
+  // 军师由队中智力最高且尚在阵中的武将担任；没有军师就布不了阵。
+  const tactician = living(battle.party).sort((a, b) => b.intellect - a.intellect)[0] ?? null;
   return roundCommands.map((command) => {
     if (command.a !== "formation") return command;
     const general = battle.party.find((unit) => unit.id === command.g);
     const next = command.f ? SAGA_FORMATION_BY_ID.get(command.f) : null;
     if (!general || general.downed || !next) return { g: command.g, a: "attack", target: battle.target };
+    if (!tactician) {
+      events.push({
+        kind: "miss",
+        side: "player",
+        actor: general.name,
+        text: `${general.name} 军中已无军师，布不成阵`,
+      });
+      return { g: command.g, a: "attack", target: battle.target };
+    }
     if (next.level > maxLevel) {
       events.push({
         kind: "miss",
@@ -1411,6 +1543,21 @@ export function resolveBattleRound(
 ): void {
   if (battle.phase !== "select") return;
   const events: SagaBattleEvent[] = [];
+  // 原版规矩：一队里两人被打到战斗不能，阵势就维持不住，自动回到散开（v15 起生效）。
+  if (
+    battle.rules >= 15 &&
+    battle.party.filter((general) => general.downed).length >= 2 &&
+    battle.playerFormation !== "sankai"
+  ) {
+    const broken = SAGA_FORMATION_BY_ID.get(battle.playerFormation)?.name ?? "阵势";
+    battle.playerFormation = "sankai";
+    events.push({
+      kind: "buff",
+      side: "player",
+      actor: "军师",
+      text: `两人败退，${broken}阵维持不住，全军散开`,
+    });
+  }
   const commands = resolveFormationCommands(battle, roundCommands, events);
   const byId = new Map(commands.map((command) => [command.g, command]));
   const actors = battleTurnOrder(battle);
@@ -1441,6 +1588,8 @@ export function resolveBattleRound(
     battle.round += 1;
     for (const general of [...battle.party, ...battle.enemies]) {
       if (general.buff > 0) general.buff -= 1;
+      if (general.ward > 0) general.ward -= 1;
+      if (general.wardTactic > 0) general.wardTactic -= 1;
     }
   } else {
     finishBattle(battle, state, events);

@@ -34,7 +34,7 @@ export const SAGA_SAVE_VERSION = 1;
  * 每级四维成长由 ×3 收到 ×2；v13 及更早的行军仍按旧账重放。
  * 旧行军没有这个字段，重放时按 v1 走，避免改版把还没收兵的对局打乱。
  */
-export const SAGA_RULESET = 14;
+export const SAGA_RULESET = 15;
 
 /** 四维上限：v9 起武力 / 智力 / 防御 / 速度可以一路长到 255（基础值不动，长的是等级与特性加成）。 */
 export const SAGA_STAT_CAP = 255;
@@ -181,9 +181,15 @@ export const SAGA_MAX_COMMANDS = 4000;export const SAGA_MAX_ROUNDS_PER_BLOCK = 2
 export const SAGA_MAX_TOTAL_ROUNDS = 2400;
 
 export type FormationId =
+  | "sankai"
   | "yulin"
   | "heyi"
   | "fengshi"
+  | "chongfang"
+  | "baima"
+  | "yizi"
+  | "jingji"
+  | "bagua"
   | "fangyuan"
   | "changshe"
   | "yanxing"
@@ -217,7 +223,11 @@ export type TacticId =
   | "fusha"
   | "xianjing"
   | "jiezhen"
-  | "ansha";
+  | "ansha"
+  | "mianji"
+  | "miance"
+  | "zhaohun"
+  | "xinluan";
 export type SagaItemKind = "weapon" | "armor" | "consumable" | "supply";
 
 /** 武将固有特性：数值、暴击与连击上的个人长板。 */
@@ -346,6 +356,10 @@ export interface SagaFormationDef {
   level: number;
   /** 战斗内变阵消耗的策略值（由下令武将出）。 */
   cost: number;
+  /** 旧版自拟阵，仍可被老存档 / 老行军重放引用，但不再出现在变阵菜单。 */
+  legacy?: boolean;
+  /** 静寂阵：布阵期间己方不能再用回复系计策。 */
+  noHeal?: boolean;
 }
 
 export interface SagaChapterDef {
@@ -391,7 +405,21 @@ export interface SagaTacticDef {
   level: number;
   /** 计策系别，决定结算口径（火 / 水打全体，石打单体，回复与特殊各自一套）。
    *  `break` = 破阵（敌阵回散开），`assassin` = 单体即死。 */
-  kind: "fire" | "water" | "rock" | "heal" | "healAll" | "confuse" | "buff" | "trap" | "break" | "assassin";
+  kind:
+    | "fire"
+    | "water"
+    | "rock"
+    | "heal"
+    | "healAll"
+    | "confuse"
+    | "buff"
+    | "trap"
+    | "break"
+    | "assassin"
+    | "ward"
+    | "wardTactic"
+    | "revive"
+    | "drain";
   /** 威力系数：火 / 水 / 石按它放大伤害，回复按它放大回兵量。 */
   power?: number;
   /** 混乱 / 缚杀这类计策持续几回合。 */
@@ -596,6 +624,10 @@ export interface SagaBattleGeneral {
   guard: boolean;
   confused: number;
   buff: number;
+  /** 免击计剩余回合：期间不受普攻伤害。 */
+  ward: number;
+  /** 免策计剩余回合：期间不受攻击计策伤害。 */
+  wardTactic: number;
   downed: boolean;
   recruitable: boolean;
   recruitHard: boolean;

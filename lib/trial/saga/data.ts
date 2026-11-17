@@ -200,26 +200,39 @@ export const SAGA_TACTICS: SagaTacticDef[] = [
   { id: "jiezhen", name: "解阵计", desc: "破去敌军阵形，打回散开", cost: 10, level: 29, kind: "break" },
   { id: "ansha", name: "暗杀计", desc: "直接取一名敌将性命，成算不高", cost: 10, level: 28, kind: "assassin" },
   { id: "guwu", name: "鼓舞", desc: "全队攻击提升 3 回合", cost: 2, level: 3, kind: "buff" },
+  // 辅助计：原版里的免击 / 免策 / 招魂 / 心乱，补成四支可实战的策。
+  { id: "mianji", name: "免击计", desc: "一队友军 2 回合内不受普攻伤害", cost: 8, level: 20, kind: "ward", turns: 2 },
+  { id: "miance", name: "免策计", desc: "一队友军 2 回合内不受攻击计策伤害", cost: 10, level: 28, kind: "wardTactic", turns: 2 },
+  { id: "zhaohun", name: "招魂计", desc: "唤回一名败退友军，以三成兵力归队", cost: 12, level: 34, kind: "revive" },
+  { id: "xinluan", name: "心乱计", desc: "扰乱敌将心神，削去 30 点策略值", cost: 6, level: 40, kind: "drain", power: 30 },
 ];
 
 export const SAGA_TACTIC_BY_ID = new Map(SAGA_TACTICS.map((t) => [t.id, t]));
 
 /**
- * 阵形表：照《吞食天地2》原版——鹤翼6 / 冲方10 / 白马16 / 鱼鳞21 / 锋矢27 / 一字37 / 背水43 / 静寂45 / 八卦48，
- * 本作收拢到 6 / 10 / 16 / 21 / 27（封顶抬到 50 后照旧按这条 30 级档，后 20 级不再解锁新阵）；
- * 消耗按原版 8 / 12 / 8 / 16 / 24 折到策略值池。
+ * 阵形表：按《吞食天地2》原版十阵重排——散开 / 鹤翼6 / 冲方10 / 白马16 / 鱼鳞21 / 锋矢27 /
+ * 一字37 / 背水43 / 静寂45 / 八卦48。原版的站位差异（两端攻击衰减、生门死门）在本作里
+ * 收成队级攻防速修正，保证七人队伍也能直观感到阵形强弱；静寂另带「不能回复」。
+ * 旧版自拟的方圆 / 长蛇 / 雁行 / 衡轭 / 车悬 / 八门保留为 legacy，只供老存档与老战报重放。
  */
 export const SAGA_FORMATIONS: SagaFormationDef[] = [
-  { id: "yulin", name: "鱼鳞", desc: "攻击 +15%，防御 -5%", atk: 115, def: 95, spd: 100, beats: "heyi", level: 0, cost: 1 },
-  { id: "heyi", name: "鹤翼", desc: "速度 +15%，攻击 +5%", atk: 105, def: 100, spd: 115, beats: "fengshi", level: 0, cost: 2 },
-  { id: "fengshi", name: "锋矢", desc: "攻击 +25%，防御 -15%", atk: 125, def: 85, spd: 105, beats: "fangyuan", level: 0, cost: 2 },
-  { id: "fangyuan", name: "方圆", desc: "防御 +25%，速度 -10%", atk: 90, def: 125, spd: 90, beats: "changshe", level: 0, cost: 2 },
-  { id: "changshe", name: "长蛇", desc: "速度 +25%，防御 -10%", atk: 100, def: 90, spd: 125, beats: "yulin", level: 0, cost: 2 },
-  { id: "yanxing", name: "雁行", desc: "攻击 +8%，防御 +2%，速度 +12%，克鱼鳞", atk: 108, def: 102, spd: 112, beats: "yulin", level: 6, cost: 3 },
-  { id: "hengzhe", name: "衡轭", desc: "攻击 +18%，防御 +5%，速度 -8%，克锋矢", atk: 118, def: 105, spd: 92, beats: "fengshi", level: 10, cost: 4 },
-  { id: "chexuan", name: "车悬", desc: "攻击 +22%，防御 -8%，速度 +18%，克长蛇", atk: 122, def: 92, spd: 118, beats: "changshe", level: 16, cost: 4 },
-  { id: "beishui", name: "背水", desc: "攻击 +30%，防御 -20%，速度 +8%，克方圆", atk: 130, def: 80, spd: 108, beats: "fangyuan", level: 21, cost: 6 },
-  { id: "bamen", name: "八门", desc: "攻击 -5%，防御 +30%，速度 -15%，克鹤翼", atk: 95, def: 130, spd: 85, beats: "heyi", level: 27, cost: 8 },
+  { id: "sankai", name: "散开", desc: "不设阵势，攻防速均无增减", atk: 100, def: 100, spd: 100, beats: "sankai", level: 0, cost: 0 },
+  { id: "heyi", name: "鹤翼", desc: "两翼张开：攻击 +10%，防御 -10%", atk: 110, def: 90, spd: 105, beats: "fengshi", level: 0, cost: 2 },
+  { id: "chongfang", name: "冲方", desc: "正面硬冲：攻击 +20%，防御 +15%，速度 -30%", atk: 120, def: 115, spd: 70, beats: "yulin", level: 10, cost: 3 },
+  { id: "baima", name: "白马", desc: "轻骑疾进：速度 +30%，克冲方", atk: 100, def: 100, spd: 130, beats: "chongfang", level: 16, cost: 3 },
+  { id: "yulin", name: "鱼鳞", desc: "层层叠阵：攻击 +15%，防御 -5%", atk: 115, def: 95, spd: 100, beats: "heyi", level: 0, cost: 1 },
+  { id: "fengshi", name: "锋矢", desc: "锐锋直进：攻击 +25%，防御 -15%", atk: 125, def: 85, spd: 105, beats: "yizi", level: 0, cost: 2 },
+  { id: "yizi", name: "一字", desc: "横列展开：攻击 +15%，速度 +15%，防御 -20%", atk: 115, def: 80, spd: 115, beats: "fengshi", level: 37, cost: 6 },
+  { id: "beishui", name: "背水", desc: "置之死地：攻击 +45%，防御 -50%，速度 +10%", atk: 145, def: 50, spd: 110, beats: "bagua", level: 43, cost: 8 },
+  { id: "jingji", name: "静寂", desc: "全员隐伏：防御 +40%，敌军命中下降，但不能用回复计", atk: 95, def: 140, spd: 105, beats: "baima", level: 45, cost: 10, noHeal: true },
+  { id: "bagua", name: "八卦", desc: "生门死门：攻击 +15%，防御 +30%，速度 -5%", atk: 115, def: 130, spd: 95, beats: "heyi", level: 48, cost: 12 },
+  // 旧版自拟阵：保留定义供老存档、老战报与旧测试解析，变阵菜单里不再列出。
+  { id: "fangyuan", name: "方圆", desc: "旧阵：防御 +25%，速度 -10%", atk: 90, def: 125, spd: 90, beats: "changshe", level: 0, cost: 2, legacy: true },
+  { id: "changshe", name: "长蛇", desc: "旧阵：速度 +25%，防御 -10%", atk: 100, def: 90, spd: 125, beats: "yulin", level: 0, cost: 2, legacy: true },
+  { id: "yanxing", name: "雁行", desc: "旧阵：攻击 +8%，防御 +2%，速度 +12%", atk: 108, def: 102, spd: 112, beats: "yulin", level: 6, cost: 3, legacy: true },
+  { id: "hengzhe", name: "衡轭", desc: "旧阵：攻击 +18%，防御 +5%，速度 -8%", atk: 118, def: 105, spd: 92, beats: "fengshi", level: 10, cost: 4, legacy: true },
+  { id: "chexuan", name: "车悬", desc: "旧阵：攻击 +22%，防御 -8%，速度 +18%", atk: 122, def: 92, spd: 118, beats: "changshe", level: 16, cost: 4, legacy: true },
+  { id: "bamen", name: "八门", desc: "旧阵：攻击 -5%，防御 +30%，速度 -15%", atk: 95, def: 130, spd: 85, beats: "heyi", level: 27, cost: 8, legacy: true },
 ];
 
 export const SAGA_FORMATION_BY_ID = new Map(SAGA_FORMATIONS.map((f) => [f.id, f]));
@@ -303,11 +316,15 @@ const TACTIC_LINES: { id: TacticId; intellect: number }[] = [
   { id: "hunluan", intellect: 70 },
   { id: "fusha", intellect: 86 },
   { id: "xianjing", intellect: 92 },
+  { id: "mianji", intellect: 76 },
+  { id: "miance", intellect: 86 },
+  { id: "zhaohun", intellect: 92 },
+  { id: "xinluan", intellect: 88 },
 ];
 
 /** 一名武将同时能记的计策上限：够装下所有已解锁的阶数，不再为省位砍掉低阶。 */
-const TACTIC_MEMORY_CAP = 26;
-const TACTIC_FAMILY_ORDER = ["fire", "water", "rock", "heal", "confuse", "trap"] as const;
+const TACTIC_MEMORY_CAP = 30;
+const TACTIC_FAMILY_ORDER = ["fire", "water", "rock", "heal", "confuse", "trap", "ward", "wardTactic", "revive", "drain"] as const;
 
 export function tacticsFor(def: SagaGeneralDef | undefined, level: number): TacticId[] {
   if (!def) return [];
