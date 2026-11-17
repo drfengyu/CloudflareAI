@@ -534,9 +534,16 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.93.0（2026-11-17，入口封面 + 档案商店 + 结算删档）
+**当前版本**：v0.93.1（2026-11-17，本阵解锁与编成所修复）
 **下一版本**：待定
 
+- v0.93.1 本阵解锁 / 编成所修复（不动战斗规则，`SAGA_RULESET` 仍 14）：
+  `run.ts` `canEngageNode` 的本阵判定改成「同章非本阵节点逐个已破，**或**属岔路且同组任一侧已破」；
+  `replaySagaRun` 收尾按岔路组补记缺的另一侧、重算 `completed`，全清而 `scene==="field"` 时收口为
+  `won`。`types.ts` `SAGA_RESERVE_SIZE` 12 → 60（旧上限下待命满 12 时 `setActiveParty` 会静默
+  `return false`，队伍满员移不出人）。`game.tsx` 编成所「编队」拆成上阵 / 待命两组、卡片经验只留
+  一行 `经验 x/y · 距下一级还差 z`，军情 chips 与 `PartyList` 同样分组去重，营地按钮「未可」后写明
+  还差几座。`notice.ts` / `package.json` / `package-lock.json` 升到 0.93.1。
 - v0.93.0 入口封面 / 档案商店 / 结算删档（不动战斗规则，`SAGA_RULESET` 仍 14）：
   `components/trial/game.tsx` 新增 `coverOpen`（进页面先停在封面，结算完再回来）、
   `settleAsk`、`saveCleared`；`TrialGameProps` 新增 `hasSave`，由 `page.tsx` 按

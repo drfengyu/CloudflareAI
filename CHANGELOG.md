@@ -5,6 +5,29 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.93.1] - 2026-11-17
+
+### 修复
+
+- **第 6 章刘璋本阵锁死**（`lib/trial/saga/run.ts`）：本阵开打条件改成「同章非本阵节点逐个已破，
+  **或**该节点属岔路且同组有任一侧已破」——旧战报（升级前开的行军、只记了打通一侧的指令）里，
+  另一侧没落进 `clearedNodes`，原先要两条岔路都在名单里，本阵于是一直「未可」且无提示。
+  `replaySagaRun` 收尾再扫一遍：按岔路组把缺的另一侧补成已破、重算 `completed`；若整趟已全清而
+  `scene` 还停在 `field`，直接收口为 `won`，不再停在「全清但没结算」的僵局。
+- **营地按钮写明缺什么**（`components/trial/game.tsx`）：本阵「未可」时附「（还差 N 座：名字…）」，
+  前区本阵未破则写「（前区本阵未破）」，并写进按钮 `title`。
+- **队伍满员移不出人**（`lib/trial/saga/types.ts`）：`SAGA_RESERVE_SIZE` 12 → 60。旧上限下，
+  待命席满 12 时移出在队武将会变成 13 人，`setActiveParty` 静默 `return false`，按钮点了没反应；
+  放宽后移出 / 上阵都直接生效，`normalizeTrialSave`、`recruitToSave` 自动跟随新上限。
+
+### 改进
+
+- **编成所「编队」页重做**（`components/trial/game.tsx`）：拆成「上阵 `x/5`」与「待命 `n`」两组，
+  每组空态有提示；卡片只保留一行经验「经验 x/y · 距下一级还差 z」（满级写「已满级」），
+  并显示武/智/防/速/攻/兵力、特性、武器防具。
+- **武将名单去重分组**：军情面板的队伍 chips、存档面板的 `PartyList` 均按上阵 / 待命分组，
+  同一名武将不会同时出现在两处；`StatusRoster` 的待命名单按上阵 id 过滤。
+
 ## [0.93.0] - 2026-11-17
 
 ### 新增

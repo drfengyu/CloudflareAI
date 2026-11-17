@@ -89,6 +89,7 @@ import {
   generalStats,
   initialTrialSave,
   normalizeTrialSave,
+  setActiveParty,
   troopBaseline,
 } from "../lib/trial/saga/state";
 import { applyRecruitOffer, battleAttackPower, battleTurnOrder, corpsCounterFactor, resolveBattleRound, startBattle, startEncounterBattle } from "../lib/trial/saga/battle";
@@ -352,6 +353,54 @@ test("剧情分支：一处岔路两条路只能走一条，打通一条另一�
     branchIndices[0].node.branch!.group,
     "岔路信息随对局 JSON 往返",
   );
+});
+
+test("旧战报只记了岔路的一侧：同组打通一处就放本阵，不会锁死在「还差一座」", () => {
+  const run: SagaRun = { ...freshRun(), rules: 12 };
+  const branchIndices = run.nodes
+    .map((node, index) => ({ node, index }))
+    .filter(({ node }) => node.branch)
+    .sort((a, b) => a.node.branch!.option - b.node.branch!.option);
+  assert.equal(branchIndices.length, 2, "本章有一处岔路");
+  const bossIndex = run.nodes.findIndex((node) => node.kind === "boss");
+  assert.ok(bossIndex >= 0);
+
+  const stale = createReplayState(run);
+  run.nodes.forEach((node, index) => {
+    if (index === bossIndex || index === branchIndices[1].index) return;
+    stale.clearedNodes.push(index);
+  });
+  stale.completed = stale.clearedNodes.length;
+  assert.equal(
+    canEngageNode(run, stale, bossIndex),
+    true,
+    "另一侧没落进战报，本阵照样能打",
+  );
+
+  // 重放收尾会把同组另一侧补记，存档不会再停在「全清但没结算」。
+  const mate = branchIndices[1].index;
+  const replay = replaySagaRun(run, []).state;
+  assert.equal(replay.clearedNodes.includes(mate), false, "一条都没打时不该补记");
+});
+
+test("待命席放宽：队伍满 5 人、待命 20 人时仍能把在队武将移出", () => {
+  const save = initialTrialSave();
+  const spare = SAGA_GENERALS.filter(
+    (general) => !general.enemyOnly && !save.party.some((row) => row.id === general.id),
+  ).slice(0, 20);
+  save.reserve = spare.map((general) => createGeneralState(general.id));
+  assert.equal(save.reserve.length >= 13, true, "待命席已超过旧上限 12");
+  const leaving = save.party[1].id;
+  assert.equal(
+    setActiveParty(
+      save,
+      save.party.filter((row) => row.id !== leaving).map((row) => row.id),
+    ),
+    true,
+    "移出不再被后备上限拒绝",
+  );
+  assert.equal(findGeneral(save, leaving) !== undefined, true, "移出的武将还在麾下");
+  assert.equal(save.party.some((row) => row.id === leaving), false);
 });
 
 test("对局 JSON：版本校验严格，旧玩法与损坏数据一律当没有对局", () => {

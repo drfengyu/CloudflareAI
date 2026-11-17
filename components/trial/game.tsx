@@ -75,7 +75,7 @@ import {
   trainingCost,
   trainingLevelCap,
 } from "@/lib/trial/saga/training";
-import { SAGA_MAX_LEVEL } from "@/lib/trial/saga/types";
+import { SAGA_MAX_LEVEL, SAGA_PARTY_SIZE } from "@/lib/trial/saga/types";
 import {
   campScene,
   chapterIntroScene,
@@ -2878,71 +2878,119 @@ export function TrialGame(props: TrialGameProps) {
                   </div>
 
                   {hallTab === "party" ? (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <p className="text-xs text-muted-foreground">
-                        上阵最多 {5} 人；后备 {save.reserve.length}/12。点击「上阵/移出」调整，阵亡只在战斗中发生，换代后兵力自动补满。
+                        上阵 {save.party.length}/{SAGA_PARTY_SIZE} 人、待命{" "}
+                        {save.reserve.filter((row) => !save.party.some((p) => p.id === row.id)).length} 人。
+                        点「移出」把在队武将放回待命席，点「上阵」把待命武将补进队伍；
+                        阵亡只在战斗中发生，换人之后按满编算。
                       </p>
-                      <div className="grid gap-2 sm:grid-cols-2">
-                        {[...save.party, ...save.reserve].map((member) => {
-                          const def = SAGA_GENERAL_BY_ID.get(member.id);
-                          const stats = generalStats(member, save.gearLevels, uiRules);
-                          const active = save.party.some((row) => row.id === member.id);
-                          return (
-                            <div key={member.id} className="rounded-lg border border-border p-2.5 text-sm">
-                              <div className="flex gap-2.5">
-                                <SagaPortrait
-                                  generalId={member.id}
-                                  gear={{ weapon: member.weapon, armor: member.armor }}
-                                  width={44}
-                                  height={55}
-                                />
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex items-center justify-between">
-                                    <span className="font-medium">
-                                      {def?.name ?? member.id}
-                                      <span className="ml-1.5 text-xs text-muted-foreground">Lv{member.level}</span>
-                                    </span>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      disabled={active ? save.party.length <= 1 : save.party.length >= 5}
-                                      onClick={() =>
-                                        setActiveParty(
-                                          active
-                                            ? save.party.filter((row) => row.id !== member.id).map((row) => row.id)
-                                            : [...save.party.map((row) => row.id), member.id],
-                                        )
-                                      }
-                                    >
-                                      {active ? "移出" : "上阵"}
-                                    </Button>
+                      {(
+                        [
+                          { key: "party", label: "上阵", active: true, members: save.party },
+                          {
+                            key: "reserve",
+                            label: "待命",
+                            active: false,
+                            members: save.reserve.filter(
+                              (row) => !save.party.some((p) => p.id === row.id),
+                            ),
+                          },
+                        ] as const
+                      ).map((group) => (
+                        <section key={group.key} className="space-y-1.5">
+                          <p className="text-sm font-medium">
+                            {group.label}
+                            <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                              {group.members.length} 人
+                              {group.active ? ` · 最多 ${SAGA_PARTY_SIZE} 人` : ""}
+                            </span>
+                          </p>
+                          {group.members.length === 0 ? (
+                            <p className="text-xs text-muted-foreground">
+                              {group.active ? "还没有上阵武将。" : "待命席空着，招降或平定地方会有新武将进来。"}
+                            </p>
+                          ) : (
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {group.members.map((member) => {
+                                const def = SAGA_GENERAL_BY_ID.get(member.id);
+                                const stats = generalStats(member, save.gearLevels, uiRules);
+                                const need =
+                                  member.level >= SAGA_MAX_LEVEL
+                                    ? 0
+                                    : expToNext(member.level) - member.exp;
+                                return (
+                                  <div key={member.id} className="rounded-lg border border-border p-2.5 text-sm">
+                                    <div className="flex gap-2.5">
+                                      <SagaPortrait
+                                        generalId={member.id}
+                                        gear={{ weapon: member.weapon, armor: member.armor }}
+                                        width={44}
+                                        height={55}
+                                      />
+                                      <div className="min-w-0 flex-1">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <span className="truncate font-medium">
+                                            {def?.name ?? member.id}
+                                            <span className="ml-1.5 text-xs text-muted-foreground">
+                                              Lv{member.level}
+                                            </span>
+                                          </span>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            disabled={
+                                              group.active
+                                                ? save.party.length <= 1
+                                                : save.party.length >= SAGA_PARTY_SIZE
+                                            }
+                                            onClick={() =>
+                                              setActiveParty(
+                                                group.active
+                                                  ? save.party
+                                                      .filter((row) => row.id !== member.id)
+                                                      .map((row) => row.id)
+                                                  : [...save.party.map((row) => row.id), member.id],
+                                              )
+                                            }
+                                          >
+                                            {group.active ? "移出" : "上阵"}
+                                          </Button>
+                                        </div>
+                                        <p className="mt-0.5 text-xs text-muted-foreground">
+                                          武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速{" "}
+                                          {stats.speed} · 攻 {stats.force + stats.weaponAtk + member.level * 2} ·
+                                          兵力 {stats.maxTroops}
+                                        </p>
+                                        <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+                                          经验 {member.exp}/{expToNext(member.level)}
+                                          {member.level >= SAGA_MAX_LEVEL
+                                            ? " · 已满级"
+                                            : ` · 距下一级还差 ${Math.max(0, need)}`}
+                                        </p>
+                                        {(def?.traits?.length ?? 0) > 0 ? (
+                                          <p className="mt-0.5 text-xs text-primary/90">
+                                            {(def?.traits ?? [])
+                                              .map((traitId) => {
+                                                const trait = SAGA_TRAIT_BY_ID.get(traitId);
+                                                return `${trait?.name ?? traitId}：${trait?.desc ?? ""}`;
+                                              })
+                                              .join("；")}
+                                          </p>
+                                        ) : null}
+                                        <p className="mt-0.5 text-xs text-muted-foreground">
+                                          武器 {member.weapon ? itemName(member.weapon) : "无"} · 防具{" "}
+                                          {member.armor ? itemName(member.armor) : "无"}
+                                        </p>
+                                      </div>
+                                    </div>
                                   </div>
-                                  <p className="mt-0.5 text-xs text-muted-foreground">
-                                    武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 攻{" "}
-                                    {stats.force + stats.weaponAtk + member.level * 2} · 兵力 {stats.maxTroops}
-                                  </p>
-                                  <p className="mt-0.5 text-xs text-muted-foreground">
-                                    {def?.title} · {def?.tactics.map((tactic) => SAGA_TACTIC_BY_ID.get(tactic)?.name).join(" / ") || "无计策"}
-                                  </p>
-                                  {(def?.traits?.length ?? 0) > 0 ? (
-                                    <p className="mt-0.5 text-xs text-primary/90">
-                                      {(def?.traits ?? [])
-                                        .map((traitId) => {
-                                          const trait = SAGA_TRAIT_BY_ID.get(traitId);
-                                          return `${trait?.name ?? traitId}：${trait?.desc ?? ""}`;
-                                        })
-                                        .join("；")}
-                                    </p>
-                                  ) : null}
-                                  <p className="mt-0.5 text-xs text-muted-foreground">
-                                    武器 {member.weapon ? itemName(member.weapon) : "无"} · 防具 {member.armor ? itemName(member.armor) : "无"}
-                                  </p>
-                                </div>
-                              </div>
+                                );
+                              })}
                             </div>
-                          );
-                        })}
-                      </div>
+                          )}
+                        </section>
+                      ))}
                     </div>
                   ) : null}
 
@@ -3440,16 +3488,39 @@ export function TrialGame(props: TrialGameProps) {
           const name = run?.nodes[camp.node]?.name ?? "敌营";
           const done = clearedNodes.includes(camp.node);
           const available = openNodeList.includes(camp.node);
+          // 本阵还差几座：把还有哪座没破直接写在按钮上，别只显示「未可」让人猜。
+          const bossNode = run?.nodes[camp.node];
+          const pendingNodes =
+            bossNode?.kind === "boss"
+              ? run!.nodes.filter((item, itemIndex) => {
+                  if (item.chapter !== bossNode.chapter || item.kind === "boss") return false;
+                  if (clearedNodes.includes(itemIndex)) return false;
+                  if (item.branch) {
+                    return !run!.nodes.some(
+                      (sibling, siblingIndex) =>
+                        sibling.branch?.group === item.branch!.group && clearedNodes.includes(siblingIndex),
+                    );
+                  }
+                  return true;
+                })
+              : [];
+          const lockHint =
+            !done && !available && pendingNodes.length > 0
+              ? `（还差 ${pendingNodes.length} 座：${pendingNodes.map((item) => item.name).join("、")}）`
+              : !done && !available
+                ? "（前区本阵未破）"
+                : "";
           return (
             <Button
               key={camp.node}
               variant="outline"
               size="sm"
               disabled={Boolean(battle) || Boolean(settlement) || !run || inTown}
+              title={lockHint ? `${name}${lockHint}` : name}
               onClick={() => walkTo(camp.x, camp.y + 32, () => openCamp(camp.node))}
             >
               <Swords className="h-3.5 w-3.5" />
-              {done ? "已破" : available ? "可攻" : "未可"} · {name}
+              {done ? "已破" : available ? "可攻" : `未可${lockHint}`} · {name}
             </Button>
           );
         })}
@@ -3515,10 +3586,16 @@ function StatusPanel({
         <StatusRoster members={save.party} active state={state} rules={rules} gearLevels={save.gearLevels} />
       </section>
 
-      {save.reserve.length > 0 ? (
+      {save.reserve.filter((row) => !save.party.some((p) => p.id === row.id)).length > 0 ? (
         <section className="space-y-2">
-          <p className="text-sm font-medium">后备武将</p>
-          <StatusRoster members={save.reserve} active={false} state={state} rules={rules} gearLevels={save.gearLevels} />
+          <p className="text-sm font-medium">待命武将</p>
+          <StatusRoster
+            members={save.reserve.filter((row) => !save.party.some((p) => p.id === row.id))}
+            active={false}
+            state={state}
+            rules={rules}
+            gearLevels={save.gearLevels}
+          />
         </section>
       ) : null}
 
@@ -3554,21 +3631,37 @@ function StatusPanel({
 
       <section className="space-y-1.5">
         <p className="text-sm font-medium">队伍</p>
-        <div className="flex flex-wrap gap-1.5">
-          {[...save.party, ...save.reserve].map((member) => (
-            <span
-              key={member.id}
-              className={cn(
-                "rounded border px-2 py-0.5 text-xs",
-                save.party.some((row) => row.id === member.id)
-                  ? "border-primary/50 bg-primary/5"
-                  : "border-border text-muted-foreground",
-              )}
-            >
-              {generalName(member.id)} Lv{member.level}
-            </span>
-          ))}
-        </div>
+        {(
+          [
+            { label: "上阵", members: save.party, active: true },
+            {
+              label: "待命",
+              members: save.reserve.filter((row) => !save.party.some((p) => p.id === row.id)),
+              active: false,
+            },
+          ] as const
+        ).map((group) => (
+          <div key={group.label} className="space-y-1">
+            <p className="text-xs text-muted-foreground">
+              {group.label} · {group.members.length} 人
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {group.members.map((member) => (
+                <span
+                  key={member.id}
+                  className={cn(
+                    "rounded border px-2 py-0.5 text-xs",
+                    group.active
+                      ? "border-primary/50 bg-primary/5"
+                      : "border-border text-muted-foreground",
+                  )}
+                >
+                  {generalName(member.id)} Lv{member.level}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
       </section>
     </div>
   );
@@ -3625,6 +3718,9 @@ function StatusRoster({
                 </div>
                 <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
                   兵力 {current}/{max} · 经验 {member.exp}/{expToNext(member.level)}
+                  {member.level >= SAGA_MAX_LEVEL
+                    ? " · 已满级"
+                    : ` · 距下一级还差 ${Math.max(0, expToNext(member.level) - member.exp)}`}
                 </p>
                 {rules >= 2 && (def?.traits?.length ?? 0) > 0 ? (
                   <div className="mt-0.5 space-y-0.5 text-[11px]">
@@ -3657,54 +3753,78 @@ function StatusRoster({
 }
 
 function PartyList({ save, rules = SAGA_RULESET }: { save: TrialSave; rules?: number }) {
+  const groups = [
+    { key: "party", label: "上阵", members: save.party },
+    {
+      key: "reserve",
+      label: "待命",
+      members: save.reserve.filter((row) => !save.party.some((p) => p.id === row.id)),
+    },
+  ] as const;
   return (
-    <div className="grid gap-2 sm:grid-cols-2">
-      {[...save.party, ...save.reserve].map((member) => {
-        const def = SAGA_GENERAL_BY_ID.get(member.id);
-        const stats = generalStats(member, save.gearLevels, rules);
-        const active = save.party.some((row) => row.id === member.id);
-        const attack = stats.force + stats.weaponAtk + member.level * 2;
-        return (
-          <div key={member.id} className="rounded-lg border border-border p-2 text-xs">
-            <div className="flex gap-2">
-              <SagaPortrait
-                generalId={member.id}
-                gear={{ weapon: member.weapon, armor: member.armor }}
-                width={48}
-                height={60}
-              />
-              <div className="min-w-0 flex-1">
-                <p className="flex items-center justify-between text-sm font-medium">
-                  <span>
-                    {def?.name ?? member.id} <span className="text-muted-foreground">Lv{member.level}</span>
-                  </span>
-                  <span className="text-[11px] text-muted-foreground">{active ? "上阵" : "后备"}</span>
-                </p>
-                <p className="mt-0.5 text-muted-foreground">
-                  武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 攻 {attack} · 兵力{" "}
-                  {stats.maxTroops}
-                </p>
-                <p className="mt-0.5 text-muted-foreground">
-                  经验 {member.exp}/{expToNext(member.level)} · {def?.title}
-                </p>
-                {(def?.traits?.length ?? 0) > 0 ? (
-                  <p className="mt-0.5 text-primary/90">
-                    {(def?.traits ?? [])
-                      .map((traitId) => {
-                        const trait = SAGA_TRAIT_BY_ID.get(traitId);
-                        return `${trait?.name ?? traitId}：${trait?.desc ?? ""}`;
-                      })
-                      .join("；")}
-                  </p>
-                ) : null}
-                <p className="mt-0.5 text-muted-foreground">
-                  武器 {member.weapon ? itemName(member.weapon) : "无"} · 防具 {member.armor ? itemName(member.armor) : "无"}
-                </p>
-              </div>
-            </div>
+    <div className="space-y-2">
+      {groups.map((group) => (
+        <div key={group.key} className="space-y-1">
+          <p className="text-xs text-muted-foreground">
+            {group.label} · {group.members.length} 人
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {group.members.map((member) => {
+              const def = SAGA_GENERAL_BY_ID.get(member.id);
+              const stats = generalStats(member, save.gearLevels, rules);
+              const active = group.key === "party";
+              const attack = stats.force + stats.weaponAtk + member.level * 2;
+              return (
+                <div key={member.id} className="rounded-lg border border-border p-2 text-xs">
+                  <div className="flex gap-2">
+                    <SagaPortrait
+                      generalId={member.id}
+                      gear={{ weapon: member.weapon, armor: member.armor }}
+                      width={48}
+                      height={60}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="flex items-center justify-between text-sm font-medium">
+                        <span>
+                          {def?.name ?? member.id}{" "}
+                          <span className="text-muted-foreground">Lv{member.level}</span>
+                        </span>
+                        <span className="text-[11px] text-muted-foreground">{active ? "上阵" : "待命"}</span>
+                      </p>
+                      <p className="mt-0.5 text-muted-foreground">
+                        武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 攻{" "}
+                        {attack} · 兵力 {stats.maxTroops}
+                      </p>
+                      <p className="mt-0.5 tabular-nums text-muted-foreground">
+                        经验 {member.exp}/{expToNext(member.level)}
+                        {member.level >= SAGA_MAX_LEVEL
+                          ? " · 已满级"
+                          : ` · 距下一级还差 ${Math.max(0, expToNext(member.level) - member.exp)}`}
+                        {" · "}
+                        {def?.title}
+                      </p>
+                      {(def?.traits?.length ?? 0) > 0 ? (
+                        <p className="mt-0.5 text-primary/90">
+                          {(def?.traits ?? [])
+                            .map((traitId) => {
+                              const trait = SAGA_TRAIT_BY_ID.get(traitId);
+                              return `${trait?.name ?? traitId}：${trait?.desc ?? ""}`;
+                            })
+                            .join("；")}
+                        </p>
+                      ) : null}
+                      <p className="mt-0.5 text-muted-foreground">
+                        武器 {member.weapon ? itemName(member.weapon) : "无"} · 防具{" "}
+                        {member.armor ? itemName(member.armor) : "无"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
+        </div>
+      ))}
     </div>
   );
 }

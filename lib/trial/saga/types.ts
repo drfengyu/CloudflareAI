@@ -40,7 +40,8 @@ export const SAGA_RULESET = 14;
 export const SAGA_STAT_CAP = 255;
 
 export const SAGA_PARTY_SIZE = 5;
-export const SAGA_RESERVE_SIZE = 12;
+/** 待命席上限：12 张卡就会把「移出在队武将」堵死（后备满了就换不动人），放宽到 60。 */
+export const SAGA_RESERVE_SIZE = 60;
 /** 武将等级封顶：v14 起从 30 抬到 50（兵力曲线 1 级 100 兵 → 50 级 20000 兵）。 */
 export const SAGA_MAX_LEVEL = 50;
 

@@ -838,9 +838,21 @@ export function canEngageNode(run: SagaRun, state: SagaReplayState, node: number
   }
   if (target.kind !== "boss") return true;
   // 主帅本阵扎在本区最后：本区外围营地没拔干净就冲进去，重放时直接忽略。
+  // 岔路两选一：同组只要打通了一处，另一处（即便战报里没记到）也算过，不能把本阵锁死。
+  const cleared = new Set(state.clearedNodes);
+  const branchDone = new Set<number>();
+  for (let index = 0; index < run.nodes.length; index++) {
+    const item = run.nodes[index];
+    if (!item || item.chapter !== target.chapter) continue;
+    if (!item.branch || !cleared.has(index)) continue;
+    branchDone.add(item.branch.group);
+  }
   return run.nodes.every(
     (item, itemIndex) =>
-      item.chapter !== target.chapter || item.kind === "boss" || state.clearedNodes.includes(itemIndex),
+      item.chapter !== target.chapter ||
+      item.kind === "boss" ||
+      cleared.has(itemIndex) ||
+      (item.branch ? branchDone.has(item.branch.group) : false),
   );
 }
 
@@ -1010,6 +1022,25 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
   }
   // 重放结束后的新指令（以及下一次开战）一律按当前规则。
   state.rules = currentRules;
+  // 岔路修补：旧战报（升级前开的行军、只记了打通一侧的指令）里另一侧可能没落进
+  // `clearedNodes`，本阵就永远差一座。这里按「同组已打通一处」把另一侧补成已破。
+  const clearedSet = new Set(state.clearedNodes);
+  const doneGroups = new Set<number>();
+  for (const index of state.clearedNodes) {
+    const branch = run.nodes[index]?.branch;
+    if (branch) doneGroups.add(branch.group);
+  }
+  run.nodes.forEach((node, index) => {
+    if (!node.branch || clearedSet.has(index) || !doneGroups.has(node.branch.group)) return;
+    clearedSet.add(index);
+    state.clearedNodes.push(index);
+  });
+  state.completed = state.clearedNodes.length;
+  // 补完之后本区（乃至整趟）真的全破了，按胜利收口，不让存档停在「全清但没结算」。
+  if (state.scene === "field" && state.completed >= run.nodes.length) {
+    state.scene = "won";
+    state.victory = true;
+  }
   return { state, cleared: state.completed, victory: state.victory };
 }
 
