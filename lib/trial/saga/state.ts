@@ -10,6 +10,7 @@ import {
 } from "./data";
 import {
   SAGA_CARRY_LIMIT,
+  SAGA_LEGACY_MAX_LEVEL,
   SAGA_MAX_LEVEL,
   SAGA_PARTY_SIZE,
   SAGA_RESERVE_SIZE,
@@ -25,7 +26,7 @@ import { forgeStat, normalizeGearLevels } from "./forge";
 
 /**
  * 兵力基准的参照武将 `baseTroops`（张飞 210，全表最高）。
- * v14 起「1 级 100 兵 → 50 级 20000 兵」的曲线以它为 1.0，其余武将按 baseTroops 比例微调。
+ * v17 起「1 级 100 兵 → 100 级 40294 兵」的二次成长基准以它为 1.0，其余武将按 baseTroops 比例微调。
  */
 export const SAGA_TROOP_REF_BASE = 210;
 
@@ -237,13 +238,15 @@ export function generalStats(
       gearSpeed: 0,
     };
   }
-  const level = clampInt(state.level, 1, SAGA_MAX_LEVEL, 1);
+  const maxLevel = rules >= 17 ? SAGA_MAX_LEVEL : SAGA_LEGACY_MAX_LEVEL;
+  const level = clampInt(state.level, 1, maxLevel, 1);
   const weapon = state.weapon ? SAGA_ITEM_BY_ID.get(state.weapon) : null;
   const armor = state.armor ? SAGA_ITEM_BY_ID.get(state.armor) : null;
   const bonus = traitStats(def);
-  // v9 起每级成长翻三倍、四维封顶 255，兵力翻一倍；v14 起等级封顶提到 50，
-  // 每级成长降到 ×2（50 级时吕布武力 253，正好压在 255 以下），兵力改走几何曲线。
-  const growth = rules >= 14 ? 2 : rules >= 9 ? 3 : 1;
+  // v9 起每级成长翻三倍、四维封顶 255，兵力翻一倍；v14 起等级封顶 50、每级成长 ×2；
+  // v17 起等级封顶 100，每级成长收到 ×1.05（100 级吕布武力 255、庞统智力约 220），
+  // 旧行军仍按各自版本的成长与兵力口径重放。
+  const growth = rules >= 17 ? 1.05 : rules >= 14 ? 2 : rules >= 9 ? 3 : 1;
   const troopScale = rules >= 9 ? 2 : 1;
   const cap = (value: number): number => Math.min(SAGA_STAT_CAP, Math.round(value));
   const maxTroops =
@@ -281,24 +284,39 @@ export function expToNext(level: number): number {
  * - v14（50 级封顶）：几何曲线，1 级 100 → 50 级 20000（每级约 ×1.113），
  *   `generalStats` 再按武将自身 `baseTroops / 210` 微调强弱（张飞满级 20000、庞统约 14286）；
  *   敌军同样按这条基准 × 1.2~6，两边口径永远对齐。
+ * - v17（100 级封顶）：不再用几何曲线，改「小幅线性 + 二次成长」：
+ *   `100 + 10 × (level-1) + 4 × (level-1)^2`，1 级 100、10 级 514、50 级 10194、
+ *   100 级 40294（不设 20000 上限），前期不会一百多兵就被营中步卒压死。
+ *   v14~v16 的旧行军仍按 50 级几何分母重放。
  */
 export function troopBaseline(level: number, rules = SAGA_RULESET): number {
-  const lv = Math.max(1, Math.trunc(level));
-  if (rules >= 14) return Math.round(100 * Math.pow(200, (lv - 1) / (SAGA_MAX_LEVEL - 1)));
+  const maxLevel = rules >= 17 ? SAGA_MAX_LEVEL : SAGA_LEGACY_MAX_LEVEL;
+  const lv = Math.min(maxLevel, Math.max(1, Math.trunc(level)));
+  if (rules >= 17) {
+    const step = lv - 1;
+    return 100 + step * 10 + step * step * 4;
+  }
+  if (rules >= 14) {
+    return Math.round(100 * Math.pow(200, (lv - 1) / (SAGA_LEGACY_MAX_LEVEL - 1)));
+  }
   return 400 + (lv - 1) * 24;
 }
 
-export function grantGeneralExp(state: SagaGeneralState, amount: number): number {
+export function grantGeneralExp(
+  state: SagaGeneralState,
+  amount: number,
+  maxLevel = SAGA_MAX_LEVEL,
+): number {
   const gain = Math.max(0, Math.trunc(amount));
   if (gain <= 0) return 0;
   state.exp += gain;
   let levels = 0;
-  while (state.level < SAGA_MAX_LEVEL && state.exp >= expToNext(state.level)) {
+  while (state.level < maxLevel && state.exp >= expToNext(state.level)) {
     state.exp -= expToNext(state.level);
     state.level += 1;
     levels += 1;
   }
-  if (state.level >= SAGA_MAX_LEVEL) state.exp = 0;
+  if (state.level >= maxLevel) state.exp = 0;
   return levels;
 }
 

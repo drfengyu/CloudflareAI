@@ -32,9 +32,11 @@ export const SAGA_SAVE_VERSION = 1;
  * 不再用武将自身 baseTroops 的旧曲线；v12 及更早的行军仍按旧账重放。
  * v14 起等级封顶抬到 50、兵力改几何曲线（1 级 100 兵 → 50 级 20000 兵），
  * 每级四维成长由 ×3 收到 ×2；v13 及更早的行军仍按旧账重放。
+ * v17 起等级封顶抬到 100，兵力改「小幅线性 + 二次成长」（1 级 100 兵 → 100 级 40294 兵），
+ * 四维成长改为 ×1.05（100 级吕布武力 255、庞统智力约 220），50 级版本的行军仍按 v16 旧账重放。
  * 旧行军没有这个字段，重放时按 v1 走，避免改版把还没收兵的对局打乱。
  */
-export const SAGA_RULESET = 16;
+export const SAGA_RULESET = 17;
 
 /** 四维上限：v9 起武力 / 智力 / 防御 / 速度可以一路长到 255（基础值不动，长的是等级与特性加成）。 */
 export const SAGA_STAT_CAP = 255;
@@ -50,8 +52,16 @@ export const SAGA_BATTLE_SIZE = SAGA_DEPLOY_SIZE;
 export const SAGA_RESERVE_SIZE = 120;
 /** 每名武将最多携带 8 种不同道具，同种道具叠数量。 */
 export const SAGA_CARRY_LIMIT = 8;
-/** 武将等级封顶：v14 起从 30 抬到 50（兵力曲线 1 级 100 兵 → 50 级 20000 兵）。 */
-export const SAGA_MAX_LEVEL = 50;
+/** 武将等级封顶：v17 起从 50 抬到 100（兵力二次成长 1 级 100 兵 → 100 级 40294 兵）。 */
+export const SAGA_MAX_LEVEL = 100;
+
+/** v14~v16 的旧等级封顶：这些版本的行军仍按 50 级口径重放，不能跟着新档一起抬到 100。 */
+export const SAGA_LEGACY_MAX_LEVEL = 50;
+
+/** 按行军规则取等级上限：v17 起 100，v14~v16 仍 50。 */
+export function sagaMaxLevel(rules: number = SAGA_RULESET): number {
+  return rules >= 17 ? SAGA_MAX_LEVEL : SAGA_LEGACY_MAX_LEVEL;
+}
 
 /** 行军大地图：俯视格网，镜头跟随主角在图上自由行走。 */
 export const SAGA_FIELD_COLS = 76;

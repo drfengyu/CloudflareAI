@@ -111,13 +111,13 @@ function makeEnemy(
   const def = SAGA_GENERAL_BY_ID.get(defId);
   const fallback = SAGA_GENERAL_BY_ID.get("huangjin_lishi")!;
   const raw = def ?? fallback;
-  // v14 起封顶 50 级，敌军也跟着章节一路练到 50 级（原来每章 +4 最多到 25 级上下，
-// 后半程玩家满级就再无对手）。第 7 章本阵正好贴到 50 级。
+  // v17 起封顶 100 级，敌军跟着章节一路练到 100 级：每章 +14 级，
+  // 第 7 章本阵正好贴到 100 级（旧 v14~v16 行军里的敌军等级已落库，不会重算）。
   const level = Math.min(
     SAGA_MAX_LEVEL,
-    1 + chapterIndex * 7 + nodeIndex + (kind === "elite" ? 1 : 0) + (kind === "boss" ? 3 : 0),
+    1 + chapterIndex * 14 + nodeIndex + (kind === "elite" ? 1 : 0) + (kind === "boss" ? 3 : 0),
   );
-  // v13 起敌军兵力按「同等级我方基准」给：基准 = 1 级 100 兵 → 50 级 20000 兵的几何曲线，
+  // 敌军兵力按「同等级我方基准」给：基准 = 1 级 100 兵 → 100 级 40294 兵的二次成长，
   // 再按身份 ×1.2~6（本阵主将最高 6 倍，随身份强弱浮动），不再用武将自身的 baseTroops 开小差。
   const refTroops = troopBaseline(level);
   const strength = Math.min(1, Math.max(0, (raw.baseTroops - 120) / 140));
@@ -140,10 +140,10 @@ function makeEnemy(
     level,
     troops,
     maxTroops: troops,
-    force: cap(raw.force + bonus.force + Math.floor(level * 4.2)),
-    intellect: cap(raw.intellect + bonus.intellect + Math.floor(level * 3.3)),
-    defense: cap(raw.defense + bonus.defense + Math.floor(level * 3.6)),
-    speed: cap(raw.speed + bonus.speed + Math.floor(level * 2.1)),
+    force: cap(raw.force + bonus.force + Math.floor(level * 1.5)),
+    intellect: cap(raw.intellect + bonus.intellect + Math.floor(level * 1.2)),
+    defense: cap(raw.defense + bonus.defense + Math.floor(level * 1.3)),
+    speed: cap(raw.speed + bonus.speed + Math.floor(level * 0.75)),
     tactics: tacticsFor(raw, level),
     traits: raw.traits ?? [],
     color: raw.color,
@@ -822,7 +822,7 @@ function applyPurchase(state: SagaReplayState, purchase: SagaPurchase): void {
   }
   if (purchase.itemId === SAGA_TRAINING_ITEM_ID) {
     if (purchase.generalId && typeof purchase.targetLevel === "number") {
-      trainGeneral(state.save, purchase.generalId, purchase.targetLevel);
+      trainGeneral(state.save, purchase.generalId, purchase.targetLevel, state.rules);
     }
     return;
   }

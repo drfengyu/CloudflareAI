@@ -534,8 +534,23 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
 
 ## 版本发布
 
-**当前版本**：v0.96.0（2026-11-17，五人出战 / 阵亡与复活 / 武库分柜）
+**当前版本**：v0.97.0（2026-11-19，等级封顶 100 / 武智封顶 255）
 **下一版本**：待定
+
+- v0.97.0 等级封顶 50 → 100（`SAGA_RULESET` 16 → 17）：
+  `types.ts` `SAGA_MAX_LEVEL = 100`，新增 `SAGA_LEGACY_MAX_LEVEL = 50` 给 v14~v16 重放。
+  `state.ts` `generalStats` 对 `rules >= 17` 用 `growth = 1.05`、等级上限 100；旧规则仍 ×2、封 50。
+  `troopBaseline(level, rules)`：v17 走二次成长 `100 + 10 × (level-1) + 4 × (level-1)^2`
+  （1 级 100 / 10 级 514 / 50 级 10194 / 100 级 40294，不设 20000 上限），v14~v16 仍走 `/49` 几何分母；
+  `grantGeneralExp` 增加 `maxLevel` 参数。
+  `training.ts` `trainingLevelCap(save, rules)` / `trainGeneral(..., rules)` 增加规则参数，
+  仍 `min(100, 9 + wins × 6)`，v16 旧行军仍封 50。
+  `run.ts makeEnemy` 等级每章 +14（第 7 章本阵 100 级），敌将四维成长 4.2 / 3.3 / 3.6 / 2.1 →
+  1.5 / 1.2 / 1.3 / 0.75，仍封顶 255；`battle.ts` 升级按 `battle.rules` 取 50 / 100 上限。
+  `encounter.ts` v17 领头敌将与杂兵都先按章节等级算、再用队伍最高级封顶；
+  杂兵倍率 0.9~1.2、领头 1.0~1.5；队数 10 级前后 1、15 级 2、30 级 3、45 级以后 4，旧规则不变。
+  `game.tsx` 档案商店封顶文案改读 `SAGA_MAX_LEVEL`，训练场按 `uiRules` 取上限。
+  `notice.ts` / `package.json` / `package-lock.json` 升到 0.97.0。
 
 - v0.96.0 五人出战与阵亡停尸（`SAGA_RULESET` 15 → 16）：
   `types.ts` 新增 `SAGA_DEPLOY_SIZE = 5`、`SAGA_CARRY_LIMIT = 8`、`WeaponType`、`GearSlot`；

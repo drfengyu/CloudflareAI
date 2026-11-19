@@ -14,7 +14,7 @@ import {
   tacticsFor,
   traitStats,
 } from "./data";
-import { SAGA_MAX_COMMANDS, type SagaEnemy, type SagaNode, type SagaRun } from "./types";
+import { SAGA_MAX_COMMANDS, SAGA_MAX_LEVEL, type SagaEnemy, type SagaNode, type SagaRun } from "./types";
 import { troopBaseline } from "./state";
 
 interface FoeTemplate {
@@ -122,15 +122,33 @@ function pick<T>(rng: () => number, list: readonly T[]): T {
   return list[Math.min(list.length - 1, Math.floor(rng() * list.length))];
 }
 
-function leaderEnemy(leaderId: string, chapterIndex: number, ordinal: number, rules: number): SagaEnemy {
+function leaderEnemy(
+  leaderId: string,
+  chapterIndex: number,
+  ordinal: number,
+  rules: number,
+  partyLevel: number,
+): SagaEnemy {
   const def = SAGA_GENERAL_BY_ID.get(leaderId) ?? SAGA_GENERAL_BY_ID.get("huangjin_lishi")!;
-  const level = 1 + chapterIndex * 4 + Math.floor(ordinal / 3);
+  // v17 起主线拉长到 100 级，野外领头敌将按章节练到 90+；
+  // 但野外不看「这是第几场遭遇」硬堆等级：最高只到队伍最高级，避免 10 级撞上 16 级头目。
+  const scaledLevel =
+    rules >= 17
+      ? 1 + chapterIndex * 13 + Math.floor(ordinal / 3)
+      : 1 + chapterIndex * 4 + Math.floor(ordinal / 3);
+  const level =
+    rules >= 17
+      ? Math.min(SAGA_MAX_LEVEL, scaledLevel, partyLevel)
+      : scaledLevel;
   // v13 起野外领头的敌将也按「同等级我方基准 × 1.3~2.3」给兵；旧规则仍走原曲线重放。
+  // v17 前期再收一档（1.0~1.5 倍），避免 10 级队伍一场遭遇撞上两倍兵力的头目。
   const troops =
     rules >= 13
       ? Math.round(
           troopBaseline(level, rules) *
-            (1.3 + 1.0 * Math.min(1, Math.max(0, (def.baseTroops - 120) / 140))),
+            (rules >= 17
+              ? 1.0 + 0.5 * Math.min(1, Math.max(0, (def.baseTroops - 120) / 140))
+              : 1.3 + 1.0 * Math.min(1, Math.max(0, (def.baseTroops - 120) / 140))),
         )
       : Math.max(
           50,
@@ -167,17 +185,27 @@ function squadEnemy(
   slot: number,
   withLeader: boolean,
   rules: number,
+  partyLevel: number,
 ): SagaEnemy {
-  // v6 起野外杂兵整体降到「章节 × 2 + 场次 / 3」，比旧规则的「章节 × 3 + 场次 / 2」低一截。
+  // v6 起野外杂兵整体降到「章节 × 2 + 场次 / 3」，比旧规则的「章节 × 3 + 场次 / 2」低一截；
+  // v17 起主线拉长到 100 级，杂兵改为「章节 × 8」，但最高不超过队伍最高级，避免越打越离谱。
+  const scaledLevel =
+    rules >= 17
+      ? 1 + chapterIndex * 8 + Math.floor(ordinal / 3)
+      : rules >= 6
+        ? 1 + chapterIndex * 2 + Math.floor(ordinal / 3)
+        : 1 + chapterIndex * 3 + Math.floor(ordinal / 2);
   const level =
-    rules >= 6
-      ? 1 + chapterIndex * 2 + Math.floor(ordinal / 3)
-      : 1 + chapterIndex * 3 + Math.floor(ordinal / 2);
+    rules >= 17
+      ? Math.min(SAGA_MAX_LEVEL, scaledLevel, partyLevel)
+      : scaledLevel;
   const troops =
     rules >= 13
       ? Math.round(
           troopBaseline(level, rules) *
-            (1.2 + 0.5 * Math.min(1, Math.max(0, (foe.baseTroops - 60) / 120))) *
+            (rules >= 17
+              ? 0.9 + 0.3 * Math.min(1, Math.max(0, (foe.baseTroops - 60) / 120))
+              : 1.2 + 0.5 * Math.min(1, Math.max(0, (foe.baseTroops - 60) / 120))) *
             (withLeader ? 1.05 : 1),
         )
       : Math.max(
@@ -215,24 +243,31 @@ function squadEnemy(
  * 1~4 队：可能全是兵士 / 山贼 / 海贼 / 盗贼，也可能由一名本章敌将领头。
  * v4 之前只有前三种杂兵，旧行军按原编成重放；
  * v6 起杂兵等级降为「章节 × 2 + 场次 / 3」，v5 及更早仍按原等级重放。
+ * v17 起野外按队伍最高等级封顶：10 级前后只放 1 队、15 级 2 队、30 级 3 队、45 级以后才放满 4 队。
  */
 export function sagaEncounterFor(run: SagaRun, ordinal: number, rules: number): SagaNode {
   const index = clampInt(ordinal, 0, SAGA_MAX_COMMANDS - 1);
   const chapter =
     SAGA_CHAPTERS[clampInt(run.startSave.chapter, 0, SAGA_CHAPTERS.length - 1)];
+  const partyLevel = Math.max(
+    1,
+    ...run.startSave.party.map((general) => Math.max(1, Math.trunc(general.level))),
+  );
   const rng = mulberry32((run.seed ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0);
   const foe = pick(rng, rules >= 4 ? FOES_V4 : FOES);
   const hasLeader = rng() < 0.38;
-  const squad = 1 + Math.floor(rng() * 3);
+  const squadCap =
+    rules >= 17 ? (partyLevel >= 45 ? 4 : partyLevel >= 30 ? 3 : partyLevel >= 15 ? 2 : 1) : 4;
+  const squad = 1 + Math.floor(rng() * squadCap);
   const enemies: SagaEnemy[] = [];
   let leaderName = "";
   if (hasLeader) {
-    const leader = leaderEnemy(pick(rng, chapter.field), chapter.index, index, rules);
+    const leader = leaderEnemy(pick(rng, chapter.field), chapter.index, index, rules, partyLevel);
     leaderName = leader.name;
     enemies.push(leader);
   }
   for (let slot = 0; slot < squad; slot++) {
-    enemies.push(squadEnemy(foe, chapter.index, index, slot, hasLeader, rules));
+    enemies.push(squadEnemy(foe, chapter.index, index, slot, hasLeader, rules, partyLevel));
   }
   const rewardGold =
     8 + chapter.index * 4 + enemies.length * 4 + (hasLeader ? 12 : 0) + Math.floor(index / 2) * 2;

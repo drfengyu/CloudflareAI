@@ -14,6 +14,8 @@ import { generalStats, grantGeneralExp, recruitToSave, findGeneral, troopBaselin
 import {
   SAGA_BATTLE_SIZE,
   SAGA_DEPLOY_SIZE,
+  SAGA_LEGACY_MAX_LEVEL,
+  SAGA_MAX_LEVEL,
   type SagaBattleEvent,
   type SagaBattleGeneral,
   type SagaBattleState,
@@ -252,13 +254,13 @@ function buildSoldier(
   };
 }
 
-/** 等级越高出手越重：1 级为基准，50 级约 +49%。 */
+/** 等级越高出手越重：1 级为基准，100 级约 +99%（旧规则 50 级仍约 +49%）。 */
 function skillFactor(level: number): number {
-  return 1 + clamp(level - 1, 0, 49) * 0.01;
+  return 1 + clamp(level - 1, 0, SAGA_MAX_LEVEL - 1) * 0.01;
 }
 
 /**
- * v14 起兵力从 1 级 100 一路涨到 50 级 20000，伤害 / 回复若还按绝对值算，
+ * v14 起兵力从 1 级 100 一路涨到 100 级 40294，伤害 / 回复若还按绝对值算，
  * 一场仗要打上百回合。这里跟着兵力的量级一起抬：伤害 ≈ 系数 × 同等级兵力基准 × 攻防比 × 等级差。
  * 兵力多的一方只是更能挨，不会被「同级 1.2~6 倍兵力」直接压成秒杀。
  * 旧规则（v13 及更早）返回 null，仍走原来的绝对值，旧战报重放不翻账。
@@ -276,7 +278,7 @@ function forceDamage(
   const typical = 67 + actorLevel * 1.7;
   const ratio = clamp(raw / typical, ratioFloor, ratioCeil);
   const lvAdj = clamp(1 + (actorLevel - targetLevel) * 0.02, 0.7, 1.15);
-  return Math.max(1, Math.round(troopBaseline(actorLevel) * factor * ratio * lvAdj));
+  return Math.max(1, Math.round(troopBaseline(actorLevel, rules) * factor * ratio * lvAdj));
 }
 
 /** 回复口径：一次单体回复约一成半，全体回复约一成（仍按施术者等级的量级）。 */
@@ -424,7 +426,7 @@ function buildBattle(
       bonds: [],
       bondAtk: 0,
       bondCut: 0,
-      // v0.96：策略点大幅抬高，且随等级成长；50 级智将可攒到 40+ 点。
+      // v0.97：策略点仍按等级成长、封顶 48；100 级智将早在前中期就能攒到 40+ 点。
       tacticPoints:
         rules >= 3
           ? Math.min(
@@ -1418,7 +1420,11 @@ function finishBattle(
       const def = SAGA_GENERAL_BY_ID.get(saved.id);
       const name = def?.name ?? saved.id;
       const before = tacticsFor(def, saved.level);
-      const levels = grantGeneralExp(saved, battle.rewardExp);
+      const levels = grantGeneralExp(
+        saved,
+        battle.rewardExp,
+        battle.rules >= 17 ? SAGA_MAX_LEVEL : SAGA_LEGACY_MAX_LEVEL,
+      );
       if (levels > 0) {
         events.push({
           kind: "level",

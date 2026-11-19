@@ -871,25 +871,31 @@ test("铁匠铺强化：价格随等级递增、满级封顶，属性按基础�
   assert.deepEqual(normalizeTrialSave({ ...initialTrialSave(), gearLevels: undefined }).gearLevels, {});
 });
 
-test("v14 属性口径：50 级封顶、四维成长 ×2 不越 255，兵力走 100→20000 曲线", () => {
+test("v17 属性口径：100 级封顶、四维成长 ×1.05 不越 255，兵力二次成长走到 40294", () => {
   const maxed: SagaGeneralState = { id: "lvbu", level: SAGA_MAX_LEVEL, exp: 0, weapon: null, armor: null };
   const fresh: SagaGeneralState = { id: "lvbu", level: 1, exp: 0, weapon: null, armor: null };
   const maxedStats = generalStats(maxed);
   assert.equal(maxedStats.force <= SAGA_STAT_CAP, true, "四维不越过 255");
-  assert.equal(maxedStats.force, 253, "吕布 100 + 无双 6 + 49 级 × 3 = 253");
+  assert.equal(maxedStats.force, 255, "吕布 100 + 无双 6 + 99 级 × 1.575 = 255（封顶）");
   assert.equal(generalStats(fresh).force, 106, "1 级仍是基础值 + 特性");
   assert.equal(generalStats(fresh).maxTroops, 114, "1 级兵力 = 基准 100 × 240/210");
-  assert.equal(maxedStats.maxTroops, 22857, "满级兵力 = 基准 20000 × 240/210");
+  assert.equal(maxedStats.maxTroops, 46050, "满级兵力 = 基准 40294 × 240/210");
   assert.equal(troopBaseline(1), 100, "兵力基准 1 级 100");
-  assert.equal(troopBaseline(SAGA_MAX_LEVEL), 20000, "兵力基准 50 级 20000");
+  assert.equal(troopBaseline(10), 514, "10 级 514，前期不再一百多兵");
+  assert.equal(troopBaseline(50), 10194, "50 级 10194，后段继续抬");
+  assert.equal(troopBaseline(SAGA_MAX_LEVEL), 40294, "兵力基准 100 级 40294，不设 20000 上限");
   const guanyuMax = generalStats({ id: "guanyu", level: SAGA_MAX_LEVEL, exp: 0, weapon: null, armor: null });
-  assert.equal(guanyuMax.maxTroops, 19048, "关羽满级 = 20000 × 200/210");
+  assert.equal(guanyuMax.maxTroops, 38375, "关羽满级 = 40294 × 200/210");
   const pangtongMax = generalStats({ id: "pangtong", level: SAGA_MAX_LEVEL, exp: 0, weapon: null, armor: null });
-  assert.equal(pangtongMax.maxTroops, 14286, "庞统满级 = 20000 × 150/210");
-  // 旧规则（v8 及更早）还是原来的成长与兵力，已落库的战报重放不会翻盘。
-  const legacy = generalStats(maxed, undefined, 8);
-  assert.equal(legacy.force, 106 + Math.floor((SAGA_MAX_LEVEL - 1) * 1.5), "旧规则仍按 ×1.5 成长");
-  assert.equal(legacy.maxTroops, 240 + (SAGA_MAX_LEVEL - 1) * 13, "旧规则兵力不加倍");
+  assert.equal(pangtongMax.maxTroops, 28781, "庞统满级 = 40294 × 150/210");
+  // v14~v16 的 50 级口径保持不变，已落库的战报重放不会翻盘。
+  const old50: SagaGeneralState = { id: "lvbu", level: 50, exp: 0, weapon: null, armor: null };
+  assert.equal(generalStats(old50, undefined, 16).force, 253, "v16 吕布 50 级仍是 253");
+  assert.equal(troopBaseline(50, 16), 20000, "v16 的 50 级基准仍是 20000");
+  assert.equal(generalStats(old50, undefined, 16).maxTroops, 22857, "v16 满级兵力不变");
+  // 旧规则（v8 及更早）还是原来的成长与兵力，且仍封 50 级。
+  assert.equal(generalStats(old50, undefined, 8).force, 106 + Math.floor(49 * 1.5), "旧规则仍按 ×1.5 成长");
+  assert.equal(generalStats(old50, undefined, 8).maxTroops, 240 + 49 * 13, "旧规则兵力不加倍");
   // v13 的线性兵力口径也照旧，只有 v14 起才换曲线。
   const v13 = generalStats(fresh, undefined, 13);
   assert.equal(v13.maxTroops, 480, "v13 仍是基础 240 × 2");
@@ -1256,6 +1262,24 @@ test("野外遭遇编成：同种子同序号固定，1~4 队且将领可有可�
       "野外编成不预置可招标记，v7 起由 buildBattle 开放头目招降",
     );
   }
+});
+
+test("v17 野外遭遇按队伍等级封顶：10 级第 47 场不会撞上 16 级敌军", () => {
+  const save = initialTrialSave();
+  for (const general of save.party) general.level = 10;
+  const run = { ...freshRun(11, 5), startSave: save, rules: SAGA_RULESET };
+  const node = sagaEncounterFor(run, 47, SAGA_RULESET);
+  assert.equal(
+    node.enemies.every((enemy) => enemy.level <= 10),
+    true,
+    "领头与杂兵都不高于队伍最高级",
+  );
+  const squads = node.enemies.filter((enemy) => enemy.id.startsWith("foe_"));
+  assert.equal(node.enemies.length - squads.length <= 1, true, "最多一名领头敌将");
+  assert.equal(squads.length <= 1, true, "10 级前后杂兵最多 1 队");
+  // 旧规则仍按旧公式：同一场可以是 16 级，不能被新规则改掉。
+  const legacy = sagaEncounterFor({ ...run, rules: 16 }, 47, 16);
+  assert.equal(legacy.enemies.some((enemy) => enemy.level > 11), true, "v16 旧遭遇等级照旧");
 });
 
 test("野外遭遇兵种：兵士、山贼、海贼、盗贼都可能出现，有无将领两种编成都有", () => {
@@ -2053,7 +2077,7 @@ test("策略点：主要随智力浮动，等级再补几点，封顶 48 点", (
   const atLv30 = startBattle(run, 0, createReplayState(run)).party[0];
   assert.equal(atLv10.tacticPoints > atLv1.tacticPoints, true, "升级增加策略点");
   assert.equal(atLv1.tacticPoints, 9, "刘备 1 级：基础 4 + 智力 72/15=4 + 仁德 1");
-  assert.equal(atLv30.tacticPoints, 29, "30 级智力成长后：4 + 9 + 15 + 仁德 1");
+  assert.equal(atLv30.tacticPoints, 27, "30 级智力成长后：4 + 7 + 15 + 仁德 1");
   assert.equal(atLv1.tactics.includes("huifu"), true, "仁德之主自带回复");
 
   const zhangfeiRun = {
@@ -2219,7 +2243,7 @@ test("撤退：只结束当前这一场仗，编制与已走指令都保留，�
   assert.deepEqual(sanitizeSagaCommands([{ k: "retreat" }, { junk: true }]), [{ k: "retreat" }]);
 });
 
-test("训练场：逐级计价，上限随平定数增长并封顶 30", () => {
+test("训练场：逐级计价，上限随平定数增长并封顶 100", () => {
   assert.equal(SAGA_TRAINING_ITEM_ID, "training");
   assert.equal(SAGA_TRAINING_TICKETS_PER_LEVEL, 2);
   const save = initialTrialSave();
@@ -2231,7 +2255,7 @@ test("训练场：逐级计价，上限随平定数增长并封顶 30", () => {
   save.stats.wins = 3;
   assert.equal(trainingLevelCap(save), 27, "每平定一处 +6 级");
   save.stats.wins = 20;
-  assert.equal(trainingLevelCap(save), SAGA_MAX_LEVEL, "封顶 50 级");
+  assert.equal(trainingLevelCap(save), SAGA_MAX_LEVEL, "封顶 100 级");
 
   save.stats.wins = 0;
   const guanyu = findGeneral(save, "guanyu");
@@ -2397,7 +2421,7 @@ test("公告与维护窗口判定", () => {
 });
 
 test("兵种相克与名将连携只在 v10 起生效", () => {
-  assert.equal(SAGA_RULESET, 16, "规则档升到 v16（5 人出战 + 阵亡停尸 + SP 成长）");
+  assert.equal(SAGA_RULESET, 17, "规则档升到 v17（100 级成长 + 5 人出战 + 阵亡停尸 + SP 成长）");
 
   // 兵种按底子推：猛将骑、谋士弓、其余枪。
   assert.equal(sagaCorpsOf(SAGA_GENERAL_BY_ID.get("lvbu")), "cavalry");

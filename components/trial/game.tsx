@@ -77,7 +77,7 @@ import {
   trainingCost,
   trainingLevelCap,
 } from "@/lib/trial/saga/training";
-import { SAGA_CARRY_LIMIT, SAGA_DEPLOY_SIZE, SAGA_MAX_LEVEL, SAGA_PARTY_SIZE } from "@/lib/trial/saga/types";
+import { SAGA_CARRY_LIMIT, SAGA_DEPLOY_SIZE, SAGA_PARTY_SIZE, sagaMaxLevel } from "@/lib/trial/saga/types";
 import {
   campScene,
   chapterIntroScene,
@@ -476,6 +476,7 @@ export function TrialGame(props: TrialGameProps) {
 
   /** 界面上的属性 / 兵力一律按当前对局的规则档算：图鉴、编队、出战面板与战场不能各说各话。 */
   const uiRules = state?.rules ?? run?.rules ?? SAGA_RULESET;
+  const uiMaxLevel = sagaMaxLevel(uiRules);
 
   /** 上阵武将当前兵力：没出城时就是满编；行军中的残兵来自重放状态。 */
   const troopRows = save.party.map((general) => {
@@ -780,7 +781,7 @@ export function TrialGame(props: TrialGameProps) {
   const trainTo = useCallback(
     async (generalId: string, currentLevel: number) => {
       if (!runId || !run || busy) return;
-      const cap = trainingLevelCap(save);
+      const cap = trainingLevelCap(save, uiRules);
       const target = Math.trunc(Number(trainTargets[generalId] ?? currentLevel + 1) || 0);
       if (target <= currentLevel) {
         toast.error("目标等级要高于当前等级");
@@ -824,7 +825,7 @@ export function TrialGame(props: TrialGameProps) {
         setBusy(null);
       }
     },
-    [busy, commands, run, runId, save, tickets, trainTargets],
+    [busy, commands, run, runId, save, tickets, trainTargets, uiRules],
   );
 
   /** 铁匠铺强化：一次一级，价格随等级递增；服务端重放核对当前等级后再扣券。 */
@@ -2562,7 +2563,7 @@ export function TrialGame(props: TrialGameProps) {
                     <div className="space-y-1">
                       {[...save.party, ...save.reserve].map((member) => {
                         const need =
-                          member.level >= SAGA_MAX_LEVEL ? 0 : expToNext(member.level) - member.exp;
+                          member.level >= uiMaxLevel ? 0 : expToNext(member.level) - member.exp;
                         return (
                           <div
                             key={member.id}
@@ -2575,8 +2576,8 @@ export function TrialGame(props: TrialGameProps) {
                               </span>
                             </span>
                             <span className="tabular-nums text-muted-foreground">
-                              {member.level >= SAGA_MAX_LEVEL
-                                ? "已到 50 级封顶"
+                              {member.level >= uiMaxLevel
+                                ? `已到 ${uiMaxLevel} 级封顶`
                                 : `经验 ${member.exp} / ${expToNext(member.level)} · 距下一级还差 ${Math.max(0, need)}`}
                             </span>
                           </div>
@@ -3136,7 +3137,7 @@ export function TrialGame(props: TrialGameProps) {
                                 const def = SAGA_GENERAL_BY_ID.get(member.id);
                                 const stats = generalStats(member, save.gearLevels, uiRules);
                                 const need =
-                                  member.level >= SAGA_MAX_LEVEL
+                                  member.level >= uiMaxLevel
                                     ? 0
                                     : expToNext(member.level) - member.exp;
                                 return (
@@ -3189,7 +3190,7 @@ export function TrialGame(props: TrialGameProps) {
                                         </p>
                                         <p className="mt-0.5 text-xs tabular-nums text-muted-foreground">
                                           经验 {member.exp}/{expToNext(member.level)}
-                                          {member.level >= SAGA_MAX_LEVEL
+                                          {member.level >= uiMaxLevel
                                             ? " · 已满级"
                                             : ` · 距下一级还差 ${Math.max(0, need)}`}
                                         </p>
@@ -3473,7 +3474,7 @@ export function TrialGame(props: TrialGameProps) {
                   <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>
                       每级 {SAGA_TRAINING_TICKETS_PER_LEVEL} 张活动券，一次练到目标等级；
-                      训练场上限 {trainingLevelCap(save)} 级（每平定一处地方 +6，最高 {SAGA_MAX_LEVEL} 级）。
+                      训练场上限 {trainingLevelCap(save, uiRules)} 级（每平定一处地方 +6，最高 {uiMaxLevel} 级）。
                     </span>
                     <span className="flex items-center gap-1 tabular-nums">
                       <CouponIcon kind="trial" className="h-3.5 w-3.5" />
@@ -3488,7 +3489,7 @@ export function TrialGame(props: TrialGameProps) {
                   <div className="grid gap-2 sm:grid-cols-2">
                     {[...save.party, ...save.reserve].map((member) => {
                       const def = SAGA_GENERAL_BY_ID.get(member.id);
-                      const cap = trainingLevelCap(save);
+                      const cap = trainingLevelCap(save, uiRules);
                       const target = Math.trunc(Number(trainTargets[member.id] ?? member.level + 1) || 0);
                       const targetValid = target > member.level && target <= cap;
                       const cost = targetValid ? trainingCost(member.level, target) : 0;
@@ -4073,6 +4074,7 @@ function StatusRoster({
   rules: number;
   gearLevels: Record<string, number>;
 }) {
+  const maxLevel = sagaMaxLevel(rules);
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       {members.map((member) => {
@@ -4111,7 +4113,7 @@ function StatusRoster({
                 </div>
                 <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
                   兵力 {current}/{max} · 经验 {member.exp}/{expToNext(member.level)}
-                  {member.level >= SAGA_MAX_LEVEL
+                  {member.level >= maxLevel
                     ? " · 已满级"
                     : ` · 距下一级还差 ${Math.max(0, expToNext(member.level) - member.exp)}`}
                 </p>
@@ -4146,6 +4148,7 @@ function StatusRoster({
 }
 
 function PartyList({ save, rules = SAGA_RULESET }: { save: TrialSave; rules?: number }) {
+  const maxLevel = sagaMaxLevel(rules);
   // 队伍只展开上阵的这几人；待命席的人回城进编成所再看详情。
   const groups = [{ key: "party", label: "上阵", members: save.party }] as const;
   return (
@@ -4184,7 +4187,7 @@ function PartyList({ save, rules = SAGA_RULESET }: { save: TrialSave; rules?: nu
                       </p>
                       <p className="mt-0.5 tabular-nums text-muted-foreground">
                         经验 {member.exp}/{expToNext(member.level)}
-                        {member.level >= SAGA_MAX_LEVEL
+                        {member.level >= maxLevel
                           ? " · 已满级"
                           : ` · 距下一级还差 ${Math.max(0, expToNext(member.level) - member.exp)}`}
                         {" · "}

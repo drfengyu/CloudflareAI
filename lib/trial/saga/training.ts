@@ -7,14 +7,15 @@
 
 import { SAGA_GENERAL_BY_ID } from "./data";
 import { findGeneral } from "./state";
-import { SAGA_MAX_LEVEL, type TrialSave } from "./types";
+import { SAGA_LEGACY_MAX_LEVEL, SAGA_MAX_LEVEL, SAGA_RULESET, type TrialSave } from "./types";
 
 export const SAGA_TRAINING_ITEM_ID = "training";
 export const SAGA_TRAINING_TICKETS_PER_LEVEL = 2;
 
-/** 训练场上限：初到涿郡可练到 9 级，每平定一处地方 +6，最高 50 级。 */
-export function trainingLevelCap(save: TrialSave): number {
-  return Math.min(SAGA_MAX_LEVEL, 9 + Math.max(0, save.stats.wins) * 6);
+/** 训练场上限：初到涿郡可练到 9 级，每平定一处地方 +6，v17 起最高 100 级（旧行军仍封 50）。 */
+export function trainingLevelCap(save: TrialSave, rules = SAGA_RULESET): number {
+  const maxLevel = rules >= 17 ? SAGA_MAX_LEVEL : SAGA_LEGACY_MAX_LEVEL;
+  return Math.min(maxLevel, 9 + Math.max(0, save.stats.wins) * 6);
 }
 
 export function trainingCost(fromLevel: number, toLevel: number): number {
@@ -23,12 +24,17 @@ export function trainingCost(fromLevel: number, toLevel: number): number {
 }
 
 /** 把武将练到目标等级；已在目标等级以上、查无此人或超出上限都返回 0。 */
-export function trainGeneral(save: TrialSave, generalId: string, targetLevel: number): number {
+export function trainGeneral(
+  save: TrialSave,
+  generalId: string,
+  targetLevel: number,
+  rules = SAGA_RULESET,
+): number {
   const general = findGeneral(save, generalId);
   if (!general || !SAGA_GENERAL_BY_ID.get(generalId)) return 0;
   const target = Math.min(
-    trainingLevelCap(save),
-    SAGA_MAX_LEVEL,
+    trainingLevelCap(save, rules),
+    rules >= 17 ? SAGA_MAX_LEVEL : SAGA_LEGACY_MAX_LEVEL,
     Math.trunc(Number(targetLevel) || 0),
   );
   if (target <= general.level) return 0;

@@ -616,7 +616,7 @@ export async function buyTrialItem(input: {
     const generalId = String(input.generalId ?? "");
     const general = findGeneral(progress.save, generalId);
     if (!general) throw new TrialError("查无此将");
-    const cap = trainingLevelCap(progress.save);
+    const cap = trainingLevelCap(progress.save, progress.rules);
     const targetLevel = Math.trunc(Number(input.targetLevel) || 0);
     if (targetLevel <= general.level) throw new TrialError("目标等级需高于当前等级");
     if (targetLevel > cap) throw new TrialError(`训练场上限为 ${cap} 级，先平定更多地方`);
