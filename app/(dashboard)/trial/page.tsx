@@ -14,6 +14,7 @@ import {
   trialGoldFor,
 } from "@/lib/trial/config";
 import { getTrialConfig } from "@/lib/trial/settings";
+import { ensureTrialUpdateGift } from "@/lib/trial/update-gift";
 import {
   campaignComplete,
   findActiveTrialRun,
@@ -66,10 +67,10 @@ function Stat({
 
 export default async function TrialPage() {
   const userId = await requireUser();
-  const [config, coupon] = await Promise.all([
-    getTrialConfig(),
-    getActivityCouponView(userId, "trial"),
-  ]);
+  const config = await getTrialConfig();
+  // 先按最新公告的更新条目发一封带券附件的站内信；未领取前券包余额不变。
+  await ensureTrialUpdateGift(userId, config);
+  const coupon = await getActivityCouponView(userId, "trial");
   const windowInfo = trialActivityWindow(config);
   const activityKey = trialActivityKey(config);
 

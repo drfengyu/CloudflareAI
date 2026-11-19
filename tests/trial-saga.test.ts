@@ -15,7 +15,7 @@ import {
   hasPortraitAsset,
   portraitAssetSrc,
 } from "../components/trial/portrait-assets";
-import { SAGA_NOTICES, SAGA_NOTICE_VERSION, SAGA_NOTICE_VISIBLE, latestNoticeId, maintenanceActiveAt, maintenancePhaseAt, visibleNotices } from "../lib/trial/saga/notice";
+import { SAGA_NOTICES, SAGA_NOTICE_VERSION, SAGA_NOTICE_VISIBLE, latestNoticeId, maintenanceActiveAt, maintenancePhaseAt, updateGiftTickets, visibleNotices } from "../lib/trial/saga/notice";
 import { settlementFor } from "../components/trial/settlement";
 import {
   SAGA_FIELD_COLS,
@@ -2406,6 +2406,8 @@ test("公告与维护窗口判定", () => {
     "公告面板只取最新三条",
   );
   assert.ok(SAGA_NOTICES.length > SAGA_NOTICE_VISIBLE, "旧公告仍留档可查");
+  assert.equal(updateGiftTickets(SAGA_NOTICES[0]), SAGA_NOTICES[0].lines.length, "更新礼一项一张");
+  assert.equal(updateGiftTickets({ ...SAGA_NOTICES[0], kind: "maintain" }), 0, "维护公告不发更新礼");
 
   // 维护窗口：开始与结束都算在内，窗口边界外不算，没有窗口一律不在维护。
   const at = (iso: string) => new Date(iso);

@@ -109,6 +109,11 @@
   魏延 / 刘备 34538、庞统 28781。四维成长 `growth = 1.05`，
   100 级吕布武力 255（封顶）、关羽 252、庞统智力约 220、张飞智力约 133；旧规则仍 ×2、50 级封顶。
 
+- **版本更新礼（v0.97.0）**：最新一条「更新」公告的 `lines.length` 就是发放张数，一项一张当期试炼活动券；
+  进入 `/trial` 时发一封带券附件的站内信，玩家手动点「领取」后才入当期券包；
+  `activity_coupon` 里以 `activityKey = update-gift:<版本>`、`credits = 0` 的零券面行做幂等，
+  同版本只发一次信；维护 / 活动公告不发，旧版本不补发。
+
 - **等级封顶 50 与兵力几何曲线（v0.92.0，历史口径）**：`types.ts` 的 `SAGA_MAX_LEVEL` 30 → 50
   （`SAGA_RULESET` 13 → 14）。`state.ts` 新增 `SAGA_TROOP_REF_BASE = 210`（张飞
   `baseTroops`，全表最高，作曲线 1.0 基准），`troopBaseline(level, rules)` 在 `rules >= 14`

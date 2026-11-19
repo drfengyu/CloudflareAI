@@ -114,6 +114,7 @@ import {
   SAGA_NOTICE_VERSION,
   latestNoticeId,
   maintenancePhaseAt,
+  updateGiftTickets,
   visibleNotices,
 } from "@/lib/trial/saga/notice";
 import type { ActivityCouponView } from "@/lib/activity/coupons";
@@ -4877,6 +4878,9 @@ function NoticeBoard() {
   const phase = maintenancePhaseAt(new Date());
   const window = SAGA_MAINTENANCE;
   const moment = (iso: string): string => iso.replace("T", " ").slice(0, 16);
+  const notices = visibleNotices();
+  const latest = notices[0];
+  const giftTickets = updateGiftTickets(latest);
   return (
     <div className="space-y-3 text-sm">
       <div className="rounded-lg border border-border p-2.5">
@@ -4909,7 +4913,7 @@ function NoticeBoard() {
       </p>
 
       <div className="space-y-2">
-        {visibleNotices().map((entry) => (
+        {notices.map((entry) => (
           <div key={entry.id} className="rounded-lg border border-border p-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <span className="font-medium">
@@ -4927,6 +4931,11 @@ function NoticeBoard() {
                 <li key={line}>{line}</li>
               ))}
             </ul>
+            {entry.id === latest?.id && giftTickets > 0 ? (
+              <p className="mt-1.5 rounded bg-primary/5 px-2 py-1 text-[11px] text-primary">
+                更新礼：本次公告共 {giftTickets} 项内容，已按一项一张发放 {giftTickets} 张当期活动券到站内信，请手动领取（活动结束后作废）。
+              </p>
+            ) : null}
           </div>
         ))}
         <p className="text-[11px] text-muted-foreground">

@@ -438,3 +438,12 @@ export function latestNoticeId(): string | null {
 export function visibleNotices(): SagaNoticeEntry[] {
   return SAGA_NOTICES.slice(0, SAGA_NOTICE_VISIBLE);
 }
+
+/**
+ * 版本更新礼：按最新一条「更新」公告的条目数，一项发一张当期活动券。
+ * 维护 / 活动公告不算更新内容，返回 0；旧版本公告不会补发。
+ */
+export function updateGiftTickets(entry: SagaNoticeEntry | undefined = SAGA_NOTICES[0]): number {
+  if (!entry || entry.kind !== "update") return 0;
+  return entry.lines.length;
+}

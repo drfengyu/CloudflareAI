@@ -545,6 +545,8 @@ curl https://cloudai.fuwari.fun/api/openai/v1/chat/completions \
   `grantGeneralExp` 增加 `maxLevel` 参数。
   `training.ts` `trainingLevelCap(save, rules)` / `trainGeneral(..., rules)` 增加规则参数，
   仍 `min(100, 9 + wins × 6)`，v16 旧行军仍封 50。
+  版本更新礼：`lib/trial/update-gift.ts` 按 `SAGA_NOTICES[0].lines.length` 一项发一张当期活动券；
+  进入 `/trial` 发带券附件的站内信，手动领取后才入券包；`activity_coupon` 的 `update-gift:<版本>` 零券面行做幂等，维护公告不发。
   `run.ts makeEnemy` 等级每章 +14（第 7 章本阵 100 级），敌将四维成长 4.2 / 3.3 / 3.6 / 2.1 →
   1.5 / 1.2 / 1.3 / 0.75，仍封顶 255；`battle.ts` 升级按 `battle.rules` 取 50 / 100 上限。
   `encounter.ts` v17 领头敌将与杂兵都先按章节等级算、再用队伍最高级封顶；
