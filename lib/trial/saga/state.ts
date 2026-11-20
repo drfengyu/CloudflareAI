@@ -4,8 +4,10 @@ import {
   SAGA_GENERAL_BY_ID,
   SAGA_ITEM_BY_ID,
   SAGA_STARTER_IDS,
+  SAGA_TRAIT_BY_ID,
   gearSlotOf,
   traitStats,
+  traitsForRules,
   weaponTypesFor,
 } from "./data";
 import {
@@ -23,6 +25,7 @@ import {
   type TrialSave,
 } from "./types";
 import { forgeStat, normalizeGearLevels } from "./forge";
+import { SAGA_FREE_INN_PER_DAY } from "./inn";
 
 /**
  * 兵力基准的参照武将 `baseTroops`（张飞 210，全表最高）。
@@ -195,6 +198,9 @@ export function normalizeTrialSave(raw: unknown): TrialSave {
     gearLevels: normalizeGearLevels(it.gearLevels),
     met: [...met],
     recruited: [...recruited],
+    ...(typeof it.innFreeDate === "string"
+      ? { innFreeDate: it.innFreeDate.slice(0, 10), innFreeUsed: clampInt(it.innFreeUsed, 0, SAGA_FREE_INN_PER_DAY, 0) }
+      : {}),
     stats: {
       runs: clampInt(stats.runs, 0, 9_999_999, 0),
       wins: clampInt(stats.wins, 0, 9_999_999, 0),
@@ -211,13 +217,58 @@ export interface SagaGeneralStats {
   force: number;
   intellect: number;
   defense: number;
+  /** v18 起为含装备后的总攻击；旧规则保留旧口径供兼容。 */
+  attack: number;
   speed: number;
   maxTroops: number;
   weaponAtk: number;
   armorDef: number;
   /** 坐骑 / 靴 / 吊坠带来的速度加成。 */
   gearSpeed: number;
+  /** 战斗开场 SP 上限：v18 起随等级最高 255。 */
+  spMax: number;
+  /** 不含阵形的基准命中 / 暴击 / 爆伤，阵形加成在战斗内另算。 */
+  hitRate: number;
+  critRate: number;
+  critDamage: number;
 }
+
+/** 速决定命中：55% 起步，每点速度 +0.333%，封顶 98%。 */
+export function speedHitRate(speed: number): number {
+  return Math.min(0.98, Math.max(0.55, 0.55 + Math.max(0, speed) / 300));
+}
+
+/** 速决定暴击：5% 起步，每点速度 +0.15%，特性暴击另加，封顶 40%。 */
+export function speedCritRate(speed: number, traitCrit = 0): number {
+  return Math.min(0.4, Math.max(0.05, 0.05 + Math.max(0, speed) * 0.0015 + traitCrit));
+}
+
+/** 速决定爆伤：1.5 倍起步，每点速度 +0.0025，封顶 2 倍。 */
+export function speedCritDamage(speed: number): number {
+  return Math.min(2, Math.max(1.5, 1.5 + Math.max(0, speed) * 0.0025));
+}
+
+/** v18 攻击成长：武力固定底子 + 等级成长 + 兵器 / 锻造，含装备封顶 255。 */
+export function attackAtLevel(force: number, level: number, gearAtk = 0): number {
+  return Math.min(
+    SAGA_STAT_CAP,
+    Math.round(force + Math.max(0, level - 1) * 1.2 + gearAtk),
+  );
+}
+
+/** v18 防御成长：武力决定初始防御（八成），再叠等级、甲胄、防具特性，封顶 255。 */
+export function defenseAtLevel(
+  force: number,
+  level: number,
+  gearDef = 0,
+  traitDef = 0,
+): number {
+  return Math.min(
+    SAGA_STAT_CAP,
+    Math.round(force * 0.8 + Math.max(0, level - 1) * 1.05 + gearDef + traitDef),
+  );
+}
+
 
 /** 武将属性；传入存档的 `gearLevels` 时，兵器 / 甲胄按铁匠铺强化等级加成。 */
 export function generalStats(
@@ -231,21 +282,25 @@ export function generalStats(
       force: 1,
       intellect: 1,
       defense: 1,
+      attack: 1,
       speed: 1,
       maxTroops: 1,
       weaponAtk: 0,
       armorDef: 0,
       gearSpeed: 0,
+      spMax: 1,
+      hitRate: speedHitRate(1),
+      critRate: speedCritRate(1),
+      critDamage: speedCritDamage(1),
     };
   }
   const maxLevel = rules >= 17 ? SAGA_MAX_LEVEL : SAGA_LEGACY_MAX_LEVEL;
   const level = clampInt(state.level, 1, maxLevel, 1);
   const weapon = state.weapon ? SAGA_ITEM_BY_ID.get(state.weapon) : null;
   const armor = state.armor ? SAGA_ITEM_BY_ID.get(state.armor) : null;
-  const bonus = traitStats(def);
-  // v9 起每级成长翻三倍、四维封顶 255，兵力翻一倍；v14 起等级封顶 50、每级成长 ×2；
-  // v17 起等级封顶 100，每级成长收到 ×1.05（100 级吕布武力 255、庞统智力约 220），
-  // 旧行军仍按各自版本的成长与兵力口径重放。
+  const bonus = traitStats(def, rules);
+  // v9 起四维封顶 255；v14 起等级封顶 50、每级成长 ×2；v17 起等级封顶 100、每级成长 ×1.05。
+  // v18 起武力 / 智力 / 速度固定不涨，只有攻击 / 防御随等级成长。
   const growth = rules >= 17 ? 1.05 : rules >= 14 ? 2 : rules >= 9 ? 3 : 1;
   const troopScale = rules >= 9 ? 2 : 1;
   const cap = (value: number): number => Math.min(SAGA_STAT_CAP, Math.round(value));
@@ -261,15 +316,58 @@ export function generalStats(
     const item = state[slot] ? SAGA_ITEM_BY_ID.get(state[slot] as string) : null;
     return sum + (item?.speed ?? 0);
   }, 0);
+  const weaponAtk = weapon ? forgeStat(weapon.id, gearLevels?.[weapon.id] ?? 0) : 0;
+  const armorDef = armor
+    ? forgeStat(armor.id, gearLevels?.[armor.id] ?? 0) + extraDef
+    : extraDef;
+  const activeTraits = traitsForRules(def, rules);
+  const traitCrit = activeTraits.reduce(
+    (sum, id) => sum + (SAGA_TRAIT_BY_ID.get(id)?.crit ?? 0),
+    0,
+  );
+  const traitSp = activeTraits.reduce(
+    (sum, id) => sum + (SAGA_TRAIT_BY_ID.get(id)?.tacticPoints ?? 0),
+    0,
+  );
+  if (rules >= 18) {
+    const force = cap(def.force + bonus.force);
+    const intellect = cap(def.intellect + bonus.intellect);
+    const speed = cap(def.speed + bonus.speed);
+    const actualSpeed = speed + gearSpeed;
+    return {
+      force,
+      intellect,
+      defense: defenseAtLevel(force, level, armorDef, bonus.defense),
+      attack: attackAtLevel(force, level, weaponAtk),
+      speed,
+      maxTroops,
+      weaponAtk,
+      armorDef,
+      gearSpeed,
+      spMax: Math.min(
+        255,
+        12 + Math.floor(intellect / 3) + (level - 1) * 2 + traitSp,
+      ),
+      hitRate: speedHitRate(actualSpeed),
+      critRate: speedCritRate(actualSpeed, traitCrit),
+      critDamage: speedCritDamage(actualSpeed),
+    };
+  }
+  const force = cap(def.force + bonus.force + Math.floor((level - 1) * 1.5 * growth));
   return {
-    force: cap(def.force + bonus.force + Math.floor((level - 1) * 1.5 * growth)),
+    force,
     intellect: cap(def.intellect + bonus.intellect + Math.floor((level - 1) * 1.2 * growth)),
     defense: cap(def.defense + bonus.defense + Math.floor((level - 1) * 1.3 * growth)),
+    attack: force + weaponAtk + level * 2,
     speed: cap(def.speed + bonus.speed + Math.floor((level - 1) * 0.8 * growth)),
     maxTroops,
-    weaponAtk: weapon ? forgeStat(weapon.id, gearLevels?.[weapon.id] ?? 0) : 0,
-    armorDef: armor ? forgeStat(armor.id, gearLevels?.[armor.id] ?? 0) + extraDef : extraDef,
+    weaponAtk,
+    armorDef,
     gearSpeed,
+    spMax: Math.min(48, 4 + Math.floor(def.intellect / 15) + Math.floor(level / 2) + traitSp),
+    hitRate: 0.9,
+    critRate: traitCrit,
+    critDamage: 1.7,
   };
 }
 

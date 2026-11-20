@@ -13,8 +13,17 @@ import {
   SAGA_GENERAL_BY_ID,
   tacticsFor,
   traitStats,
+  traitsForRules,
 } from "./data";
-import { SAGA_MAX_COMMANDS, SAGA_MAX_LEVEL, type SagaEnemy, type SagaNode, type SagaRun } from "./types";
+import {
+  SAGA_MAX_COMMANDS,
+  SAGA_MAX_LEVEL,
+  SAGA_STAT_CAP,
+  type SagaEnemy,
+  type SagaFieldBattleContext,
+  type SagaNode,
+  type SagaRun,
+} from "./types";
 import { troopBaseline } from "./state";
 
 interface FoeTemplate {
@@ -126,47 +135,71 @@ function leaderEnemy(
   leaderId: string,
   chapterIndex: number,
   ordinal: number,
+  level: number,
+  troops: number,
   rules: number,
-  partyLevel: number,
 ): SagaEnemy {
   const def = SAGA_GENERAL_BY_ID.get(leaderId) ?? SAGA_GENERAL_BY_ID.get("huangjin_lishi")!;
-  // v17 起主线拉长到 100 级，野外领头敌将按章节练到 90+；
-  // 但野外不看「这是第几场遭遇」硬堆等级：最高只到队伍最高级，避免 10 级撞上 16 级头目。
+  const bonus = traitStats(def, rules);
+  if (rules >= 18) {
+    // v18：武 / 智 / 速固定，攻防成长与装备在 buildBattle 里结算。
+    const force = Math.min(SAGA_STAT_CAP, def.force + bonus.force);
+    const intellect = Math.min(SAGA_STAT_CAP, def.intellect + bonus.intellect);
+    const speed = Math.min(SAGA_STAT_CAP, def.speed + bonus.speed);
+    return {
+      id: def.id,
+      name: def.name,
+      title: def.title,
+      level,
+      troops,
+      maxTroops: troops,
+      force,
+      intellect,
+      defense: Math.min(SAGA_STAT_CAP, Math.round(force * 0.8 + bonus.defense)),
+      speed,
+      tactics: tacticsFor(def, level),
+      traits: traitsForRules(def, rules),
+      color: def.color,
+      accent: def.accent,
+      recruitable: false,
+      recruitHard: false,
+      boss: false,
+    };
+  }
+  // v13 起野外领头的敌将也按「同等级我方基准 × 1.3~2.3」给兵；旧规则仍走原曲线重放。
   const scaledLevel =
     rules >= 17
       ? 1 + chapterIndex * 13 + Math.floor(ordinal / 3)
       : 1 + chapterIndex * 4 + Math.floor(ordinal / 3);
-  const level =
-    rules >= 17
-      ? Math.min(SAGA_MAX_LEVEL, scaledLevel, partyLevel)
-      : scaledLevel;
-  // v13 起野外领头的敌将也按「同等级我方基准 × 1.3~2.3」给兵；旧规则仍走原曲线重放。
-  // v17 前期再收一档（1.0~1.5 倍），避免 10 级队伍一场遭遇撞上两倍兵力的头目。
-  const troops =
+  const legacyLevel =
+    rules >= 17 ? Math.min(SAGA_MAX_LEVEL, scaledLevel, level) : Math.min(SAGA_MAX_LEVEL, scaledLevel);
+  const legacyTroops =
     rules >= 13
       ? Math.round(
-          troopBaseline(level, rules) *
+          troopBaseline(legacyLevel, rules) *
             (rules >= 17
               ? 1.0 + 0.5 * Math.min(1, Math.max(0, (def.baseTroops - 120) / 140))
               : 1.3 + 1.0 * Math.min(1, Math.max(0, (def.baseTroops - 120) / 140))),
         )
-      : Math.max(
-          50,
-          Math.round((def.baseTroops + level * def.growth) * (1 + chapterIndex * 0.05) * 0.8),
-        );
-  const bonus = traitStats(def);
+      : Math.max(50, Math.round((def.baseTroops + legacyLevel * def.growth) * (1 + chapterIndex * 0.05) * 0.8));
   return {
     id: def.id,
     name: def.name,
     title: def.title,
-    level,
-    troops,
-    maxTroops: troops,
-    force: def.force + bonus.force + Math.floor(level * 1.3),
-    intellect: def.intellect + bonus.intellect + Math.floor(level * 0.9),
-    defense: def.defense + bonus.defense + Math.floor(level * 1.1),
-    speed: def.speed + bonus.speed + Math.floor(level * 0.6),
-    tactics: tacticsFor(def, level),
+    level: legacyLevel,
+    troops: legacyTroops,
+    maxTroops: legacyTroops,
+    force: Math.min(SAGA_STAT_CAP, def.force + bonus.force + Math.floor(legacyLevel * 1.3)),
+    intellect: Math.min(
+      SAGA_STAT_CAP,
+      def.intellect + bonus.intellect + Math.floor(legacyLevel * 0.9),
+    ),
+    defense: Math.min(
+      SAGA_STAT_CAP,
+      def.defense + bonus.defense + Math.floor(legacyLevel * 1.1),
+    ),
+    speed: Math.min(SAGA_STAT_CAP, def.speed + bonus.speed + Math.floor(legacyLevel * 0.6)),
+    tactics: tacticsFor(def, legacyLevel),
     traits: def.traits,
     color: def.color,
     accent: def.accent,
@@ -186,7 +219,30 @@ function squadEnemy(
   withLeader: boolean,
   rules: number,
   partyLevel: number,
+  level: number,
+  troops: number,
 ): SagaEnemy {
+  if (rules >= 18) {
+    return {
+      id: `foe_${foe.key}_${ordinal}_${slot}`,
+      name: `${foe.name}${SQUAD_MARKS[slot] ?? slot + 1}`,
+      title: foe.title,
+      level,
+      troops,
+      maxTroops: troops,
+      force: Math.min(SAGA_STAT_CAP, foe.force),
+      intellect: Math.min(SAGA_STAT_CAP, foe.intellect),
+      defense: Math.min(SAGA_STAT_CAP, Math.round(foe.force * 0.8)),
+      speed: Math.min(SAGA_STAT_CAP, foe.speed),
+      tactics: [],
+      poor: true,
+      color: foe.color,
+      accent: foe.accent,
+      recruitable: false,
+      recruitHard: false,
+      boss: false,
+    };
+  }
   // v6 起野外杂兵整体降到「章节 × 2 + 场次 / 3」，比旧规则的「章节 × 3 + 场次 / 2」低一截；
   // v17 起主线拉长到 100 级，杂兵改为「章节 × 8」，但最高不超过队伍最高级，避免越打越离谱。
   const scaledLevel =
@@ -195,14 +251,14 @@ function squadEnemy(
       : rules >= 6
         ? 1 + chapterIndex * 2 + Math.floor(ordinal / 3)
         : 1 + chapterIndex * 3 + Math.floor(ordinal / 2);
-  const level =
+  const legacyLevel =
     rules >= 17
       ? Math.min(SAGA_MAX_LEVEL, scaledLevel, partyLevel)
       : scaledLevel;
-  const troops =
+  const legacyTroops =
     rules >= 13
       ? Math.round(
-          troopBaseline(level, rules) *
+          troopBaseline(legacyLevel, rules) *
             (rules >= 17
               ? 0.9 + 0.3 * Math.min(1, Math.max(0, (foe.baseTroops - 60) / 120))
               : 1.2 + 0.5 * Math.min(1, Math.max(0, (foe.baseTroops - 60) / 120))) *
@@ -211,7 +267,7 @@ function squadEnemy(
       : Math.max(
           40,
           Math.round(
-            (foe.baseTroops + level * foe.growth) *
+            (foe.baseTroops + legacyLevel * foe.growth) *
               (1 + chapterIndex * 0.07) *
               (withLeader ? 0.9 : 1),
           ),
@@ -220,13 +276,13 @@ function squadEnemy(
     id: `foe_${foe.key}_${ordinal}_${slot}`,
     name: `${foe.name}${SQUAD_MARKS[slot] ?? slot + 1}`,
     title: foe.title,
-    level,
-    troops,
-    maxTroops: troops,
-    force: foe.force + Math.floor(level * 1.1),
-    intellect: foe.intellect + Math.floor(level * 0.6),
-    defense: foe.defense + Math.floor(level * 1),
-    speed: foe.speed + Math.floor(level * 0.5),
+    level: legacyLevel,
+    troops: legacyTroops,
+    maxTroops: legacyTroops,
+    force: Math.min(SAGA_STAT_CAP, foe.force + Math.floor(legacyLevel * 1.1)),
+    intellect: Math.min(SAGA_STAT_CAP, foe.intellect + Math.floor(legacyLevel * 0.6)),
+    defense: Math.min(SAGA_STAT_CAP, foe.defense + Math.floor(legacyLevel * 1)),
+    speed: Math.min(SAGA_STAT_CAP, foe.speed + Math.floor(legacyLevel * 0.5)),
     tactics: [],
     // 杂兵的兵器甲胄比同级敌将低两档（v6 起；v4/v5 低一档），见 `buildBattle` 的装备档位。
     poor: true,
@@ -245,29 +301,145 @@ function squadEnemy(
  * v6 起杂兵等级降为「章节 × 2 + 场次 / 3」，v5 及更早仍按原等级重放。
  * v17 起野外按队伍最高等级封顶：10 级前后只放 1 队、15 级 2 队、30 级 3 队、45 级以后才放满 4 队。
  */
-export function sagaEncounterFor(run: SagaRun, ordinal: number, rules: number): SagaNode {
+export function sagaEncounterFor(
+  run: SagaRun,
+  ordinal: number,
+  rules: number,
+  context?: SagaFieldBattleContext,
+): SagaNode {
   const index = clampInt(ordinal, 0, SAGA_MAX_COMMANDS - 1);
   const chapter =
     SAGA_CHAPTERS[clampInt(run.startSave.chapter, 0, SAGA_CHAPTERS.length - 1)];
-  const partyLevel = Math.max(
+  const fallbackPartyLevel = Math.max(
     1,
     ...run.startSave.party.map((general) => Math.max(1, Math.trunc(general.level))),
   );
+  const partyLevel =
+    context?.level ??
+    (rules >= 18
+      ? Math.max(
+          1,
+          Math.round(
+            run.startSave.party.reduce(
+              (sum, general) => sum + Math.max(1, Math.trunc(general.level)),
+              0,
+            ) / Math.max(1, run.startSave.party.length),
+          ),
+        )
+      : fallbackPartyLevel);
+  const avgTroops =
+    context?.avgTroops ??
+    Math.max(
+      1,
+      Math.round(
+        troopBaseline(partyLevel, rules) *
+          (run.startSave.party.reduce(
+            (sum, general) =>
+              sum +
+              (SAGA_GENERAL_BY_ID.get(general.id)?.baseTroops ?? 180),
+            0,
+          ) /
+            Math.max(1, run.startSave.party.length) /
+            210),
+      ),
+    );
+  const partySize = context?.partySize ?? run.startSave.party.length;
   const rng = mulberry32((run.seed ^ Math.imul(index + 1, 0x9e3779b9)) >>> 0);
   const foe = pick(rng, rules >= 4 ? FOES_V4 : FOES);
+
+  if (rules >= 18) {
+    // v18：野外等级跟当前队伍平均等级走，不再看第几场；出战人数随机，
+    // 前期不超过我方队伍人数，任何时期最多 5 人。
+    const maxEnemies = Math.min(
+      5,
+      Math.max(1, partyLevel < 15 ? Math.min(5, partySize) : 5),
+    );
+    const enemyCount = 1 + Math.floor(rng() * maxEnemies);
+    const hasLeader = enemyCount >= 2 ? rng() < 0.58 : rng() < 0.35;
+    // 敌将兵力 = 我方平均兵力 × 0.8~6；权重大头压在低倍率，6 倍是少数硬仗。
+    const anchorFactor = 0.8 + Math.pow(rng(), 1.8) * 5.2;
+    const anchorTroops = Math.max(1, Math.round(avgTroops * anchorFactor));
+    const enemies: SagaEnemy[] = [];
+    let leaderName = "";
+    if (hasLeader) {
+      const leader = leaderEnemy(
+        pick(rng, chapter.field),
+        chapter.index,
+        index,
+        partyLevel,
+        anchorTroops,
+        rules,
+      );
+      leaderName = leader.name;
+      enemies.push(leader);
+    }
+    // 杂兵严格低于敌方武将一半：18%~45% 锚点兵力。
+    while (enemies.length < enemyCount) {
+      const slot = enemies.filter((row) => row.poor).length;
+      const mobTroops = Math.max(1, Math.round(anchorTroops * (0.18 + rng() * 0.27)));
+      enemies.push(
+        squadEnemy(
+          foe,
+          chapter.index,
+          index,
+          slot,
+          hasLeader,
+          rules,
+          partyLevel,
+          Math.min(SAGA_MAX_LEVEL, Math.max(1, partyLevel - 1)),
+          mobTroops,
+        ),
+      );
+    }
+    const rewardGold =
+      8 + chapter.index * 4 + enemies.length * 4 + (hasLeader ? 12 : 0) + Math.floor(index / 2) * 2;
+    const rewardExp =
+      8 + chapter.index * 3 + enemies.length * 3 + (hasLeader ? 10 : 0) + Math.floor(index / 2);
+    const name = hasLeader ? `${foe.group}·${leaderName}` : foe.group;
+    return {
+      kind: "battle",
+      name,
+      blurb: `${foe.blurb}${hasLeader ? `领头的正是${leaderName}。` : ""}`.slice(0, 120),
+      chapter: chapter.index,
+      enemies,
+      rewardGold,
+      rewardExp,
+      enemyFormation: pick(rng, SAGA_FORMATIONS).id,
+    };
+  }
+
   const hasLeader = rng() < 0.38;
   const squadCap =
-    rules >= 17 ? (partyLevel >= 45 ? 4 : partyLevel >= 30 ? 3 : partyLevel >= 15 ? 2 : 1) : 4;
+    rules >= 17 ? (fallbackPartyLevel >= 45 ? 4 : fallbackPartyLevel >= 30 ? 3 : fallbackPartyLevel >= 15 ? 2 : 1) : 4;
   const squad = 1 + Math.floor(rng() * squadCap);
   const enemies: SagaEnemy[] = [];
   let leaderName = "";
   if (hasLeader) {
-    const leader = leaderEnemy(pick(rng, chapter.field), chapter.index, index, rules, partyLevel);
+    const leader = leaderEnemy(
+      pick(rng, chapter.field),
+      chapter.index,
+      index,
+      fallbackPartyLevel,
+      0,
+      rules,
+    );
     leaderName = leader.name;
     enemies.push(leader);
   }
   for (let slot = 0; slot < squad; slot++) {
-    enemies.push(squadEnemy(foe, chapter.index, index, slot, hasLeader, rules, partyLevel));
+    enemies.push(
+      squadEnemy(
+        foe,
+        chapter.index,
+        index,
+        slot,
+        hasLeader,
+        rules,
+        fallbackPartyLevel,
+        0,
+        0,
+      ),
+    );
   }
   const rewardGold =
     8 + chapter.index * 4 + enemies.length * 4 + (hasLeader ? 12 : 0) + Math.floor(index / 2) * 2;

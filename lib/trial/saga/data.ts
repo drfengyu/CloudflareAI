@@ -9,6 +9,7 @@ import type {
   SagaItemKind,
   SagaTacticDef,
   SagaTraitDef,
+  SagaTraitId,
   TacticId,
   WeaponType,
 } from "./types";
@@ -38,21 +39,21 @@ export const SAGA_TRAIT_BY_ID = new Map(SAGA_TRAITS.map((trait) => [trait.id, tr
 /** 武将图鉴：史实人物与演义称号，数值为原创平衡。 */
 export const SAGA_GENERALS: SagaGeneralDef[] = [
   { id: "liubei", name: "刘备", title: "仁德之主", force: 70, intellect: 72, defense: 66, speed: 64, tactics: ["huifu", "guwu"], learn: [{ level: 10, tactic: "hunluan" }], traits: ["rende"], baseTroops: 180, growth: 10, color: "#3f6212", accent: "#bef264" },
-  { id: "guanyu", name: "关羽", title: "武圣", force: 97, intellect: 75, defense: 82, speed: 60, tactics: ["guwu"], learn: [{ level: 12, tactic: "hunluan" }], traits: ["mengjiang"], baseTroops: 200, growth: 12, color: "#166534", accent: "#fde68a" },
-  { id: "zhangfei", name: "张飞", title: "燕人", force: 98, intellect: 32, defense: 84, speed: 55, tactics: ["hunluan"], traits: ["mengjiang"], baseTroops: 210, growth: 12, color: "#7f1d1d", accent: "#fca5a5" },
-  { id: "zhaoyun", name: "赵云", title: "常山赵子龙", force: 96, intellect: 76, defense: 84, speed: 78, tactics: ["huoji"], learn: [{ level: 10, tactic: "guwu" }, { level: 16, tactic: "hunluan" }], traits: ["huixin"], baseTroops: 195, growth: 11, color: "#1e40af", accent: "#bfdbfe", recruitable: true },
+  { id: "guanyu", name: "关羽", title: "武圣", force: 97, intellect: 75, defense: 82, speed: 60, tactics: ["guwu"], learn: [{ level: 12, tactic: "hunluan" }], traits: ["mengjiang", "tiebi"], baseTroops: 200, growth: 12, color: "#166534", accent: "#fde68a" },
+  { id: "zhangfei", name: "张飞", title: "燕人", force: 98, intellect: 32, defense: 84, speed: 55, tactics: ["hunluan"], traits: ["mengjiang", "ganglie"], baseTroops: 210, growth: 12, color: "#7f1d1d", accent: "#fca5a5" },
+  { id: "zhaoyun", name: "赵云", title: "常山赵子龙", force: 96, intellect: 76, defense: 84, speed: 78, tactics: ["huoji"], learn: [{ level: 10, tactic: "guwu" }, { level: 16, tactic: "hunluan" }], traits: ["huixin", "shensu"], baseTroops: 195, growth: 11, color: "#1e40af", accent: "#bfdbfe", recruitable: true },
   { id: "huangzhong", name: "黄忠", title: "老当益壮", force: 93, intellect: 62, defense: 76, speed: 56, tactics: ["huoji"], traits: ["huixin"], baseTroops: 190, growth: 11, color: "#a16207", accent: "#fde68a", recruitable: true },
   { id: "machao", name: "马超", title: "锦马超", force: 97, intellect: 48, defense: 78, speed: 80, tactics: ["guwu"], traits: ["huixin"], baseTroops: 200, growth: 11, color: "#475569", accent: "#e2e8f0", recruitable: true },
   { id: "weiyan", name: "魏延", title: "镇北将军", force: 90, intellect: 58, defense: 72, speed: 68, tactics: ["hunluan"], traits: ["mengjiang"], baseTroops: 185, growth: 10, color: "#6b21a8", accent: "#e9d5ff", recruitable: true },
-  { id: "pangtong", name: "庞统", title: "凤雏", force: 42, intellect: 96, defense: 50, speed: 58, tactics: ["huoji", "hunluan"], learn: [{ level: 8, tactic: "guwu" }, { level: 14, tactic: "huifu" }], traits: ["zhisheng"], baseTroops: 150, growth: 8, color: "#4b5563", accent: "#fbbf24", recruitable: true },
+  { id: "pangtong", name: "庞统", title: "凤雏", force: 42, intellect: 96, defense: 50, speed: 58, tactics: ["huoji", "hunluan"], learn: [{ level: 8, tactic: "guwu" }, { level: 14, tactic: "huifu" }], traits: ["zhisheng", "shendao"], baseTroops: 150, growth: 8, color: "#4b5563", accent: "#fbbf24", recruitable: true },
   { id: "fazheng", name: "法正", title: "蜀郡谋主", force: 48, intellect: 92, defense: 54, speed: 62, tactics: ["huifu", "hunluan"], learn: [{ level: 10, tactic: "huoji" }, { level: 16, tactic: "guwu" }], traits: ["zhisheng"], baseTroops: 150, growth: 8, color: "#0f766e", accent: "#99f6e4", recruitable: true },
   { id: "yanyan", name: "严颜", title: "巴郡老将", force: 88, intellect: 60, defense: 78, speed: 50, tactics: ["guwu"], traits: ["tiebi"], baseTroops: 180, growth: 10, color: "#78350f", accent: "#fcd34d", recruitable: true },
   { id: "zhangren", name: "张任", title: "西川枪王", force: 89, intellect: 68, defense: 76, speed: 66, tactics: ["huoji"], traits: ["shensu"], baseTroops: 180, growth: 10, color: "#7c2d12", accent: "#fdba74", recruitable: true },
   { id: "taishici", name: "太史慈", title: "神亭岭", force: 94, intellect: 66, defense: 78, speed: 72, tactics: ["guwu"], traits: ["shensu"], baseTroops: 195, growth: 11, color: "#0e7490", accent: "#a5f3fc", recruitable: true },
   { id: "ganning", name: "甘宁", title: "锦帆贼", force: 92, intellect: 60, defense: 74, speed: 80, tactics: ["huoji"], traits: ["shensu"], baseTroops: 190, growth: 11, color: "#9a3412", accent: "#fdba74", recruitable: true },
   { id: "huaxiong", name: "华雄", title: "汜水关", force: 92, intellect: 40, defense: 76, speed: 62, tactics: ["guwu"], traits: ["mengjiang"], baseTroops: 195, growth: 11, color: "#7f1d1d", accent: "#fecaca", recruitable: true },
-  { id: "lvbu", name: "吕布", title: "飞将", force: 100, intellect: 36, defense: 88, speed: 86, tactics: ["guwu"], traits: ["wushuang"], baseTroops: 240, growth: 13, color: "#4c1d95", accent: "#fbbf24", recruitable: true, recruitHard: true },
-  { id: "zhugeliang", name: "诸葛亮", title: "卧龙", force: 38, intellect: 100, defense: 58, speed: 60, tactics: ["huoji", "huifu", "hunluan", "guwu"], traits: ["zhisheng"], baseTroops: 160, growth: 8, color: "#1e3a8a", accent: "#bfdbfe", recruitable: true },
+  { id: "lvbu", name: "吕布", title: "飞将", force: 100, intellect: 36, defense: 88, speed: 86, tactics: ["guwu"], traits: ["wushuang", "xiaoyong"], baseTroops: 240, growth: 13, color: "#4c1d95", accent: "#fbbf24", recruitable: true, recruitHard: true },
+  { id: "zhugeliang", name: "诸葛亮", title: "卧龙", force: 38, intellect: 100, defense: 58, speed: 60, tactics: ["huoji", "huifu", "hunluan", "guwu"], traits: ["zhisheng", "shendao"], baseTroops: 160, growth: 8, color: "#1e3a8a", accent: "#bfdbfe", recruitable: true },
   { id: "zhanghe", name: "张郃", title: "巧变", force: 90, intellect: 66, defense: 78, speed: 72, tactics: ["guwu"], traits: ["shensu"], baseTroops: 190, growth: 11, color: "#365314", accent: "#d9f99d", recruitable: true },
   { id: "zhangjiao", name: "张角", title: "天公将军", force: 55, intellect: 92, defense: 60, speed: 50, tactics: ["huoji", "huifu", "hunluan", "guwu"], traits: ["zhisheng"], baseTroops: 220, growth: 12, color: "#581c87", accent: "#e9d5ff", enemyOnly: true },
   { id: "zhangbao", name: "张宝", title: "地公将军", force: 60, intellect: 70, defense: 58, speed: 55, tactics: ["huoji"], baseTroops: 180, growth: 10, color: "#6b21a8", accent: "#d8b4fe", enemyOnly: true },
@@ -74,13 +75,13 @@ export const SAGA_GENERALS: SagaGeneralDef[] = [
   { id: "yuanshao", name: "袁绍", title: "四世三公", force: 70, intellect: 72, defense: 78, speed: 54, tactics: ["huoji", "guwu"], learn: [{ level: 16, tactic: "hunluan" }], baseTroops: 240, growth: 13, color: "#4c1d95", accent: "#ddd6fe", enemyOnly: true },
   { id: "caimao", name: "蔡瑁", title: "水军都督", force: 68, intellect: 50, defense: 64, speed: 58, tactics: ["huoji"], baseTroops: 185, growth: 10, color: "#0f766e", accent: "#99f6e4", enemyOnly: true },
   { id: "zhangyun", name: "张允", title: "水军副将", force: 66, intellect: 48, defense: 62, speed: 60, tactics: ["huoji"], baseTroops: 180, growth: 10, color: "#115e59", accent: "#5eead4", enemyOnly: true },
-  { id: "caocao", name: "曹操", title: "魏武帝", force: 78, intellect: 88, defense: 82, speed: 64, tactics: ["huoji", "huifu", "hunluan", "guwu"], traits: ["zhisheng"], baseTroops: 260, growth: 14, color: "#1e3a8a", accent: "#fbbf24", enemyOnly: true },
+  { id: "caocao", name: "曹操", title: "魏武帝", force: 78, intellect: 88, defense: 82, speed: 64, tactics: ["huoji", "huifu", "hunluan", "guwu"], traits: ["xiaoxiong", "baizhan"], baseTroops: 260, growth: 14, color: "#1e3a8a", accent: "#fbbf24", enemyOnly: true },
   { id: "liuzhang", name: "刘璋", title: "益州牧", force: 52, intellect: 60, defense: 70, speed: 44, tactics: ["huifu"], baseTroops: 230, growth: 12, color: "#3f6212", accent: "#fde68a", enemyOnly: true },
   { id: "liukui", name: "刘璝", title: "益州将", force: 78, intellect: 50, defense: 70, speed: 54, tactics: [], baseTroops: 175, growth: 10, color: "#365314", accent: "#d9f99d", enemyOnly: true },
   { id: "lengbao", name: "冷苞", title: "益州将", force: 76, intellect: 46, defense: 68, speed: 56, tactics: [], baseTroops: 175, growth: 10, color: "#4d7c0f", accent: "#ecfccb", enemyOnly: true },
   { id: "xuhuang", name: "徐晃", title: "公明", force: 90, intellect: 62, defense: 80, speed: 66, tactics: ["guwu"], baseTroops: 205, growth: 11, color: "#1e40af", accent: "#bfdbfe", enemyOnly: true },
   { id: "caohong", name: "曹洪", title: "子廉", force: 84, intellect: 50, defense: 76, speed: 58, tactics: [], baseTroops: 195, growth: 10, color: "#1d4ed8", accent: "#dbeafe", enemyOnly: true },
-  { id: "simayi", name: "司马懿", title: "冢虎", force: 60, intellect: 98, defense: 76, speed: 70, tactics: ["huoji", "huifu", "hunluan", "guwu"], traits: ["zhisheng"], baseTroops: 260, growth: 14, color: "#3b0764", accent: "#d8b4fe", enemyOnly: true },
+  { id: "simayi", name: "司马懿", title: "冢虎", force: 60, intellect: 98, defense: 76, speed: 70, tactics: ["huoji", "huifu", "hunluan", "guwu"], traits: ["zhisheng", "shendao"], baseTroops: 260, growth: 14, color: "#3b0764", accent: "#d8b4fe", enemyOnly: true },
   { id: "guohuai", name: "郭淮", title: "雍州刺史", force: 82, intellect: 70, defense: 74, speed: 64, tactics: ["huoji"], learn: [{ level: 18, tactic: "hunluan" }], baseTroops: 200, growth: 11, color: "#312e81", accent: "#c7d2fe", enemyOnly: true },
   { id: "sunli", name: "孙礼", title: "曹魏将", force: 80, intellect: 58, defense: 70, speed: 62, tactics: [], baseTroops: 190, growth: 10, color: "#3730a3", accent: "#e0e7ff", enemyOnly: true },
   { id: "jiling", name: "纪灵", title: "三尖刀", force: 88, intellect: 46, defense: 76, speed: 60, tactics: ["guwu"], baseTroops: 195, growth: 11, color: "#713f12", accent: "#fde68a", enemyOnly: true },
@@ -116,8 +117,8 @@ export const SAGA_GENERALS: SagaGeneralDef[] = [
   { id: "wangshuang", name: "王双", title: "流星锤", force: 90, intellect: 36, defense: 76, speed: 64, tactics: ["guwu"], traits: ["mengjiang"], baseTroops: 200, growth: 11, color: "#7f1d1d", accent: "#fecaca", enemyOnly: true },
   { id: "sunjian", name: "孙坚", title: "江东猛虎", force: 90, intellect: 62, defense: 80, speed: 68, tactics: ["guwu"], traits: ["mengjiang"], baseTroops: 205, growth: 11, color: "#0e7490", accent: "#a5f3fc", recruitable: true },
   { id: "sunce", name: "孙策", title: "小霸王", force: 94, intellect: 60, defense: 80, speed: 74, tactics: ["guwu"], traits: ["wushuang"], baseTroops: 210, growth: 12, color: "#0e7490", accent: "#fbbf24", recruitable: true, recruitHard: true },
-  { id: "sunquan", name: "孙权", title: "吴大帝", force: 70, intellect: 78, defense: 78, speed: 58, tactics: ["huifu", "guwu"], traits: ["tongshuai"], baseTroops: 205, growth: 11, color: "#115e59", accent: "#5eead4", recruitable: true },
-  { id: "zhouyu", name: "周瑜", title: "美周郎", force: 72, intellect: 96, defense: 78, speed: 70, tactics: ["huoji", "huifu", "guwu"], traits: ["zhisheng"], baseTroops: 190, growth: 10, color: "#0f766e", accent: "#fde68a", recruitable: true, recruitHard: true },
+  { id: "sunquan", name: "孙权", title: "吴大帝", force: 70, intellect: 78, defense: 78, speed: 58, tactics: ["huifu", "guwu"], traits: ["tongshuai", "rende"], baseTroops: 205, growth: 11, color: "#115e59", accent: "#5eead4", recruitable: true },
+  { id: "zhouyu", name: "周瑜", title: "美周郎", force: 72, intellect: 96, defense: 78, speed: 70, tactics: ["huoji", "huifu", "guwu"], traits: ["zhisheng", "huixin"], baseTroops: 190, growth: 10, color: "#0f766e", accent: "#fde68a", recruitable: true, recruitHard: true },
   { id: "lusu", name: "鲁肃", title: "江东大都督", force: 52, intellect: 92, defense: 70, speed: 60, tactics: ["huifu", "guwu"], traits: ["jizhi"], baseTroops: 175, growth: 9, color: "#0f766e", accent: "#99f6e4", recruitable: true },
   { id: "lvmeng", name: "吕蒙", title: "白衣渡江", force: 82, intellect: 84, defense: 78, speed: 66, tactics: ["huoji", "guwu"], traits: ["jizhi"], baseTroops: 195, growth: 10, color: "#115e59", accent: "#5eead4", recruitable: true },
   { id: "luxun", name: "陆逊", title: "火烧连营", force: 66, intellect: 95, defense: 76, speed: 68, tactics: ["huoji", "hunluan", "guwu"], traits: ["shendao"], baseTroops: 190, growth: 10, color: "#0f766e", accent: "#a7f3d0", recruitable: true, recruitHard: true },
@@ -266,6 +267,8 @@ export const SAGA_ITEMS: SagaItemDef[] = [
   { id: "yitian", name: "倚天剑", kind: "weapon", priceTickets: 11, atk: 52, weaponType: "sword", chapter: 5, desc: "攻击 +52，剑长三尺，锋芒照人" },
   { id: "fangtian", name: "方天画戟", kind: "weapon", priceTickets: 14, atk: 64, weaponType: "halberd", chapter: 5, desc: "攻击 +64，温侯的招牌" },
   { id: "crescent_bow", name: "半月弓", kind: "weapon", priceTickets: 10, atk: 44, weaponType: "bow", chapter: 3, desc: "攻击 +44，远射之器" },
+  { id: "qixing", name: "七星宝刀", kind: "weapon", priceTickets: 13, atk: 68, weaponType: "blade", chapter: 6, desc: "攻击 +68，宝刀削铁如泥" },
+  { id: "longdan", name: "龙胆亮银枪", kind: "weapon", priceTickets: 15, atk: 72, weaponType: "spear", chapter: 7, desc: "攻击 +72，子龙掌中银枪" },
   // 甲胄：胸甲一系。
   { id: "cloth", name: "布甲", kind: "armor", priceTickets: 1, def: 6, chapter: 0, desc: "防御 +6" },
   { id: "leather", name: "皮甲", kind: "armor", priceTickets: 2, def: 11, chapter: 0, desc: "防御 +11" },
@@ -274,14 +277,19 @@ export const SAGA_ITEMS: SagaItemDef[] = [
   { id: "yulinjia", name: "鱼鳞甲", kind: "armor", priceTickets: 7, def: 30, chapter: 3, desc: "防御 +30" },
   { id: "mingguang", name: "明光铠", kind: "armor", priceTickets: 9, def: 38, chapter: 4, desc: "防御 +38" },
   { id: "shoumian", name: "兽面吞头铠", kind: "armor", priceTickets: 12, def: 46, chapter: 5, desc: "防御 +46" },
+  { id: "xuantie", name: "玄铁重铠", kind: "armor", priceTickets: 14, def: 54, chapter: 6, desc: "防御 +54，玄铁铸身" },
+  { id: "longlin", name: "龙鳞铠", kind: "armor", priceTickets: 16, def: 62, chapter: 7, desc: "防御 +62，鳞片映日" },
   // 盔 / 腰带 / 吊坠 / 靴：各占一个槽，后城卖得更好。
   { id: "cloth_helm", name: "布盔", kind: "helmet", priceTickets: 1, def: 3, chapter: 0, desc: "防御 +3" },
   { id: "iron_helm", name: "铁盔", kind: "helmet", priceTickets: 3, def: 7, chapter: 1, desc: "防御 +7" },
   { id: "silver_helm", name: "银盔", kind: "helmet", priceTickets: 6, def: 12, chapter: 3, desc: "防御 +12" },
   { id: "gold_helm", name: "金盔", kind: "helmet", priceTickets: 10, def: 18, chapter: 5, desc: "防御 +18" },
+  { id: "longwen_helm", name: "龙纹盔", kind: "helmet", priceTickets: 13, def: 24, chapter: 6, desc: "防御 +24" },
+  { id: "zijin_crown", name: "紫金冠", kind: "helmet", priceTickets: 16, def: 28, chapter: 7, desc: "防御 +28，诸侯冠冕" },
   { id: "leather_belt", name: "皮带", kind: "belt", priceTickets: 1, def: 2, chapter: 0, desc: "防御 +2" },
   { id: "bronze_belt", name: "铜带", kind: "belt", priceTickets: 4, def: 5, chapter: 2, desc: "防御 +5" },
   { id: "jade_belt", name: "玉带", kind: "belt", priceTickets: 9, def: 10, chapter: 5, desc: "防御 +10" },
+  { id: "longwen_belt", name: "龙纹带", kind: "belt", priceTickets: 14, def: 16, chapter: 7, desc: "防御 +16" },
   { id: "jade_pendant", name: "玉佩", kind: "pendant", priceTickets: 2, def: 1, speed: 1, chapter: 0, desc: "防御 +1，速度 +1" },
   { id: "tiger_pendant", name: "虎符坠", kind: "pendant", priceTickets: 7, def: 4, speed: 2, chapter: 3, desc: "防御 +4，速度 +2" },
   { id: "straw_boots", name: "草鞋", kind: "boots", priceTickets: 1, speed: 1, chapter: 0, desc: "速度 +1" },
@@ -293,6 +301,7 @@ export const SAGA_ITEMS: SagaItemDef[] = [
   { id: "jueying", name: "绝影", kind: "mount", priceTickets: 9, speed: 4, chapter: 3, desc: "速度 +4，奔逸绝尘" },
   { id: "zhuahuang", name: "爪黄飞电", kind: "mount", priceTickets: 11, speed: 4, chapter: 4, desc: "速度 +4，御驾之名驹" },
   { id: "chitu", name: "赤兔", kind: "mount", priceTickets: 15, speed: 6, chapter: 5, desc: "速度 +6，日行千里" },
+  { id: "hanxue", name: "汗血宝马", kind: "mount", priceTickets: 18, speed: 8, chapter: 7, desc: "速度 +8，踏雪无痕" },
   // 药品：新增可随身携带的复活丹，药铺与军需都有售。
   { id: "herb", name: "伤药", kind: "consumable", priceTickets: 1, heal: 120, chapter: 0, desc: "回复 120 兵力", stack: true },
   { id: "medicine", name: "良药", kind: "consumable", priceTickets: 2, heal: 300, chapter: 0, desc: "回复 300 兵力", stack: true },
@@ -303,6 +312,8 @@ export const SAGA_ITEMS: SagaItemDef[] = [
   { id: "lingzhi", name: "灵芝", kind: "consumable", priceTickets: 4, heal: 900, chapter: 2, desc: "回复 900 兵力，山中所采的灵药", stack: true },
   { id: "zhaohun_dan", name: "招魂丹", kind: "consumable", priceTickets: 4, revive: 0.3, chapter: 0, desc: "复活一名败将，回三成兵力", stack: true },
   { id: "huihun_dan", name: "回魂丹", kind: "consumable", priceTickets: 8, revive: 0.5, chapter: 4, desc: "复活一名败将，回五成兵力", stack: true },
+  { id: "jiuzhuan", name: "九转还魂丹", kind: "consumable", priceTickets: 14, revive: 0.8, chapter: 7, desc: "复活一名败将，回八成兵力", stack: true },
+  { id: "xiandan", name: "仙丹", kind: "consumable", priceTickets: 12, heal: 3000, chapter: 7, desc: "回复 3000 兵力", stack: true },
   // 军需：只在本次行军生效的补给。
   { id: "secret_medicine", name: "秘药", kind: "supply", priceTickets: 1, supply: "heal", desc: "此行：一名武将兵力回满", stack: true },
   { id: "revive_token", name: "兵符", kind: "supply", priceTickets: 2, supply: "revive", desc: "此行：复活一名败将（四成兵力）", stack: true },
@@ -518,14 +529,16 @@ export function tacticsFor(def: SagaGeneralDef | undefined, level: number): Tact
 }
 
 /** 特性带来的四维加成；战斗伤害里的暴击 / 追击另算。 */
-export function traitStats(def: SagaGeneralDef | undefined): {
+export function traitStats(def: SagaGeneralDef | undefined, rules = 18): {
   force: number;
   intellect: number;
   defense: number;
   speed: number;
 } {
   const stats = { force: 0, intellect: 0, defense: 0, speed: 0 };
-  for (const id of def?.traits ?? []) {
+  // v18 起支持一名名将带多条特性；旧规则仍只吃第一条，避免已落库战报翻盘。
+  const ids = rules >= 18 ? def?.traits ?? [] : (def?.traits ?? []).slice(0, 1);
+  for (const id of ids) {
     const trait = SAGA_TRAIT_BY_ID.get(id);
     if (!trait) continue;
     stats.force += trait.force ?? 0;
@@ -534,6 +547,15 @@ export function traitStats(def: SagaGeneralDef | undefined): {
     stats.speed += trait.speed ?? 0;
   }
   return stats;
+}
+
+/** v18 起名将可带多条特性；旧规则只启用第一条。 */
+export function traitsForRules(
+  def: SagaGeneralDef | undefined,
+  rules: number,
+): SagaTraitId[] {
+  const ids = def?.traits ?? [];
+  return rules >= 18 ? ids : ids.slice(0, 1);
 }
 
 export const SAGA_CHAPTERS: SagaChapterDef[] = [

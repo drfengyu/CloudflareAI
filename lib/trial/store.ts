@@ -25,7 +25,7 @@ import {
   couponGoldCost,
   sanitizeSagaBank,
 } from "./saga/bank";
-import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "./saga/inn";
+import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS, freeInnAvailable, trialDayKey } from "./saga/inn";
 import {
   SAGA_FORGE_ITEM_ID,
   SAGA_FORGE_MAX_LEVEL,
@@ -611,6 +611,8 @@ export async function buyTrialItem(input: {
     throw new TrialError(`每名武将最多带 8 种道具，先舍弃一件再买`);
   }
   let tickets = priceTickets;
+  let freeStay = false;
+  let freeDay: string | undefined;
   let training: { generalId: string; targetLevel: number } | null = null;
   if (isTraining) {
     const generalId = String(input.generalId ?? "");
@@ -624,15 +626,18 @@ export async function buyTrialItem(input: {
     if (tickets <= 0) throw new TrialError("目标等级无效");
     training = { generalId, targetLevel };
   }
+  // 每天前两次住店免费：按存档里的 Asia/Shanghai 自然日计数，跨日自动重置。
+  if (isInn && freeInnAvailable(progress.save)) {
+    freeStay = true;
+    freeDay = trialDayKey();
+    tickets = 0;
+  }
   const cost = tickets * input.config.couponUnitCredits;
-  const paid = await payWithCoupon(
-    input.userId,
-    "trial",
-    activityKey,
-    cost,
-    input.config.couponUnitCredits,
-  );
-  if (!paid.ok) throw new TrialError(paid.reason);
+  const paid =
+    cost > 0
+      ? await payWithCoupon(input.userId, "trial", activityKey, cost, input.config.couponUnitCredits)
+      : null;
+  if (paid && !paid.ok) throw new TrialError(paid.reason);
 
   const next: SagaRun = {
     ...run,
@@ -643,6 +648,7 @@ export async function buyTrialItem(input: {
         itemId: isInn ? SAGA_INN_ITEM_ID : isTraining ? SAGA_TRAINING_ITEM_ID : item!.id,
         tickets,
         ...(training ?? {}),
+        ...(freeStay ? { freeStay: true, freeDay } : {}),
         at: Date.now(),
         cmdIndex,
       },
@@ -656,7 +662,7 @@ export async function buyTrialItem(input: {
     [JSON.stringify(next), input.runId, input.userId, row.questions],
   );
   if (updated.changes !== 1) {
-    await refundCouponPayment(paid.payment);
+    if (paid) await refundCouponPayment(paid.payment);
     throw new TrialError("行军状态已变化，请刷新页面后重试");
   }
 
@@ -773,7 +779,7 @@ export async function upgradeTrialGear(input: {
     [JSON.stringify(next), input.runId, input.userId, row.questions],
   );
   if (updated.changes !== 1) {
-    await refundCouponPayment(paid.payment);
+    if (paid) await refundCouponPayment(paid.payment);
     throw new TrialError("行军状态已变化，请刷新页面后重试");
   }
 

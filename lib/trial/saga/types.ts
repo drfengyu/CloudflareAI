@@ -33,12 +33,18 @@ export const SAGA_SAVE_VERSION = 1;
  * v14 起等级封顶抬到 50、兵力改几何曲线（1 级 100 兵 → 50 级 20000 兵），
  * 每级四维成长由 ×3 收到 ×2；v13 及更早的行军仍按旧账重放。
  * v17 起等级封顶抬到 100，兵力改「小幅线性 + 二次成长」（1 级 100 兵 → 100 级 40294 兵），
- * 四维成长改为 ×1.05（100 级吕布武力 255、庞统智力约 220），50 级版本的行军仍按 v16 旧账重放。
+ * v18 起武力 / 智力 / 速度固定不随等级成长，攻击 / 防御改成长值并含装备封顶 255；
+ * 智决定 SP 与计策伤害，速决定命中 / 暴击 / 爆伤，SP 随等级最高 255。
+ * 旧行军仍按各自版本的成长与兵力口径重放。
  * 旧行军没有这个字段，重放时按 v1 走，避免改版把还没收兵的对局打乱。
  */
-export const SAGA_RULESET = 17;
+export const SAGA_RULESET = 18;
 
-/** 四维上限：v9 起武力 / 智力 / 防御 / 速度可以一路长到 255（基础值不动，长的是等级与特性加成）。 */
+/**
+ * 属性上限：255。
+ * v18 起武力 / 智力 / 速度是固定基础值，不随等级成长；攻击 / 防御才是成长值，
+ * 由武力底子 + 等级成长 + 装备实时叠加，含装备一起封顶 255。
+ */
 export const SAGA_STAT_CAP = 255;
 
 /** 上阵队伍上限：v15 起从 5 人抬到 7 人，战场两列排开一起上。 */
@@ -93,7 +99,7 @@ export interface SagaFieldCamp {
 }
 
 /** 行军途中的乡野点位：可走近交谈，只讲剧情，不参与结算。 */
-export type SagaFieldPoiKind = "village" | "shrine" | "ferry";
+export type SagaFieldPoiKind = "village" | "shrine" | "ferry" | "cave";
 
 export interface SagaFieldPoi {
   kind: SagaFieldPoiKind;
@@ -364,6 +370,9 @@ export interface TrialSave {
   gearLevels: Record<string, number>;
   met: string[];
   recruited: string[];
+  /** 每日免费住宿：上次住的自然日（Asia/Shanghai）与当天已用次数，最多两次。 */
+  innFreeDate?: string;
+  innFreeUsed?: number;
   stats: SagaStats;
 }
 
@@ -531,6 +540,9 @@ export interface SagaPurchase {
   /** 铁匠铺：被强化的装备与强化后的等级（`itemId` 为 `forge`）。 */
   gearId?: string;
   at: number;
+  /** 每日两次免费住宿：这一笔不扣券，并记下所属自然日。 */
+  freeStay?: boolean;
+  freeDay?: string;
   /** 购买时已经执行过的指令数：装备 / 军需 / 住店从下一步行动起生效。 */
   cmdIndex: number;
 }
@@ -614,7 +626,12 @@ export type SagaCommand =
   /** 打的是图上哪座营：大地图上可以自由挑顺序，首领营要先破其余营。 */
   | { k: "battle"; node: number; rounds: SagaRoundCommand[][] }
   /** 野外遭遇战：不占营地进度，编成由种子与这是第几场遭遇推出。 */
-  | { k: "skirmish"; rounds: SagaRoundCommand[][] }
+  | {
+      k: "skirmish";
+      rounds: SagaRoundCommand[][];
+      /** 开打当时锁定的队伍快照；老战报没有，仍按旧口径重放。 */
+      field?: SagaFieldBattleContext;
+    }
   /** 胜利后的归降回应：accept=true 按标价付钱并再掷一次成功率，false 婉拒（无成本）。 */
   | {
       k: "recruit";
@@ -624,7 +641,11 @@ export type SagaCommand =
       itemId: string | null;
     }
   /** 乘船：在两区渡口之间摆渡，扣船票（金币）。走位本身不入指令，这里只管钱与关卡口径。 */
-  | { k: "ferry"; to: number };
+  | { k: "ferry"; to: number }
+  /** 山洞宝箱：开启一次得装备 / 药品，按箱子 ID 去重，不能反复刷。 */
+  | { k: "loot"; chest: string; item: string; qty?: number }
+  /** 非战斗时施展回复计：每趟行军限三次，按施计者智力与等级回兵。 */
+  | { k: "tactic"; g: string; t: string };
 
 /**
  * 胜利后弹出的一条归降提议：由本场战斗的种子与战报确定标价、聘礼与成功率，
@@ -654,7 +675,10 @@ export interface SagaBattleGeneral {
   maxTroops: number;
   force: number;
   intellect: number;
+  /** v18 起为「含装备后的总防御」；旧规则仍由 battle.ts 另行计算。 */
   defense: number;
+  /** v18 起为「含装备后的总攻击」；旧规则仍走 battleAttackPower 的旧公式。 */
+  attack: number;
   speed: number;
   tactics: TacticId[];
   /** 武将固有特性，参与伤害、暴击与开场策略点结算。 */
@@ -713,6 +737,13 @@ export interface SagaBattleEvent {
   text: string;
 }
 
+/** 野外遭遇开打时锁定的队伍快照，保证客户端即时开战与服务端重放同编成。 */
+export interface SagaFieldBattleContext {
+  level: number;
+  avgTroops: number;
+  partySize: number;
+}
+
 export interface SagaBattleState {
   nodeIndex: number;
   nodeName: string;
@@ -734,6 +765,8 @@ export interface SagaBattleState {
   pendingRecruits: string[];
   /** v11 起胜利后生成的归降提议；旧规则为空。 */
   recruitOffers: RecruitOffer[];
+  /** 野外遭遇开打时锁定的队伍快照（营地战为空）。 */
+  field?: SagaFieldBattleContext;
 }
 
 export interface SagaInventory {
@@ -770,6 +803,10 @@ export interface SagaReplayState {
   encounters: number;
   recruited: string[];
   battlesWon: number;
+  /** 已开过的山洞宝箱（按洞穴与箱子 ID 去重），同一条指令重放只发一次。 */
+  lootedChests: string[];
+  /** 非战斗回复计已用次数：每趟行军最多 3 次。 */
+  fieldTacticsUsed: number;
 }
 
 export interface SagaReplayResult {

@@ -351,8 +351,8 @@ export function generateSagaField(options: {
     terrain[camp.ty * cols + camp.tx] = SAGA_TILE_ROAD;
   }
 
-  // 乡野点位：沿着官道挑三处落脚地，走过去能听一段本地故事。
-  const poiKinds: SagaFieldPoiKind[] = ["village", "shrine", "ferry"];
+  // 乡野点位：沿着官道挑落脚地，村、祠、渡口之外再加一处乱石山洞。
+  const poiKinds: SagaFieldPoiKind[] = ["village", "shrine", "ferry", "cave"];
   const pois: SagaFieldPoi[] = [];
   for (let i = 0; i < poiKinds.length; i++) {
     const kind = poiKinds[i];
@@ -398,7 +398,10 @@ export function generateSagaField(options: {
     terrain[best.ty * cols + best.tx] = SAGA_TILE_ROAD;
     pois.push({
       kind,
-      name: chapter.landmarks[i] ?? chapter.stages[i] ?? "乡野",
+      name:
+        kind === "cave"
+          ? `${chapter.name}乱石洞`
+          : chapter.landmarks[i] ?? chapter.stages[i] ?? "乡野",
       tx: best.tx,
       ty: best.ty,
       x: (best.tx + 0.5) * tile,

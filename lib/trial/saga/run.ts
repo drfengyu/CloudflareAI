@@ -18,7 +18,7 @@ import {
   SAGA_MAX_COUPON_TICKETS,
   type SagaBankPolicy,
 } from "./bank";
-import { SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS } from "./inn";
+import { SAGA_FREE_INN_PER_DAY, SAGA_INN_ITEM_ID, SAGA_INN_PRICE_TICKETS, trialDayKey } from "./inn";
 import { SAGA_TRAINING_ITEM_ID, trainGeneral } from "./training";
 import { SAGA_FORGE_ITEM_ID, SAGA_FORGE_MAX_LEVEL, upgradeGear } from "./forge";
 import {
@@ -48,6 +48,7 @@ import {
   type FormationId,
   type SagaCommand,
   type SagaEnemy,
+  type SagaGeneralState,
   type SagaNode,
   type SagaNodeKind,
   type SagaPurchase,
@@ -416,9 +417,19 @@ function parsePurchases(raw: unknown, bank: SagaBankPolicy): SagaPurchase[] {
       continue;
     }
     // 客栈住店是一张券一次的购买记录：允许同一趟重复住，重放时按记录补兵。
+    // 每日前两次免费，记录里带 freeStay/freeDay，重放时计入当天次数。
     if (itemId === SAGA_INN_ITEM_ID) {
       ids.add(id);
-      out.push({ id, itemId, tickets: SAGA_INN_PRICE_TICKETS, at, cmdIndex });
+      const freeStay = it.freeStay === true && Number(it.tickets) === 0;
+      const freeDay = typeof it.freeDay === "string" ? it.freeDay.slice(0, 10) : undefined;
+      out.push({
+        id,
+        itemId,
+        tickets: freeStay ? 0 : SAGA_INN_PRICE_TICKETS,
+        at,
+        cmdIndex,
+        ...(freeStay ? { freeStay: true, ...(freeDay ? { freeDay } : {}) } : {}),
+      });
       continue;
     }
     // 钱庄金币换券：记录扣掉多少金币、换到多少张券；券已在服务端入账，重放只扣金币。
@@ -651,6 +662,22 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
         if (i && SAGA_ITEM_BY_ID.has(i)) out.push({ k: "sell", i, g });
         break;
       }
+      case "loot": {
+        const chest = typeof it.chest === "string" ? it.chest.slice(0, 48) : "";
+        const item = SAGA_ITEM_BY_ID.get(typeof it.item === "string" ? it.item : "");
+        if (!chest || !item) break;
+        const qty = Math.max(1, Math.min(5, Math.trunc(Number(it.qty) || 1)));
+        out.push({ k: "loot", chest, item: item.id, qty });
+        break;
+      }
+      case "tactic": {
+        const g = typeof it.g === "string" ? it.g.slice(0, 32) : "";
+        const tactic = SAGA_TACTICS.find((row) => row.id === it.t);
+        if (g && tactic && (tactic.kind === "heal" || tactic.kind === "healAll")) {
+          out.push({ k: "tactic", g, t: tactic.id });
+        }
+        break;
+      }
       case "party": {
         if (!Array.isArray(it.active)) break;
         const active = it.active
@@ -701,7 +728,27 @@ export function sanitizeSagaCommands(raw: unknown): SagaCommand[] {
         }
         // 一回合没打就撤退的遭遇也要留档：遭遇编成按「第几场」复现，
         // 丢掉空格会让人物端的场次序号整体错位，后面的遭遇战全部对不上。
-        out.push({ k: "skirmish", rounds });
+        const field =
+          it.field && typeof it.field === "object"
+            ? {
+                level: Math.max(
+                  1,
+                  Math.min(SAGA_MAX_LEVEL, Math.trunc(Number((it.field as Record<string, unknown>).level) || 1)),
+                ),
+                avgTroops: Math.max(
+                  1,
+                  Math.trunc(Number((it.field as Record<string, unknown>).avgTroops) || 1),
+                ),
+                partySize: Math.max(
+                  1,
+                  Math.min(
+                    SAGA_PARTY_SIZE,
+                    Math.trunc(Number((it.field as Record<string, unknown>).partySize) || 1),
+                  ),
+                ),
+              }
+            : undefined;
+        out.push({ k: "skirmish", rounds, ...(field ? { field } : {}) });
         break;
       }
       case "recruit": {
@@ -762,6 +809,8 @@ export function createReplayState(run: SagaRun): SagaReplayState {
     encounters: 0,
     recruited: [],
     battlesWon: 0,
+    lootedChests: [],
+    fieldTacticsUsed: 0,
   };
 }
 
@@ -811,6 +860,13 @@ function applyPurchase(state: SagaReplayState, purchase: SagaPurchase): void {
     state.save.gold = Math.min(9_999_999, state.save.gold + Math.trunc(purchase.gold));
   }
   if (purchase.itemId === SAGA_INN_ITEM_ID) {
+    // 免费住宿计入当天次数；跨日重置。付费住店不动免费次数。
+    if (purchase.freeStay) {
+      const day = purchase.freeDay || trialDayKey();
+      const used = state.save.innFreeDate === day ? Math.max(0, state.save.innFreeUsed ?? 0) : 0;
+      state.save.innFreeDate = day;
+      state.save.innFreeUsed = Math.min(SAGA_FREE_INN_PER_DAY, used + 1);
+    }
     // 兵败后住店是重整旗鼓：全队拉回满编，行军从下一步继续。
     const revive = state.scene === "lost";
     restAtInn(state);
@@ -1019,6 +1075,61 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
         else delete owner.items[command.i];
         break;
       }
+      case "loot": {
+        if (state.scene !== "field") break;
+        if (state.lootedChests.includes(command.chest)) break;
+        const item = SAGA_ITEM_BY_ID.get(command.item);
+        if (!item) break;
+        const qty = Math.max(1, Math.min(5, Math.trunc(command.qty ?? 1)));
+        state.lootedChests.push(command.chest);
+        if (gearSlotOf(item)) {
+          state.save.gear[item.id] = (state.save.gear[item.id] ?? 0) + qty;
+        } else if (item.kind === "consumable") {
+          state.save.bag[item.id] = (state.save.bag[item.id] ?? 0) + qty;
+        } else {
+          state.save.gold = Math.min(9_999_999, state.save.gold + qty);
+        }
+        break;
+      }
+      case "tactic": {
+        // 非战斗回复计：每趟行军限三次，不扣战斗 SP，按施计者智力与等级回兵。
+        if (state.scene !== "field" || state.fieldTacticsUsed >= 3) break;
+        const actor = findGeneral(state.save, command.g);
+        const def = actor ? SAGA_GENERAL_BY_ID.get(actor.id) : null;
+        const tactic = SAGA_TACTICS.find((row) => row.id === command.t);
+        if (!actor || !def || !tactic || (tactic.kind !== "heal" && tactic.kind !== "healAll")) break;
+        if (!tacticsFor(def, actor.level).includes(tactic.id)) break;
+        const raw =
+          Math.max(1, tactic.power ?? 1) *
+          (Math.max(0, generalStats(actor, state.save.gearLevels, state.rules).intellect) * 0.8 +
+            actor.level * 2 +
+            30);
+        const healOne = (target: SagaGeneralState): number => {
+          const stats = generalStats(target, state.save.gearLevels, state.rules);
+          const max = Math.max(1, Math.round(stats.maxTroops * (1 + state.buffs.troopPct / 100)));
+          const current = Math.max(0, Math.min(max, state.partyTroops[target.id] ?? target.troops ?? max));
+          if (current <= 0) return 0;
+          const next = Math.min(max, current + Math.max(1, Math.round(raw)));
+          state.partyTroops[target.id] = next;
+          target.troops = next;
+          return next - current;
+        };
+        state.fieldTacticsUsed += 1;
+        if (tactic.kind === "healAll") {
+          for (const member of state.save.party) healOne(member);
+        } else {
+          const weakest = [...state.save.party]
+            .map((member) => {
+              const stats = generalStats(member, state.save.gearLevels, state.rules);
+              const max = Math.max(1, Math.round(stats.maxTroops * (1 + state.buffs.troopPct / 100)));
+              const current = Math.max(0, Math.min(max, state.partyTroops[member.id] ?? member.troops ?? max));
+              return { member, ratio: current <= 0 ? 2 : current / max };
+            })
+            .sort((a, b) => a.ratio - b.ratio)[0];
+          if (weakest) healOne(weakest.member);
+        }
+        break;
+      }
       case "sell": {
         const item = SAGA_ITEM_BY_ID.get(command.i);
         if (!item) break;
@@ -1103,7 +1214,7 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
         const ordinal = state.encounters;
         state.encounters += 1;
         state.scene = "battle";
-        const battle = startEncounterBattle(run, ordinal, state);
+        const battle = startEncounterBattle(run, ordinal, state, command.field);
         for (const round of command.rounds) {
           resolveBattleRound(battle, round, state);
           if (battle.phase !== "select") break;

@@ -176,7 +176,7 @@ export function settlementFor(input: {
   const inn = pool.find((row) => row.id === "inn")!;
   const others = pool.filter((row) => row.id !== "inn");
   const extraCount =
-    input.kind === "town" ? 3 + Math.floor(rand() * 3) : 1 + Math.floor(rand() * 2);
+    input.kind === "town" ? others.length : 1 + Math.floor(rand() * 2);
   const picked: FacilityDef[] = [inn];
   const rest = [...others];
   while (picked.length < 1 + extraCount && rest.length > 0) {
