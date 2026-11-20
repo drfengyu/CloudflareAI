@@ -42,10 +42,35 @@ export const SAGA_RULESET = 18;
 
 /**
  * 属性上限：255。
- * v18 起武力 / 智力 / 速度是固定基础值，不随等级成长；攻击 / 防御才是成长值，
+ * v18 起武力 / 智力 / 速度是固定基础值，不随等级成长；旧表按 2.5 倍铺进 255 区间见
+ * `SAGA_STAT_BASE_SCALE`。攻击 / 防御才是成长值，
  * 由武力底子 + 等级成长 + 装备实时叠加，含装备一起封顶 255。
  */
 export const SAGA_STAT_CAP = 255;
+
+/**
+ * v18 基础三维换算倍率：旧表按 0~100 写人物底子，直接搬进 255 上限会显得「满格 255、
+ * 名将只有 70」，所以 v18 起把武力 / 智力按 2.5 倍铺满区间（吕布 100 → 255、刘备 70 → 175）。
+ * 旧规则不换算，重放数值不翻账。
+ */
+export const SAGA_STAT_BASE_SCALE = 2.5;
+
+/** v18 的基础三维取值：旧表底子 × 2.5，再叠特性并封顶 255。 */
+export function sagaV18Stat(raw: number, bonus = 0): number {
+  return Math.min(SAGA_STAT_CAP, Math.round(raw * SAGA_STAT_BASE_SCALE + bonus));
+}
+
+/**
+ * v18 速度单独走 0~210 区间：旧表最高 86（吕布）× 2.4 → 206，赵云 187、张飞 132，
+ * 不再占满 255；命中 / 暴击 / 爆伤结算时再按同一倍率折回旧刻度。
+ */
+export const SAGA_SPEED_CAP = 210;
+export const SAGA_SPEED_BASE_SCALE = 2.4;
+
+/** v18 的固定速度：旧表底子 × 2.4，叠特性后封顶 210。 */
+export function sagaV18Speed(raw: number, bonus = 0): number {
+  return Math.min(SAGA_SPEED_CAP, Math.round(raw * SAGA_SPEED_BASE_SCALE + bonus));
+}
 
 /** 上阵队伍上限：v15 起从 5 人抬到 7 人，战场两列排开一起上。 */
 /** 上阵 7 人，但每场最多 5 人出战，其余两人留作替补。 */
@@ -328,6 +353,9 @@ export interface SagaGeneralDef {
 }
 
 export type WeaponType = "sword" | "axe" | "spear" | "bow" | "blade" | "halberd";
+
+/** 兵器品质：木 → 铁 → 铜 → 银 → 钢 → 精钢 → 玄铁名器。 */
+export type WeaponQuality = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export type GearSlot = "weapon" | "armor" | "helmet" | "belt" | "pendant" | "boots" | "mount";
 
 export interface SagaGeneralState {
@@ -346,6 +374,8 @@ export interface SagaGeneralState {
   items?: Record<string, number>;
   /** 当前剩余兵力；0 表示阵亡，需招魂计或复活道具才归队。 */
   troops?: number;
+  /** v18 起跨战斗保留的策略值；住宿、回气道具与战斗防御可补。 */
+  sp?: number;
 }
 
 export interface SagaStats {
@@ -385,11 +415,16 @@ export interface SagaItemDef {
   atk?: number;
   def?: number;
   speed?: number;
+  /** 使用后回复的兵力。 */
   heal?: number;
+  /** 使用后回复的策略值（v18 起）。 */
+  sp?: number;
   /** 复活：按目标兵力上限的比例回兵，0 表示不是复活道具。 */
   revive?: number;
   /** 攻击类武器的兵种；武将只能装备自己会使的兵器。 */
   weaponType?: WeaponType;
+  /** 兵器品质：只影响分城货架与说明，攻击值直接写在 atk。 */
+  quality?: WeaponQuality;
   /** 坐骑 / 护具的装备槽；不填时按 kind 推断。 */
   slot?: GearSlot;
   /** 上架章节：后面的城才卖更好的货。 */
@@ -506,7 +541,7 @@ export interface SagaEnemy {
   boss: boolean;
 }
 
-export type SagaNodeKind = "town" | "battle" | "elite" | "boss";
+export type SagaNodeKind = "town" | "battle" | "gate" | "siege" | "elite" | "boss";
 
 export interface SagaNode {
   kind: SagaNodeKind;
@@ -691,11 +726,22 @@ export interface SagaBattleGeneral {
   bondAtk: number;
   bondCut: number;
   tacticPoints: number;
+  /** v18 起策略值上限：防御回气与住宿补满都以此封顶。 */
+  spMax: number;
   weaponAtk: number;
   armorDef: number;
   /** 装备外观：立绘与战阵造型按穿戴的兵器 / 甲胄改变。 */
   weapon: string | null;
   armor: string | null;
+  /** v18 起敌将可能额外披挂的头盔、腰带、佩饰、靴与坐骑，只用于敌情展示与本场加成。 */
+  helmet?: string | null;
+  belt?: string | null;
+  pendant?: string | null;
+  boots?: string | null;
+  mount?: string | null;
+  /** 上述额外护具加起来的防御与速度。 */
+  extraDef?: number;
+  extraSpeed?: number;
   /** 敌方装备的随机强化等级（0 表示未强化），只影响本场攻防与敌情面板。 */
   weaponPlus?: number;
   armorPlus?: number;

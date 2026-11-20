@@ -96,8 +96,8 @@ export default async function TrialPage() {
             从当前城镇出城后是一张<b>俯视行军大地图</b>：方向键 / WASD 四向自由行走，
             出城后官道、草地、海边滩涂与树林都会随机遇敌（只有城内与城门洞安全），
             点空白处可随时查看队伍、道具与装备。
-            图上有 {config.questionCount} 座敌营，先打哪座由你走位决定；主帅本阵要先拔尽其余营寨。
-            营寨全部攻破，剧情才会推进到下一处地方。每一步都会<b>自动存档</b>，
+            图上有 {config.questionCount} 座敌营，另有<b>关卡</b>与<b>攻城战</b>；先打哪座由你走位决定，
+            主帅本阵要先拔尽其余营寨、关卡并攻下城池。营寨全部攻破，剧情才会推进到下一处地方。每一步都会<b>自动存档</b>，
             撤退只结束当前这场仗，等级、金币、装备、招降武将都不会丢。
           </li>
           <li>
@@ -137,45 +137,6 @@ export default async function TrialPage() {
             战报只上传编制 / 购物 / 战斗指令，由服务端按种子重放判定。
           </li>
         </ul>
-      </CardContent>
-    </Card>
-  );
-
-  const progressCard = (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">讨逆路线</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-1">
-        {SAGA_CHAPTERS.map((row) => {
-          const cleared = row.index < save.chapter;
-          const current = !finished && row.index === save.chapter;
-          return (
-            <div
-              key={row.index}
-              className={
-                current
-                  ? "flex items-center justify-between rounded-lg border border-primary/60 bg-primary/5 px-3 py-2 text-sm"
-                  : "flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
-              }
-            >
-              <span>
-                {cleared ? `${row.town} · ${row.name}` : current ? place : "？？？"}
-                {current ? <span className="ml-2 text-xs text-primary">当前</span> : null}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {cleared ? "已定" : current ? "剧情进行中" : "未至"}
-              </span>
-            </div>
-          );
-        })}
-        {finished ? (
-          <p className="pt-1 text-xs text-muted-foreground">八处地方皆定，讨逆之路已经走完。</p>
-        ) : (
-          <p className="pt-1 text-xs text-muted-foreground">
-            走完当前地方的剧情，才会出现下一处地名。
-          </p>
-        )}
       </CardContent>
     </Card>
   );
@@ -285,8 +246,6 @@ export default async function TrialPage() {
             hint={`招降 ${save.stats.recruited} 人 · 单次最远 ${save.stats.bestCleared} 处`}
           />
         </div>
-
-        {progressCard}
         {rulesCard}
       </PageBody>
     </>

@@ -20,6 +20,7 @@ import {
   findGeneral,
   speedCritDamage,
   speedCritRate,
+  speedEffectRating,
   speedHitRate,
   troopBaseline,
 } from "./state";
@@ -28,6 +29,8 @@ import {
   SAGA_DEPLOY_SIZE,
   SAGA_LEGACY_MAX_LEVEL,
   SAGA_MAX_LEVEL,
+  sagaV18Speed,
+  sagaV18Stat,
   type SagaBattleEvent,
   type SagaBattleGeneral,
   type SagaBattleState,
@@ -153,6 +156,64 @@ const GEAR_TIERS = {
   armor: ["cloth", "leather", "iron_armor", "heavy_armor"],
 } as const;
 
+/** 敌军额外护具的档位表：按等级取档，敌将比步卒更容易凑成整套。 */
+const ENEMY_EXTRA_GEAR = {
+  helmet: ["cloth_helm", "iron_helm", "silver_helm", "gold_helm", "longwen_helm", "zijin_crown"],
+  belt: ["leather_belt", "bronze_belt", "jade_belt", "longwen_belt"],
+  pendant: ["jade_pendant", "tiger_pendant"],
+  boots: ["straw_boots", "leather_boots", "cloud_boots"],
+  mount: ["white_horse", "dilu", "jueying", "zhuahuang", "chitu", "hanxue"],
+} as const;
+
+type EnemyExtraSlot = keyof typeof ENEMY_EXTRA_GEAR;
+
+interface EnemyExtraGear {
+  helmet: string | null;
+  belt: string | null;
+  pendant: string | null;
+  boots: string | null;
+  mount: string | null;
+  def: number;
+  speed: number;
+}
+
+/**
+ * v18 起敌军至少带兵器甲胄，另外按等级和身份滚额外护具：
+ * 敌将更容易凑成整套（头盔 / 腰带 / 佩饰 / 靴 / 坐骑），步卒只有较低概率摸到一两件。
+ * 全部由战斗种子决定，客户端与服务端重放一致。
+ */
+function enemyExtraGear(level: number, general: boolean, rng: () => number): EnemyExtraGear {
+  const out: EnemyExtraGear = {
+    helmet: null,
+    belt: null,
+    pendant: null,
+    boots: null,
+    mount: null,
+    def: 0,
+    speed: 0,
+  };
+  const fullChance = general
+    ? 0.2 + Math.min(0.25, level / 320)
+    : 0.03 + Math.min(0.12, level / 800);
+  const full = rng() < fullChance;
+  for (const slot of Object.keys(ENEMY_EXTRA_GEAR) as EnemyExtraSlot[]) {
+    const chance = full
+      ? 1
+      : general
+        ? 0.42 + Math.min(0.22, level / 350)
+        : 0.12 + Math.min(0.15, level / 600);
+    if (rng() >= chance) continue;
+    const list = ENEMY_EXTRA_GEAR[slot];
+    const tier = clamp(Math.floor((level - 1) / 14), 0, list.length - 1);
+    const item = SAGA_ITEM_BY_ID.get(list[tier]);
+    if (!item) continue;
+    out[slot] = item.id;
+    out.def += item.def ?? 0;
+    out.speed += item.speed ?? 0;
+  }
+  return out;
+}
+
 /** 每 `step` 级升一档；杂兵传 -2 拿低两档的旧兵器（v4/v5 传 -1）。v5 起改成 5 级一档。 */
 function gearTierFor(level: number, shift = 0, step = 8): number {
   return clamp(Math.floor((level - 1) / step) + shift, 0, GEAR_TIERS.weapon.length - 1);
@@ -185,6 +246,47 @@ function tierGear(tier: number, weaponPlus = 0, armorPlus = 0): {
   };
 }
 
+/**
+ * v18 收口：非野外战的补位杂兵不能压过敌将。
+ * 旧行军里的敌将可能按旧章节等级落库，补位兵却按当前节点现算，于是出现「步卒等级 / 兵力 / 装备比将还好」。
+ * 这里统一以本场最弱敌将为上限：兵卒低一级、兵力压到八成、装备再降一档，攻防按新等级与新装备重算。
+ */
+function capGuardsBelowOfficers(enemies: SagaBattleGeneral[]): void {
+  const officers = enemies.filter((unit) => !unit.id.startsWith("guard_"));
+  if (officers.length === 0) return;
+  const minLevel = Math.min(...officers.map((unit) => unit.level));
+  const minTroops = Math.min(...officers.map((unit) => unit.maxTroops));
+  const minForce = Math.min(...officers.map((unit) => unit.force));
+  const minIntellect = Math.min(...officers.map((unit) => unit.intellect));
+  const minSpeed = Math.min(...officers.map((unit) => unit.speed));
+  const minDefense = Math.min(...officers.map((unit) => unit.defense));
+  const officerTier = gearTierFor(minLevel, 0, 5);
+  const gear = tierGear(Math.max(0, officerTier - 1), 0, 0);
+  for (const guard of enemies) {
+    if (!guard.id.startsWith("guard_")) continue;
+    guard.level = Math.max(1, Math.min(guard.level, minLevel - 1));
+    guard.troops = Math.max(40, Math.min(guard.troops, Math.floor(minTroops * 0.8)));
+    guard.maxTroops = guard.troops;
+    guard.force = Math.max(1, Math.min(guard.force, Math.floor(minForce * 0.85)));
+    guard.intellect = Math.max(1, Math.min(guard.intellect, minIntellect));
+    guard.speed = Math.max(1, Math.min(guard.speed, Math.floor(minSpeed * 0.9)));
+    guard.weapon = gear.weapon;
+    guard.armor = gear.armor;
+    guard.weaponAtk = gear.weaponAtk;
+    guard.armorDef = gear.armorDef;
+    guard.weaponPlus = 0;
+    guard.armorPlus = 0;
+    guard.attack = attackAtLevel(guard.force, guard.level, gear.weaponAtk);
+    guard.defense = Math.min(
+      defenseAtLevel(guard.force, guard.level, gear.armorDef + (guard.extraDef ?? 0)),
+      Math.floor(minDefense * 0.9),
+    );
+    const points = Math.max(1, 2 + Math.floor(guard.intellect / 20) + Math.floor(guard.level / 6));
+    guard.tacticPoints = Math.min(guard.tacticPoints, points);
+    guard.spMax = Math.max(guard.tacticPoints, points);
+  }
+}
+
 function seedRng(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
@@ -212,7 +314,7 @@ function buildSoldier(
     1 +
     chapter * 4 +
     nodeIndex +
-    (node.kind === "boss" ? 2 : node.kind === "elite" ? 1 : 0);
+    (node.kind === "boss" || node.kind === "siege" ? 2 : node.kind === "elite" || node.kind === "gate" ? 1 : 0);
   const jitter = 0.9 + rng() * 0.2;
   // v13 起营中杂兵也按「同等级我方基准 × 1.4~2.0」给兵：站在营里的步卒不比将少太多。
   const troops =
@@ -223,7 +325,7 @@ function buildSoldier(
         )
       : Math.max(60, Math.round((90 + level * 9) * (1 + chapter * 0.05) * jitter));
   const intellect =
-    rules >= 18 ? Math.max(12, Math.round(24 * jitter)) : Math.max(12, Math.round(20 + level * 0.5));
+    rules >= 18 ? sagaV18Stat(Math.max(12, Math.round(24 * jitter))) : Math.max(12, Math.round(20 + level * 0.5));
   // v5 起 5 级一档并可能带随机强化；旧规则不多抽随机数，重放结果不变。
   const weaponPlus = rules >= 5 ? gearPlusFor(rng, level, true) : 0;
   const armorPlus = rules >= 5 ? gearPlusFor(rng, level, true) : 0;
@@ -234,18 +336,26 @@ function buildSoldier(
     armorPlus,
   );
   const soldierForce =
-    rules >= 18 ? Math.max(12, Math.round(62 * jitter)) : Math.round((52 + level * 1.2) * jitter);
+    rules >= 18
+      ? sagaV18Stat(Math.max(12, Math.round(62 * jitter)))
+      : Math.round((52 + level * 1.2) * jitter);
   const soldierDef = Math.round((50 + level * 1.1) * jitter);
   const soldierSpeed =
-    rules >= 18 ? Math.max(10, Math.round(46 * jitter)) : Math.round((44 + level * 0.6) * jitter);
+    rules >= 18
+      ? sagaV18Speed(Math.max(10, Math.round(46 * jitter)))
+      : Math.round((44 + level * 0.6) * jitter);
+  // 步卒也至少带兵器甲胄，额外护具只按低概率滚一两件，绝不会像敌将那样容易成套。
+  const extra = rules >= 18 ? enemyExtraGear(level, false, rng) : null;
+  const extraDef = extra?.def ?? 0;
+  const extraSpeed = extra?.speed ?? 0;
   const soldierAttack =
     rules >= 18 ? attackAtLevel(soldierForce, level, gear.weaponAtk) : soldierForce + gear.weaponAtk + level * 2;
   const soldierDefense =
-    rules >= 18 ? defenseAtLevel(soldierForce, level, gear.armorDef) : soldierDef;
+    rules >= 18 ? defenseAtLevel(soldierForce, level, gear.armorDef + extraDef) : soldierDef;
   return {
     id: `guard_${nodeIndex}_${slot}`,
     name: `${SOLDIER_NAMES[slot % SOLDIER_NAMES.length]}${SOLDIER_MARKS[slot] ?? slot + 1}`,
-    title: node.kind === "boss" ? "守城亲兵" : "营中步卒",
+    title: node.kind === "boss" || node.kind === "siege" ? "守城亲兵" : "营中步卒",
     side: "enemy",
     level,
     troops,
@@ -254,7 +364,7 @@ function buildSoldier(
     intellect,
     defense: soldierDefense,
     attack: soldierAttack,
-    speed: soldierSpeed,
+    speed: soldierSpeed + extraSpeed,
     tactics: [],
     traits: [],
     corps:
@@ -272,10 +382,21 @@ function buildSoldier(
       rules >= 3
         ? Math.max(1, 2 + Math.floor(intellect / 20) + Math.floor(level / 6))
         : Math.max(1, 2 + Math.floor(intellect / 30)),
+    spMax:
+      rules >= 3
+        ? Math.max(1, 2 + Math.floor(intellect / 20) + Math.floor(level / 6))
+        : Math.max(1, 2 + Math.floor(intellect / 30)),
     weaponAtk: gear.weaponAtk,
     armorDef: gear.armorDef,
     weapon: gear.weapon,
     armor: gear.armor,
+    helmet: extra?.helmet ?? null,
+    belt: extra?.belt ?? null,
+    pendant: extra?.pendant ?? null,
+    boots: extra?.boots ?? null,
+    mount: extra?.mount ?? null,
+    extraDef,
+    extraSpeed,
     weaponPlus: gear.weaponPlus,
     armorPlus: gear.armorPlus,
     color: "#57534e",
@@ -345,7 +466,21 @@ export function battleHitRate(
 ): number {
   if (battle.rules < 18) return hitChance(actor, target);
   const speed = battleEffectiveSpeed(actor, battle);
-  return speedHitRate(speed);
+  return speedHitRate(speedEffectRating(speed));
+}
+
+/** v18 计策成算：智力只决定成功率，不再禁止低智武将施计。 */
+export function battleTacticRate(
+  actor: SagaBattleGeneral,
+  targetIntellect: number,
+  battle: SagaBattleState,
+): number {
+  if (battle.rules < 18) return 1;
+  return clamp(
+    0.72 + (actor.intellect - targetIntellect) / 160 + Math.min(60, actor.level) / 400,
+    0.2,
+    0.95,
+  );
 }
 
 /** v18 暴击由实际速度 + 特性暴击决定；旧规则只吃特性暴击。 */
@@ -355,7 +490,7 @@ export function battleCritRate(
 ): number {
   if (battle.rules < 18) return traitTotal(actor, "crit");
   return speedCritRate(
-    battleEffectiveSpeed(actor, battle),
+    speedEffectRating(battleEffectiveSpeed(actor, battle)),
     traitTotal(actor, "crit"),
   );
 }
@@ -366,7 +501,7 @@ export function battleCritDamage(
   battle: SagaBattleState,
 ): number {
   if (battle.rules < 18) return 1.7;
-  return speedCritDamage(battleEffectiveSpeed(actor, battle));
+  return speedCritDamage(speedEffectRating(battleEffectiveSpeed(actor, battle)));
 }
 
 /** 命中率按双方智力差浮动：智力压制最多九成八，被压制至少六成五。旧规则专用。 */
@@ -427,6 +562,7 @@ function applyWarband(
           rules >= 18 ? 255 : 48,
           unit.tacticPoints + (bond.tacticPoints ?? 0),
         );
+        unit.spMax = Math.max(unit.spMax, unit.tacticPoints);
       }
     }
     for (const bond of bonds) {
@@ -462,19 +598,15 @@ export function fieldBattleContext(state: SagaReplayState): SagaFieldBattleConte
         Math.max(1, party.length),
     ),
   );
-  const living = party
-    .filter((member) => (state.partyTroops[member.id] ?? 0) > 0)
-    .slice(0, SAGA_DEPLOY_SIZE);
-  const source = living.length > 0 ? living : party;
+  // 野外敌军按队伍「满编兵力」定档，不跟当前残兵走：否则刘备只剩 26 兵时，
+  // 杂兵也会缩到十几人，仗越打越像儿戏。
   const avgTroops = Math.max(
     1,
     Math.round(
-      source.reduce((sum, member) => {
-        const troops = state.partyTroops[member.id];
-        if (typeof troops === "number" && troops > 0) return sum + troops;
+      party.reduce((sum, member) => {
         const stats = generalStats(member, state.save.gearLevels, state.rules);
         return sum + Math.max(1, stats.maxTroops);
-      }, 0) / Math.max(1, source.length),
+      }, 0) / Math.max(1, party.length),
     ),
   );
   return { level, avgTroops, partySize: Math.max(1, party.length) };
@@ -520,6 +652,7 @@ function buildBattle(
     );
     const stored = state.partyTroops[saved.id];
     const troops = clamp(stored ?? maxTroops, 0, maxTroops);
+    const spMax = stats.spMax;
     return {
       id: saved.id,
       name: def?.name ?? saved.id,
@@ -542,7 +675,7 @@ function buildBattle(
       // v18 起 SP 由智力决定底子、随等级成长到 255；v17 及以前仍按旧上限重放。
       tacticPoints:
         rules >= 18
-          ? stats.spMax
+          ? clamp(saved.sp ?? spMax, 0, spMax)
           : rules >= 3
             ? Math.min(
                 48,
@@ -564,6 +697,7 @@ function buildBattle(
               : Math.min(9, 2 + Math.floor(stats.intellect / 30) + buffs.tacticPoints),
       weaponAtk: stats.weaponAtk,
       armorDef: stats.armorDef,
+      spMax,
       weapon: saved.weapon,
       armor: saved.armor,
       color: def?.color ?? "#475569",
@@ -589,7 +723,7 @@ function buildBattle(
   // 只有 `poor` 的杂兵和「黄巾力士」这种兵种型通用杂号不收。
   // v7 的行军仍按旧白名单重放，避免已经落下的招降指令结果翻盘。
   const fieldEncounter = nodeIndex < 0;
-  const enemies: SagaBattleGeneral[] = node.enemies.slice(0, SAGA_BATTLE_SIZE).map((enemy) => {
+  const enemies: SagaBattleGeneral[] = node.enemies.slice(0, SAGA_BATTLE_SIZE).map((enemy, order) => {
     const baseDef = SAGA_GENERAL_BY_ID.get(enemy.id);
     const fieldLeader = fieldEncounter && !enemy.poor && enemy.id !== "huangjin_lishi";
     const fieldLeaderV7 = fieldLeader && Boolean(baseDef?.recruitable);
@@ -612,6 +746,17 @@ function buildBattle(
           );
     const weaponAtk = gear?.weaponAtk ?? 0;
     const armorDef = gear?.armorDef ?? 0;
+    // v18：至少保底兵器甲胄，再按身份滚头盔 / 腰带 / 佩饰 / 靴 / 坐骑；敌将概率高于步卒。
+    const extra =
+      rules >= 18
+        ? enemyExtraGear(
+            enemy.level,
+            !enemy.poor,
+            seedRng((rngState ^ Math.imul(nodeIndex + 23, 0x9e3779b1) ^ Math.imul(order + 7, 0x85ebca6b)) >>> 0),
+          )
+        : null;
+    const extraDef = extra?.def ?? 0;
+    const extraSpeed = extra?.speed ?? 0;
     const enemyAttack =
       rules >= 18
         ? attackAtLevel(enemy.force, enemy.level, weaponAtk)
@@ -621,10 +766,24 @@ function buildBattle(
         ? defenseAtLevel(
             enemy.force,
             enemy.level,
-            armorDef,
+            armorDef + extraDef,
             traitTotalOf(enemy.traits, "defense"),
           )
         : enemy.defense;
+    const enemySp =
+      rules >= 18
+        ? Math.min(
+            255,
+            12 +
+              Math.floor(enemy.intellect / 3) +
+              (enemy.level - 1) * 2 +
+              traitTotalOf(enemy.traits, "tacticPoints"),
+          )
+        : rules >= 3
+          ? Math.max(2, 2 + Math.floor(enemy.intellect / 20) + Math.floor(enemy.level / 6))
+          : rules >= 2
+            ? Math.max(2, 2 + Math.floor(enemy.intellect / 30) + Math.floor(enemy.level / 6))
+            : Math.max(2, 2 + Math.floor(enemy.intellect / 30));
     return {
       id: enemy.id,
       name: enemy.name,
@@ -637,31 +796,26 @@ function buildBattle(
       intellect: enemy.intellect,
       defense: enemyDefense,
       attack: enemyAttack,
-      speed: enemy.speed,
+      speed: enemy.speed + extraSpeed,
       tactics: enemy.tactics,
       traits: enemy.traits ?? [],
       corps: "spear",
       bonds: [],
       bondAtk: 0,
       bondCut: 0,
-      tacticPoints:
-        rules >= 18
-          ? Math.min(
-              255,
-              12 +
-                Math.floor(enemy.intellect / 3) +
-                (enemy.level - 1) * 2 +
-                traitTotalOf(enemy.traits, "tacticPoints"),
-            )
-          : rules >= 3
-            ? Math.max(2, 2 + Math.floor(enemy.intellect / 20) + Math.floor(enemy.level / 6))
-            : rules >= 2
-              ? Math.max(2, 2 + Math.floor(enemy.intellect / 30) + Math.floor(enemy.level / 6))
-              : Math.max(2, 2 + Math.floor(enemy.intellect / 30)),
+      tacticPoints: enemySp,
+      spMax: enemySp,
       weaponAtk,
       armorDef,
       weapon: gear?.weapon ?? null,
       armor: gear?.armor ?? null,
+      helmet: extra?.helmet ?? null,
+      belt: extra?.belt ?? null,
+      pendant: extra?.pendant ?? null,
+      boots: extra?.boots ?? null,
+      mount: extra?.mount ?? null,
+      extraDef,
+      extraSpeed,
       weaponPlus: gear?.weaponPlus ?? 0,
       armorPlus: gear?.armorPlus ?? 0,
       color: enemy.color,
@@ -686,6 +840,7 @@ function buildBattle(
       for (let slot = 0; slot < count; slot++) {
         enemies.push(buildSoldier(node, nodeIndex, slot, rules, rng));
       }
+      if (rules >= 18) capGuardsBelowOfficers(enemies);
     }
   }
   const openLog: SagaBattleEvent[] = [];
@@ -693,7 +848,7 @@ function buildBattle(
   return {
     nodeIndex,
     nodeName: node.name,
-    boss: node.kind === "boss",
+    boss: node.kind === "boss" || node.kind === "siege",
     rules,
     round: 1,
     phase: "select",
@@ -803,7 +958,7 @@ function dealDamage(
       actor.level,
       base,
       target.level,
-      actor.side === "player" ? (battle.rules >= 18 ? 0.45 : 0.3) : battle.rules >= 18 ? 0.2 : 0.15,
+      actor.side === "player" ? (battle.rules >= 18 ? 0.45 : 0.3) : battle.rules >= 18 ? 0.32 : 0.15,
     ) ??
     base;
   let damage = Math.max(
@@ -886,6 +1041,24 @@ function executeTactic(
   const name = def?.name ?? tacticName(tactic);
   const kind = def?.kind ?? "fire";
 
+  // v18：伤害 / 吸兵类计策先看一次成算。智力低只是更容易失手，不会连“施计”按钮都点不了。
+  if (battle.rules >= 18 && (kind === "fire" || kind === "water" || kind === "rock" || kind === "drain")) {
+    const aliveFoes = living(foes);
+    const targetIntellect = aliveFoes.length
+      ? aliveFoes.reduce((sum, foe) => sum + foe.intellect, 0) / aliveFoes.length
+      : actor.intellect;
+    if (roll(battle) > battleTacticRate(actor, targetIntellect, battle)) {
+      events.push({
+        kind: "miss",
+        side: actor.side,
+        actor: actor.name,
+        text: `${actor.name} 施展${name}，被对方识破`,
+      });
+      actor.tacticPoints = Math.max(0, actor.tacticPoints - (def?.cost ?? 1));
+      return;
+    }
+  }
+
   const hitFoe = (foe: SagaBattleGeneral, raw: number, countered: number, allowHalf: boolean, skill: number) => {
     if (foe.wardTactic > 0) {
       events.push({
@@ -905,7 +1078,7 @@ function executeTactic(
         actor.level,
         raw - resist,
         foe.level,
-        actor.side === "player" ? 0.2 : 0.12,
+        actor.side === "player" ? 0.2 : battle.rules >= 18 ? 0.16 : 0.12,
         0.05,
         3,
       ) ?? Math.max(6, raw - resist);
@@ -1425,7 +1598,15 @@ function executeCommand(
 ): void {
   if (command.a === "guard") {
     actor.guard = true;
-    events.push({ kind: "guard", side: actor.side, actor: actor.name, text: `${actor.name} 举盾防守` });
+    const before = actor.tacticPoints;
+    actor.tacticPoints = Math.min(actor.spMax, actor.tacticPoints + 8);
+    const gained = actor.tacticPoints - before;
+    events.push({
+      kind: "guard",
+      side: actor.side,
+      actor: actor.name,
+      text: `${actor.name} 举盾防守${gained > 0 ? `，回气 +${gained} SP` : ""}`,
+    });
     return;
   }
   if (command.a === "formation") {

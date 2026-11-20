@@ -19,6 +19,8 @@ import {
   SAGA_MAX_COMMANDS,
   SAGA_MAX_LEVEL,
   SAGA_STAT_CAP,
+  sagaV18Speed,
+  sagaV18Stat,
   type SagaEnemy,
   type SagaFieldBattleContext,
   type SagaNode,
@@ -142,10 +144,10 @@ function leaderEnemy(
   const def = SAGA_GENERAL_BY_ID.get(leaderId) ?? SAGA_GENERAL_BY_ID.get("huangjin_lishi")!;
   const bonus = traitStats(def, rules);
   if (rules >= 18) {
-    // v18：武 / 智 / 速固定，攻防成长与装备在 buildBattle 里结算。
-    const force = Math.min(SAGA_STAT_CAP, def.force + bonus.force);
-    const intellect = Math.min(SAGA_STAT_CAP, def.intellect + bonus.intellect);
-    const speed = Math.min(SAGA_STAT_CAP, def.speed + bonus.speed);
+    // v18：武 / 智按 2.5 倍铺进 255 区间，速仍按旧刻度；攻防成长与装备在 buildBattle 里结算。
+    const force = sagaV18Stat(def.force, bonus.force);
+    const intellect = sagaV18Stat(def.intellect, bonus.intellect);
+    const speed = sagaV18Speed(def.speed, bonus.speed);
     return {
       id: def.id,
       name: def.name,
@@ -230,10 +232,10 @@ function squadEnemy(
       level,
       troops,
       maxTroops: troops,
-      force: Math.min(SAGA_STAT_CAP, foe.force),
-      intellect: Math.min(SAGA_STAT_CAP, foe.intellect),
+      force: sagaV18Stat(foe.force),
+      intellect: sagaV18Stat(foe.intellect),
       defense: Math.min(SAGA_STAT_CAP, Math.round(foe.force * 0.8)),
-      speed: Math.min(SAGA_STAT_CAP, foe.speed),
+      speed: sagaV18Speed(foe.speed),
       tactics: [],
       poor: true,
       color: foe.color,

@@ -45,6 +45,8 @@ import {
   SAGA_RULESET,
   SAGA_RUN_VERSION,
   SAGA_STAT_CAP,
+  sagaV18Speed,
+  sagaV18Stat,
   type FormationId,
   type SagaCommand,
   type SagaEnemy,
@@ -134,6 +136,11 @@ function makeEnemy(
   const troops = Math.max(80, Math.round(refTroops * Math.min(ceiling, Math.max(1.2, mult))));
   const bonus = traitStats(raw);
   const cap = (value: number): number => Math.min(SAGA_STAT_CAP, Math.round(value));
+  // v18：敌将固定三维同样按 2.5 / 2.4 倍铺进 255 / 210 区间，不再叠旧等级成长。
+  // 否则补位步卒按 v18 换算、敌将仍停在旧表 0~100，营里会出现「杂兵武力压过敌将」。
+  const force = sagaV18Stat(raw.force, bonus.force);
+  const intellect = sagaV18Stat(raw.intellect, bonus.intellect);
+  const speed = sagaV18Speed(raw.speed, bonus.speed);
   return {
     id: raw.id,
     name: raw.name,
@@ -141,10 +148,10 @@ function makeEnemy(
     level,
     troops,
     maxTroops: troops,
-    force: cap(raw.force + bonus.force + Math.floor(level * 1.5)),
-    intellect: cap(raw.intellect + bonus.intellect + Math.floor(level * 1.2)),
-    defense: cap(raw.defense + bonus.defense + Math.floor(level * 1.3)),
-    speed: cap(raw.speed + bonus.speed + Math.floor(level * 0.75)),
+    force,
+    intellect,
+    defense: cap(force * 0.8 + bonus.defense),
+    speed,
     tactics: tacticsFor(raw, level),
     traits: raw.traits ?? [],
     color: raw.color,
@@ -174,7 +181,11 @@ function enemyIds(
   if (kind === "boss") {
     return [chapter.boss, ...unique(chapter.guards, 2)];
   }
-  if (kind === "elite") {
+  if (kind === "siege") {
+    const leader = chapter.guards[0] ?? chapter.elite[0] ?? chapter.field[0];
+    return [leader, ...unique([...chapter.guards, ...chapter.elite, ...chapter.field].filter((id) => id !== leader), 2)];
+  }
+  if (kind === "elite" || kind === "gate") {
     const count = chapterIndex >= 2 ? 3 : 2;
     return unique([...chapter.elite, ...chapter.field, ...chapter.guards], count);
   }
@@ -183,7 +194,7 @@ function enemyIds(
   return unique([...chapter.field, ...chapter.elite], count);
 }
 
-/** 一章的节点：若干野战 / 精锐 + 本阵，中间按需岔出两条只能走一条的路。 */
+/** 一章的节点：野战 / 精锐 / 本阵，再补一座关卡与一场攻城战，不再岔路。 */
 function buildChapterNodes(chapterIndex: number, nodeCount: number, rng: () => number): SagaNode[] {
   const chapter = SAGA_CHAPTERS[chapterIndex];
   const nodes: SagaNode[] = [];
@@ -224,32 +235,42 @@ function buildChapterNodes(chapterIndex: number, nodeCount: number, rng: () => n
       enemyFormation: pick(rng, SAGA_FORMATIONS).id,
     });
   }
-  // 剧情分支：初战之后岔出两处营，只能走一条（打通一条，另一条自动闭营）。
-  if (nodeCount >= 4 && chapter.branch) {
-    const options: [0 | 1, NonNullable<typeof chapter.branch>["a"]][] = [
-      [0, chapter.branch.a],
-      [1, chapter.branch.b],
-    ];
-    const branchNodes: SagaNode[] = options.map(([option, config]) => {
-      const enemies = config.pool
-        .slice(0, 2)
-        .map((id) => makeEnemy(id, chapter.index, 1, "battle", false));
-      const rewardGold = 18 + chapter.index * 22 + 8 + (config.bonus === "gold" ? 70 : 0);
-      const rewardExp = 16 + chapter.index * 10 + 6 + (config.bonus === "exp" ? 60 : 0);
-      return {
-        kind: "battle",
-        name: config.name,
-        blurb: `${config.blurb} 此处与另一条路只能走一条。`.slice(0, 120),
-        chapter: chapter.index,
-        enemies,
-        rewardGold,
-        rewardExp,
-        enemyFormation: pick(rng, SAGA_FORMATIONS).id,
-        branch: { group: chapter.index, option },
-      };
-    });
-    nodes.splice(1, 0, ...branchNodes);
-  }
+
+  // 新增两类硬仗：关卡卡住官道，攻城战直逼城池；都不带岔路，走完才算推进。
+  const gateStage = chapter.stages[1] ?? pick(rng, FIELD_NAMES);
+  const gateEnemies = enemyIds(chapter.index, "gate", 1, rng).map((id) =>
+    makeEnemy(id, chapter.index, 1, "gate", false),
+  );
+  const gateStory =
+    chapter.story[Math.min(chapter.story.length - 1, Math.floor(chapter.story.length / 3))] ?? "";
+  nodes.splice(1, 0, {
+    kind: "gate",
+    name: `${gateStage}·关卡`,
+    blurb: `${gateStory} 关口守军横枪拦路，破了这道关卡才能继续进兵。`.slice(0, 120),
+    chapter: chapter.index,
+    enemies: gateEnemies,
+    rewardGold: 18 + chapter.index * 22 + 8 + 20,
+    rewardExp: 16 + chapter.index * 10 + 6 + 16,
+    enemyFormation: pick(rng, SAGA_FORMATIONS).id,
+  });
+
+  const siegeIndex = nodes.length - 1;
+  const siegeEnemies = enemyIds(chapter.index, "siege", siegeIndex, rng).map((id) =>
+    makeEnemy(id, chapter.index, siegeIndex, "siege", false),
+  );
+  const siegeLeader = siegeEnemies[0]?.name ?? "守城将";
+  const siegeStory = chapter.story[chapter.story.length - 1] ?? "";
+  nodes.splice(nodes.length - 1, 0, {
+    kind: "siege",
+    name: `${chapter.town}·攻城战`,
+    blurb: `${siegeStory} 兵临城下，${siegeLeader}闭门据守，此战破城。`.slice(0, 120),
+    chapter: chapter.index,
+    enemies: siegeEnemies,
+    rewardGold: 18 + chapter.index * 22 + siegeIndex * 8 + 45,
+    rewardExp: 16 + chapter.index * 10 + siegeIndex * 6 + 35,
+    enemyFormation: pick(rng, SAGA_FORMATIONS).id,
+  });
+
   return nodes;
 }
 
@@ -337,7 +358,7 @@ function parseNode(raw: unknown): SagaNode | null {
   if (!raw || typeof raw !== "object") return null;
   const it = raw as Partial<SagaNode>;
   const kind = it.kind;
-  if (kind !== "battle" && kind !== "elite" && kind !== "boss") return null;
+  if (kind !== "battle" && kind !== "gate" && kind !== "siege" && kind !== "elite" && kind !== "boss") return null;
   if (!Array.isArray(it.enemies) || it.enemies.length === 0 || it.enemies.length > SAGA_BATTLE_SIZE) return null;
   const enemies: SagaEnemy[] = [];
   for (const item of it.enemies) {
@@ -831,22 +852,27 @@ export function bankSagaGold(state: SagaReplayState, gold: number, bank: SagaBan
  * 住店券在购买时已经扣过，重放只负责补兵；兵败后的 `lost` 场景由购买记录切回。
  */
 export function restAtInn(state: SagaReplayState): boolean {
-  let healed = 0;
+  let recovered = 0;
   for (const general of state.save.party) {
     const stats = generalStats(general, state.save.gearLevels, state.rules);
     const maxTroops = Math.max(
       1,
       Math.round(stats.maxTroops * (1 + state.buffs.troopPct / 100)),
     );
+    // 住宿补满 SP，哪怕兵力是满的。
+    if ((general.sp ?? stats.spMax) < stats.spMax) {
+      general.sp = stats.spMax;
+      recovered += 1;
+    }
     const current = Math.min(maxTroops, state.partyTroops[general.id] ?? maxTroops);
     // 阵亡者不会因为住店自动复活，得用招魂计或复活丹。
     if (current <= 0) continue;
     if (current >= maxTroops) continue;
     state.partyTroops[general.id] = maxTroops;
     general.troops = maxTroops;
-    healed += maxTroops - current;
+    recovered += maxTroops - current;
   }
-  return healed > 0;
+  return recovered > 0;
 }
 
 /** 购买记录从购买发生的指令位置起生效，已经打过的仗不会被回溯加强。 */
@@ -932,8 +958,8 @@ export function canEngageNode(run: SagaRun, state: SagaReplayState, node: number
     );
     if (bossIndex >= 0) return false;
   }
-  if (target.kind !== "boss") return true;
-  // 主帅本阵扎在本区最后：本区外围营地没拔干净就冲进去，重放时直接忽略。
+  if (target.kind !== "boss" && target.kind !== "siege") return true;
+  // 主帅本阵与攻城战都压在本区最后：外围营地没拔干净就冲进去，重放时直接忽略。
   // 岔路两选一：同组只要打通了一处，另一处（即便战报里没记到）也算过，不能把本阵锁死。
   const cleared = new Set(state.clearedNodes);
   const branchDone = new Set<number>();
@@ -947,6 +973,7 @@ export function canEngageNode(run: SagaRun, state: SagaReplayState, node: number
     (item, itemIndex) =>
       item.chapter !== target.chapter ||
       item.kind === "boss" ||
+      (target.kind === "siege" && item.kind === "siege") ||
       cleared.has(itemIndex) ||
       (item.branch ? branchDone.has(item.branch.group) : false),
   );
@@ -972,6 +999,16 @@ export function openNodes(run: SagaRun, state: SagaReplayState): number[] {
   return out;
 }
 
+/** 把战斗里花掉的 SP 写回存档：下一场、行军谋略与住宿补气共用同一份数值。 */
+function syncBattleSp(state: SagaReplayState): void {
+  const battle = state.battle;
+  if (!battle) return;
+  for (const unit of battle.party) {
+    const saved = findGeneral(state.save, unit.id);
+    if (saved) saved.sp = Math.max(0, Math.min(unit.spMax, unit.tacticPoints));
+  }
+}
+
 /** 从战斗中撤退：当前兵力记回队伍，还有人站着就回大地图，全灭才落到住店重整。 */
 export function retreatFromBattle(state: SagaReplayState): boolean {
   const battle = state.battle;
@@ -982,6 +1019,7 @@ export function retreatFromBattle(state: SagaReplayState): boolean {
     state.partyTroops[general.id] = troops;
     if (troops > 0) alive = true;
   }
+  syncBattleSp(state);
   state.battle = null;
   state.scene = alive ? "field" : "lost";
   return true;
@@ -1043,6 +1081,9 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
           const healed = Math.min(maxTroops, current + item.heal);
           state.partyTroops[target.id] = healed;
           target.troops = healed;
+        } else if (item.sp) {
+          const spNow = clampInt(target.sp ?? stats.spMax, 0, stats.spMax);
+          target.sp = Math.min(stats.spMax, spNow + item.sp);
         } else {
           break;
         }
@@ -1092,18 +1133,19 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
         break;
       }
       case "tactic": {
-        // 非战斗回复计：每趟行军限三次，不扣战斗 SP，按施计者智力与等级回兵。
+        // 非战斗回复计：每趟行军限三次，同样按计策表扣当前 SP；SP 不足就放不出来。
         if (state.scene !== "field" || state.fieldTacticsUsed >= 3) break;
         const actor = findGeneral(state.save, command.g);
         const def = actor ? SAGA_GENERAL_BY_ID.get(actor.id) : null;
         const tactic = SAGA_TACTICS.find((row) => row.id === command.t);
         if (!actor || !def || !tactic || (tactic.kind !== "heal" && tactic.kind !== "healAll")) break;
         if (!tacticsFor(def, actor.level).includes(tactic.id)) break;
+        const actorStats = generalStats(actor, state.save.gearLevels, state.rules);
+        const spNow = clampInt(actor.sp ?? actorStats.spMax, 0, actorStats.spMax);
+        if (spNow < tactic.cost) break;
         const raw =
           Math.max(1, tactic.power ?? 1) *
-          (Math.max(0, generalStats(actor, state.save.gearLevels, state.rules).intellect) * 0.8 +
-            actor.level * 2 +
-            30);
+          (Math.max(0, actorStats.intellect) * 0.8 + actor.level * 2 + 30);
         const healOne = (target: SagaGeneralState): number => {
           const stats = generalStats(target, state.save.gearLevels, state.rules);
           const max = Math.max(1, Math.round(stats.maxTroops * (1 + state.buffs.troopPct / 100)));
@@ -1115,6 +1157,7 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
           return next - current;
         };
         state.fieldTacticsUsed += 1;
+        actor.sp = Math.max(0, spNow - tactic.cost);
         if (tactic.kind === "healAll") {
           for (const member of state.save.party) healOne(member);
         } else {
@@ -1184,6 +1227,7 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
           if (battle.phase !== "select") break;
         }
         state.battle = battle;
+        if (battle.phase !== "select") syncBattleSp(state);
         if (battle.phase === "won") {
           state.clearedNodes.push(command.node);
           // 岔路只走一条：打通这条，另一条当场闭营，本阵的解锁条件也随之满足。
@@ -1220,6 +1264,7 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
           if (battle.phase !== "select") break;
         }
         state.battle = battle;
+        if (battle.phase !== "select") syncBattleSp(state);
         if (battle.phase === "won") {
           state.scene = "field";
         } else if (battle.phase === "lost") {

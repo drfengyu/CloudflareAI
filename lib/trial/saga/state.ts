@@ -7,6 +7,7 @@ import {
   SAGA_TRAIT_BY_ID,
   gearSlotOf,
   traitStats,
+  tacticsFor,
   traitsForRules,
   weaponTypesFor,
 } from "./data";
@@ -19,6 +20,9 @@ import {
   SAGA_RULESET,
   SAGA_SAVE_VERSION,
   SAGA_STAT_CAP,
+  SAGA_SPEED_BASE_SCALE,
+  sagaV18Speed,
+  sagaV18Stat,
   type FormationId,
   type GearSlot,
   type SagaGeneralState,
@@ -51,18 +55,20 @@ export function createGeneralState(id: string, level = 1): SagaGeneralState {
 
 export function initialTrialSave(): TrialSave {
   const liubei = createGeneralState("liubei");
-  liubei.weapon = "iron_sword";
+  liubei.weapon = "wood_sword";
   liubei.armor = "cloth";
   liubei.items = { herb: 2, zhaohun_dan: 1 };
   const guanyu = createGeneralState("guanyu");
-  guanyu.weapon = "blade";
+  guanyu.weapon = "wood_blade";
+  guanyu.armor = "cloth";
   const zhangfei = createGeneralState("zhangfei");
-  zhangfei.weapon = "spear";
+  zhangfei.weapon = "wood_spear";
+  zhangfei.armor = "cloth";
   return {
     version: SAGA_SAVE_VERSION,
     chapter: 0,
     clears: 0,
-    gold: 80,
+    gold: 200,
     formation: "yulin",
     party: [liubei, guanyu, zhangfei],
     reserve: [],
@@ -120,6 +126,9 @@ function normalizeGeneral(raw: unknown): SagaGeneralState | null {
   state.items = items;
   const troops = clampInt(it.troops, 0, 99_999, 0);
   if (troops > 0) state.troops = troops;
+  // 旧档没有 sp 字段，按满 SP 落地；新档按上限收口。
+  const spMax = generalStats(state, {}, SAGA_RULESET).spMax;
+  state.sp = typeof it.sp === "number" ? clampInt(it.sp, 0, spMax, spMax) : spMax;
   return state;
 }
 
@@ -233,6 +242,11 @@ export interface SagaGeneralStats {
   critDamage: number;
 }
 
+/** v18 速度按 2.4 倍展示（0~210），命中 / 暴击公式仍按旧 0~100 刻度结算，避免一开局就顶到上限。 */
+export function speedEffectRating(speed: number): number {
+  return speed / SAGA_SPEED_BASE_SCALE;
+}
+
 /** 速决定命中：55% 起步，每点速度 +0.333%，封顶 98%。 */
 export function speedHitRate(speed: number): number {
   return Math.min(0.98, Math.max(0.55, 0.55 + Math.max(0, speed) / 300));
@@ -330,10 +344,13 @@ export function generalStats(
     0,
   );
   if (rules >= 18) {
-    const force = cap(def.force + bonus.force);
-    const intellect = cap(def.intellect + bonus.intellect);
-    const speed = cap(def.speed + bonus.speed);
+    // v18 旧表 0~100 的底子按 2.5 倍铺进 255 区间，名将才真正贴到上限；
+    // 速度保持原值，命中 / 暴击公式仍按旧刻度算。
+    const force = sagaV18Stat(def.force, bonus.force);
+    const intellect = sagaV18Stat(def.intellect, bonus.intellect);
+    const speed = sagaV18Speed(def.speed, bonus.speed);
     const actualSpeed = speed + gearSpeed;
+    const effectSpeed = speedEffectRating(actualSpeed);
     return {
       force,
       intellect,
@@ -348,9 +365,9 @@ export function generalStats(
         255,
         12 + Math.floor(intellect / 3) + (level - 1) * 2 + traitSp,
       ),
-      hitRate: speedHitRate(actualSpeed),
-      critRate: speedCritRate(actualSpeed, traitCrit),
-      critDamage: speedCritDamage(actualSpeed),
+      hitRate: speedHitRate(effectSpeed),
+      critRate: speedCritRate(effectSpeed, traitCrit),
+      critDamage: speedCritDamage(effectSpeed),
     };
   }
   const force = cap(def.force + bonus.force + Math.floor((level - 1) * 1.5 * growth));
@@ -533,11 +550,11 @@ export function equipGeneral(
   }
   const item = SAGA_ITEM_BY_ID.get(itemId);
   if (!item || gearSlotOf(item) !== slot) return false;
-  if (slot === "weapon" && item.weaponType) {
-    const def = SAGA_GENERAL_BY_ID.get(general.id);
-    if (!weaponTypesFor(def).includes(item.weaponType)) return false;
-  }
   if ((save.gear[item.id] ?? 0) <= 0) return false;
+  if (slot === "weapon") {
+    const def = SAGA_GENERAL_BY_ID.get(general.id);
+    if (item.weaponType && !weaponTypesFor(def).includes(item.weaponType)) return false;
+  }
   if (current) save.gear[current] = (save.gear[current] ?? 0) + 1;
   save.gear[item.id] = (save.gear[item.id] ?? 0) - 1;
   if (save.gear[item.id] <= 0) delete save.gear[item.id];

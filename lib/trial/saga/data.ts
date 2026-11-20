@@ -11,6 +11,7 @@ import type {
   SagaTraitDef,
   SagaTraitId,
   TacticId,
+  WeaponQuality,
   WeaponType,
 } from "./types";
 
@@ -253,22 +254,75 @@ export function formationUnlocked(formation: FormationId, maxLevel: number): boo
   return !def || maxLevel >= def.level;
 }
 
+export const SAGA_WEAPON_QUALITY_LABEL: Record<WeaponQuality, string> = {
+  0: "木",
+  1: "铁",
+  2: "铜",
+  3: "银",
+  4: "钢",
+  5: "精钢",
+  6: "玄铁",
+};
+
+/** 每一城的兵器货架只摆当前品质与上一档，最多两种品质。 */
+export function weaponQualityForChapter(chapter: number): WeaponQuality {
+  return Math.max(1, Math.min(6, Math.trunc(chapter) + 1)) as WeaponQuality;
+}
+
 export const SAGA_ITEMS: SagaItemDef[] = [
-  // 兵器：剑 / 斧 / 枪 / 弓 / 刀 / 戟分开，武将只会使其中几类。
-  { id: "iron_sword", name: "铁剑", kind: "weapon", priceTickets: 1, atk: 8, weaponType: "sword", chapter: 0, desc: "攻击 +8" },
-  { id: "spear", name: "长枪", kind: "weapon", priceTickets: 2, atk: 14, weaponType: "spear", chapter: 0, desc: "攻击 +14" },
-  { id: "blade", name: "大刀", kind: "weapon", priceTickets: 3, atk: 20, weaponType: "blade", chapter: 0, desc: "攻击 +20" },
-  { id: "guandao", name: "偃月刀", kind: "weapon", priceTickets: 5, atk: 27, weaponType: "blade", chapter: 1, desc: "攻击 +27" },
-  { id: "huan_shou", name: "环首刀", kind: "weapon", priceTickets: 7, atk: 34, weaponType: "sword", chapter: 2, desc: "攻击 +34" },
-  { id: "shuangji", name: "双戟", kind: "weapon", priceTickets: 8, atk: 40, weaponType: "axe", chapter: 3, desc: "攻击 +40" },
-  { id: "dafu", name: "大斧", kind: "weapon", priceTickets: 9, atk: 48, weaponType: "axe", chapter: 3, desc: "攻击 +48" },
-  { id: "qinglong", name: "青龙偃月刀", kind: "weapon", priceTickets: 12, atk: 58, weaponType: "blade", chapter: 4, desc: "攻击 +58，关将军的成名之器" },
-  { id: "zhangba_shemao", name: "丈八蛇矛", kind: "weapon", priceTickets: 12, atk: 56, weaponType: "spear", chapter: 4, desc: "攻击 +56，燕人手中那条蛇" },
-  { id: "yitian", name: "倚天剑", kind: "weapon", priceTickets: 11, atk: 52, weaponType: "sword", chapter: 5, desc: "攻击 +52，剑长三尺，锋芒照人" },
-  { id: "fangtian", name: "方天画戟", kind: "weapon", priceTickets: 14, atk: 64, weaponType: "halberd", chapter: 5, desc: "攻击 +64，温侯的招牌" },
-  { id: "crescent_bow", name: "半月弓", kind: "weapon", priceTickets: 10, atk: 44, weaponType: "bow", chapter: 3, desc: "攻击 +44，远射之器" },
-  { id: "qixing", name: "七星宝刀", kind: "weapon", priceTickets: 13, atk: 68, weaponType: "blade", chapter: 6, desc: "攻击 +68，宝刀削铁如泥" },
-  { id: "longdan", name: "龙胆亮银枪", kind: "weapon", priceTickets: 15, atk: 72, weaponType: "spear", chapter: 7, desc: "攻击 +72，子龙掌中银枪" },
+  // 兵器：剑 / 斧 / 枪 / 弓 / 刀 / 戟各自成套，品质从木到玄铁；
+  // 武将只装备自己「兵器特性」内的类型，差别在攻击与价格。
+  { id: "wood_sword", name: "木剑", kind: "weapon", priceTickets: 1, atk: 2, weaponType: "sword", quality: 0, chapter: 0, desc: "攻击 +2，木料削成，军中练手" },
+  { id: "spear", name: "铁枪", kind: "weapon", priceTickets: 2, atk: 14, weaponType: "spear", quality: 1, chapter: 0, desc: "攻击 +14" },
+  { id: "wood_spear", name: "木枪", kind: "weapon", priceTickets: 1, atk: 3, weaponType: "spear", quality: 0, chapter: 0, desc: "攻击 +3，削尖的木杆" },
+  { id: "wood_blade", name: "木刀", kind: "weapon", priceTickets: 1, atk: 3, weaponType: "blade", quality: 0, chapter: 0, desc: "攻击 +3，木刀轻便" },
+  { id: "wood_bow", name: "木弓", kind: "weapon", priceTickets: 1, atk: 2, speed: 1, weaponType: "bow", quality: 0, chapter: 0, desc: "攻击 +2、速度 +1，猎户用的木弓" },
+  { id: "wood_axe", name: "木斧", kind: "weapon", priceTickets: 1, atk: 4, weaponType: "axe", quality: 0, chapter: 0, desc: "攻击 +4，劈柴也劈人" },
+  { id: "wood_halberd", name: "木戟", kind: "weapon", priceTickets: 1, atk: 4, weaponType: "halberd", quality: 0, chapter: 0, desc: "攻击 +4，木杆加铁尖" },
+  { id: "iron_sword", name: "铁剑", kind: "weapon", priceTickets: 1, atk: 8, weaponType: "sword", quality: 1, chapter: 0, desc: "攻击 +8" },
+  { id: "iron_blade", name: "铁刀", kind: "weapon", priceTickets: 3, atk: 18, weaponType: "blade", quality: 1, chapter: 0, desc: "攻击 +18，军中常见的铁刀" },
+  { id: "iron_bow", name: "铁弓", kind: "weapon", priceTickets: 2, atk: 12, speed: 1, weaponType: "bow", quality: 1, chapter: 0, desc: "攻击 +12、速度 +1" },
+  { id: "iron_axe", name: "铁斧", kind: "weapon", priceTickets: 3, atk: 18, weaponType: "axe", quality: 1, chapter: 0, desc: "攻击 +18" },
+  { id: "iron_halberd", name: "铁戟", kind: "weapon", priceTickets: 3, atk: 20, weaponType: "halberd", quality: 1, chapter: 0, desc: "攻击 +20" },
+  { id: "copper_sword", name: "铜剑", kind: "weapon", priceTickets: 4, atk: 16, weaponType: "sword", quality: 2, chapter: 1, desc: "攻击 +16，铜料更韧" },
+  { id: "copper_spear", name: "铜枪", kind: "weapon", priceTickets: 4, atk: 22, weaponType: "spear", quality: 2, chapter: 1, desc: "攻击 +22" },
+  { id: "blade", name: "铜刀", kind: "weapon", priceTickets: 3, atk: 20, weaponType: "blade", quality: 2, chapter: 1, desc: "攻击 +20" },
+  { id: "copper_bow", name: "铜弓", kind: "weapon", priceTickets: 4, atk: 18, speed: 1, weaponType: "bow", quality: 2, chapter: 1, desc: "攻击 +18、速度 +1" },
+  { id: "copper_axe", name: "铜斧", kind: "weapon", priceTickets: 5, atk: 24, weaponType: "axe", quality: 2, chapter: 1, desc: "攻击 +24" },
+  { id: "guandao", name: "铜偃月刀", kind: "weapon", priceTickets: 5, atk: 27, weaponType: "blade", quality: 2, chapter: 1, desc: "攻击 +27，铜刀中的长柄重器" },
+  { id: "copper_halberd", name: "铜戟", kind: "weapon", priceTickets: 6, atk: 26, weaponType: "halberd", quality: 2, chapter: 1, desc: "攻击 +26" },
+  { id: "silver_sword", name: "银剑", kind: "weapon", priceTickets: 7, atk: 30, weaponType: "sword", quality: 3, chapter: 2, desc: "攻击 +30" },
+  { id: "silver_spear", name: "银枪", kind: "weapon", priceTickets: 8, atk: 38, weaponType: "spear", quality: 3, chapter: 2, desc: "攻击 +38" },
+  { id: "silver_blade", name: "银刀", kind: "weapon", priceTickets: 8, atk: 40, weaponType: "blade", quality: 3, chapter: 2, desc: "攻击 +40" },
+  { id: "huan_shou", name: "银环首刀", kind: "weapon", priceTickets: 7, atk: 34, weaponType: "sword", quality: 3, chapter: 2, desc: "攻击 +34，环首直刃" },
+  { id: "silver_bow", name: "银弓", kind: "weapon", priceTickets: 7, atk: 32, speed: 2, weaponType: "bow", quality: 3, chapter: 2, desc: "攻击 +32、速度 +2" },
+  { id: "silver_axe", name: "银斧", kind: "weapon", priceTickets: 9, atk: 42, weaponType: "axe", quality: 3, chapter: 2, desc: "攻击 +42" },
+  { id: "silver_halberd", name: "银戟", kind: "weapon", priceTickets: 9, atk: 44, weaponType: "halberd", quality: 3, chapter: 2, desc: "攻击 +44" },
+  { id: "steel_sword", name: "钢剑", kind: "weapon", priceTickets: 9, atk: 46, weaponType: "sword", quality: 4, chapter: 3, desc: "攻击 +46" },
+  { id: "steel_spear", name: "钢枪", kind: "weapon", priceTickets: 11, atk: 54, weaponType: "spear", quality: 4, chapter: 3, desc: "攻击 +54" },
+  { id: "steel_blade", name: "钢刀", kind: "weapon", priceTickets: 12, atk: 56, weaponType: "blade", quality: 4, chapter: 3, desc: "攻击 +56" },
+  { id: "steel_bow", name: "钢弓", kind: "weapon", priceTickets: 10, atk: 44, speed: 2, weaponType: "bow", quality: 4, chapter: 3, desc: "攻击 +44、速度 +2" },
+  { id: "shuangji", name: "钢双戟", kind: "weapon", priceTickets: 8, atk: 40, weaponType: "axe", quality: 4, chapter: 3, desc: "攻击 +40，双戟短打" },
+  { id: "dafu", name: "钢大斧", kind: "weapon", priceTickets: 9, atk: 48, weaponType: "axe", quality: 4, chapter: 3, desc: "攻击 +48" },
+  { id: "steel_halberd", name: "钢戟", kind: "weapon", priceTickets: 13, atk: 60, weaponType: "halberd", quality: 4, chapter: 3, desc: "攻击 +60" },
+  { id: "refined_sword", name: "精钢剑", kind: "weapon", priceTickets: 13, atk: 62, weaponType: "sword", quality: 5, chapter: 4, desc: "攻击 +62，百炼精钢" },
+  { id: "refined_spear", name: "精钢枪", kind: "weapon", priceTickets: 15, atk: 66, weaponType: "spear", quality: 5, chapter: 4, desc: "攻击 +66" },
+  { id: "refined_blade", name: "精钢刀", kind: "weapon", priceTickets: 16, atk: 68, weaponType: "blade", quality: 5, chapter: 4, desc: "攻击 +68" },
+  { id: "refined_bow", name: "精钢弓", kind: "weapon", priceTickets: 14, atk: 60, speed: 3, weaponType: "bow", quality: 5, chapter: 4, desc: "攻击 +60、速度 +3" },
+  { id: "qinglong", name: "青龙偃月刀", kind: "weapon", priceTickets: 12, atk: 58, weaponType: "blade", quality: 5, chapter: 4, desc: "攻击 +58，关将军的成名之器" },
+  { id: "zhangba_shemao", name: "丈八蛇矛", kind: "weapon", priceTickets: 12, atk: 56, weaponType: "spear", quality: 5, chapter: 4, desc: "攻击 +56，燕人手中那条蛇" },
+  { id: "yitian", name: "倚天剑", kind: "weapon", priceTickets: 11, atk: 52, weaponType: "sword", quality: 5, chapter: 4, desc: "攻击 +52，剑长三尺，锋芒照人" },
+  { id: "fangtian", name: "方天画戟", kind: "weapon", priceTickets: 14, atk: 64, weaponType: "halberd", quality: 5, chapter: 4, desc: "攻击 +64，温侯的招牌" },
+  { id: "refined_axe", name: "精钢斧", kind: "weapon", priceTickets: 17, atk: 70, weaponType: "axe", quality: 5, chapter: 4, desc: "攻击 +70" },
+  { id: "refined_halberd", name: "精钢戟", kind: "weapon", priceTickets: 18, atk: 72, weaponType: "halberd", quality: 5, chapter: 4, desc: "攻击 +72" },
+  { id: "treasure_sword", name: "玄铁剑", kind: "weapon", priceTickets: 20, atk: 84, weaponType: "sword", quality: 6, chapter: 5, desc: "攻击 +84，玄铁所铸" },
+  { id: "longdan", name: "龙胆亮银枪", kind: "weapon", priceTickets: 20, atk: 92, weaponType: "spear", quality: 6, chapter: 5, desc: "攻击 +92，子龙掌中银枪" },
+  { id: "qixing", name: "七星宝刀", kind: "weapon", priceTickets: 20, atk: 88, weaponType: "blade", quality: 6, chapter: 5, desc: "攻击 +88，宝刀削铁如泥" },
+  { id: "treasure_blade", name: "玄铁刀", kind: "weapon", priceTickets: 22, atk: 94, weaponType: "blade", quality: 6, chapter: 5, desc: "攻击 +94" },
+  { id: "treasure_bow", name: "玄铁弓", kind: "weapon", priceTickets: 18, atk: 80, speed: 4, weaponType: "bow", quality: 6, chapter: 5, desc: "攻击 +80、速度 +4" },
+  { id: "treasure_axe", name: "玄铁斧", kind: "weapon", priceTickets: 22, atk: 96, weaponType: "axe", quality: 6, chapter: 5, desc: "攻击 +96" },
+  { id: "treasure_halberd", name: "玄铁戟", kind: "weapon", priceTickets: 23, atk: 98, weaponType: "halberd", quality: 6, chapter: 5, desc: "攻击 +98" },
+  { id: "crescent_bow", name: "半月弓", kind: "weapon", priceTickets: 10, atk: 44, speed: 2, weaponType: "bow", quality: 4, chapter: 3, desc: "攻击 +44、速度 +2，远射之器" },
   // 甲胄：胸甲一系。
   { id: "cloth", name: "布甲", kind: "armor", priceTickets: 1, def: 6, chapter: 0, desc: "防御 +6" },
   { id: "leather", name: "皮甲", kind: "armor", priceTickets: 2, def: 11, chapter: 0, desc: "防御 +11" },
@@ -307,6 +361,8 @@ export const SAGA_ITEMS: SagaItemDef[] = [
   { id: "medicine", name: "良药", kind: "consumable", priceTickets: 2, heal: 300, chapter: 0, desc: "回复 300 兵力", stack: true },
   { id: "jinchuang", name: "金疮药", kind: "consumable", priceTickets: 3, heal: 600, chapter: 1, desc: "回复 600 兵力", stack: true },
   { id: "qingxin", name: "清心散", kind: "consumable", priceTickets: 2, heal: 220, chapter: 1, desc: "回复 220 兵力，行军途中安神", stack: true },
+  { id: "xingshen", name: "醒神散", kind: "consumable", priceTickets: 2, sp: 40, chapter: 1, desc: "回复 40 策略值，行军途中提神", stack: true },
+  { id: "juqi", name: "聚气丹", kind: "consumable", priceTickets: 5, sp: 100, chapter: 4, desc: "回复 100 策略值，军中难得的丹药", stack: true },
   { id: "dahuan", name: "大还丹", kind: "consumable", priceTickets: 5, heal: 1200, chapter: 2, desc: "回复 1200 兵力", stack: true },
   { id: "junliang", name: "军粮", kind: "consumable", priceTickets: 2, heal: 400, chapter: 0, desc: "回复 400 兵力，随军携带的干粮", stack: true },
   { id: "lingzhi", name: "灵芝", kind: "consumable", priceTickets: 4, heal: 900, chapter: 2, desc: "回复 900 兵力，山中所采的灵药", stack: true },
@@ -325,7 +381,7 @@ export const SAGA_ITEMS: SagaItemDef[] = [
 
 export const SAGA_ITEM_BY_ID = new Map(SAGA_ITEMS.map((i) => [i.id, i]));
 
-/** 一只手的兵器谱：按武将 id 给出会使的兵器，未列的按剑。 */
+/** 兵器谱：只作为武将的「兵器特性」展示，不再限制能装什么兵器。 */
 const SAGA_ARMS_BY_ID: Record<string, WeaponType[]> = {
   liubei: ["sword"],
   guanyu: ["blade"],
@@ -443,10 +499,26 @@ const SAGA_ARMS_BY_ID: Record<string, WeaponType[]> = {
   kuaiyue: ["sword"],
 };
 
-/** 武将会使的兵器；没有专门配置的按剑算。 */
+/** 武将会使的兵器；没有专门配置的按剑算。只用于「兵器特性」展示，不限制装备。 */
 export function weaponTypesFor(def: SagaGeneralDef | undefined): WeaponType[] {
   if (!def) return ["sword"];
   return def.arms ?? SAGA_ARMS_BY_ID[def.id] ?? ["sword"];
+}
+
+export const SAGA_WEAPON_TYPE_LABEL: Record<WeaponType, string> = {
+  sword: "剑",
+  axe: "斧",
+  spear: "枪",
+  bow: "弓",
+  blade: "刀",
+  halberd: "戟",
+};
+
+/** 武将兵器特性文案，如「惯用枪」「惯用枪 / 弓」。 */
+export function weaponProfileText(def: SagaGeneralDef | undefined): string {
+  return `惯用${weaponTypesFor(def)
+    .map((type) => SAGA_WEAPON_TYPE_LABEL[type])
+    .join(" / ")}`;
 }
 
 /** 装备类物品的槽位；消耗品与军需返回 null。 */
@@ -462,6 +534,15 @@ export function gearSlotOf(item: SagaItemDef | undefined): GearSlot | null {
 
 /** 店铺上架：按当前章节只放已到年份的货，后面的城自然卖得更好。 */
 export function shopStock(kind: SagaItemKind, chapter: number): SagaItemDef[] {
+  if (kind === "weapon") {
+    // 兵器按品质分城：当前档与上一档，最多两种品质同城上架。
+    const tier = weaponQualityForChapter(chapter);
+    return SAGA_ITEMS.filter((item) => {
+      if (item.kind !== "weapon") return false;
+      const quality = item.quality ?? 1;
+      return quality === tier || quality === tier - 1;
+    });
+  }
   return SAGA_ITEMS.filter((item) => item.kind === kind && (item.chapter ?? 0) <= chapter);
 }
 
@@ -517,7 +598,8 @@ export function tacticsFor(def: SagaGeneralDef | undefined, level: number): Tact
     // 同系各阶威力随等级不同，全部列出（按消耗从高到低），不再只留最强的两条。
     const picks = TACTIC_LINES.filter((line) => {
       const kind = SAGA_TACTIC_BY_ID.get(line.id)?.kind;
-      return kind === family && def.intellect >= line.intellect;
+      // 智力不再决定“能不能用计”，只影响战斗中的计策成功率。
+      return kind === family;
     })
       .map((line) => line.id)
       .filter((id) => tacticUnlocked(id, level))
@@ -568,6 +650,8 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     story: [
       "汉室倾颓，黄巾席卷八州，涿郡张榜募兵。",
       "刘关张桃园结义，聚乡勇五百，首战程远志、邓茂。",
+      "黄巾分路围城，广宗、长社两地烽烟并起，官军各自为战。",
+      "刘备一路收拢溃兵，沿青州道南下，与皇甫嵩会师。",
       "广宗城下会战张角，破了黄巾本阵，讨逆之路从这里开始。",
     ],
     stages: ["涿郡郊外", "黄巾哨营", "青州道口", "长社坡", "阳城驿", "广宗城下", "黄巾本阵"],
@@ -602,7 +686,9 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     story: [
       "董卓入京，废立天子，天下震动。",
       "曹操发檄，诸侯会盟，孙坚为先锋直逼汜水关。",
-      "华雄连斩数将，关羽温酒斩之，联军进抵洛阳。",
+      "华雄据关挑战，联军诸将观望不前，粮道又被董军截断。",
+      "关羽请缨出战，曹操温酒相送；刀光落处，华雄授首。",
+      "联军进抵洛阳，董卓焚宫西走，讨逆锋芒转向虎牢。",
     ],
     stages: ["陈留城外", "汜水关前", "虎牢关道", "荥阳坂", "偃师古道", "洛阳郊野", "洛阳宫阙"],
     landmarks: ["枯井村", "关帝庙", "汜水渡"],
@@ -636,7 +722,9 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     story: [
       "曹操为父报仇兴兵徐州，刘备借兵救陶谦。",
       "陶谦三让徐州，刘备领徐州牧；袁术遣纪灵来争，辕门射戟。",
-      "袁术称帝，众叛亲离，终败于江亭；赵云在古城来投。",
+      "纪灵退兵后，袁术仍据寿春称帝，江淮粮道尽为其所断。",
+      "刘备联军南下，连破盱眙、淮北，兵锋直指仲家宫阙。",
+      "袁术众叛亲离，终败于江亭；赵云在古城来投。",
     ],
     stages: ["小沛城郊", "盱眙道口", "纪灵营寨", "淮北平原", "寿春城下", "江亭渡口", "仲家宫阙"],
     landmarks: ["彭城集", "子房庙", "泗水渡"],
@@ -669,8 +757,10 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     blurb: "吕布袭取徐州，曹操亲征下邳。水淹城池，温侯困守白门楼。",
     story: [
       "吕布袭取徐州，与袁术时和时战。",
-      "曹操亲征下邳，引沂泗之水灌城，吕布困守白门楼。",
-      "陈宫就义，高顺不屈；吕布殒命，张辽归心。",
+      "曹操亲征下邳，先断泗水粮道，再引沂泗之水灌城。",
+      "水势漫过城垣，吕布困守白门楼，部将人心离散。",
+      "陈宫就义，高顺不屈；张辽归心，徐州遂定。",
+      "温侯授首，刘备随曹操还许都，衣带诏的风声渐起。",
     ],
     stages: ["徐州城外", "泗水渡口", "下邳道", "陷阵大营", "白门楼前", "水淹城垣", "温侯本阵"],
     landmarks: ["白门里", "泗水祠", "下邳渡"],
@@ -703,8 +793,10 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     blurb: "袁绍兵多粮足，颜良文丑当先。延津渡口，一场硬仗。",
     story: [
       "袁绍并河北四州，南下攻许都。",
-      "白马延津，关羽斩颜良、诛文丑。",
-      "曹操夜袭乌巢，一把火烧尽河北粮草；刘备南走荆州，三顾茅庐。",
+      "白马延津，关羽斩颜良、诛文丑，河北军为之夺气。",
+      "两军在官渡对峙，曹营粮尽，许都朝野已有退意。",
+      "曹操夜袭乌巢，一把火烧尽河北粮草，袁军自溃。",
+      "刘备南走荆州，三顾茅庐，隆中对定下三分之势。",
     ],
     stages: ["延津渡口", "白马坡", "延津南岸", "乌巢粮道", "官渡壁垒", "黎阳古道", "邺城本阵"],
     landmarks: ["乌巢村", "官渡祠", "延津渡"],
@@ -738,7 +830,9 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     story: [
       "曹操挟八十三万之众饮马长江。",
       "孙刘结盟，周瑜督水军，黄盖献诈降火船。",
-      "东南风起，赤壁烈焰烧尽连环船，曹军北还。",
+      "东南风起，火船撞入连环船阵，江面一夜通红。",
+      "曹军北还，刘备乘势取荆南，诸葛亮入吴吊丧。",
+      "赤壁余烬未冷，周瑜又围南郡，荆襄归属再起争端。",
     ],
     stages: ["江夏水寨", "三江口", "赤壁矶", "乌林港", "华容道", "南郡城郊", "荆襄大营"],
     landmarks: ["赤壁村", "东风祠", "三江口渡"],
@@ -771,8 +865,10 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     blurb: "西川险道，张任严颜扼守。取涪城，方可图成都。",
     story: [
       "刘璋暗弱，张松献西川图本。",
-      "刘备入川，涪城会盟后反目；雒城折了庞统。",
-      "孔明张飞入援，成都开城，西川归心。",
+      "刘备入川，涪城会盟后反目，雒城折了庞统。",
+      "孔明张飞分路入援，巴郡严颜归降，成都门户洞开。",
+      "马超来投，成都震动；刘璋开城，西川归心。",
+      "益州既定，汉中成为下一处必争之地。",
     ],
     stages: ["涪城道", "雒城关", "绵竹隘", "巴郡江岸", "葭萌关", "成都郊外", "成都宫门"],
     landmarks: ["落凤坡", "涪水祠", "雒城渡"],
@@ -806,7 +902,9 @@ export const SAGA_CHAPTERS: SagaChapterDef[] = [
     story: [
       "汉中已定，先主进位汉中王，荆州却已易手。",
       "先主崩于白帝，托孤孔明；南中平后，六出祁山。",
-      "渭水对垒，冢虎不出；秋风五丈原，讨逆之路行至最后一战。",
+      "祁山道远，木牛流马运粮，渭水两岸连营百里。",
+      "渭水对垒，冢虎不出；孔明积劳成疾，星落营中。",
+      "秋风五丈原，讨逆之路行至最后一战。",
     ],
     stages: ["斜谷口", "陈仓道", "渭水南岸", "北原营寨", "武功水", "五丈原上", "魏军大营"],
     landmarks: ["斜谷村", "武侯祠", "渭水渡"],

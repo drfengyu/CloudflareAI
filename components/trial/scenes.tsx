@@ -883,7 +883,7 @@ export function CampBanner({
   return (
     <div className="overflow-hidden rounded-lg border border-border">
       <div className="relative">
-        <SceneCanvas backdrop="camp" height={220} />
+        <SceneCanvas backdrop={node.kind === "boss" || node.kind === "siege" ? "city" : "camp"} height={220} />
         <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/80 via-black/35 to-transparent p-2">
           <div className="flex items-end gap-1.5">
             {enemies.map((enemy) => (
