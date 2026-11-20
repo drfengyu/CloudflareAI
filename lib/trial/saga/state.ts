@@ -21,6 +21,7 @@ import {
   SAGA_SAVE_VERSION,
   SAGA_STAT_CAP,
   SAGA_SPEED_BASE_SCALE,
+  SAGA_SPEED_CAP,
   sagaV18Speed,
   sagaV18Stat,
   type FormationId,
@@ -349,7 +350,7 @@ export function generalStats(
     const force = sagaV18Stat(def.force, bonus.force);
     const intellect = sagaV18Stat(def.intellect, bonus.intellect);
     const speed = sagaV18Speed(def.speed, bonus.speed);
-    const actualSpeed = speed + gearSpeed;
+    const actualSpeed = Math.min(SAGA_SPEED_CAP, speed + gearSpeed);
     const effectSpeed = speedEffectRating(actualSpeed);
     return {
       force,
