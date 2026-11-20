@@ -72,7 +72,7 @@
 
 ### 验证
 
-- `npx tsx --test tests/trial-saga.test.ts` 97/97；`npm run typecheck` 0 错误；`npm run build` 通过。
+- `npx tsx --test tests/trial-saga.test.ts` 98/98；`npm run typecheck` 0 错误；`npm run build` 通过。
 
 ## [0.97.0] - 2026-11-19
 
