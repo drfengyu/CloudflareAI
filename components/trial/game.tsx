@@ -96,7 +96,15 @@ import {
   trainingCost,
   trainingLevelCap,
 } from "@/lib/trial/saga/training";
-import { SAGA_CARRY_LIMIT, SAGA_DEPLOY_SIZE, SAGA_PARTY_SIZE, sagaMaxLevel } from "@/lib/trial/saga/types";
+import {
+  SAGA_CARRY_LIMIT,
+  SAGA_DEPLOY_SIZE,
+  SAGA_PARTY_SIZE,
+  SAGA_SPEED_CAP,
+  sagaMaxLevel,
+  sagaV18Speed,
+  sagaV18Stat,
+} from "@/lib/trial/saga/types";
 import {
   campScene,
   chapterIntroScene,
@@ -365,6 +373,8 @@ export function TrialGame(props: TrialGameProps) {
   const [battle, setBattle] = useState<BattleSession | null>(null);
   /** 敌情面板：战斗中查看敌将四维、装备、计策与特性。 */
   const [showEnemyInfo, setShowEnemyInfo] = useState(false);
+  /** 部将面板：战斗中同时查看我军当前 SP、计策列表、装备与四维。 */
+  const [showPartyInfo, setShowPartyInfo] = useState(false);
   const [anim, setAnim] = useState<BattleAnimation | null>(null);
   /** 战斗演出倍速：只改动画节拍与配音间隔，结算结果不受影响。 */
   const [battleSpeed, setBattleSpeed] = useState<1 | 2>(1);
@@ -2114,6 +2124,14 @@ export function TrialGame(props: TrialGameProps) {
                   >
                     敌情
                   </Button>
+                  <Button
+                    size="sm"
+                    variant={showPartyInfo ? "primary" : "outline"}
+                    className="h-7 px-2.5 text-xs"
+                    onClick={() => setShowPartyInfo((value) => !value)}
+                  >
+                    部将
+                  </Button>
                   <Button size="sm" variant="outline" className="h-7 px-2.5 text-xs" onClick={allAttack} disabled={battleLocked}>
                     总攻击
                   </Button>
@@ -2183,6 +2201,67 @@ export function TrialGame(props: TrialGameProps) {
                   </span>
                 ))}
               </div>
+
+              {showPartyInfo ? (
+                <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                  {battle.battle.party.map((unit) => {
+                    const weapon = unit.weapon ? SAGA_ITEM_BY_ID.get(unit.weapon) : null;
+                    const armor = unit.armor ? SAGA_ITEM_BY_ID.get(unit.armor) : null;
+                    const speed = battleEffectiveSpeed(unit, battle.battle);
+                    const hit = battleHitRate(unit, battle.battle.enemies[0] ?? unit, battle.battle);
+                    const crit = battleCritRate(unit, battle.battle);
+                    return (
+                      <div
+                        key={unit.id}
+                        className="rounded-lg border border-amber-300/20 bg-amber-300/[0.04] px-2.5 py-1.5"
+                      >
+                        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          <span className="text-[12px] font-medium text-amber-100">{unit.name}</span>
+                          <span className="text-[10px] text-white/45">
+                            {unit.title} · Lv{unit.level}
+                          </span>
+                          <span className="ml-auto text-[10px] tabular-nums text-white/65">
+                            兵 {Math.max(0, unit.troops)}/{unit.maxTroops}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-[10px] tabular-nums text-white/65">
+                          武 {unit.force} · 智 {unit.intellect} · 防 {unit.defense} · 速{" "}
+                          {Math.round(speed)} · 攻 {battleAttackPower(unit, battle.battle.rules)}
+                        </p>
+                        <p className="text-[10px] tabular-nums text-fuchsia-100/80">
+                          SP {unit.tacticPoints}/{unit.spMax} · 命中 {Math.round(hit * 100)}% · 暴击{" "}
+                          {Math.round(crit * 100)}%
+                        </p>
+                        <p className="text-[10px] text-white/55">
+                          兵器 {weapon ? `${weapon.name}（+${unit.weaponAtk}）` : "无"} · 甲胄{" "}
+                          {armor ? `${armor.name}（+${unit.armorDef}）` : "无"}
+                        </p>
+                        <p className="text-[10px] text-white/55">
+                          计策{" "}
+                          {unit.tactics.length > 0
+                            ? unit.tactics
+                                .map((tactic) => {
+                                  const item = SAGA_TACTIC_BY_ID.get(tactic);
+                                  return item ? `${item.name}(${item.cost}SP)` : tactic;
+                                })
+                                .join(" / ")
+                            : "无"}
+                        </p>
+                        {unit.traits.length > 0 ? (
+                          <p className="text-[10px] text-amber-100/60">
+                            {unit.traits
+                              .map((id) => {
+                                const trait = SAGA_TRAIT_BY_ID.get(id);
+                                return `${trait?.name ?? id}：${trait?.desc ?? ""}`;
+                              })
+                              .join("；")}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
 
               {showEnemyInfo ? (
                 <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
@@ -3364,7 +3443,7 @@ export function TrialGame(props: TrialGameProps) {
                                           </span>
                                         </div>
                                         <p className="mt-0.5 text-xs text-muted-foreground">
-                                          武 {stats.force} · 智 {stats.intellect} · 速 {stats.speed + stats.gearSpeed} ·
+                                          武 {stats.force} · 智 {stats.intellect} · 速 {stats.speedTotal} ·
                                           攻 {stats.attack} · 防 {stats.defense} · SP {stats.spMax} · 兵力{" "}
                                           {stats.maxTroops}
                                         </p>
@@ -4419,7 +4498,6 @@ function StatusRoster({
         const current = Math.min(max, state?.partyTroops[member.id] ?? max);
         const ratio = max > 0 ? current / max : 1;
         const tactics = def ? (rules >= 2 ? tacticsFor(def, member.level) : def.tactics) : [];
-        const attack = stats.force + stats.weaponAtk + member.level * 2;
         return (
           <div key={member.id} className="rounded-lg border border-border p-2.5 text-sm">
             <div className="flex gap-2.5">
@@ -4438,7 +4516,7 @@ function StatusRoster({
                   <span className="text-[11px] text-muted-foreground">{active ? "上阵" : "后备"}</span>
                 </div>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 攻 {attack}
+                  武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speedTotal} · 攻 {stats.attack}
                 </p>
                 <div className="mt-1 h-1.5 overflow-hidden rounded bg-muted">
                   <div
@@ -4503,7 +4581,6 @@ function PartyList({ save, rules = SAGA_RULESET }: { save: TrialSave; rules?: nu
               const def = SAGA_GENERAL_BY_ID.get(member.id);
               const stats = generalStats(member, save.gearLevels, rules);
               const active = group.key === "party";
-              const attack = stats.force + stats.weaponAtk + member.level * 2;
               return (
                 <div key={member.id} className="rounded-lg border border-border p-2 text-xs">
                   <div className="flex gap-2">
@@ -4522,8 +4599,8 @@ function PartyList({ save, rules = SAGA_RULESET }: { save: TrialSave; rules?: nu
                         <span className="text-[11px] text-muted-foreground">{active ? "上阵" : "待命"}</span>
                       </p>
                       <p className="mt-0.5 text-muted-foreground">
-                        武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speed} · 攻{" "}
-                        {attack} · 兵力 {stats.maxTroops}
+                        武 {stats.force} · 智 {stats.intellect} · 防 {stats.defense} · 速 {stats.speedTotal} · 攻{" "}
+                        {stats.attack} · 兵力 {stats.maxTroops}
                       </p>
                       <p className="mt-0.5 tabular-nums text-muted-foreground">
                         经验 {member.exp}/{expToNext(member.level)}
@@ -4619,12 +4696,15 @@ function DexGrid({
                     <>
                       <p className="mt-0.5 text-muted-foreground">
                         {stats
-                          ? `武 ${stats.force} · 智 ${stats.intellect} · 速 ${stats.speed + stats.gearSpeed} · 攻 ${stats.attack} · 防 ${stats.defense} · SP ${stats.spMax} · 兵力 ${stats.maxTroops}`
+                          ? `武 ${stats.force} · 智 ${stats.intellect} · 速 ${stats.speedTotal} · 攻 ${stats.attack} · 防 ${stats.defense} · SP ${stats.spMax} · 兵力 ${stats.maxTroops}`
                           : (() => {
                               const bonus = traitStats(def);
-                              const force = Math.min(255, def.force + bonus.force);
-                              const speed = Math.min(255, def.speed + bonus.speed);
-                              return `武 ${force} · 智 ${Math.min(255, def.intellect + bonus.intellect)} · 速 ${speed} · 攻 ${force} · 防 ${Math.round(force * 0.8)} · SP ${Math.min(255, 12 + Math.floor((def.intellect + bonus.intellect) / 3))} · 兵力 ${def.baseTroops}（基础）`;
+                              const force = sagaV18Stat(def.force, bonus.force);
+                              const intellect = sagaV18Stat(def.intellect, bonus.intellect);
+                              const speed = Math.min(SAGA_SPEED_CAP, sagaV18Speed(def.speed, bonus.speed));
+                              const attack = Math.min(255, force);
+                              const defense = Math.min(255, Math.max(0, Math.round(bonus.defense)));
+                              return `武 ${force} · 智 ${intellect} · 速 ${speed} · 攻 ${attack} · 防 ${defense} · SP ${Math.min(255, 12 + Math.floor(intellect / 3))} · 兵力 ${def.baseTroops}（基础）`;
                             })()}
                         {` · ${SAGA_CORPS_LABEL[sagaCorpsOf(def)]}兵`}
                       </p>

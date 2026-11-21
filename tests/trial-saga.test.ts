@@ -871,7 +871,7 @@ test("v18 攻防实时吃装备：武决定初始，等级成长，含装备封�
   const stats1 = generalStats(lv1);
   assert.equal(stats1.force, 249, "武力 97 × 2.5 + 猛将 6，固定");
   assert.equal(stats1.attack, 255, "攻击 = 武力 249 + 铁剑 8，封顶 255");
-  assert.equal(stats1.defense, 213, "防御 = 武力八成 199 + 铁壁 8 + 布甲 6");
+  assert.equal(stats1.defense, 14, "防御只算装备与特性：铁壁 8 + 布甲 6，不含武力与等级");
   const lv100: SagaGeneralState = {
     id: "guanyu",
     level: 100,
@@ -889,7 +889,7 @@ test("v18 攻防实时吃装备：武决定初始，等级成长，含装备封�
   assert.equal(stats100.speed, 144, "100 级基础速度 60 × 2.4 = 144，仍不随等级涨");
   assert.equal(stats100.gearSpeed, 12, "赤兔 6 + 云靴 4 + 虎符坠 2，速度只由装备改");
   assert.equal(stats100.attack, 255, "攻击含青龙刀封顶 255");
-  assert.equal(stats100.defense, 255, "防御含明光铠等封顶 255");
+  assert.equal(stats100.defense, 78, "防御只算明光铠 38 + 金盔 18 + 玉带 10 + 虎符坠 4 + 铁壁 8");
   assert.equal(stats100.spMax > 200 && stats100.spMax <= 255, true, "SP 随等级接近 255");
 });
 
@@ -2310,7 +2310,7 @@ test("营寨增兵：按种子补士兵位，双方最多 5 人，敌将带装�
         assert.ok((guard.weaponAtk ?? 0) <= minWeapon, `${guard.name} 兵器不优于敌将`);
         assert.ok(guard.force <= minForce, `${guard.name} 武力不压过敌将`);
         assert.ok(guard.attack <= minAttack, `${guard.name} 攻击不压过敌将`);
-        assert.ok(guard.speed <= minSpeed, `${guard.name} 速度不压过敌将`);
+        assert.ok(guard.speed <= Math.floor(minSpeed * 0.5), `${guard.name} 速度不超过敌将一半`);
         assert.ok(guard.defense <= minDefense, `${guard.name} 防御不压过敌将`);
       }
     }

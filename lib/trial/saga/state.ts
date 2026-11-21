@@ -229,7 +229,10 @@ export interface SagaGeneralStats {
   defense: number;
   /** v18 起为含装备后的总攻击；旧规则保留旧口径供兼容。 */
   attack: number;
+  /** 基础固定速度（v18 为 0~210 的底子）。 */
   speed: number;
+  /** 含坐骑 / 靴 / 吊坠后的实际速度，已按 v18 上限 210 封顶；界面统一读这个。 */
+  speedTotal: number;
   maxTroops: number;
   weaponAtk: number;
   armorDef: number;
@@ -271,17 +274,17 @@ export function attackAtLevel(force: number, level: number, gearAtk = 0): number
   );
 }
 
-/** v18 防御成长：武力决定初始防御（八成），再叠等级、甲胄、防具特性，封顶 255。 */
+/**
+ * v18 防御：不再吃武力或等级，完全由甲胄 / 头盔 / 腰带 / 佩饰 / 靴等装备的防御值
+ * 加少数武将的防御特性组成。签名保留前两个参数，旧调用点不用改。
+ */
 export function defenseAtLevel(
-  force: number,
-  level: number,
+  _force: number,
+  _level: number,
   gearDef = 0,
   traitDef = 0,
 ): number {
-  return Math.min(
-    SAGA_STAT_CAP,
-    Math.round(force * 0.8 + Math.max(0, level - 1) * 1.05 + gearDef + traitDef),
-  );
+  return Math.min(SAGA_STAT_CAP, Math.max(0, Math.round(gearDef + traitDef)));
 }
 
 
@@ -299,6 +302,7 @@ export function generalStats(
       defense: 1,
       attack: 1,
       speed: 1,
+      speedTotal: 1,
       maxTroops: 1,
       weaponAtk: 0,
       armorDef: 0,
@@ -358,6 +362,7 @@ export function generalStats(
       defense: defenseAtLevel(force, level, armorDef, bonus.defense),
       attack: attackAtLevel(force, level, weaponAtk),
       speed,
+      speedTotal: actualSpeed,
       maxTroops,
       weaponAtk,
       armorDef,
@@ -378,6 +383,10 @@ export function generalStats(
     defense: cap(def.defense + bonus.defense + Math.floor((level - 1) * 1.3 * growth)),
     attack: force + weaponAtk + level * 2,
     speed: cap(def.speed + bonus.speed + Math.floor((level - 1) * 0.8 * growth)),
+    speedTotal: Math.min(
+      SAGA_STAT_CAP,
+      cap(def.speed + bonus.speed + Math.floor((level - 1) * 0.8 * growth)) + gearSpeed,
+    ),
     maxTroops,
     weaponAtk,
     armorDef,

@@ -270,7 +270,7 @@ function capGuardsBelowOfficers(enemies: SagaBattleGeneral[]): void {
     guard.maxTroops = guard.troops;
     guard.force = Math.max(1, Math.min(guard.force, Math.floor(minForce * 0.85)));
     guard.intellect = Math.max(1, Math.min(guard.intellect, minIntellect));
-    guard.speed = Math.max(1, Math.min(guard.speed, Math.floor(minSpeed * 0.9)));
+    guard.speed = Math.max(1, Math.min(guard.speed, Math.floor(minSpeed * 0.5)));
     guard.weapon = gear.weapon;
     guard.armor = gear.armor;
     guard.weaponAtk = gear.weaponAtk;
@@ -666,7 +666,7 @@ function buildBattle(
       intellect: stats.intellect,
       defense: stats.defense,
       attack: stats.attack,
-      speed: Math.min(SAGA_SPEED_CAP, stats.speed + stats.gearSpeed + buffs.speed),
+      speed: Math.min(SAGA_SPEED_CAP, stats.speedTotal + buffs.speed),
       tactics: rules >= 2 ? tacticsFor(def, saved.level) : def?.tactics ?? [],
       traits: rules >= 2 ? traitsForRules(def, rules) : [],
       corps: "spear",
