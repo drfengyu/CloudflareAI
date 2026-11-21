@@ -22,6 +22,15 @@ import { battleAttackPower } from "@/lib/trial/saga/battle";
 import { SAGA_CORPS_LABEL, SAGA_GENERAL_BY_ID } from "@/lib/trial/saga/data";
 import { paintBattleBust, portraitTraitsFor } from "@/components/trial/portraits";
 import { portraitAssetImage } from "@/components/trial/portrait-assets";
+import {
+  getTerrainImage,
+  getUnitStrip,
+  terrainForChapter,
+  terrainForFieldTile,
+  unitFramesFor,
+  unitStripFor,
+} from "@/components/trial/tstd2-assets";
+import type { Tstd2TerrainId } from "@/lib/trial/saga/tstd2-story";
 
 /**
  * 三国讨逆传的 Canvas 美术：俯视行军大地图与回合战斗两张场景。
@@ -390,6 +399,48 @@ function tileHash(tx: number, ty: number): number {
   h = (h ^ (h >>> 13)) | 0;
   h = Math.imul(h, 1274126177);
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+/** 用桌面版 24px 地形条带切一格铺到大地图上；图未加载时返回 false 走原画。 */
+function paintDesktopFieldTile(
+  ctx: CanvasRenderingContext2D,
+  id: Tstd2TerrainId,
+  sourceX: number,
+  sx: number,
+  sy: number,
+  size: number,
+): boolean {
+  const image = getTerrainImage(id);
+  if (!image || !image.complete || image.naturalWidth < 24 || image.naturalHeight < 24) return false;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = 0.94;
+  ctx.drawImage(image, sourceX, 12, 24, 12, sx, sy, size, size);
+  ctx.restore();
+  return true;
+}
+
+/** 战斗远景 / 内景用整条地形带横向重复；原素材 328×24，按比例放大。 */
+function paintDesktopTerrainBand(
+  ctx: CanvasRenderingContext2D,
+  id: Tstd2TerrainId,
+  view: SagaView,
+  y: number,
+  scale: number,
+  alpha: number,
+  _offset = 0,
+): boolean {
+  const image = getTerrainImage(id);
+  if (!image || !image.complete || !image.naturalWidth) return false;
+  const w = view.w;
+  const h = 24 * scale;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = alpha;
+  // 一条 328×24 的原版地表条带横向铺满画幅；不再平铺，避免城门/寨门重复。
+  ctx.drawImage(image, 0, 0, image.naturalWidth, image.naturalHeight, 0, y, w, h);
+  ctx.restore();
+  return true;
 }
 
 const GRASS_TINT: Record<string, [string, string]> = {
@@ -1201,6 +1252,20 @@ export function paintField(ctx: CanvasRenderingContext2D, options: FieldPaintOpt
       const sx = Math.round(tx * tile - camX);
       const sy = Math.round(ty * tile - camY);
       const r = tileHash(tx, ty);
+      const desktopTile = terrainForFieldTile(kind, field.flavor, Math.floor(r * 1_000_000));
+      if (paintDesktopFieldTile(ctx, desktopTile.id, desktopTile.sourceX, sx, sy, tile)) {
+        ctx.fillStyle = "rgba(22,30,20,0.08)";
+        ctx.fillRect(sx, sy, tile + 0.6, tile + 0.6);
+        if (kind === SAGA_TILE_WATER) {
+          ctx.strokeStyle = "rgba(214,236,226,0.16)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(sx + 4, sy + 8 + Math.sin(time * 1.4 + tx) * 2);
+          ctx.lineTo(sx + tile - 4, sy + 8 + Math.sin(time * 1.4 + tx) * 2);
+          ctx.stroke();
+        }
+        continue;
+      }
       if (kind === SAGA_TILE_WATER) {
         paintWater(ctx, sx, sy, tile, r, time);
         continue;
@@ -1666,6 +1731,40 @@ function drawSquadWeapon(
   ctx.fillRect(39, -92, 14, 3);
 }
 
+function paintDesktopSquad(
+  ctx: CanvasRenderingContext2D,
+  unitId: string,
+  time: number,
+  downed: boolean,
+): boolean {
+  const stripId = unitStripFor(unitId);
+  const image = getUnitStrip(stripId);
+  const frames = unitFramesFor(stripId);
+  if (!image || !image.complete || !image.naturalWidth || frames.length === 0) return false;
+  // 12 帧按 8fps 播放；兵力少不会换素材，只影响头顶血条与队列明暗。
+  const frame = frames[Math.floor(time * 8 + (stripId.charCodeAt(0) % 7)) % frames.length];
+  const base = 3.2;
+  const destW = frame.w * base;
+  const destH = frame.h * base;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = downed ? 0.25 : 1;
+  if (downed) ctx.rotate(-0.45);
+  ctx.drawImage(
+    image,
+    frame.x,
+    frame.y,
+    frame.w,
+    frame.h,
+    -destW / 2,
+    8 - destH,
+    destW,
+    destH,
+  );
+  ctx.restore();
+  return true;
+}
+
 function paintSquad(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -1679,6 +1778,8 @@ function paintSquad(
   weapon: string | null = null,
   armor: string | null = null,
   rim = false,
+  unitId?: string,
+  time = 0,
 ): void {
   ctx.save();
   ctx.translate(x, y);
@@ -1699,6 +1800,11 @@ function paintSquad(
   ctx.beginPath();
   ctx.ellipse(0, 8, 38, 9, 0, 0, Math.PI * 2);
   ctx.fill();
+
+  if (unitId && paintDesktopSquad(ctx, unitId, time, downed)) {
+    ctx.restore();
+    return;
+  }
 
   const soldiers = Math.max(0, Math.ceil(ratio * 6));
   for (let i = 0; i < 6; i++) {
@@ -2436,6 +2542,16 @@ function paintBattleVenue(
 ): void {
   const gy = view.groundY;
   const rand = battleRandom(seed ^ 0x51ed270b);
+  // 内景先铺桌面版城 / 寨条带，程序化的门楼与帐篷再压在上面做层次。
+  paintDesktopTerrainBand(
+    ctx,
+    venue === "city" ? "city" : "camp",
+    view,
+    gy - 314 * view.k,
+    4.2 * view.k,
+    0.58,
+    time * 2,
+  );
 
   // 战场台地：上缘融进远山，下缘淡进地面，武将队列就站在这一带。
   // 左右各铺出画面 40 px，营盘 / 城下空地读起来比画幅更宽，两军靠两侧也不贴边。
@@ -2520,6 +2636,16 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
   ctx.translate(shakeX, shakeY);
 
   paintBackdrop(ctx, time + 4, view, mood);
+  // 桌面版地形条带压在远景与地平线之间：不同章节直接换原版地表。
+  paintDesktopTerrainBand(
+    ctx,
+    terrainForChapter(options.chapterIndex ?? 0),
+    view,
+    view.groundY - 248 * view.k,
+    3.8 * view.k,
+    0.5,
+    time * 6,
+  );
   paintGround(ctx, 0, view, mood);
 
   // 内景与阵位共用一个种子：同一座营 / 城每次进场长得一样，换节点才变
@@ -2568,6 +2694,8 @@ export function paintBattle(ctx: CanvasRenderingContext2D, options: BattlePaintO
       unit.weapon,
       unit.armor,
       !unit.downed && darkStage,
+      unit.id,
+      time,
     );
     ctx.filter = "none";
     ctx.restore();

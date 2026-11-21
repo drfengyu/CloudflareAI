@@ -1,5 +1,10 @@
 import { SAGA_CHAPTERS, SAGA_GENERAL_BY_ID } from "./data";
 import type { SagaFieldPoi, SagaNode } from "./types";
+import {
+  TSTD2_CHAPTER_TERRAIN,
+  tstd2DialogueLines,
+  type Tstd2TerrainId,
+} from "./tstd2-story";
 
 /**
  * 剧情文本：开场、阵前、平定、乡野、酒馆与营帐议事。
@@ -25,6 +30,7 @@ export interface SagaScene {
   id: string;
   title: string;
   backdrop: SagaBackdrop;
+  terrain?: Tstd2TerrainId;
   lines: SagaDialogueLine[];
 }
 
@@ -348,22 +354,53 @@ function clampChapter(index: number): number {
 export function chapterIntroScene(chapterIndex: number): SagaScene {
   const index = clampChapter(chapterIndex);
   const chapter = SAGA_CHAPTERS[index];
+  // 原版章节开场：台词直接取自桌面版剧情脚本，原来的原创文案只在缺数据时兜底。
+  const original = tstd2DialogueLines(index + 1, 12).map((line) => ({
+    ...line,
+    side: "narrator" as const,
+  }));
   return {
     id: `intro-${index}`,
     title: `${chapter.town} · ${chapter.name}`,
     backdrop: "city",
-    lines: INTROS[index].map((line) => ({ ...line, side: line.side ?? "hero" })),
+    terrain: TSTD2_CHAPTER_TERRAIN[index + 1] ?? "city",
+    lines:
+      original.length >= 4
+        ? [
+            {
+              speaker: "旁白",
+              text: `原版《吞食天地2》${chapter.name}开场。${chapter.blurb}`,
+              side: "narrator" as const,
+            },
+            ...original,
+          ]
+        : INTROS[index].map((line) => ({ ...line, side: line.side ?? "hero" })),
   };
 }
 
 export function chapterVictoryScene(chapterIndex: number): SagaScene {
   const index = clampChapter(chapterIndex);
   const chapter = SAGA_CHAPTERS[index];
+  const original = tstd2DialogueLines(index + 1, 8, true).map((line) => ({
+    ...line,
+    side: "narrator" as const,
+  }));
   return {
     id: `victory-${index}`,
     title: `${chapter.town}已定`,
     backdrop: "field",
-    lines: OUTROS[index].map((line) => ({ ...line, side: line.side ?? "hero" })),
+    terrain: TSTD2_CHAPTER_TERRAIN[index + 1] ?? "plain",
+    lines:
+      original.length >= 3
+        ? [
+            {
+              speaker: "旁白",
+              text: `原版章节收束：${chapter.town}已定，${chapter.name}的剧情告一段落。`,
+              side: "narrator" as const,
+            },
+            ...original,
+          ]
+        : OUTROS[index].map((line) => ({ ...line, side: line.side ?? "hero" })),
   };
 }
 
@@ -388,6 +425,7 @@ export function campScene(
     id: `camp-${index}-${node.name}`,
     title: node.name,
     backdrop: "camp",
+    terrain: node.kind === "boss" || node.kind === "siege" ? "city" : "camp",
     lines: [
       {
         speaker: "旁白",
@@ -488,6 +526,7 @@ export function poiScene(
     id: `poi-${index}-${poi.kind}-${poi.name}`,
     title: poi.name,
     backdrop: "field",
+    terrain: poi.kind === "cave" ? "cave" : poi.kind === "shrine" ? "tomb" : "plain",
     lines,
   };
 }
@@ -499,6 +538,7 @@ export function tavernScene(chapterIndex: number): SagaScene {
     id: `tavern-${index}`,
     title: "酒馆 · 一段旧事",
     backdrop: "tavern",
+    terrain: "city",
     lines: [
       { speaker: "旁白", text: "酒馆里人声嘈杂。说书人一拍醒木，四周渐渐安静下来。", side: "narrator" },
       { speaker: tale[0], npcId: "tavernkeeper", text: tale[1], side: "npc" },
@@ -543,7 +583,7 @@ export function councilScene(chapterIndex: number, partyIds: string[]): SagaScen
       side: "hero",
     },
   ];
-  return { id: `council-${index}`, title: "营帐议事", backdrop: "tent", lines };
+  return { id: `council-${index}`, title: "营帐议事", backdrop: "tent", terrain: TSTD2_CHAPTER_TERRAIN[index + 1] ?? "camp", lines };
 }
 
 export function npcChatLines(npcId: string): string[] {

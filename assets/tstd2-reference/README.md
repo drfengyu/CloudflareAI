@@ -3,6 +3,15 @@
 来源：`D:\Github\民间改版学习\Windows64_v1.0.5\Windows_v1.0.5`（Unity 桌面版）。
 本目录只作**学习与复刻参考**，素材版权归原作者 / 改版作者所有，不要当作自制素材对外分发。
 
+## 运行时接入（v0.100.0）
+
+游戏已经直接使用本目录素材，不再只是参考：
+
+- `terrain/` 20 张已复制到 `public/trial/tstd2/terrain/`，天空底色抠透明后铺进大地图、战斗远景与剧情画布。
+- `unit-strips/` 94 张已复制到 `public/trial/tstd2/units/`，按 alpha 像素切帧清单 `components/trial/tstd2-unit-frames.json`，战斗中按单位 id 播放。
+- `scripts/` 536 个 Lua 已解析为 `lib/trial/saga/tstd2-story.ts`（1027 条台词），八章开场与平定直接使用原文，游戏内「原作剧情」可查阅全量。
+- 生成脚本：`scripts/key-tstd2-terrain.py`、`scripts/build-tstd2-unit-frames.py`、`scripts/generate-tstd2-runtime-story.mjs`。
+
 ## 目录
 
 | 目录 | 内容 | 数量 |
@@ -13,7 +22,7 @@
 | `effects/` | 火、金仙计、奋战等战斗特效条 | 4 |
 | `audio/` | 原版 BGM / 战斗 / 城镇 / 计策音效，已转 OGG | 70 |
 | `scripts/` | 从 `lua` 资源解包的全部剧情脚本 | 536 |
-| `story/dialogues.md` | 全部 `Talk` 台词，按脚本编号整理 | 1130 条 |
+| `story/dialogues.md` | 全部 `Talk` 台词，按脚本编号整理 | 1027 条 |
 | `data/items.csv` | 兵器、甲胄、盾、盔、饰品、药品与剧情道具 | 112 条 |
 | `data/shops.json` / `shops.md` | 各城武器店 / 道具店货架 | 51 家 |
 | `data/scenes.md` | `StartChapter` / `ChangeScene` 场景切换表 | 38 条 |

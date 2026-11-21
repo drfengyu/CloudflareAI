@@ -50,6 +50,13 @@ import {
   tavernScene,
 } from "../lib/trial/saga/story";
 import {
+  TSTD2_CHAPTER_TERRAIN,
+  TSTD2_LINE_COUNT,
+  TSTD2_SCRIPT_COUNT,
+  TSTD2_STORY,
+  tstd2ScriptsForChapter,
+} from "../lib/trial/saga/tstd2-story";
+import {
   sagaNextQuest,
   sagaQuestContext,
   sagaQuestsFor,
@@ -1309,6 +1316,27 @@ test("剧情场景：开场、阵前、平定、乡野、酒馆与议事都有�
     assert.equal(Boolean(npc?.name && npc.title && npc.greeting), true, `${id} 有掌柜招呼语`);
     assert.equal(npc.lines.length >= 3, true, `${id} 至少有三句闲谈`);
   }
+});
+
+test("桌面版剧情：536 个脚本全量入库，八章开场直接使用原版台词", () => {
+  assert.equal(TSTD2_SCRIPT_COUNT, 536);
+  assert.equal(TSTD2_LINE_COUNT, 1027);
+  assert.equal(TSTD2_STORY.length, 536);
+  for (let chapter = 1; chapter <= 8; chapter++) {
+    const scripts = tstd2ScriptsForChapter(chapter);
+    assert.equal(scripts.length > 0, true, `第 ${chapter} 章有原版脚本`);
+    const intro = chapterIntroScene(chapter - 1);
+    assert.equal(Boolean(intro.terrain), true, `第 ${chapter} 章有原版地形`);
+    assert.equal(TSTD2_CHAPTER_TERRAIN[chapter] !== undefined, true);
+  }
+  const first = TSTD2_STORY.find((script) => script.id === "11001");
+  assert.equal(first?.lines[0]?.[1].includes("淮南袁术"), true, "第一章原版开场已入档");
+  const intro = chapterIntroScene(0);
+  assert.equal(
+    intro.lines.some((line) => line.text.includes("淮南袁术")),
+    true,
+    "第一章对话浮层直接读原版台词",
+  );
 });
 
 test("军令：进度从重放状态与乡野见闻推出，主线优先", () => {

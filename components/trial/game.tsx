@@ -170,12 +170,14 @@ import {
 } from "./renderer";
 import {
   CampBanner,
+  DesktopStoryArchive,
   DialogueOverlay,
   NpcIntro,
   PartyStrip,
   SagaPortrait,
   SceneCanvas,
 } from "./scenes";
+import { preloadTstd2Assets } from "./tstd2-assets";
 import { WalkTown } from "./town";
 import { settlementFor, type Settlement } from "./settlement";
 
@@ -398,6 +400,8 @@ export function TrialGame(props: TrialGameProps) {
   const noticeUnread = useSyncExternalStore(subscribeNoticeSeen, noticeUnreadSnapshot, () => false);
   /** 入口封面：进页面先停在封面，选「继续游戏 / 新的征途」再进关；结算完也回到这里。 */
   const [coverOpen, setCoverOpen] = useState(true);
+  /** 原作剧情档案馆：从封面或 HUD 打开，只读桌面版解包剧本。 */
+  const [storyOpen, setStoryOpen] = useState(false);
   /** 新开一局时的敌方伤害难度；已有行军沿用存档里的选择。 */
   const [difficulty, setDifficulty] = useState<SagaDifficulty>(SAGA_DEFAULT_DIFFICULTY);
   /** 档案商店：结算确认（问「是否结算所有金币为 tcr、结束游戏并清空存档」）。 */
@@ -445,6 +449,9 @@ export function TrialGame(props: TrialGameProps) {
   const finished = save.stats.wins >= SAGA_CHAPTERS.length;
   /** 入口封面用：服务端有存档，或者这一局还没结算、本机也没刚清档。 */
   const saveExists = props.hasSave && !saveCleared;
+  useEffect(() => {
+    void preloadTstd2Assets();
+  }, []);
   useEffect(() => {
     if (save.difficulty) setDifficulty(save.difficulty);
   }, [save.difficulty]);
@@ -4165,6 +4172,10 @@ export function TrialGame(props: TrialGameProps) {
                     <ScrollText className="h-3.5 w-3.5" />
                     存档与图鉴
                   </Button>
+                  <Button variant="ghost" size="sm" onClick={() => setStoryOpen(true)}>
+                    <ScrollText className="h-3.5 w-3.5" />
+                    原作剧情
+                  </Button>
                 </div>
               </div>
             </div>
@@ -4188,6 +4199,8 @@ export function TrialGame(props: TrialGameProps) {
             }}
           />
         ) : null}
+
+        {storyOpen ? <DesktopStoryArchive onClose={() => setStoryOpen(false)} /> : null}
 
         {dialogue ? (
           <DialogueOverlay
@@ -4239,6 +4252,14 @@ export function TrialGame(props: TrialGameProps) {
         >
           <Coins className="h-3.5 w-3.5" />
           档案
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setStoryOpen(true)}
+        >
+          <ScrollText className="h-3.5 w-3.5" />
+          原作剧情
         </Button>
         {!inTown && run ? (
           <>

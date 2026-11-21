@@ -3,6 +3,19 @@
 素材与数据副本：`assets/tstd2-reference/`，来源为 Unity 桌面版 `Windows_v1.0.5`。
 本文记录“原版怎么做的”和“本作 v19 怎么接”，避免以后又靠猜。
 
+## 0. 运行时接入（v0.100.0）
+
+- **地形**：`public/trial/tstd2/terrain/` 20 张，来自原版 328×24 横向场景条。原图 24bpp 无透明通道，
+  `scripts/key-tstd2-terrain.py` 把天空底色抠成透明；大地图每格取下部 24×12 地表段铺成 32×32，
+  战斗远景按章节地形铺满画幅，城 / 寨内景再叠对应条带，剧情画布按 `SagaScene.terrain` 铺底。
+- **单位动画**：`public/trial/tstd2/units/` 94 张，`scripts/build-tstd2-unit-frames.py` 按 alpha 像素切出
+  每条 1～12 帧包围盒，运行时读 `components/trial/tstd2-unit-frames.json`，8fps 循环；
+  `unitStripFor(unitId)` 做稳定哈希映射，同一单位每次上场同一条动画。
+- **剧情**：`scripts/generate-tstd2-runtime-story.mjs` 解析 536 个 Lua 的 `Talk` / `TalkAsk`，
+  生成 `lib/trial/saga/tstd2-story.ts`（536 脚本 / 1027 条台词），并按 `scenes.md` 的章节切换点
+  （11050 / 12200 / 13015 / 14107 / 16000 / 16090 / 17050）分到八章；章节开场与平定对白直接使用原文。
+- **查阅**：`DesktopStoryArchive` 内置全量脚本，支持八章页签与关键词检索；只读，不参与存档和结算。
+
 ## 1. 原版装备档位
 
 原版每类兵器共用一条档位线，数值越高档位越整：
@@ -70,7 +83,7 @@ v19 采用五槽分摊，是为了保留本作“腰带 / 佩饰 / 靴”这套�
 
 ## 4. 剧情结构
 
-`scripts/` 内含 536 个事件脚本，`story/dialogues.md` 是全部 1130 条台词。
+`scripts/` 内含 536 个事件脚本，`story/dialogues.md` 是全部 1027 条台词。
 关键节点：
 
 - 开局：献帝命刘备讨袁术（`11001`）。

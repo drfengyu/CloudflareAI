@@ -28,13 +28,27 @@ export interface SagaMaintenanceWindow {
 }
 
 /** 游戏内公告版本号（与站点版本对齐）。 */
-export const SAGA_NOTICE_VERSION = "0.99.0";
+export const SAGA_NOTICE_VERSION = "0.100.0";
 
 /** 公告面板只展示最新三条，更早的留档不删。 */
 export const SAGA_NOTICE_VISIBLE = 3;
 
 /** 最新公告：按版本从新到旧。 */
 export const SAGA_NOTICES: SagaNoticeEntry[] = [
+  {
+    id: "notice-0.100.0",
+    version: "0.100.0",
+    date: "2026-11-21",
+    kind: "update",
+    title: "桌面版素材接入运行时：原版地形、单位动画与全量剧情",
+    lines: [
+      "20 条原版地形条带已接进大地图、战斗远景与对话场景：平原、荒地、森林、海、峡谷、山、石阵、城、寨、洞窟按章节与格型自动取图；原图 24bpp 没有透明通道，已把天空底色抠掉再叠进画面。",
+      "94 条桌面版单位动画条带已替换战斗队列：按透明像素切出每条 1～12 帧的包围盒，8fps 循环播放；主将、敌将、杂兵与降将按单位 id 固定映射，同一武将每次上场动作一致。",
+      "剧情运行时直接读原版脚本：第一章到第八章的开场与平定对白改成 536 个 Lua 脚本里的原台词，不再用原创占位文案；封面和 HUD 新增「原作剧情」，可按章节、脚本、关键词查阅 1027 条原版台词。",
+      "素材随游戏打包：地形 20 张、单位 94 张、特效 4 张已复制到 public/trial/tstd2，原始素材与 536 个脚本继续留在 assets/tstd2-reference；图片加载失败时保留原程序化画面兜底。",
+      "本轮不改战斗结算、存档结构与 v19 数值；素材与剧情都只参与演出和查阅。",
+    ],
+  },
   {
     id: "notice-0.99.0",
     version: "0.99.0",

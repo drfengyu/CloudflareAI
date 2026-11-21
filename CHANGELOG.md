@@ -5,6 +5,28 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.100.0] - 2026-11-21
+
+### 新增
+
+- **桌面版地形接入运行时**：`public/trial/tstd2/terrain/` 收录 20 条原版地形条带（城 / 城关 / 寨 / 山 / 森 / 海 / 峡谷 / 石阵 / 洞窟等），
+  大地图按格型与地貌取 24×12 地表切片铺底，战斗远景按章节换地形、城寨内景再叠原版城 / 寨条带，剧情对话画布铺对应章节地表。
+  原图是无透明通道的 24bpp，新增 `scripts/key-tstd2-terrain.py` 把天空底色 `(96,208,224)` / `(160,255,240)` 抠成透明后再使用。
+- **桌面版单位动画接入战斗**：`public/trial/tstd2/units/` 收录 94 条单位条带，`scripts/build-tstd2-unit-frames.py`
+  按透明像素切出每条 1～12 帧的包围盒，写入 `components/trial/tstd2-unit-frames.json`；`paintSquad` 按单位 id 固定映射条带、
+  8fps 逐帧绘制，玩家朝右、敌军朝左，败退保留透明压暗；图片未加载时继续用原程序化队列，不影响测试与服务端渲染。
+- **全量原版剧情进运行时**：新增 `lib/trial/saga/tstd2-story.ts`（自动生成，536 个脚本 / 1027 条台词），
+  第一章到第八章的开场与平定对白改为原版台词，章节地形随剧情切换；`SagaScene` 增加 `terrain`，`SceneCanvas` 与 `DialogueOverlay` 透传。
+  封面与 HUD 新增「原作剧情」按钮，打开 `DesktopStoryArchive`，按章节页签、脚本标题与关键词筛选，逐条查看原版 `Talk` 台词。
+- **素材构建脚本**：`scripts/generate-tstd2-runtime-story.mjs`、`scripts/build-tstd2-unit-frames.py`、`scripts/key-tstd2-terrain.py`，
+  可重复从 `assets/tstd2-reference/` 重建运行时数据；生成物随代码提交。
+- **文档**：`docs/features/tstd2-reference.md` 增加运行时接入说明；`docs/features/trial.md` 与游戏公告补 v0.100.0 条目。
+
+### 说明
+
+- 本轮只替换演出素材与剧情文本，不改战斗结算、存档结构、v19 数值与难度公式。
+- 原版地形条带是横向 328×24 场景条，不是俯视 tilemap；大地图取其下部地表段做纹理，战斗与对话保留整条构图。
+
 ## [0.99.0] - 2026-11-21
 
 ### 新增
@@ -33,7 +55,7 @@
 ### 素材
 
 - 新增 `assets/tstd2-reference/`：从 Unity 桌面版解包 116 张 96×96 武将头像、20 条地形、94 条单位动画、
-  4 条战斗特效、70 条 OGG 音频、536 个剧情脚本、1130 条台词，以及 112 件装备 / 道具、51 家店铺货架、
+  4 条战斗特效、70 条 OGG 音频、536 个剧情脚本、1027 条台词，以及 112 件装备 / 道具、51 家店铺货架、
   38 条章节场景切换表。研究结论见 `docs/features/tstd2-reference.md`。
 - 玩家头像换成 96×96 版本并裁掉边框；新增曹操、孙坚、文丑、蔡瑁、刘璋、廖化、郝昭、郭汜、车胄 9 位武将立绘。
 

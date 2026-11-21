@@ -1,13 +1,22 @@
 "use client";
 
 import Image from "next/image";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MessageCircle, MessageSquare, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SAGA_GENERAL_BY_ID } from "@/lib/trial/saga/data";
 import { SAGA_NPCS, type SagaScene } from "@/lib/trial/saga/story";
+import {
+  TSTD2_CHAPTER_LABEL,
+  TSTD2_LINE_COUNT,
+  TSTD2_SCRIPT_COUNT,
+  TSTD2_STORY,
+  tstd2ScriptsForChapter,
+  type Tstd2TerrainId,
+} from "@/lib/trial/saga/tstd2-story";
 import type { SagaGeneralState, SagaNode } from "@/lib/trial/saga/types";
 import type { SagaQuest } from "@/lib/trial/saga/quests";
+import { getTerrainImage } from "./tstd2-assets";
 import { portraitAssetSrc } from "./portrait-assets";
 import {
   npcTraitsFor,
@@ -188,12 +197,32 @@ function paintLantern(
   ctx.fill();
 }
 
+/** 对话 / 营前场景的远景直接铺桌面版地形条带。 */
+function paintDesktopSceneBand(
+  ctx: CanvasRenderingContext2D,
+  terrain: Tstd2TerrainId | undefined,
+  w: number,
+  h: number,
+): void {
+  if (!terrain) return;
+  const image = getTerrainImage(terrain);
+  if (!image || !image.complete || !image.naturalWidth) return;
+  const bandH = Math.max(44, h * 0.24);
+  const y = h * 0.53;
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = 0.36;
+  ctx.drawImage(image, 0, 0, image.naturalWidth, image.naturalHeight, 0, y, w, bandH);
+  ctx.restore();
+}
+
 function paintStoryBackdrop(
   ctx: CanvasRenderingContext2D,
   backdrop: string,
   w: number,
   h: number,
   time: number,
+  terrain?: Tstd2TerrainId,
 ): void {
   storySky(ctx, backdrop, w, h);
 
@@ -556,6 +585,8 @@ function paintStoryBackdrop(
     }
   }
 
+  paintDesktopSceneBand(ctx, terrain, w, h);
+
   const vignette = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.4, w / 2, h / 2, Math.max(w, h) * 0.62);
   vignette.addColorStop(0, "rgba(0,0,0,0)");
   vignette.addColorStop(1, "rgba(0,0,0,0.45)");
@@ -566,10 +597,12 @@ function paintStoryBackdrop(
 /** 对话 / 营前 / 帐内共用的背景画布；按比例自适应尺寸。 */
 export function SceneCanvas({
   backdrop,
+  terrain,
   height = 300,
   className,
 }: {
   backdrop: "city" | "camp" | "tent" | "tavern" | "field";
+  terrain?: Tstd2TerrainId;
   height?: number;
   className?: string;
 }) {
@@ -585,12 +618,12 @@ export function SceneCanvas({
     const start = performance.now();
     const frame = (now: number) => {
       ctx.setTransform(2, 0, 0, 2, 0, 0);
-      paintStoryBackdrop(ctx, backdrop, 960, height, (now - start) / 1000);
+      paintStoryBackdrop(ctx, backdrop, 960, height, (now - start) / 1000, terrain);
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [backdrop, height]);
+  }, [backdrop, terrain, height]);
   return (
     <canvas
       ref={ref}
@@ -679,7 +712,7 @@ export function DialogueOverlay({
         onClick={(event) => event.stopPropagation()}
       >
         <div className="relative">
-          <SceneCanvas backdrop={scene.backdrop} height={280} />
+          <SceneCanvas backdrop={scene.backdrop} terrain={scene.terrain} height={280} />
           <span className="absolute left-3 top-3 rounded bg-black/55 px-2 py-1 text-[11px] tracking-[0.18em] text-amber-100/90">
             {scene.title}
           </span>
@@ -872,6 +905,112 @@ export function PartyStrip({ members }: { members: SagaGeneralState[] }) {
   );
 }
 
+export function DesktopStoryArchive({ onClose }: { onClose: () => void }) {
+  const chapters = [1, 2, 3, 4, 5, 6, 7, 8, 0];
+  const [chapter, setChapter] = useState(1);
+  const [query, setQuery] = useState("");
+  const scripts = useMemo(() => {
+    const rows = tstd2ScriptsForChapter(chapter);
+    const q = query.trim();
+    if (!q) return rows;
+    return rows.filter(
+      (script) =>
+        script.title.includes(q) ||
+        script.id.includes(q) ||
+        script.lines.some(([, text]) => text.includes(q)),
+    );
+  }, [chapter, query]);
+  const total = TSTD2_STORY.reduce((sum, script) => sum + script.lines.length, 0);
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="原作剧情档案馆"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-2 backdrop-blur-sm sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-amber-900/50 bg-[#14110c] text-amber-50 shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3 border-b border-amber-900/40 px-4 py-3">
+          <div>
+            <p className="text-sm font-semibold tracking-[0.2em] text-amber-100">原作剧情档案馆</p>
+            <p className="mt-0.5 text-[11px] text-amber-100/55">
+              桌面版解包 {TSTD2_SCRIPT_COUNT} 个剧情脚本 / {TSTD2_LINE_COUNT} 条台词；档案馆共录入 {total} 条。
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="关闭剧情档案馆"
+            className="rounded bg-black/40 p-1.5 text-amber-100/80 transition hover:bg-black/70"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex gap-1 overflow-x-auto border-b border-amber-900/30 px-3 py-2">
+          {chapters.map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setChapter(value)}
+              className={cn(
+                "shrink-0 rounded border px-2.5 py-1 text-[11px] transition",
+                chapter === value
+                  ? "border-amber-500/70 bg-amber-500/15 text-amber-100"
+                  : "border-amber-900/35 text-amber-100/55 hover:border-amber-600/50",
+              )}
+            >
+              {TSTD2_CHAPTER_LABEL[value] ?? `第 ${value} 章`}
+            </button>
+          ))}
+        </div>
+
+        <div className="border-b border-amber-900/25 px-3 py-2">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="搜地名、人名或台词…"
+            className="w-full rounded border border-amber-900/35 bg-black/35 px-2.5 py-1.5 text-xs text-amber-50 outline-none placeholder:text-amber-100/35 focus:border-amber-600/60"
+          />
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 py-2">
+          {scripts.length === 0 ? (
+            <p className="py-10 text-center text-xs text-amber-100/45">没有匹配的脚本。</p>
+          ) : (
+            <div className="space-y-2">
+              {scripts.map((script) => (
+                <article key={script.id} className="rounded-lg border border-amber-900/30 bg-black/20 p-2.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h3 className="text-xs font-semibold text-amber-200/95">{script.title}</h3>
+                    <span className="shrink-0 font-mono text-[10px] text-amber-100/35">{script.id}.lua</span>
+                  </div>
+                  <div className="mt-1 space-y-1">
+                    {script.lines.map(([speaker, text], index) => (
+                      <p key={`${script.id}-${index}`} className="text-[11px] leading-relaxed text-amber-50/80">
+                        <span className="mr-1.5 text-[10px] text-amber-100/35">[{speaker}]</span>
+                        {text}
+                      </p>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="border-t border-amber-900/35 px-4 py-2 text-[10px] text-amber-100/40">
+          只读资料：原版脚本仅用于查阅与剧情演出，不改变战斗结算和存档。
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function CampBanner({
   node,
   onTalk,
@@ -883,7 +1022,11 @@ export function CampBanner({
   return (
     <div className="overflow-hidden rounded-lg border border-border">
       <div className="relative">
-        <SceneCanvas backdrop={node.kind === "boss" || node.kind === "siege" ? "city" : "camp"} height={220} />
+        <SceneCanvas
+          backdrop={node.kind === "boss" || node.kind === "siege" ? "city" : "camp"}
+          terrain={node.kind === "boss" || node.kind === "siege" ? "city" : "camp"}
+          height={220}
+        />
         <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/80 via-black/35 to-transparent p-2">
           <div className="flex items-end gap-1.5">
             {enemies.map((enemy) => (
