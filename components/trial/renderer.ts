@@ -83,7 +83,7 @@ export type FieldFacilityId =
 
 /** 城里能办的几件事 + 出营：大地图上收进「城中整备」面板的页签。 */
 export const FIELD_FACILITIES: { id: FieldFacilityId; label: string; hint: string }[] = [
-  { id: "record", label: "桃园碑", hint: "查看存档、武将与图鉴" },
+  { id: "record", label: "讨逆碑", hint: "查看存档、武将与图鉴" },
   { id: "hall", label: "编成所", hint: "编队、阵型、装备与图鉴" },
   { id: "train", label: "训练场", hint: "花活动券逐级提升武将等级" },
   { id: "forge", label: "铁匠铺", hint: "用活动券强化武器与防具" },
@@ -1389,6 +1389,16 @@ export function paintField(ctx: CanvasRenderingContext2D, options: FieldPaintOpt
   drawMinimap(ctx, field, options);
 
   // 顶部信息条
+  const chapterRegion = field.regions?.find((region) => region.chapter === options.chapterIndex);
+  const chapterCamps = chapterRegion
+    ? field.camps.filter((camp) =>
+        camp.x >= chapterRegion.tx * tile &&
+        camp.x < (chapterRegion.tx + chapterRegion.w) * tile &&
+        camp.y >= chapterRegion.ty * tile &&
+        camp.y < (chapterRegion.ty + chapterRegion.h) * tile,
+      )
+    : field.camps;
+  const chapterCleared = chapterCamps.filter((camp) => options.cleared.includes(camp.node)).length;
   const banner = ctx.createLinearGradient(0, 0, 0, 56);
   banner.addColorStop(0, "rgba(12,14,20,0.78)");
   banner.addColorStop(1, "rgba(12,14,20,0)");
@@ -1401,7 +1411,7 @@ export function paintField(ctx: CanvasRenderingContext2D, options: FieldPaintOpt
   ctx.fillStyle = "rgba(232,213,171,0.66)";
   ctx.font = uiFont(12);
   ctx.fillText(
-    `第 ${options.chapterIndex + 1} 处 · 营地 ${options.cleared.length}/${field.camps.length} · 金币 ${options.gold} · 战力 ${options.power}`,
+    `第 ${options.chapterIndex + 1} 处 · 本区营地 ${chapterCleared}/${chapterCamps.length} · 金币 ${options.gold} · 战力 ${options.power}`,
     24,
     48,
   );

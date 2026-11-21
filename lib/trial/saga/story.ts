@@ -1,6 +1,7 @@
 import { SAGA_CHAPTERS, SAGA_GENERAL_BY_ID } from "./data";
 import type { SagaFieldPoi, SagaNode } from "./types";
 import {
+  TSTD2_CHAPTER_LABEL,
   TSTD2_CHAPTER_TERRAIN,
   tstd2DialogueLines,
   type Tstd2TerrainId,
@@ -369,7 +370,7 @@ export function chapterIntroScene(chapterIndex: number): SagaScene {
         ? [
             {
               speaker: "旁白",
-              text: `原版《吞食天地2》${chapter.name}开场。${chapter.blurb}`,
+              text: `桌面版《吞食天地2》${TSTD2_CHAPTER_LABEL[index + 1] ?? chapter.name}开场。${chapter.blurb}`,
               side: "narrator" as const,
             },
             ...original,
@@ -395,7 +396,7 @@ export function chapterVictoryScene(chapterIndex: number): SagaScene {
         ? [
             {
               speaker: "旁白",
-              text: `原版章节收束：${chapter.town}已定，${chapter.name}的剧情告一段落。`,
+              text: `桌面版章节收束：${TSTD2_CHAPTER_LABEL[index + 1] ?? chapter.name}，${chapter.town}已定。`,
               side: "narrator" as const,
             },
             ...original,

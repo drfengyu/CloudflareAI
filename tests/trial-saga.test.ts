@@ -982,21 +982,21 @@ test("铁匠铺强化：购买记录按指令位置抬等级，收兵存档保�
 
 test("攻克章节：发金币经验、进下一章并解锁武将写进存档", () => {
   const startSave = initialTrialSave();
-  startSave.chapter = 2;
+  startSave.chapter = 0;
   const settled = settleSagaRun(easyRun(startSave), winCommands);
 
   assert.equal(settled.cleared, 1);
   assert.equal(settled.victory, true);
-  assert.equal(settled.result.chapterName, "徐州风云");
-  assert.equal(settled.result.chapterAfter, 3);
-  assert.equal(settled.endSave.chapter, 3);
+  assert.equal(settled.result.chapterName, "讨袁术");
+  assert.equal(settled.result.chapterAfter, 1);
+  assert.equal(settled.endSave.chapter, 1);
   assert.equal(settled.endSave.stats.wins, 1);
   assert.equal(settled.endSave.stats.runs, 1);
   assert.ok(settled.endSave.gold > startSave.gold);
   assert.equal(
-    [...settled.endSave.party, ...settled.endSave.reserve].some((member) => member.id === "zhaoyun"),
+    [...settled.endSave.party, ...settled.endSave.reserve].some((member) => member.id === "chendeng"),
     true,
-    "通关徐州风云后赵云入队",
+    "通关徐州讨袁术后陈登入队",
   );
   assert.deepEqual(settled.result.recruited, []);
 });
@@ -1316,6 +1316,47 @@ test("剧情场景：开场、阵前、平定、乡野、酒馆与议事都有�
     assert.equal(Boolean(npc?.name && npc.title && npc.greeting), true, `${id} 有掌柜招呼语`);
     assert.equal(npc.lines.length >= 3, true, `${id} 至少有三句闲谈`);
   }
+});
+
+test("章节顺序：按桌面版原作从徐州讨袁术到五丈原", () => {
+  assert.deepEqual(
+    SAGA_CHAPTERS.map((chapter) => chapter.town),
+    ["徐州", "冀州", "新野", "江夏", "江陵", "涪城", "汉中", "五丈原"],
+  );
+  assert.deepEqual(
+    SAGA_CHAPTERS.map((chapter) => chapter.name),
+    ["讨袁术", "冀州白马", "卧龙出山", "赤壁之战", "荆南四郡", "西川归心", "北伐中原", "五丈原"],
+  );
+  assert.equal(SAGA_CHAPTERS[0].boss, "chezhou", "第一章收束在车胄");
+  assert.equal(SAGA_CHAPTERS[0].unlock, "chendeng");
+  assert.equal(SAGA_CHAPTERS[1].unlock, "zhaoyun");
+  assert.equal(SAGA_CHAPTERS[2].unlock, "zhugeliang");
+  assert.equal(SAGA_CHAPTERS[4].unlock, "huangzhong");
+  assert.equal(SAGA_CHAPTERS[6].unlock, "jiangwei");
+  assert.equal(chapterIntroScene(0).lines[0]?.text.includes("徐州讨袁术"), true);
+  assert.equal(chapterIntroScene(0).lines[0]?.text.includes("桃园起兵"), false);
+});
+
+test("旧剧情存档：按原进度就近迁移到新八章", () => {
+  const cases: [number, number][] = [
+    [0, 0],
+    [1, 0],
+    [2, 1],
+    [3, 2],
+    [4, 2],
+    [5, 3],
+    [6, 5],
+    [7, 7],
+  ];
+  for (const [legacy, next] of cases) {
+    const oldSave = initialTrialSave();
+    delete oldSave.story;
+    oldSave.chapter = legacy;
+    assert.equal(normalizeTrialSave(oldSave).chapter, next, `旧第 ${legacy} 章迁到新第 ${next} 章`);
+  }
+  const modern = initialTrialSave();
+  modern.chapter = 4;
+  assert.equal(normalizeTrialSave(modern).chapter, 4, "新档章节原样保留");
 });
 
 test("桌面版剧情：536 个脚本全量入库，八章开场直接使用原版台词", () => {
@@ -2488,7 +2529,7 @@ test("训练场：逐级计价，上限随平定数增长并封顶 100", () => {
   assert.equal(SAGA_TRAINING_ITEM_ID, "training");
   assert.equal(SAGA_TRAINING_TICKETS_PER_LEVEL, 2);
   const save = initialTrialSave();
-  assert.equal(trainingLevelCap(save), 9, "初到涿郡可练到 9 级");
+  assert.equal(trainingLevelCap(save), 9, "初到徐州可练到 9 级");
   assert.equal(trainingCost(1, 10), 18);
   assert.equal(trainingCost(7, 7), 0);
   assert.equal(trainingCost(9, 4), 0);

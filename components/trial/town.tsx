@@ -102,7 +102,7 @@ const STREET_SPOTS: StreetSpot[] = [
   { id: "hermit", label: "隐士庐", x: 2140, y: 1100, width: 320, height: 170, kind: "house", accent: "#6f5a3a", roof: "#b0703c", sign: "道" },
   { id: "tent", label: "营帐", x: 220, y: 1500, width: 240, height: 150, kind: "tent", accent: "#9a6a30", roof: "#c07a3a" },
   { id: "house-b", label: "民居", x: 860, y: 1500, width: 320, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a", sign: "宅" },
-  { id: "record", label: "桃园碑", x: 1500, y: 1500, width: 120, height: 140, kind: "monument", accent: "#8d7434", roof: "#a89a6a", sign: "记" },
+  { id: "record", label: "讨逆碑", x: 1500, y: 1500, width: 120, height: 140, kind: "monument", accent: "#8d7434", roof: "#a89a6a", sign: "记" },
   { id: "house-c", label: "民居", x: 2140, y: 1500, width: 320, height: 170, kind: "house", accent: "#8a6a48", roof: "#c0703a", sign: "宅" },
   // 南面院墙中段留出南城口，触发点在墙口前（不可见，只做交互）
   { id: "gate", label: "出城口", x: 1180, y: 1660, width: 200, height: 60, kind: "gate", accent: "#9a6a30", roof: "#a97a44" },
@@ -327,53 +327,33 @@ interface PalaceLord {
 
 const PALACE_LORDS: PalaceLord[] = [
   {
-    npcId: "lord-liuyan",
-    name: "刘焉",
-    title: "幽州牧",
-    greeting: "玄德来得正好。黄巾势大，涿郡的丁口与粮草，我尽数托付给你。",
-    lines: [
-      "宗室子弟里，肯实心任事的不多。这面讨逆旗，你举得起。",
-      "破了广宗，替我把幽州的百姓带回来。",
-    ],
-  },
-  {
-    npcId: "lord-zhangmiao",
-    name: "张邈",
-    title: "陈留太守",
-    greeting: "关东诸侯会盟，粮道由陈留支应。玄德只管向前，后路有我。",
-    lines: [
-      "华雄在汜水关前骂阵，联军却没几个人敢应。",
-      "关羽若真能斩将，这碗温酒我替他斟满。",
-    ],
-  },
-  {
-    npcId: "lord-taoqian",
-    name: "陶谦",
-    title: "徐州牧",
-    greeting: "徐州四战之地。老夫老了，往后要靠你这样的后生。",
-    lines: [
-      "袁术在寿春称帝，纪灵的三尖刀已经压到小沛了。",
-      "百姓要的不过是安生日子。谁能给，徐州就归谁。",
-    ],
-  },
-  {
-    npcId: "lord-chende",
+    npcId: "lord-chendeng",
     name: "陈登",
-    title: "下邳相",
-    greeting: "温侯勇而无谋。水一灌，这座城就守不住了。",
+    title: "徐州别驾",
+    greeting: "皇叔，朝廷的诏书到了。袁术在寿春僭号，徐州该出兵了。",
     lines: [
-      "白门楼上的酒还没凉，城外的水已经漫过马腹。",
-      "张辽、高顺都是难得的将才，能不杀就别杀。",
+      "朱灵、路昭是曹操的人，随军可以，粮草却一分也别指望许都。",
+      "纪灵的三尖刀已经压到盱眙，先破他的营，再图寿春。",
     ],
   },
   {
-    npcId: "lord-caocao",
-    name: "曹操",
-    title: "丞相",
-    greeting: "玄德来得正好。袁绍兵多粮足，本相在官渡等他。",
+    npcId: "lord-yuanshao",
+    name: "袁绍",
+    title: "冀州牧",
+    greeting: "玄德远来，河北的粮草养得起你。先去白马坡，看看颜良文丑的威风。",
     lines: [
-      "颜良文丑当先，河北的旗号遮了半边天。",
-      "乌巢的粮草是袁军的命门。一把火，胜过十万兵。",
+      "云长若肯来投，胜颜良文丑十倍。",
+      "曹操在东边坐大，你我联手，许都迟早要换主人。",
+    ],
+  },
+  {
+    npcId: "lord-liubiao",
+    name: "刘表",
+    title: "荆州牧",
+    greeting: "玄德屯兵新野，替我守北门。荆州兵少，只能靠你这支人马。",
+    lines: [
+      "隆中有一位卧龙先生，若能请出山，荆州就有主心骨了。",
+      "曹军若南下，新野挡不住，就退往江夏与刘琦合兵。",
     ],
   },
   {
@@ -387,6 +367,16 @@ const PALACE_LORDS: PalaceLord[] = [
     ],
   },
   {
+    npcId: "lord-guanyu",
+    name: "关羽",
+    title: "荆州主将",
+    greeting: "兄长入川，把荆州托付给我。荆南四郡，该逐一收回来了。",
+    lines: [
+      "长沙有黄忠、魏延，都是可用之才，能不伤性命最好。",
+      "荆州是益州的根本，北面襄樊，东面江夏，一处都不能丢。",
+    ],
+  },
+  {
     npcId: "lord-liuzhang",
     name: "刘璋",
     title: "益州牧",
@@ -394,6 +384,16 @@ const PALACE_LORDS: PalaceLord[] = [
     lines: [
       "雒城有张任死守，那是个不肯低头的人。",
       "同宗之谊，莫要走到兵戎相见那一步才好。",
+    ],
+  },
+  {
+    npcId: "lord-liubei",
+    name: "刘备",
+    title: "汉中王",
+    greeting: "汉中已定，朕进位汉中王。孔明在汉中练兵，下一步就是祁山。",
+    lines: [
+      "荆州已失，夷陵又折了元气；北伐是兴复汉室最后的路。",
+      "街亭一失，全盘皆动。告诉孔明，粮道比城池更要紧。",
     ],
   },
   {
@@ -2267,7 +2267,7 @@ function paintPalace(
 function spotActionLabel(spot: StreetSpot): string {
   if (spot.kind === "gate") return "出城行军";
   if (spot.kind === "palace") return "进宫面见主公";
-  if (spot.kind === "monument") return "查看桃园碑";
+  if (spot.kind === "monument") return "查看讨逆碑";
   if (spot.kind === "tent") return "走进营帐议事";
   return `进入${spot.label}`;
 }

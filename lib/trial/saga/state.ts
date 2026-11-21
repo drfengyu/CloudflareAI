@@ -4,6 +4,7 @@ import {
   SAGA_GENERAL_BY_ID,
   SAGA_ITEM_BY_ID,
   SAGA_STARTER_IDS,
+  SAGA_STORY_VERSION,
   SAGA_TRAIT_BY_ID,
   gearSlotOf,
   traitStats,
@@ -73,6 +74,7 @@ export function initialTrialSave(): TrialSave {
     version: SAGA_SAVE_VERSION,
     rules: SAGA_RULESET,
     difficulty: "normal",
+    story: SAGA_STORY_VERSION,
     chapter: 0,
     clears: 0,
     gold: 200,
@@ -183,7 +185,12 @@ export function normalizeTrialSave(raw: unknown): TrialSave {
   }
 
   const formation = SAGA_FORMATION_BY_ID.get(String(it.formation ?? "") as FormationId)?.id ?? base.formation;
-  const chapter = clampInt(it.chapter, 0, SAGA_CHAPTERS.length - 1, 0);
+  const rawChapter = clampInt(it.chapter, 0, SAGA_CHAPTERS.length - 1, 0);
+  // 旧八章是涿郡→汜水关→徐州→白门楼→官渡→赤壁→入蜀→五丈原；
+  // 新八章按桌面版原作从徐州起兵。旧档按原进度就近落到新章，不把玩家卡回开头。
+  const legacyChapterMap = [0, 0, 1, 2, 2, 3, 5, 7];
+  const story = Math.trunc(Number(it.story)) >= SAGA_STORY_VERSION;
+  const chapter = story ? rawChapter : legacyChapterMap[rawChapter] ?? rawChapter;
   const bagAllowed = (id: string) => SAGA_ITEM_BY_ID.get(id)?.kind === "consumable";
   const gearAllowed = (id: string) => Boolean(gearSlotOf(SAGA_ITEM_BY_ID.get(id)));
   const met = new Set(
@@ -205,6 +212,7 @@ export function normalizeTrialSave(raw: unknown): TrialSave {
     version: SAGA_SAVE_VERSION,
     rules: it.rules === SAGA_RULESET_V19 ? SAGA_RULESET_V19 : Math.trunc(Number(it.rules)) || SAGA_RULESET,
     difficulty: normalizeSagaDifficulty(it.difficulty),
+    story: SAGA_STORY_VERSION,
     chapter,
     clears: clampInt(it.clears, 0, 999, 0),
     gold: clampInt(it.gold, 0, 9_999_999, base.gold),

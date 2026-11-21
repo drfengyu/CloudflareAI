@@ -1992,7 +1992,7 @@ export function TrialGame(props: TrialGameProps) {
           {finished
             ? "全剧终"
             : run
-              ? `营地 ${clearedNodes.length}/${run.nodes.length} · 遭遇 ${state?.encounters ?? 0} 场`
+              ? `本区营地 ${clearedNodes.filter((node) => run.nodes[node]?.chapter === chapter.index).length}/${run.nodes.filter((node) => node.chapter === chapter.index).length} · 遭遇 ${state?.encounters ?? 0} 场`
               : "整装待发"}
           {run ? (
             saveState === "error" ? (
@@ -4161,7 +4161,7 @@ export function TrialGame(props: TrialGameProps) {
                 <p className="text-[11px] leading-relaxed text-muted-foreground">
                   {saveExists
                     ? "已有存档：「继续游戏」接着走当前剧情；要重新开始，先去档案商店把金币结算成 tcr、清空存档。"
-                    : "还没有存档：「继续游戏」要等有存档后才能用；点「新的征途」从桃园出发。"}
+                    : "还没有存档：「继续游戏」要等有存档后才能用；点「新的征途」从徐州出发。"}
                 </p>
                 <div className="flex flex-wrap gap-2 border-t border-border/60 pt-3">
                   <Button variant="ghost" size="sm" onClick={() => setPanel("archive")}>

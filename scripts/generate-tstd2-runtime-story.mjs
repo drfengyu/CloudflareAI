@@ -98,14 +98,14 @@ export const TSTD2_LINE_COUNT = ${totalLines};
 
 export const TSTD2_CHAPTER_LABEL: Record<number, string> = {
   0: "其他 / 系统",
-  1: "第一章 · 讨袁术",
-  2: "第二章 · 官渡之战",
-  3: "第三章 · 卧龙觉醒",
+  1: "第一章 · 徐州讨袁术",
+  2: "第二章 · 冀州白马",
+  3: "第三章 · 卧龙出山",
   4: "第四章 · 赤壁之战",
-  5: "第五章 · 平定荆州",
-  6: "第六章 · 西征巴蜀",
+  5: "第五章 · 荆南四郡",
+  6: "第六章 · 西川归心",
   7: "第七章 · 北伐中原",
-  8: "第八章 · 光复汉室",
+  8: "第八章 · 五丈原",
 };
 
 export const TSTD2_CHAPTER_TERRAIN: Record<number, Tstd2TerrainId> = {

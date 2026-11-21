@@ -441,6 +441,8 @@ export interface TrialSave {
   rules?: number;
   /** v19 起记录开局难度；旧档缺省普通。 */
   difficulty?: SagaDifficulty;
+  /** 剧情版本：1 = 按桌面版原作从徐州讨袁术开场；旧档缺省 0。 */
+  story?: number;
   chapter: number;
   clears: number;
   gold: number;
