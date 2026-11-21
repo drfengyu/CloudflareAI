@@ -11,7 +11,6 @@ import {
   messages,
   raidenRuns,
   topups,
-  trialRuns,
   usageLogs,
   workshopStates,
 } from "@/lib/db/schema";
@@ -212,7 +211,7 @@ const spendTotal = async (userId: string, w: PeriodWindow) => {
 };
 
 const activityRuns = async (userId: string, w: PeriodWindow) => {
-  const [draws, flips, runs, trials, workshops, collections] = await Promise.all([
+  const [draws, flips, runs, workshops, collections] = await Promise.all([
     db
       .select({ n: sql<number>`count(*)` })
       .from(lotteryDraws)
@@ -225,10 +224,6 @@ const activityRuns = async (userId: string, w: PeriodWindow) => {
       .select({ n: sql<number>`count(*)` })
       .from(raidenRuns)
       .where(and(eq(raidenRuns.userId, userId), ...inWindow(raidenRuns.startedAt, w))),
-    db
-      .select({ n: sql<number>`count(*)` })
-      .from(trialRuns)
-      .where(and(eq(trialRuns.userId, userId), ...inWindow(trialRuns.startedAt, w))),
     // 工坊 / 星图没有「一局」表，按当期存档是否在本周期内写过状态算参与一次。
     db
       .select({ n: sql<number>`count(*)` })
@@ -243,7 +238,6 @@ const activityRuns = async (userId: string, w: PeriodWindow) => {
     countFrom(draws) +
     countFrom(flips) +
     countFrom(runs) +
-    countFrom(trials) +
     Math.min(1, countFrom(workshops)) +
     Math.min(1, countFrom(collections))
   );
@@ -352,7 +346,7 @@ export const DAILY_TASKS: TaskDef[] = [
   {
     key: "daily_activity",
     title: "参与限时玩法",
-    hint: "试炼 / 工坊 / 星图 / 转盘 / 翻牌 / 雷电任意玩一局",
+    hint: "工坊 / 星图 / 转盘 / 翻牌 / 雷电任意玩一局",
     href: "/cashback",
     target: 1,
     points: 15,

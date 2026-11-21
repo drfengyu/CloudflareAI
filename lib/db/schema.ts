@@ -201,7 +201,7 @@ export const topups = sqliteTable("topup", {
     .references(() => users.id, { onDelete: "cascade" }),
   /** 变动金额（credits，可正可负，支持小数）。 */
   amount: real("amount").notNull(),
-  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励 / 8=消费返利 / 9=任务成就 / 10=充值赠送 / 11=雷电行动（装备/复活为负、通关奖励为正） / 12=翻牌夺宝（票价为负、中奖为正） / 13=站内信奖励 / 14=过期作废（清理 cron 补记，金额为负，createdAt 用原到期时间） / 15=活动券兑换（付出 cr 记负） / 16=礼包赠送 tcr / 17=每日试炼奖励 / 18=灵宠工坊 / 19=星图共鸣。 */
+  /** 1=兑换码充值 / 2=管理员手动调整 / 3=签到奖励 / 4=其他（新用户注册奖励） / 5=在线充值 / 6=限时活动抽奖（买券与倒扣为负） / 7=邀请奖励 / 8=消费返利 / 9=任务成就 / 10=充值赠送 / 11=雷电行动（装备/复活为负、通关奖励为正） / 12=翻牌夺宝（票价为负、中奖为正） / 13=站内信奖励 / 14=过期作废（清理 cron 补记，金额为负，createdAt 用原到期时间） / 15=活动券兑换（付出 cr 记负） / 16=礼包赠送 tcr / 17=已下线活动历史奖励 / 18=灵宠工坊 / 19=星图共鸣。 */
   type: integer("type").notNull(),
   /** 描述：如"兑换码 ABC123"、"管理员充值"、"后台调整"。 */
   description: text("description"),
@@ -564,7 +564,7 @@ export const activityTaskClaims = sqliteTable(
  * 活动 id：前三项是 2026-11 之前上线的经典玩法，保留可玩；后三项是替换上线的新玩法。
  * 券行、礼包记录与里程碑都按这个值隔离，所以只能加、不能改已有值。
  */
-export type ActivityKind = "lottery" | "flip" | "raiden" | "trial" | "workshop" | "collection";
+export type ActivityKind = "lottery" | "flip" | "raiden" | "workshop" | "collection";
 
 /**
  * 任务成就领取记录：一行 = 一个用户领取过某个任务，之后不再重复发。
@@ -920,41 +920,6 @@ export const flipRounds = sqliteTable(
 );
 
 export type FlipRound = typeof flipRounds.$inferSelect;
-
-/**
- * 限时活动·三国讨逆传：一次行军一行。
- *
- * `questions` 存这次行军的 JSON（种子、节点、出发时存档、局内购买），
- * 交卷只重放客户端上行的指令——金币、等级与胜负都由服务端算，从不采信响应体外的结果。
- * 剧情存档随最新一行的 `endSave` 延续，没有每日次数或限时。
- */
-export const trialRuns = sqliteTable(
-  "trial_run",
-  {
-    id: text("id").primaryKey().$defaultFn(uuid),
-    userId: text("userId")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
-    /** 活动轮次标识（活动 startAt 字符串）。 */
-    activityKey: text("activityKey").notNull(),
-    /** active=行军中 / scored=已收兵 / expired=旧玩法遗留，不再产生。 */
-    status: text("status").$type<"active" | "scored" | "expired">().notNull().default("active"),
-    /** 行军 JSON：种子、节点、startSave/endSave、局内购买。 */
-    questions: text("questions").notNull(),
-    /** 这一路的总节点数。 */
-    questionCount: integer("questionCount").notNull(),
-    /** 已攻克节点数；未收兵为 0。 */
-    correct: integer("correct").notNull().default(0),
-    durationMs: integer("durationMs").notNull().default(0),
-    /** 本次实发 tcr（按答对题数命中档位）。 */
-    rewardCredits: real("rewardCredits").notNull().default(0),
-    startedAt: integer("startedAt", { mode: "timestamp_ms" }).notNull(),
-    submittedAt: integer("submittedAt", { mode: "timestamp_ms" }),
-  },
-  (table) => [index("idx_trial_run_user").on(table.userId, table.activityKey, table.startedAt)],
-);
-
-export type TrialRun = typeof trialRuns.$inferSelect;
 
 /**
  * 限时活动·灵宠工坊：每用户 × 活动轮次一行养成状态。

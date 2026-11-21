@@ -124,7 +124,7 @@ export default async function CashbackPage() {
             ))}
           </div>
           <p className="text-[11px] text-muted-foreground">
-            每日 0 点（北京时间）重置；三国讨逆传不限次数，走到哪算哪，关掉页面进度也留着。
+            每日 0 点（北京时间）重置。
           </p>
         </section>
 

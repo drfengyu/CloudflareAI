@@ -282,7 +282,7 @@ export default async function AdminActivityLedgerPage() {
 
             <p className="text-xs text-muted-foreground">
               口径：收入 = 用户为活动券 / 礼包实付的 cr 与转盘倒扣；支出 = 活动发放（转盘、翻牌、雷电的
-              cr，试炼、工坊、图鉴的 tcr，以及礼包赠送 tcr）。tcr 按 cr 面值计，到期作废不回冲；
+              cr，工坊、图鉴的 tcr，以及礼包赠送 tcr）。tcr 按 cr 面值计，到期作废不回冲；
               礼包让利（券面 − 实付）不是现金流水，不计入本表。兑换 / 礼包流水按描述里的活动名归属，
               识别不到的落在「未归属活动券」。活动时段取该活动实际有账的首末北京日。
             </p>

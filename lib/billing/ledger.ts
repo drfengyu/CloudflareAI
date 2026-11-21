@@ -65,7 +65,7 @@ export const TOPUP_TYPE_LABEL: Record<number, string> = {
   14: "过期作废",
   15: "活动券兑换",
   16: "礼包赠送",
-  17: "每日试炼",
+  17: "已下线活动",
   18: "灵宠工坊",
   19: "星图共鸣",
 };
@@ -339,7 +339,7 @@ const EXPIRE_SOURCE_LABEL: { pattern: RegExp; label: string }[] = [
   { pattern: /消费返利/, label: "消费返利到期" },
   { pattern: /任务/, label: "任务奖励到期" },
   { pattern: /雷电行动/, label: "雷电行动到期" },
-  { pattern: /每日试炼/, label: "每日试炼到期" },
+  { pattern: /每日试炼/, label: "已下线活动到期" },
   { pattern: /灵宠工坊/, label: "灵宠工坊到期" },
   { pattern: /星图共鸣|星匣图鉴/, label: "星图共鸣到期" },
   { pattern: /站内信/, label: "站内信奖励到期" },

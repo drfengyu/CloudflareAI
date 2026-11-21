@@ -21,7 +21,7 @@ export type GameSfx =
   | "coin"
   | "click";
 
-export type GameTheme = "trial-field" | "trial-battle" | "workshop-field" | "workshop-battle";
+export type GameTheme = "workshop-field" | "workshop-battle";
 
 interface ThemeDef {
   bpm: number;
@@ -32,20 +32,6 @@ interface ThemeDef {
 }
 
 const THEMES: Record<GameTheme, ThemeDef> = {
-  // 行军：五声音阶，慢速铺底，像赶路时的鼓点与笛声。
-  "trial-field": {
-    bpm: 92,
-    wave: "sine",
-    bass: [38, 0, 0, 0, 45, 0, 0, 0, 43, 0, 0, 0, 41, 0, 0, 0],
-    lead: [62, 0, 64, 0, 67, 0, 64, 0, 62, 0, 60, 0, 62, 0, 0, 0],
-  },
-  // 交战：小调快板，低音每拍推进。
-  "trial-battle": {
-    bpm: 144,
-    wave: "square",
-    bass: [40, 40, 0, 40, 43, 0, 40, 0, 38, 38, 0, 38, 36, 0, 38, 0],
-    lead: [64, 0, 67, 0, 71, 0, 67, 0, 64, 0, 62, 0, 60, 0, 62, 0],
-  },
   // 工坊野外：轻快的大调，适合在地图上遛灵宠。
   "workshop-field": {
     bpm: 106,

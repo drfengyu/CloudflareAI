@@ -4,7 +4,6 @@ import { COUPON_TOPUP_TYPE, PACK_BONUS_TOPUP_TYPE, type ActivityKind } from "@/l
 import { TOPUP_TYPE_LOTTERY } from "@/lib/lottery/prize-math";
 import { TOPUP_TYPE_FLIP } from "@/lib/flip/config";
 import { TOPUP_TYPE_RAIDEN } from "@/lib/raiden/config";
-import { TOPUP_TYPE_TRIAL } from "@/lib/trial/config";
 import { TOPUP_TYPE_WORKSHOP } from "@/lib/workshop/config";
 import { TOPUP_TYPE_COLLECTION } from "@/lib/collection/config";
 
@@ -13,14 +12,14 @@ import { TOPUP_TYPE_COLLECTION } from "@/lib/collection/config";
  *
  * 站点视角与个人账本相反——用户花 cr 买券（`type=15`）是站点收入，
  * 活动发奖（`type=6/11/12/17/18/19`）与礼包赠 tcr（`type=16`）是站点支出；
- * 转盘的倒扣同样记为站点收入。`type=15/16` 是六种活动共用的流水，只能从
+ * 转盘的倒扣同样记为站点收入。`type=15/16` 是各活动共用的流水，只能从
  * 描述里的活动名反推归属，反推不到的单独落在「未归属活动券」。
  *
  * 页面上没有全局时间窗：每个活动只展示它自己实际有流水的时段，
  * 时段由该活动的首末记账日推导，活动内部再按天拆开。
  */
 
-export type ActivityLedgerKey = ActivityKind | "other";
+export type ActivityLedgerKey = ActivityKind | "retired" | "other";
 
 interface ActivityLedgerMeta {
   key: ActivityLedgerKey;
@@ -32,7 +31,7 @@ interface ActivityLedgerMeta {
 }
 
 export const ACTIVITY_LEDGER_META: ActivityLedgerMeta[] = [
-  { key: "trial", label: "每日试炼", rewardType: TOPUP_TYPE_TRIAL, match: ["试炼"] },
+  { key: "retired", label: "已下线活动", rewardType: 17, match: ["试炼"] },
   { key: "workshop", label: "灵宠工坊", rewardType: TOPUP_TYPE_WORKSHOP, match: ["工坊"] },
   {
     key: "collection",

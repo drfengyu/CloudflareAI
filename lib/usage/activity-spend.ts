@@ -5,19 +5,17 @@ import { COUPON_TOPUP_TYPE } from "@/lib/activity/coupons";
 import { TOPUP_TYPE_LOTTERY } from "@/lib/lottery/prize-math";
 import { TOPUP_TYPE_RAIDEN } from "@/lib/raiden/config";
 import { TOPUP_TYPE_FLIP } from "@/lib/flip/config";
-import { TOPUP_TYPE_TRIAL } from "@/lib/trial/config";
 import { TOPUP_TYPE_WORKSHOP } from "@/lib/workshop/config";
 import { TOPUP_TYPE_COLLECTION } from "@/lib/collection/config";
 
 /**
- * 限时活动的账本类型：6/11/12/17/18/19 是各玩法的奖励或历史直付流水，
- * v0.33.0 起玩法只扣活动券，货币支出统一记在 type=15 的兑换/礼包流水上。
+ * 限时活动的账本类型：6/11/12/17/18/19 是各玩法的奖励或历史直付流水， * v0.33.0 起玩法只扣活动券，货币支出统一记在 type=15 的兑换/礼包流水上。
  */
 const ACTIVITIES = [
   { type: TOPUP_TYPE_LOTTERY, name: "幸运转盘" },
   { type: TOPUP_TYPE_RAIDEN, name: "雷电行动" },
   { type: TOPUP_TYPE_FLIP, name: "翻牌夺宝" },
-  { type: TOPUP_TYPE_TRIAL, name: "每日试炼" },
+  { type: 17, name: "已下线活动" },
   { type: TOPUP_TYPE_WORKSHOP, name: "灵宠工坊" },
   { type: TOPUP_TYPE_COLLECTION, name: "星图共鸣" },
   { type: COUPON_TOPUP_TYPE, name: "活动券兑换" },
@@ -37,7 +35,7 @@ const spentExpr = sql`COALESCE(SUM(CASE WHEN ${topups.amount} < 0 THEN -${topups
 const earnedExpr = sql`COALESCE(SUM(CASE WHEN ${topups.amount} > 0 THEN ${topups.amount} ELSE 0 END), 0)`;
 
 /**
- * 某个用户在时间窗内、三个限时活动各自的消耗与回报。
+ * 某个用户在时间窗内、各限时活动的消耗与回报。
  *
  * 一条聚合拿齐，不按活动各查一次；口径直接读账本，这样每个玩法的扣费与发奖改动都会自动反映到图上，
  * 不需要三处各自维护一份「怎么算消耗」。D1 不接受带聚合的 ORDER BY，所以补零与排序都放在 JS 里。

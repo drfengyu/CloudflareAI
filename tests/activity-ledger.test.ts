@@ -20,7 +20,7 @@ const row = (
 });
 
 test("奖励流水按类型直接归属", () => {
-  assert.equal(activityKeyForRow(17, null), "trial");
+  assert.equal(activityKeyForRow(17, null), "retired");
   assert.equal(activityKeyForRow(18, null), "workshop");
   assert.equal(activityKeyForRow(19, null), "collection");
   assert.equal(activityKeyForRow(6, null), "lottery");
@@ -29,7 +29,7 @@ test("奖励流水按类型直接归属", () => {
 });
 
 test("共用的兑换 / 礼包流水按描述里的活动名归属", () => {
-  assert.equal(activityKeyForRow(15, "兑换试金券 3 张（15 cr 等值，每日试炼）"), "trial");
+  assert.equal(activityKeyForRow(15, "兑换试金券 3 张（15 cr 等值，每日试炼）"), "retired");
   assert.equal(activityKeyForRow(16, "购买珍宝礼包赠送 tcr（灵宠工坊）"), "workshop");
   assert.equal(activityKeyForRow(15, "兑换星匣券 1 张（2 cr 等值，星匣图鉴）"), "collection");
   assert.equal(activityKeyForRow(15, "兑换星图券 1 张（2 cr 等值，星图共鸣）"), "collection");
@@ -47,43 +47,43 @@ test("识别不到的共用流水落入未归属，其他类型返回 null", () 
 
 test("按活动分段：同活动同日同人相加，天数与人数正确，活动时段取首末日", () => {
   const sections = foldActivitySections([
-    row({ activityKey: "trial", date: "2026-11-12", userId: "u1", name: "阿岚", income: 5 }),
-    row({ activityKey: "trial", date: "2026-11-12", userId: "u1", name: "阿岚", expense: 2 }),
-    row({ activityKey: "trial", date: "2026-11-10", userId: "u2", email: "b@example.com", income: 3 }),
+    row({ activityKey: "retired", date: "2026-11-12", userId: "u1", name: "阿岚", income: 5 }),
+    row({ activityKey: "retired", date: "2026-11-12", userId: "u1", name: "阿岚", expense: 2 }),
+    row({ activityKey: "retired", date: "2026-11-10", userId: "u2", email: "b@example.com", income: 3 }),
     row({ activityKey: "lottery", date: "2026-11-11", userId: "u1", name: "阿岚", income: 100 }),
   ]);
 
   assert.deepEqual(
     sections.map((section) => section.key),
-    ["trial", "lottery"],
+    ["retired", "lottery"],
   );
-  const trial = sections[0];
-  assert.equal(trial.income, 8);
-  assert.equal(trial.expense, 2);
-  assert.equal(trial.entries, 3);
-  assert.equal(trial.users, 2);
-  assert.equal(trial.firstDate, "2026-11-10");
-  assert.equal(trial.lastDate, "2026-11-12");
+  const retired = sections[0];
+  assert.equal(retired.income, 8);
+  assert.equal(retired.expense, 2);
+  assert.equal(retired.entries, 3);
+  assert.equal(retired.users, 2);
+  assert.equal(retired.firstDate, "2026-11-10");
+  assert.equal(retired.lastDate, "2026-11-12");
   assert.deepEqual(
-    trial.days.map((day) => [day.date, day.income, day.expense]),
+    retired.days.map((day) => [day.date, day.income, day.expense]),
     [
       ["2026-11-12", 5, 2],
       ["2026-11-10", 3, 0],
     ],
   );
   assert.deepEqual(
-    trial.userRows.map((user) => [user.userId, user.income, user.expense]),
+    retired.userRows.map((user) => [user.userId, user.income, user.expense]),
     [
       ["u1", 5, 2],
       ["u2", 3, 0],
     ],
   );
-  assert.equal(trial.userRows[1].label, "b@example.com");
+  assert.equal(retired.userRows[1].label, "b@example.com");
 });
 
 test("不足半分的流水不进入分段；未知键落到未归属", () => {
   const sections = foldActivitySections([
-    row({ activityKey: "trial", date: "2026-11-12", userId: "u1", income: 0.004 }),
+    row({ activityKey: "retired", date: "2026-11-12", userId: "u1", income: 0.004 }),
     row({ activityKey: "mystery", date: "2026-11-12", userId: "u2", expense: 2 }),
   ]);
 
@@ -95,7 +95,7 @@ test("不足半分的流水不进入分段；未知键落到未归属", () => {
 
 test("全站总计按活动相加，人数跨活动去重", () => {
   const rows = [
-    row({ activityKey: "trial", date: "2026-11-12", userId: "u1", income: 5 }),
+    row({ activityKey: "retired", date: "2026-11-12", userId: "u1", income: 5 }),
     row({ activityKey: "lottery", date: "2026-11-12", userId: "u1", income: 100, expense: 40 }),
     row({ activityKey: "lottery", date: "2026-11-11", userId: "u2", income: 20 }),
   ];

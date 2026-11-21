@@ -112,7 +112,7 @@ test("消费返利：金额始终夹在配置区间内", () => {
   }
 });
 
-test("活动券：同一轮次名字稳定，三种活动各自有券", () => {
+test("活动券：同一轮次名字稳定，各活动各自有券", () => {
   for (const kind of ACTIVITY_KINDS) {
     const name = couponNameFor(kind, "2026-11-01~2026-11-30");
     assert.equal(name, couponNameFor(kind, "2026-11-01~2026-11-30"));
@@ -161,7 +161,7 @@ test("珍宝礼包：默认三档 10 / 50 / 100 张，倍率、限购与赠品�
   const custom = sanitizeCouponPackConfig({
     packs: [
       {
-        key: "trial",
+        key: "alpha",
         name: "体验包",
         tickets: 2,
         ratioPercent: 150,
@@ -184,7 +184,7 @@ test("珍宝礼包：默认三档 10 / 50 / 100 张，倍率、限购与赠品�
       },
     ],
   });
-  assert.deepEqual(custom.packs.map((pack) => pack.key), ["trial", "pro"]);
+  assert.deepEqual(custom.packs.map((pack) => pack.key), ["alpha", "pro"]);
   assert.equal(custom.packs[0].tickets, 2);
   assert.equal(custom.packs[0].tempCredits, 2.5);
   assert.equal(custom.packs[0].tempValidDays, 7);
@@ -269,7 +269,7 @@ test("珍宝礼包：实付按张数 × 券单价 ÷ 倍率折算，赠券张数
   assert.equal(packGrant(legacyMedium, 25.5).ratioTickets, 2);
 });
 
-test("活动券单价：三种活动默认 1 cr / 张，脏值回落、超限封顶", () => {
+test("活动券单价：各活动默认 1 cr / 张，脏值回落、超限封顶", () => {
   assert.equal(DEFAULT_LOTTERY_CONFIG.couponUnitCredits, 1);
   assert.equal(DEFAULT_FLIP_CONFIG.couponUnitCredits, 1);
   assert.equal(DEFAULT_RAIDEN_CONFIG.couponUnitCredits, 1);

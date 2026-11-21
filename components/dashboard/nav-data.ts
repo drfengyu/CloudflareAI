@@ -19,7 +19,6 @@ import {
   Receipt,
   ScrollText,
   Settings,
-  Swords,
   Ticket,
   Users,
   Wallet,
@@ -54,7 +53,6 @@ export const NAV: NavGroup[] = [
     items: [
       { href: "/tasks", label: "任务成就", icon: ListChecks },
       { href: "/cashback", label: "活动总览", icon: PiggyBank },
-      { href: "/trial", label: "每日试炼", icon: Swords },
       { href: "/workshop", label: "灵宠工坊", icon: PawPrint },
       { href: "/collection", label: "星图共鸣", icon: Library },
     ],

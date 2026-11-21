@@ -1,5 +1,9 @@
 @AGENTS.md
 
+> **2026-11-22 旧「每日试炼 / 三国讨逆传」已整体下线。** `/trial`、`components/trial`、`lib/trial`、
+> `trial_run` 表与 `trial_config` 均已移除；本文件后文涉及 trial 的段落仅作历史记录，
+> 不得作为后续实现依据。桌面端原版是下一阶段复刻的唯一基准。
+
 # 改造路线图：参考 new-api 重构本项目
 
 > 本节为正在进行的多阶段改造计划（参考 QuantumNous/new-api），逐阶段实现并提交。

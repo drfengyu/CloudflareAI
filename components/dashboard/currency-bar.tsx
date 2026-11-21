@@ -15,7 +15,7 @@ import { formatCredits } from "@/lib/billing/credits";
 import { CouponIcon } from "@/components/activity/coupon-badge";
 
 /**
- * 顶栏货币条：cr、tcr 与三种活动券。
+ * 顶栏货币条：cr、tcr 与在线玩法活动券。
  *
  * 铃铛左边的数字由布局一次取齐；这里只做展示与跳转，不自己发请求。
  * 两种余额只以单位区分、按负数补正口径显示（与钱包、看板一致）；活动券只报「图标 × 整张数」。

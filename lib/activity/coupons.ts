@@ -31,12 +31,6 @@ import {
   sanitizeRaidenConfig,
 } from "@/lib/raiden/config";
 import {
-  TRIAL_CONFIG_KEY,
-  trialActivityKey,
-  trialActivityWindow,
-  sanitizeTrialConfig,
-} from "@/lib/trial/config";
-import {
   WORKSHOP_CONFIG_KEY,
   workshopActivityKey,
   workshopActivityWindow,
@@ -85,13 +79,12 @@ export const ACTIVITY_META: Record<ActivityKind, ActivityMeta> = {
   lottery: { kind: "lottery", label: "幸运转盘", short: "转盘券", href: "/lottery" },
   flip: { kind: "flip", label: "翻牌夺宝", short: "翻牌券", href: "/flip" },
   raiden: { kind: "raiden", label: "雷电行动", short: "雷电券", href: "/raiden" },
-  trial: { kind: "trial", label: "每日试炼", short: "试炼券", href: "/trial" },
   workshop: { kind: "workshop", label: "灵宠工坊", short: "工坊券", href: "/workshop" },
   collection: { kind: "collection", label: "星图共鸣", short: "星图券", href: "/collection" },
 };
 
-/** 当前上线的三个玩法：活动中心、顶栏默认只展示它们。 */
-export const LIVE_ACTIVITY_KINDS: ActivityKind[] = ["trial", "workshop", "collection"];
+/** 当前上线的两个玩法：活动中心、顶栏默认只展示它们。 */
+export const LIVE_ACTIVITY_KINDS: ActivityKind[] = ["workshop", "collection"];
 
 /** 保留可玩的经典玩法：入口收在活动中心的「经典玩法」里。 */
 export const LEGACY_ACTIVITY_KINDS: ActivityKind[] = ["lottery", "flip", "raiden"];
@@ -103,7 +96,6 @@ const COUPON_NAMES: Record<ActivityKind, string[]> = {
   lottery: ["星轨券", "月华券", "流萤券", "极光券", "焰羽券", "银河券"],
   flip: ["翻云券", "玲珑券", "探花券", "锦鲤券", "流光券", "叠翠券"],
   raiden: ["雷霆券", "疾风券", "破阵券", "闪电券", "龙吟券", "霜刃券"],
-  trial: ["试金券", "晨星券", "破晓券", "砺心券", "明镜券", "启程券"],
   workshop: ["育灵券", "萌宠券", "藤蔓券", "绒尾券", "灵犀券", "匠心券"],
   collection: ["星图券", "观星券", "拾光券", "星辉券", "银河匣券", "寻踪券"],
 };
@@ -232,7 +224,6 @@ const ACTIVITY_CONFIG_KEYS: Record<ActivityKind, string> = {
   lottery: LOTTERY_CONFIG_KEY,
   flip: FLIP_CONFIG_KEY,
   raiden: RAIDEN_CONFIG_KEY,
-  trial: TRIAL_CONFIG_KEY,
   workshop: WORKSHOP_CONFIG_KEY,
   collection: COLLECTION_CONFIG_KEY,
 };
@@ -277,16 +268,6 @@ function resolveActivityFromConfig(kind: ActivityKind, raw: unknown): ResolvedAc
       startMs: win.startMs,
       endMs: win.endMs,
       activityKey: raidenActivityKey(config),
-      unitCredits: config.couponUnitCredits,
-    };
-  } else if (kind === "trial") {
-    const config = sanitizeTrialConfig(raw);
-    const win = trialActivityWindow(config);
-    info = {
-      status: win.status,
-      startMs: win.startMs,
-      endMs: win.endMs,
-      activityKey: trialActivityKey(config),
       unitCredits: config.couponUnitCredits,
     };
   } else if (kind === "workshop") {
@@ -376,7 +357,7 @@ async function readCouponRows(
       .map((item) => `${item.kind}|${item.activityKey}`),
   );
   if (wanted.size === 0) return new Map();
-  // 一个用户的券行最多 6 条（六种玩法各一），直接按用户取回再筛，避免 D1 对复合表达式 IN 的解析坑。
+  // 一个用户的券行最多 5 条（五种活动各一），直接按用户取回再筛，避免 D1 对复合表达式 IN 的解析坑。
   const rows = await db
     .select({
       activityKind: activityCoupons.activityKind,
@@ -441,7 +422,7 @@ export async function listLegacyActivityCoupons(userId: string): Promise<Activit
   return listActivityCoupons(userId, LEGACY_ACTIVITY_KINDS);
 }
 
-/** 顶栏货币条的数据：永久余额、未过期临时余额、三种活动券。 */
+/** 顶栏货币条的数据：永久余额、未过期临时余额、在线玩法活动券。 */
 export async function getCurrencySnapshot(userId: string): Promise<CurrencySnapshot> {
   const now = new Date();
   const [userRows, tempRows, coupons] = await Promise.all([

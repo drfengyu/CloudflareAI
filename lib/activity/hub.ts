@@ -1,8 +1,6 @@
 import { CONSTELLATIONS } from "@/lib/collection/config";
 import { getCollectionConfig } from "@/lib/collection/settings";
 import { getCollectionSnapshot } from "@/lib/collection/store";
-import { SAGA_CHAPTERS, SAGA_GENERALS } from "@/lib/trial/saga/data";
-import { findActiveTrialRun, loadTrialSave } from "@/lib/trial/store";
 import { WORKSHOP_GYM_COUNT } from "@/lib/workshop/state";
 import { getWorkshopConfig } from "@/lib/workshop/settings";
 import { getWorkshopSnapshot } from "@/lib/workshop/store";
@@ -20,7 +18,7 @@ import {
 } from "./window";
 
 /**
- * 活动中心的一次性聚合：把三款在线玩法的券、时间窗与存档进度读齐，
+ * 活动中心的一次性聚合：把两款在线玩法的券、时间窗与存档进度读齐，
  * 页面只负责排版。读的都是只读快照，不改存档、不扣券。
  */
 
@@ -96,70 +94,24 @@ function couponAlert(card: HubActivity): string | null {
 
 export async function loadActivityHub(userId: string): Promise<ActivityHub> {
   const now = Date.now();
-  const [trialCoupon, workshopCoupon, collectionCoupon, workshopConfig, collectionConfig] =
+  const [workshopCoupon, collectionCoupon, workshopConfig, collectionConfig] =
     await Promise.all([
-      getActivityCouponView(userId, "trial"),
       getActivityCouponView(userId, "workshop"),
       getActivityCouponView(userId, "collection"),
       getWorkshopConfig(),
       getCollectionConfig(),
     ]);
 
-  const trialKey = trialCoupon.activityKey;
   const workshopKey = workshopCoupon.activityKey;
   const collectionKey = collectionCoupon.activityKey;
 
-  const [trialSave, activeRun, workshopSnap, collectionSnap] = await Promise.all([
-    trialKey ? loadTrialSave(userId, trialKey) : Promise.resolve(null),
-    trialKey && trialCoupon.status === "active"
-      ? findActiveTrialRun(userId, trialKey)
-      : Promise.resolve(null),
+  const [workshopSnap, collectionSnap] = await Promise.all([
     workshopKey ? getWorkshopSnapshot(userId, workshopKey) : Promise.resolve(null),
     collectionKey ? getCollectionSnapshot(userId, collectionKey) : Promise.resolve(null),
   ]);
 
   const cards: HubActivity[] = [];
   const daily: HubDaily[] = [];
-
-  // 三国讨逆传：没有每日次数，进度看平定地方与图鉴。
-  {
-    const card = base(trialCoupon, now);
-    if (trialCoupon.status === "active") {
-      const save = trialSave?.save;
-      const chapter = SAGA_CHAPTERS[Math.min(SAGA_CHAPTERS.length - 1, save?.chapter ?? 0)];
-      const dex = new Set([...(save?.met ?? []), ...(save?.recruited ?? [])]).size;
-      const cleared = save?.stats.wins ?? 0;
-      card.progress = [
-        { label: "平定地方", value: cleared, max: SAGA_CHAPTERS.length },
-        {
-          label: "武将图鉴",
-          value: dex,
-          max: null,
-          hint: dex > 0 ? `共 ${SAGA_GENERALS.length} 人` : "尚未出城",
-        },
-      ];
-      card.cta = activeRun ? "继续行军" : "出城出发";
-      if (activeRun) card.alerts.push("有未收兵的行军，回去接着走");
-      const alert = couponAlert(card);
-      if (alert) card.alerts.push(alert);
-      daily.push({
-        kind: "trial",
-        label: "三国讨逆传",
-        href: "/trial",
-        status: card.status,
-        items: [`不限次数`, `${chapter.town} · ${chapter.name}`],
-      });
-    } else {
-      daily.push({
-        kind: "trial",
-        label: "三国讨逆传",
-        href: "/trial",
-        status: card.status,
-        items: [card.statusText],
-      });
-    }
-    cards.push(card);
-  }
 
   // 灵宠工坊：每日进图 / 道馆次数，外加道馆徽章。
   {

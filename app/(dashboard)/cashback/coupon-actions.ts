@@ -21,7 +21,6 @@ function parseKind(raw: string): ActivityKind {
 function revalidateCouponPaths() {
   revalidatePath("/cashback");
   revalidatePath("/wallet");
-  revalidatePath("/trial");
   revalidatePath("/workshop");
   revalidatePath("/collection");
   revalidatePath("/lottery");

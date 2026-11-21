@@ -81,7 +81,7 @@ function Field({
   );
 }
 
-type ActivityKindKey = "lottery" | "flip" | "raiden" | "trial" | "workshop" | "collection";
+type ActivityKindKey = "lottery" | "flip" | "raiden" | "workshop" | "collection";
 
 export function CouponPackForm({
   initialConfig,
@@ -163,7 +163,6 @@ export function CouponPackForm({
         {rows.map((row, index) => {
           const setting = preview.packs[index] ?? preview.packs[0];
           const perActivity = [
-            { label: "试炼", credits: unitCredits.trial },
             { label: "工坊", credits: unitCredits.workshop },
             { label: "图鉴", credits: unitCredits.collection },
             { label: "转盘", credits: unitCredits.lottery },

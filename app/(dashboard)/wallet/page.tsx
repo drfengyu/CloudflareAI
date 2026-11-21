@@ -76,7 +76,7 @@ export default async function WalletPage({
       listRecentLedgerByDay(userId),
       // 全量天表 + 过期作废合计：一次扫描同时供累计收支与余额对账使用
       listLedgerOverview(userId),
-      // 当期三种活动券余额与珍宝礼包：充值位同时是券礼包入口
+      // 当期在线玩法活动券余额与珍宝礼包：充值位同时是券礼包入口
       listActivityCoupons(userId),
     ]);
 

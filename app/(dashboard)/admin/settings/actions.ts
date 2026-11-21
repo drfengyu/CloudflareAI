@@ -35,11 +35,6 @@ import {
   type CouponPackSetting,
 } from "@/lib/activity/pack-config";
 import {
-  TRIAL_CONFIG_KEY,
-  TRIAL_MAX_FLOORS,
-  sanitizeTrialConfig,
-} from "@/lib/trial/config";
-import {
   WORKSHOP_CONFIG_KEY,
   WORKSHOP_TIER_COUNT,
   sanitizeWorkshopConfig,
@@ -991,79 +986,6 @@ export async function updateFlipSettings(formData: {
 
   revalidatePath("/admin/settings");
   revalidatePath("/flip");
-
-  return { success: true };
-}
-
-/** 限时活动（每日试炼）配置的保存入口 */
-export async function updateTrialSettings(formData: {
-  enabled: boolean;
-  startAt: string;
-  endAt: string;
-  questionCount: number;
-  /** 1 张活动券兑换所需的 cr。 */
-  couponUnitCredits: number;
-  rewardValidDays: number;
-  /** 钱庄存金：多少行军金币换 1 tcr。 */
-  bankGoldPerTcr: number;
-  /** 每次行军最多存多少金币。 */
-  bankMaxGoldPerRun: number;
-  tiers: { correct: number; reward: number }[];
-}) {
-  const currentUserId = await requireUser();
-  const currentUser = await db
-    .select()
-    .from(users)
-    .where(eq(users.id, currentUserId))
-    .limit(1);
-
-  if (!currentUser[0] || currentUser[0].role < 10) {
-    throw new Error("权限不足");
-  }
-
-  const startAt = formData.startAt.trim();
-  const endAt = formData.endAt.trim();
-  if (formData.enabled) {
-    const startMs = parseCnWallClock(startAt);
-    const endMs = parseCnWallClock(endAt);
-    if (startMs === null) throw new Error("开始时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
-    if (endMs === null) throw new Error("结束时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
-    if (endMs <= startMs) throw new Error("结束时间必须晚于开始时间");
-  }
-
-  const questionCount = Math.trunc(
-    requireNumber(formData.questionCount, "每处地方节点数", 2, TRIAL_MAX_FLOORS),
-  );
-  const tiers = (formData.tiers ?? []).map((tier, index) => ({
-    correct: Math.trunc(
-      requireNumber(tier?.correct, `平定奖励第 ${index + 1} 行的节点数`, 1, questionCount),
-    ),
-    reward: Math.trunc(requireNumber(tier?.reward, `平定奖励第 ${index + 1} 行的金币`, 0, 1_000_000)),
-  }));
-  if (tiers.length === 0) throw new Error("至少要配一个平定奖励档位");
-
-  const bankGoldPerTcr = Math.trunc(
-    requireNumber(formData.bankGoldPerTcr, "钱庄存金价（金/tcr）", 2, 1_000_000),
-  );
-
-  const config = sanitizeTrialConfig({
-    enabled: formData.enabled === true,
-    startAt,
-    endAt,
-    questionCount,
-    couponUnitCredits: requireNumber(formData.couponUnitCredits, "活动券单价", 0.01, 1_000_000),
-    rewardValidDays: Math.trunc(requireNumber(formData.rewardValidDays, "奖励有效期", 1, 3650)),
-    bankGoldPerTcr,
-    bankMaxGoldPerRun: Math.trunc(
-      requireNumber(formData.bankMaxGoldPerRun, "每趟存金上限", 0, 100_000_000),
-    ),
-    tiers,
-  });
-
-  await upsertOption(TRIAL_CONFIG_KEY, JSON.stringify(config));
-
-  revalidatePath("/admin/settings");
-  revalidatePath("/trial");
 
   return { success: true };
 }

@@ -10,14 +10,12 @@ import { DashboardInfoForm } from "./dashboard-info-form";
 import { LotteryForm } from "./lottery-form";
 import { RaidenForm } from "./raiden-form";
 import { FlipForm } from "./flip-form";
-import { TrialForm } from "./trial-form";
 import { WorkshopForm } from "./workshop-form";
 import { CollectionForm } from "./collection-form";
 import { CouponPackForm } from "./pack-form";
 import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
 import { sanitizeRaidenConfig } from "@/lib/raiden/config";
 import { sanitizeFlipConfig } from "@/lib/flip/config";
-import { sanitizeTrialConfig } from "@/lib/trial/config";
 import { sanitizeWorkshopConfig } from "@/lib/workshop/config";
 import { sanitizeCollectionConfig } from "@/lib/collection/config";
 import { sanitizeCouponPackConfig } from "@/lib/activity/pack-config";
@@ -80,7 +78,6 @@ export default async function AdminSettingsPage() {
   const lotteryConfig = parseConfig(settings.lottery_config, sanitizeLotteryConfig);
   const raidenConfig = parseConfig(settings.raiden_config, sanitizeRaidenConfig);
   const flipConfig = parseConfig(settings.flip_config, sanitizeFlipConfig);
-  const trialConfig = parseConfig(settings.trial_config, sanitizeTrialConfig);
   const workshopConfig = parseConfig(settings.workshop_config, sanitizeWorkshopConfig);
   const collectionConfig = parseConfig(settings.collection_config, sanitizeCollectionConfig);
   const packConfig = parseConfig(settings.coupon_pack_config, sanitizeCouponPackConfig);
@@ -293,15 +290,6 @@ export default async function AdminSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">限时活动（每日试炼）</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TrialForm initialConfig={trialConfig} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
             <CardTitle className="text-base">限时活动（灵宠工坊）</CardTitle>
           </CardHeader>
           <CardContent>
@@ -356,7 +344,6 @@ export default async function AdminSettingsPage() {
                 lottery: lotteryConfig.couponUnitCredits,
                 flip: flipConfig.couponUnitCredits,
                 raiden: raidenConfig.couponUnitCredits,
-                trial: trialConfig.couponUnitCredits,
                 workshop: workshopConfig.couponUnitCredits,
                 collection: collectionConfig.couponUnitCredits,
               }}

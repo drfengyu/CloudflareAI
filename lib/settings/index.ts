@@ -49,7 +49,7 @@ export async function getSettingsMap<
 /**
  * 一次 `IN` 查读取多个 JSON 配置并解析好。
  *
- * 活动券这类配置是整块 JSON（`trial_config` 等），缺失或解析失败都回 null，
+ * 活动券这类配置是整块 JSON（`workshop_config` 等），缺失或解析失败都回 null，
  * 交给各自的 `sanitize*` 兜默认值；读失败只记日志，不把整页拖垮。
  */
 export async function getJsonSettings(keys: string[]): Promise<Map<string, unknown>> {
