@@ -7,20 +7,21 @@
  * 没有收录到的武将仍然使用 `portraits.ts` 里现画的立绘。
  */
 export const SAGA_PORTRAIT_IDS: readonly string[] = [
-  "caohong",   "caoren",   "caozhen",   "chengpu",   "chengyuanzhi",   "chenlan",
-  "dianwei",   "dingfeng",   "dongzhuo",   "fazheng",   "ganning",   "gaolan",
-  "guanping",   "guanxing",   "guanyu",   "guojia",   "handang",   "houcheng",
-  "huanggai",   "huangzhong",   "huaxiong",   "huzhen",   "jiangwei",   "jiling",
+  "caocao",   "caohong",   "caoren",   "caozhen",   "caimao",   "chezhou",
+  "chengpu",   "chengyuanzhi",   "chenlan",   "dianwei",   "dingfeng",   "dongzhuo",
+  "fazheng",   "ganning",   "gaolan",   "guosi",   "guanping",   "guanxing",
+  "guanyu",   "guojia",   "handang",   "haozhao",   "houcheng",   "huanggai",
+  "huangzhong",   "huaxiong",   "huzhen",   "jiangwei",   "jiling",
   "jushou",   "leibo",   "lengbao",   "lidian",   "lijue",   "lingtong",
-  "liru",   "lisu",   "liubei",   "liukui",   "liuxun",   "liyan",
+  "liru",   "lisu",   "liubei",   "liukui",   "liuxun",   "liyan",   "liuzhang",
   "lusu",   "lvbu",   "lvmeng",   "machao",   "madai",   "mengda",
-  "pangde",   "pangtong",   "shenpei",   "simayi",   "songxian",   "sunquan",
-  "taishici",   "tianfeng",   "wangshuang",   "weixu",   "weiyan",   "wuyi",
-  "xiahoudun",   "xiahouyuan",   "xuchu",   "xuhuang",   "xunyu",   "xusheng",
-  "yanliang",   "yanyan",   "yuanshang",   "yuanshao",   "yuanshu",   "yuanxi",
-  "yujin",   "zhangbao",   "zhangfei",   "zhanghe",   "zhangji",   "zhangjiao",
-  "zhangliang",   "zhangliao",   "zhangren",   "zhangxun",   "zhaoyun",   "zhoucang",
-  "zhoutai",   "zhouyu",   "zhugeliang",
+  "pangde",   "pangtong",   "shenpei",   "simayi",   "songxian",   "sunjian",
+  "sunquan",   "taishici",   "tianfeng",   "wangshuang",   "wenchou",   "weixu",
+  "weiyan",   "wuyi",   "xiahoudun",   "xiahouyuan",   "xuchu",   "xuhuang",
+  "xunyu",   "xusheng",   "yanliang",   "yanyan",   "yuanshang",   "yuanshao",
+  "yuanshu",   "yuanxi",   "yujin",   "zhangbao",   "zhangfei",   "zhanghe",
+  "zhangji",   "zhangjiao",   "zhangliang",   "zhangliao",   "zhangren",   "zhangxun",
+  "zhaoyun",   "zhoucang",   "zhoutai",   "zhouyu",   "zhugeliang",
 ];
 
 const PORTRAIT_ID_SET = new Set<string>(SAGA_PORTRAIT_IDS);

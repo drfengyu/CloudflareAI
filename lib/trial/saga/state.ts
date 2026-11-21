@@ -18,10 +18,14 @@ import {
   SAGA_PARTY_SIZE,
   SAGA_RESERVE_SIZE,
   SAGA_RULESET,
+  SAGA_RULESET_V19,
   SAGA_SAVE_VERSION,
   SAGA_STAT_CAP,
   SAGA_SPEED_BASE_SCALE,
   SAGA_SPEED_CAP,
+  SAGA_TROOP_CAP_V19,
+  SAGA_WEAPON_CAP_V19,
+  normalizeSagaDifficulty,
   sagaV18Speed,
   sagaV18Stat,
   type FormationId,
@@ -67,6 +71,8 @@ export function initialTrialSave(): TrialSave {
   zhangfei.armor = "cloth";
   return {
     version: SAGA_SAVE_VERSION,
+    rules: SAGA_RULESET,
+    difficulty: "normal",
     chapter: 0,
     clears: 0,
     gold: 200,
@@ -197,6 +203,8 @@ export function normalizeTrialSave(raw: unknown): TrialSave {
   const stats = (it.stats && typeof it.stats === "object" ? it.stats : {}) as Partial<TrialSave["stats"]>;
   const save: TrialSave = {
     version: SAGA_SAVE_VERSION,
+    rules: it.rules === SAGA_RULESET_V19 ? SAGA_RULESET_V19 : Math.trunc(Number(it.rules)) || SAGA_RULESET,
+    difficulty: normalizeSagaDifficulty(it.difficulty),
     chapter,
     clears: clampInt(it.clears, 0, 999, 0),
     gold: clampInt(it.gold, 0, 9_999_999, base.gold),
@@ -329,15 +337,15 @@ export function generalStats(
       : (def.baseTroops + (level - 1) * def.growth) * troopScale;
   const extraDef = (["helmet", "belt", "pendant", "boots"] as const).reduce((sum, slot) => {
     const item = state[slot] ? SAGA_ITEM_BY_ID.get(state[slot] as string) : null;
-    return sum + (item ? forgeStat(item.id, gearLevels?.[item.id] ?? 0) : 0);
+    return sum + (item ? forgeStat(item.id, gearLevels?.[item.id] ?? 0, rules) : 0);
   }, 0);
   const gearSpeed = (["mount", "boots", "pendant"] as const).reduce((sum, slot) => {
     const item = state[slot] ? SAGA_ITEM_BY_ID.get(state[slot] as string) : null;
     return sum + (item?.speed ?? 0);
   }, 0);
-  const weaponAtk = weapon ? forgeStat(weapon.id, gearLevels?.[weapon.id] ?? 0) : 0;
+  const weaponAtk = weapon ? forgeStat(weapon.id, gearLevels?.[weapon.id] ?? 0, rules) : 0;
   const armorDef = armor
-    ? forgeStat(armor.id, gearLevels?.[armor.id] ?? 0) + extraDef
+    ? forgeStat(armor.id, gearLevels?.[armor.id] ?? 0, rules) + extraDef
     : extraDef;
   const activeTraits = traitsForRules(def, rules);
   const traitCrit = activeTraits.reduce(
@@ -348,6 +356,38 @@ export function generalStats(
     (sum, id) => sum + (SAGA_TRAIT_BY_ID.get(id)?.tacticPoints ?? 0),
     0,
   );
+  if (rules >= SAGA_RULESET_V19) {
+    // 原作口径：面板攻击只显示兵器值、防御只显示装备防御，两者各自封顶 255；
+    // 武力 / 智力 / 速度仍是 v18 固定底子，只用于伤害公式、SP 与会心。
+    const force = sagaV18Stat(def.force, bonus.force);
+    const intellect = sagaV18Stat(def.intellect, bonus.intellect);
+    const speed = sagaV18Speed(def.speed, bonus.speed);
+    const actualSpeed = Math.min(SAGA_SPEED_CAP, speed + gearSpeed);
+    const weaponPanel = Math.min(SAGA_WEAPON_CAP_V19, Math.round(weaponAtk));
+    const gearPanel = Math.min(SAGA_STAT_CAP, Math.round(armorDef));
+    return {
+      force,
+      intellect,
+      defense: gearPanel,
+      attack: weaponPanel,
+      speed,
+      speedTotal: actualSpeed,
+      maxTroops: Math.min(
+        SAGA_TROOP_CAP_V19,
+        Math.round((troopBaseline(level, rules) * def.baseTroops) / SAGA_TROOP_REF_BASE),
+      ),
+      weaponAtk: weaponPanel,
+      armorDef: gearPanel,
+      gearSpeed,
+      spMax: Math.min(
+        255,
+        12 + Math.floor(intellect / 3) + (level - 1) * 2 + traitSp,
+      ),
+      hitRate: 243 / 256,
+      critRate: Math.min(0.25, Math.max(0.02, actualSpeed / 2048 + traitCrit)),
+      critDamage: 2,
+    };
+  }
   if (rules >= 18) {
     // v18 旧表 0~100 的底子按 2.5 倍铺进 255 区间，名将才真正贴到上限；
     // 速度保持原值，命中 / 暴击公式仍按旧刻度算。
@@ -417,6 +457,11 @@ export function expToNext(level: number): number {
 export function troopBaseline(level: number, rules = SAGA_RULESET): number {
   const maxLevel = rules >= 17 ? SAGA_MAX_LEVEL : SAGA_LEGACY_MAX_LEVEL;
   const lv = Math.min(maxLevel, Math.max(1, Math.trunc(level)));
+  if (rules >= SAGA_RULESET_V19) {
+    // 把原作 1 级 250 / 99 级约 9900 的曲线整体 ×10，贴到 99999 上限：
+    // 1 级 2100、50 级 50120、99 级 98140、100 级 99120。
+    return Math.min(SAGA_TROOP_CAP_V19, 2100 + (lv - 1) * 980);
+  }
   if (rules >= 17) {
     const step = lv - 1;
     return 100 + step * 10 + step * step * 4;

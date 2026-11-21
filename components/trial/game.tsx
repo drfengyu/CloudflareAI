@@ -41,6 +41,8 @@ import {
   SAGA_CORPS_LABEL,
   gearSlotOf,
   sagaCorpsOf,
+  sagaItemAtk,
+  sagaItemDef,
   shopStock,
   tacticsFor,
   traitStats,
@@ -123,6 +125,7 @@ import type {
   SagaBattleEvent,
   SagaBattleState,
   SagaCommand,
+  SagaDifficulty,
   SagaField,
   SagaReplayState,
   SagaRoundCommand,
@@ -132,7 +135,7 @@ import type {
   TrialSave,
 } from "@/lib/trial/saga/types";
 import type { ActiveTrialRun, TrialSettlement } from "@/lib/trial/store";
-import { SAGA_RULESET } from "@/lib/trial/saga/types";
+import { SAGA_DEFAULT_DIFFICULTY, SAGA_DIFFICULTY_DESC, SAGA_DIFFICULTY_LABEL, SAGA_RULESET } from "@/lib/trial/saga/types";
 import {
   SAGA_MAINTENANCE,
   SAGA_NOTICE_VERSION,
@@ -395,6 +398,8 @@ export function TrialGame(props: TrialGameProps) {
   const noticeUnread = useSyncExternalStore(subscribeNoticeSeen, noticeUnreadSnapshot, () => false);
   /** 入口封面：进页面先停在封面，选「继续游戏 / 新的征途」再进关；结算完也回到这里。 */
   const [coverOpen, setCoverOpen] = useState(true);
+  /** 新开一局时的敌方伤害难度；已有行军沿用存档里的选择。 */
+  const [difficulty, setDifficulty] = useState<SagaDifficulty>(SAGA_DEFAULT_DIFFICULTY);
   /** 档案商店：结算确认（问「是否结算所有金币为 tcr、结束游戏并清空存档」）。 */
   const [settleAsk, setSettleAsk] = useState(false);
   /** 本机刚结算过存档：服务端刷新回来之前先把「继续游戏」收起来，免得点到空档。 */
@@ -440,6 +445,9 @@ export function TrialGame(props: TrialGameProps) {
   const finished = save.stats.wins >= SAGA_CHAPTERS.length;
   /** 入口封面用：服务端有存档，或者这一局还没结算、本机也没刚清档。 */
   const saveExists = props.hasSave && !saveCleared;
+  useEffect(() => {
+    if (save.difficulty) setDifficulty(save.difficulty);
+  }, [save.difficulty]);
   /** 档案商店的结算预览：整份存档金币按后台钱庄汇率折 tcr（与服务端同一口径）。 */
   const archiveTcrPreview = Math.floor(
     Math.max(0, Math.trunc(save.gold || 0)) / Math.max(1, props.bank.goldPerTcr),
@@ -687,7 +695,7 @@ export function TrialGame(props: TrialGameProps) {
   const startRun = useCallback(async () => {
     setBusy("start");
     try {
-      const result = await startTrialAction();
+      const result = await startTrialAction(difficulty);
       if (!result.success) {
         toast.error(result.error);
         return;
@@ -711,7 +719,7 @@ export function TrialGame(props: TrialGameProps) {
     } finally {
       setBusy(null);
     }
-  }, []);
+  }, [difficulty]);
 
   /** 档案商店「结算并结束」：金币折 tcr 发到钱包、服务端清空存档，本机缓存一并清掉。 */
   const settleArchive = useCallback(async () => {
@@ -3010,8 +3018,8 @@ export function TrialGame(props: TrialGameProps) {
                             const level = gearLevel(save, gearId);
                             const maxed = level >= SAGA_FORGE_MAX_LEVEL;
                             const cost = forgeCost(gearId, level);
-                            const stat = forgeStat(gearId, level);
-                            const nextStat = maxed ? stat : forgeStat(gearId, level + 1);
+                            const stat = forgeStat(gearId, level, uiRules);
+                            const nextStat = maxed ? stat : forgeStat(gearId, level + 1, uiRules);
                             const working = busy === `forge:${gearId}`;
                             return (
                               <div key={gearId} className="rounded-lg border border-border p-2.5">
@@ -3560,8 +3568,8 @@ export function TrialGame(props: TrialGameProps) {
                                         return (
                                           <option key={item.id} value={item.id} disabled={!available}>
                                             {item.name}
-                                            {item.atk ? `（攻+${item.atk}）` : ""}
-                                            {item.def ? `（防+${item.def}）` : ""}
+                                            {item.atk ? `（攻+${sagaItemAtk(item, uiRules)}）` : ""}
+                                            {item.def || sagaItemDef(item, uiRules) ? `（防+${sagaItemDef(item, uiRules)}）` : ""}
                                             {item.speed ? `（速+${item.speed}）` : ""}
                                             {worn === item.id ? " · 已装备" : ""}
                                           </option>
@@ -3613,8 +3621,9 @@ export function TrialGame(props: TrialGameProps) {
                                 {entries.map(([itemId, count]) => {
                                   const item = SAGA_ITEM_BY_ID.get(itemId);
                                   if (!item) return null;
-                                  const healNow = item.heal
-                                    ? Math.max(0, Math.min(item.heal, stats.maxTroops - current))
+                                  const healAmount = item.heal ? item.heal * (uiRules >= 19 ? 10 : 1) : 0;
+                                  const healNow = healAmount
+                                    ? Math.max(0, Math.min(healAmount, stats.maxTroops - current))
                                     : 0;
                                   return (
                                     <div key={itemId} className="flex flex-wrap items-center gap-1.5 text-xs">
@@ -3622,8 +3631,8 @@ export function TrialGame(props: TrialGameProps) {
                                         {item.name} ×{count}
                                       </span>
                                       <span className="flex-1 text-muted-foreground">
-                                        {item.heal
-                                          ? `至多回复 ${item.heal} 兵力 · 现在可回 ${healNow}`
+                                        {healAmount
+                                          ? `至多回复 ${healAmount} 兵力 · 现在可回 ${healNow}`
                                           : item.sp
                                             ? `至多回复 ${item.sp} SP · 现在可回 ${Math.min(item.sp, stats.spMax - spNow)}`
                                             : item.desc}
@@ -4085,11 +4094,36 @@ export function TrialGame(props: TrialGameProps) {
                     <p className="text-xs text-muted-foreground">
                       行军一线：{chapter.stages.join(" · ")}
                     </p>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium text-amber-100/80">开局难度</p>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {(["easy", "normal", "hard"] as SagaDifficulty[]).map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => setDifficulty(option)}
+                            disabled={saveExists}
+                            className={`rounded border px-2 py-1.5 text-xs transition ${
+                              difficulty === option
+                                ? "border-amber-500/70 bg-amber-500/15 text-amber-100"
+                                : "border-border/70 bg-black/20 text-muted-foreground hover:border-amber-600/40"
+                            }`}
+                          >
+                            {SAGA_DIFFICULTY_LABEL[option]}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[11px] leading-relaxed text-muted-foreground">
+                        {SAGA_DIFFICULTY_DESC[difficulty]}
+                        {saveExists ? "（已有存档：难度随存档，不能改）" : ""}
+                      </p>
+                    </div>
                     <div className="flex flex-wrap gap-2 text-xs">
                       <span className={HUD_CELL}>{save.party.length} 将上阵</span>
                       <span className={HUD_CELL}>{formatCredits(save.gold)} 金</span>
                       <span className={HUD_CELL}>战力 {partyPower(save)}</span>
                       <span className={HUD_CELL}>{tickets} 张活动券</span>
+                      <span className={HUD_CELL}>{SAGA_DIFFICULTY_LABEL[run?.difficulty ?? save.difficulty ?? difficulty]}</span>
                     </div>
                   </>
                 )}

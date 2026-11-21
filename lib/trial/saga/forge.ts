@@ -6,7 +6,7 @@
  * 重放只负责把等级抬到记录里的目标值，不采信客户端上报。
  */
 
-import { SAGA_ITEM_BY_ID } from "./data";
+import { SAGA_ITEM_BY_ID, sagaItemAtk, sagaItemDef } from "./data";
 import type { TrialSave } from "./types";
 
 export const SAGA_FORGE_ITEM_ID = "forge";
@@ -45,10 +45,10 @@ export function forgeBonus(base: number, level: number): number {
 }
 
 /** 装备在指定强化等级下的攻击 / 防御值（强化只加成装备自带的那一项）。 */
-export function forgeStat(itemId: string, level: number): number {
+export function forgeStat(itemId: string, level: number, rules = 18): number {
   const item = SAGA_ITEM_BY_ID.get(itemId);
   if (!item || !forgeable(itemId)) return 0;
-  const base = item.kind === "weapon" ? item.atk ?? 0 : item.def ?? 0;
+  const base = item.kind === "weapon" ? sagaItemAtk(item, rules) : sagaItemDef(item, rules);
   return base + forgeBonus(base, level);
 }
 

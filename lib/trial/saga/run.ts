@@ -43,11 +43,14 @@ import {
   SAGA_MAX_TOTAL_ROUNDS,
   SAGA_PARTY_SIZE,
   SAGA_RULESET,
+  SAGA_RULESET_V19,
   SAGA_RUN_VERSION,
   SAGA_STAT_CAP,
+  normalizeSagaDifficulty,
   sagaV18Speed,
   sagaV18Stat,
   type FormationId,
+  type SagaDifficulty,
   type SagaCommand,
   type SagaEnemy,
   type SagaGeneralState,
@@ -110,6 +113,7 @@ function makeEnemy(
   nodeIndex: number,
   kind: SagaNodeKind,
   boss: boolean,
+  rules = SAGA_RULESET,
 ): SagaEnemy {
   const def = SAGA_GENERAL_BY_ID.get(defId);
   const fallback = SAGA_GENERAL_BY_ID.get("huangjin_lishi")!;
@@ -122,18 +126,29 @@ function makeEnemy(
   );
   // 敌军兵力按「同等级我方基准」给：基准 = 1 级 100 兵 → 100 级 40294 兵的二次成长，
   // 再按身份 ×1.2~6（本阵主将最高 6 倍，随身份强弱浮动），不再用武将自身的 baseTroops 开小差。
-  const refTroops = troopBaseline(level);
+  const refTroops = troopBaseline(level, rules);
   const strength = Math.min(1, Math.max(0, (raw.baseTroops - 120) / 140));
+  // v19 按原作「敌将固定表、不随玩家等级暴涨」：基准只乘 0.7～1.2，
+  // 不再出现 100 级 Boss 二十四万兵压在同一张 99999 上限表里的情况。
   const mult =
-    kind === "boss"
-      ? 3.6 + 2.4 * strength
-      : kind === "elite"
-        ? 2.2 + 1.8 * strength
-        : 1.5 + 1.2 * strength;
+    rules >= SAGA_RULESET_V19
+      ? kind === "boss"
+        ? 1 + 0.2 * strength
+        : kind === "elite"
+          ? 0.85 + 0.1 * strength
+          : 0.7 + 0.08 * strength
+      : kind === "boss"
+        ? 3.6 + 2.4 * strength
+        : kind === "elite"
+          ? 2.2 + 1.8 * strength
+          : 1.5 + 1.2 * strength;
   // v14 起玩家 1 级只有 100 兵，敌军倍率随章节逐步放开：首章 1.2 倍起步，
 // 到第 7 章才放满 6 倍，免得开局就被同级 6 倍兵压死。
-  const ceiling = Math.min(6, 1.2 + Math.max(0, chapterIndex) * 0.8);
-  const troops = Math.max(80, Math.round(refTroops * Math.min(ceiling, Math.max(1.2, mult))));
+  const ceiling = rules >= SAGA_RULESET_V19 ? 1.2 : Math.min(6, 1.2 + Math.max(0, chapterIndex) * 0.8);
+  const troops = Math.max(
+    80,
+    Math.round(refTroops * Math.min(ceiling, Math.max(rules >= SAGA_RULESET_V19 ? 0.6 : 1.2, mult))),
+  );
   const bonus = traitStats(raw);
   const cap = (value: number): number => Math.min(SAGA_STAT_CAP, Math.round(value));
   // v18：敌将固定三维同样按 2.5 / 2.4 倍铺进 255 / 210 区间，不再叠旧等级成长。
@@ -195,7 +210,12 @@ function enemyIds(
 }
 
 /** 一章的节点：野战 / 精锐 / 本阵，再补一座关卡与一场攻城战，不再岔路。 */
-function buildChapterNodes(chapterIndex: number, nodeCount: number, rng: () => number): SagaNode[] {
+function buildChapterNodes(
+  chapterIndex: number,
+  nodeCount: number,
+  rng: () => number,
+  rules = SAGA_RULESET,
+): SagaNode[] {
   const chapter = SAGA_CHAPTERS[chapterIndex];
   const nodes: SagaNode[] = [];
   for (let index = 0; index < nodeCount; index++) {
@@ -203,7 +223,7 @@ function buildChapterNodes(chapterIndex: number, nodeCount: number, rng: () => n
       index === nodeCount - 1 ? "boss" : index === nodeCount - 2 && nodeCount >= 3 ? "elite" : "battle";
     const ids = enemyIds(chapter.index, kind, index, rng);
     const enemies = ids.map((id, order) =>
-      makeEnemy(id, chapter.index, index, kind === "boss" && order > 0 ? "elite" : kind, kind === "boss" && order === 0),
+      makeEnemy(id, chapter.index, index, kind === "boss" && order > 0 ? "elite" : kind, kind === "boss" && order === 0, rules),
     );
     const bossName = enemies[0]?.name ?? "敌军主将";
     const rewardGold =
@@ -239,7 +259,7 @@ function buildChapterNodes(chapterIndex: number, nodeCount: number, rng: () => n
   // 新增两类硬仗：关卡卡住官道，攻城战直逼城池；都不带岔路，走完才算推进。
   const gateStage = chapter.stages[1] ?? pick(rng, FIELD_NAMES);
   const gateEnemies = enemyIds(chapter.index, "gate", 1, rng).map((id) =>
-    makeEnemy(id, chapter.index, 1, "gate", false),
+    makeEnemy(id, chapter.index, 1, "gate", false, rules),
   );
   const gateStory =
     chapter.story[Math.min(chapter.story.length - 1, Math.floor(chapter.story.length / 3))] ?? "";
@@ -256,7 +276,7 @@ function buildChapterNodes(chapterIndex: number, nodeCount: number, rng: () => n
 
   const siegeIndex = nodes.length - 1;
   const siegeEnemies = enemyIds(chapter.index, "siege", siegeIndex, rng).map((id) =>
-    makeEnemy(id, chapter.index, siegeIndex, "siege", false),
+    makeEnemy(id, chapter.index, siegeIndex, "siege", false, rules),
   );
   const siegeLeader = siegeEnemies[0]?.name ?? "守城将";
   const siegeStory = chapter.story[chapter.story.length - 1] ?? "";
@@ -282,8 +302,14 @@ export function generateSagaRun(options: {
   bank?: SagaBankPolicy;
   /** 大地图模式：一趟行军从当前区一路推到最后一章，八区共享一张连续大图。 */
   world?: boolean;
+  /** 规则档：缺省仍走 v18，新开局显式传 19。 */
+  rules?: number;
+  /** v19 开局难度：只影响敌方伤害公式。 */
+  difficulty?: SagaDifficulty;
 }): SagaRun {
   const save = normalizeTrialSave(options.save);
+  const rules = options.rules ?? save.rules ?? SAGA_RULESET;
+  const difficulty = normalizeSagaDifficulty(options.difficulty);
   const seed =
     typeof options.seed === "number" && Number.isFinite(options.seed)
       ? options.seed >>> 0
@@ -296,7 +322,7 @@ export function generateSagaRun(options: {
     : [startChapter];
   const nodes: SagaNode[] = [];
   for (const chapterIndex of chapters) {
-    nodes.push(...buildChapterNodes(chapterIndex, nodeCount, rng));
+    nodes.push(...buildChapterNodes(chapterIndex, nodeCount, rng, rules));
   }
   return {
     version: SAGA_RUN_VERSION,
@@ -308,7 +334,8 @@ export function generateSagaRun(options: {
     purchases: [],
     shopSeq: 0,
     bank: sanitizeSagaBank(options.bank ?? DEFAULT_SAGA_BANK),
-    rules: SAGA_RULESET,
+    rules,
+    difficulty,
   };
 }
 
@@ -558,6 +585,7 @@ export function parseSagaRun(raw: string | null | undefined): SagaRun | null {
     shopSeq: clampInt(Number(it.shopSeq) || 0, 0, 1_000_000),
     bank,
     rules: upgrading ? SAGA_RULESET : storedRules,
+    difficulty: normalizeSagaDifficulty(it.difficulty),
     rulesFrom: upgrading ? commands.length : storedFrom,
     legacyRules: upgrading ? storedRules : storedLegacy,
     commands: commands.length > 0 ? commands : undefined,
@@ -816,6 +844,7 @@ export function createReplayState(run: SagaRun): SagaReplayState {
     scene: "field",
     // 旧规则行军从旧规则重放，到 `rulesFrom` 再切到当前规则。
     rules: run.legacyRules ?? run.rules ?? 1,
+    difficulty: run.difficulty,
     clearedNodes: [],
     completed: 0,
     victory: false,
@@ -1078,7 +1107,9 @@ export function replaySagaRun(run: SagaRun, commands: SagaCommand[]): SagaReplay
           state.partyTroops[target.id] = revived;
           target.troops = revived;
         } else if (item.heal && current > 0) {
-          const healed = Math.min(maxTroops, current + item.heal);
+          // v19 兵力上限 ×10，药品回复同步 ×10，否则 99999 兵下伤药等于没喝。
+          const healAmount = state.rules >= SAGA_RULESET_V19 ? item.heal * 10 : item.heal;
+          const healed = Math.min(maxTroops, current + healAmount);
           state.partyTroops[target.id] = healed;
           target.troops = healed;
         } else if (item.sp) {

@@ -48,8 +48,12 @@ import {
   trainingLevelCap,
 } from "./saga/training";
 import {
+  SAGA_DEFAULT_DIFFICULTY,
   SAGA_MAX_COMMANDS,
+  SAGA_RULESET_V19,
+  normalizeSagaDifficulty,
   type SagaCommand,
+  type SagaDifficulty,
   type SagaPurchase,
   type SagaRun,
   type SagaRunResult,
@@ -275,7 +279,11 @@ function newSeed(): number {
  * 已经有一次行军没收兵时直接复用；旧版（v5 及更早）的数据就地换成新存档与新路线。
  * 主线走完后不再开新行军。
  */
-export async function startTrialRun(userId: string, config: TrialConfig): Promise<StartedTrial> {
+export async function startTrialRun(
+  userId: string,
+  config: TrialConfig,
+  difficulty: SagaDifficulty = SAGA_DEFAULT_DIFFICULTY,
+): Promise<StartedTrial> {
   const activityKey = assertActiveWindow(config);
   const existing = await findActiveTrialRun(userId, activityKey);
   if (existing) return existing;
@@ -284,6 +292,9 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
   if (campaignComplete(save)) {
     throw new TrialError("讨逆之路已经走完，全剧终");
   }
+  // 新开的一趟行军统一走 v19 原作口径；已经收兵的旧 v18 存档只在旧战报里重放。
+  save.rules = SAGA_RULESET_V19;
+  save.difficulty = normalizeSagaDifficulty(difficulty);
 
   const stale = await db
     .select({ id: trialRuns.id })
@@ -312,6 +323,8 @@ export async function startTrialRun(userId: string, config: TrialConfig): Promis
       bank,
       // 一趟行军贯穿八区：地图是一张连续大图，跨区靠关卡与渡口。
       world: true,
+      rules: save.rules,
+      difficulty: save.difficulty,
     });
 
   if (stale[0]) {

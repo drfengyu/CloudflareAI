@@ -41,6 +41,55 @@ export const SAGA_SAVE_VERSION = 1;
 export const SAGA_RULESET = 18;
 
 /**
+ * v19：新开行军使用的“原作口径”规则档。
+ * 面板攻击只显示兵器值、防御只显示装备值；物理与计策走原作公式；
+ * 兵力上限抬到 99999，开局可选简单 / 普通 / 困难三档敌方伤害。
+ * 旧 v18 行军仍用 `SAGA_RULESET` 重放，互不翻账。
+ */
+export const SAGA_RULESET_V19 = 19;
+
+/** v19 的装备上限：兵器 255、五件防具合计 255。 */
+export const SAGA_WEAPON_CAP_V19 = 255;
+export const SAGA_GEAR_DEF_CAP_V19 = 255;
+
+/** v19 兵力上限：原作 9999 的十倍，方便在 100 级框架里继续拉长。 */
+export const SAGA_TROOP_CAP_V19 = 99_999;
+
+/** 开局难度：只改敌方伤害公式，不改兵力与装备。 */
+export type SagaDifficulty = "easy" | "normal" | "hard";
+export const SAGA_DEFAULT_DIFFICULTY: SagaDifficulty = "normal";
+export const SAGA_DIFFICULTY_LABEL: Record<SagaDifficulty, string> = {
+  easy: "简单",
+  normal: "普通",
+  hard: "困难",
+};
+export const SAGA_DIFFICULTY_DESC: Record<SagaDifficulty, string> = {
+  easy: "敌军伤害最低，敌方防御按等级额外加成 1.5 倍，适合先看剧情。",
+  normal: "原作公式：我方打敌方不吃等级惩罚，敌方打我方防御要加等级，伤害再叠 0.35 阻尼。",
+  hard: "敌军不再吃“防御+等级”惩罚，伤害系数上调，正面硬拼压力最大。",
+};
+
+/** 难度对应的敌方伤害参数：防御等级系数与伤害倍率。 */
+export const SAGA_DIFFICULTY_ENEMY: Record<
+  SagaDifficulty,
+  { defenseLevelScale: number; damageScale: number }
+> = {
+  easy: { defenseLevelScale: 1.5, damageScale: 0.7 },
+  normal: { defenseLevelScale: 1, damageScale: 1 },
+  hard: { defenseLevelScale: 0, damageScale: 1.8 },
+};
+
+export function normalizeSagaDifficulty(value: unknown): SagaDifficulty {
+  return value === "easy" || value === "hard" ? value : "normal";
+}
+
+/**
+ * v19 敌方伤害阻尼：原作乘除公式在 99999 兵线上会把“武力 × 兵力 × 兵器”顶得过高，
+ * 这里给敌方单独乘 0.35，保留不公平公式的等级惩罚，又不至于首战三回合被打空。
+ */
+export const SAGA_ENEMY_DAMAGE_DAMP = 0.35;
+
+/**
  * 属性上限：255。
  * v18 起武力 / 智力 / 速度是固定基础值，不随等级成长；旧表按 2.5 倍铺进 255 区间见
  * `SAGA_STAT_BASE_SCALE`。攻击 / 防御才是成长值，
@@ -388,6 +437,10 @@ export interface SagaStats {
 
 export interface TrialSave {
   version: number;
+  /** v19 起记录本档使用的规则版本；旧档缺省按 v18。 */
+  rules?: number;
+  /** v19 起记录开局难度；旧档缺省普通。 */
+  difficulty?: SagaDifficulty;
   chapter: number;
   clears: number;
   gold: number;
@@ -514,6 +567,8 @@ export interface SagaTacticDef {
     | "drain";
   /** 威力系数：火 / 水 / 石按它放大伤害，回复按它放大回兵量。 */
   power?: number;
+  /** v19 原作口径的计策基数（已按 99999 兵力放大 10 倍），优先于 `power`。 */
+  base?: number;
   /** 混乱 / 缚杀这类计策持续几回合。 */
   turns?: number;
 }
@@ -615,6 +670,8 @@ export interface SagaRun {
   bank: SagaBankPolicy;
   /** 战斗规则版本，见 `SAGA_RULESET`；旧行军缺省按 1。 */
   rules?: number;
+  /** v19 起开局的敌方伤害难度；旧行军缺省普通。 */
+  difficulty?: SagaDifficulty;
   /**
    * 旧规则行军续玩时的分界：第几条指令起改用当前 `rules`。
    * 之前的指令仍按 `legacyRules` 重放，已经打过的仗不会因为改版翻盘。
@@ -796,6 +853,8 @@ export interface SagaBattleState {
   boss: boolean;
   /** 本场适用的战斗规则版本（见 `SAGA_RULESET`）。 */
   rules: number;
+  /** v19 起本场适用的敌方伤害难度。 */
+  difficulty?: SagaDifficulty;
   round: number;
   phase: "select" | "won" | "lost";
   party: SagaBattleGeneral[];
@@ -831,6 +890,8 @@ export interface SagaReplayState {
   scene: "field" | "battle" | "won" | "lost";
   /** 本次行军适用的战斗规则版本（见 `SAGA_RULESET`）。 */
   rules: number;
+  /** v19 起本次行军的敌方伤害难度。 */
+  difficulty?: SagaDifficulty;
   /** 已攻克的营地节点下标，攻打的先后由玩家在地图上自由决定。 */
   clearedNodes: number[];
   completed: number;

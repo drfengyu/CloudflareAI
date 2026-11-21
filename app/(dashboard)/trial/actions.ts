@@ -20,6 +20,7 @@ import {
   type TrialProgressResult,
   type TrialSettlement,
 } from "@/lib/trial/store";
+import { normalizeSagaDifficulty } from "@/lib/trial/saga/types";
 
 type ActionResult<T> = { success: true; data: T } | { success: false; error: string };
 
@@ -29,14 +30,14 @@ function fail(error: unknown, fallback: string): { success: false; error: string
 }
 
 /** 出城：还没收兵的行军直接复用；出城不花券。 */
-export async function startTrialAction(): Promise<ActionResult<StartedTrial>> {
+export async function startTrialAction(difficulty?: unknown): Promise<ActionResult<StartedTrial>> {
   try {
     const userId = await requireUser();
     if (!(await checkRateLimit(`trial-start:${userId}`, { window: 60_000, limit: 10 }))) {
       return { success: false, error: "操作过于频繁，请稍后再试" };
     }
     const config = await getTrialConfig();
-    const data = await startTrialRun(userId, config);
+    const data = await startTrialRun(userId, config, normalizeSagaDifficulty(difficulty));
     revalidatePath("/trial");
     return { success: true, data };
   } catch (error) {

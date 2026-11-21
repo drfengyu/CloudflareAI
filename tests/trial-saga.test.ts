@@ -23,8 +23,12 @@ import {
   SAGA_MAX_LEVEL,
   SAGA_PARTY_SIZE,
   SAGA_RULESET,
+  SAGA_RULESET_V19,
   SAGA_RUN_VERSION,
   SAGA_STAT_CAP,
+  SAGA_TROOP_CAP_V19,
+  SAGA_WEAPON_CAP_V19,
+  SAGA_DIFFICULTY_ENEMY,
   SAGA_TILE_FOREST,
   SAGA_TILE_GRASS,
   SAGA_TILE_ROAD,
@@ -2918,3 +2922,48 @@ test("道具可转交给其他武将，目标满 8 种时不收", () => {
   assert.equal(blocked.save.party[0].items?.qingxin, 1, "目标满格时转交不生效");
   assert.equal(blocked.save.party[1].items?.qingxin, undefined);
 });
+
+test("v19 口径：面板攻只看兵器、防只看装备，兵力 99999 上限", () => {
+  const save = initialTrialSave();
+  save.rules = SAGA_RULESET_V19;
+  const stats = generalStats(save.party[0], save.gearLevels, save.rules);
+  assert.ok(stats.maxTroops > 0 && stats.maxTroops <= SAGA_TROOP_CAP_V19, "兵力按武将底子与 v19 基准走");
+  assert.ok(stats.attack <= SAGA_WEAPON_CAP_V19, "兵器封顶 255");
+  assert.ok(stats.defense <= SAGA_STAT_CAP, "装备防御封顶 255");
+  assert.equal(stats.attack, stats.weaponAtk, "面板攻就是兵器值");
+  assert.equal(stats.defense, stats.armorDef, "面板防就是装备值");
+  assert.equal(troopBaseline(99, SAGA_RULESET_V19), 98140);
+  assert.equal(troopBaseline(100, SAGA_RULESET_V19), 99120);
+  assert.ok(troopBaseline(100, SAGA_RULESET_V19) < SAGA_TROOP_CAP_V19);
+  assert.ok(
+    generalStats(save.party[0], save.gearLevels, SAGA_RULESET).maxTroops <
+      generalStats(save.party[0], save.gearLevels, SAGA_RULESET_V19).maxTroops,
+    "v19 兵力基准高于 v18",
+  );
+});
+
+test("v19 装备表：兵器封顶 255，五槽防御合计 255", () => {
+  const best = ["treasure_halberd", "longlin", "zijin_crown", "longwen_belt", "tiger_pendant", "cloud_boots"]
+    .map((id) => SAGA_ITEMS.find((i) => i.id === id))
+    .filter(Boolean);
+  assert.ok(best.length >= 5, "顶配装备都还在表里");
+  assert.ok(SAGA_WEAPON_CAP_V19 === 255 && SAGA_STAT_CAP === 255);
+  assert.ok(SAGA_ITEMS.every((i) => (i.atk ?? 0) <= 255 && (i.def ?? 0) <= 255));
+});
+
+test("v19 难度：只有敌方公式不同，参数按档位落库", () => {
+  assert.equal(SAGA_DIFFICULTY_ENEMY.easy.defenseLevelScale, 1.5);
+  assert.equal(SAGA_DIFFICULTY_ENEMY.easy.damageScale, 0.7);
+  assert.equal(SAGA_DIFFICULTY_ENEMY.normal.defenseLevelScale, 1);
+  assert.equal(SAGA_DIFFICULTY_ENEMY.normal.damageScale, 1);
+  assert.equal(SAGA_DIFFICULTY_ENEMY.hard.defenseLevelScale, 0);
+  assert.equal(SAGA_DIFFICULTY_ENEMY.hard.damageScale, 1.8);
+  const save = initialTrialSave();
+  save.rules = SAGA_RULESET_V19;
+  const run = generateSagaRun({ activityKey: "v19", save, nodeCount: 12, seed: 20261121, difficulty: "hard" });
+  assert.equal(run.rules, SAGA_RULESET_V19);
+  assert.equal(run.difficulty, "hard");
+  assert.ok(run.nodes.every((n) => n.enemies.every((e) => e.troops <= SAGA_TROOP_CAP_V19)));
+  assert.ok(run.nodes.some((n) => n.kind === "battle" || n.kind === "boss"));
+});
+

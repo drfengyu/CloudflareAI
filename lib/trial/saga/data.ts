@@ -175,29 +175,29 @@ export const SAGA_STARTER_IDS = ["liubei", "guanyu", "zhangfei"] as const;
  */
 export const SAGA_TACTICS: SagaTacticDef[] = [
   // 火系：原版 炼火2/业火4/炎热6/大热6/火神8，习得 1/11/20/34/40
-  { id: "huoji", name: "炼火计", desc: "火计初阶，灼烧全体敌军", cost: 2, level: 1, kind: "fire", power: 1 },
-  { id: "yehuo", name: "业火计", desc: "火势四倍，全体敌军重伤", cost: 4, level: 10, kind: "fire", power: 2.2 },
-  { id: "yanre", name: "炎热计", desc: "烈焰覆阵，全体敌军大损", cost: 6, level: 18, kind: "fire", power: 4.4 },
-  { id: "dare", name: "大热计", desc: "四面成火海，全体敌军重创", cost: 6, level: 25, kind: "fire", power: 8 },
-  { id: "huoshen", name: "火神计", desc: "火神降世，火系最强一击", cost: 8, level: 30, kind: "fire", power: 14 },
+  { id: "huoji", name: "炼火计", desc: "火计初阶，灼烧全体敌军", cost: 2, level: 1, kind: "fire", power: 1, base: 1000 },
+  { id: "yehuo", name: "业火计", desc: "火势四倍，全体敌军重伤", cost: 4, level: 10, kind: "fire", power: 2.2, base: 3600 },
+  { id: "yanre", name: "炎热计", desc: "烈焰覆阵，全体敌军大损", cost: 6, level: 18, kind: "fire", power: 4.4, base: 10000 },
+  { id: "dare", name: "大热计", desc: "四面成火海，全体敌军重创", cost: 6, level: 25, kind: "fire", power: 8, base: 25000 },
+  { id: "huoshen", name: "火神计", desc: "火神降世，火系最强一击", cost: 8, level: 30, kind: "fire", power: 14, base: 40000 },
   // 水系：原版 水途3/水星5/水雷6/洪水8/水龙10，习得 3/12/24/36/44
-  { id: "shutu", name: "水途计", desc: "掘堤放水，冲散全体敌军", cost: 3, level: 3, kind: "water", power: 1 },
-  { id: "shuixing", name: "水星计", desc: "水势暴涨，全体敌军受伤", cost: 5, level: 11, kind: "water", power: 2.4 },
-  { id: "shuilei", name: "水雷计", desc: "聚流成雷，全体敌军大损", cost: 6, level: 18, kind: "water", power: 4.6 },
-  { id: "hongshui", name: "洪水计", desc: "引来洪水，全军水没", cost: 8, level: 25, kind: "water", power: 8.6 },
-  { id: "shuilong", name: "水龙计", desc: "水龙翻江，水系最强一击", cost: 10, level: 30, kind: "water", power: 14.5 },
+  { id: "shutu", name: "水途计", desc: "掘堤放水，冲散全体敌军", cost: 3, level: 3, kind: "water", power: 1, base: 1000 },
+  { id: "shuixing", name: "水星计", desc: "水势暴涨，全体敌军受伤", cost: 5, level: 11, kind: "water", power: 2.4, base: 4000 },
+  { id: "shuilei", name: "水雷计", desc: "聚流成雷，全体敌军大损", cost: 6, level: 18, kind: "water", power: 4.6, base: 11200 },
+  { id: "hongshui", name: "洪水计", desc: "引来洪水，全军水没", cost: 8, level: 25, kind: "water", power: 8.6, base: 27000 },
+  { id: "shuilong", name: "水龙计", desc: "水龙翻江，水系最强一击", cost: 10, level: 30, kind: "water", power: 14.5, base: 44000 },
   // 石系：原版 落木4/流木4/落石6/投石8/激石10，习得 15/26/37/47（收拢到 30）
-  { id: "luomu", name: "落木计", desc: "滚木砸阵，单体受创", cost: 4, level: 5, kind: "rock", power: 1.2 },
-  { id: "liushui", name: "流木计", desc: "乱木倾泻，单体重伤", cost: 4, level: 13, kind: "rock", power: 2.6 },
-  { id: "luoshi", name: "落石计", desc: "巨石自崖顶砸下，单体重创", cost: 6, level: 20, kind: "rock", power: 5.2 },
-  { id: "toushi", name: "投石计", desc: "投石车齐发，单体大损", cost: 8, level: 26, kind: "rock", power: 9 },
-  { id: "jishi", name: "激石计", desc: "山石崩落，石系最强一击", cost: 10, level: 30, kind: "rock", power: 16 },
+  { id: "luomu", name: "落木计", desc: "滚木砸阵，单体受创", cost: 4, level: 5, kind: "rock", power: 1.2, base: 1200 },
+  { id: "liushui", name: "流木计", desc: "乱木倾泻，单体重伤", cost: 4, level: 13, kind: "rock", power: 2.6, base: 4500 },
+  { id: "luoshi", name: "落石计", desc: "巨石自崖顶砸下，单体重创", cost: 6, level: 20, kind: "rock", power: 5.2, base: 15000 },
+  { id: "toushi", name: "投石计", desc: "投石车齐发，单体大损", cost: 8, level: 26, kind: "rock", power: 9, base: 16400 },
+  { id: "jishi", name: "激石计", desc: "山石崩落，石系最强一击", cost: 10, level: 30, kind: "rock", power: 16, base: 48000 },
   // 回复系：原版 赤心2/铜仙4/银仙6/完复8/金仙4，习得 2/17/28/38/46
-  { id: "huifu", name: "赤心计", desc: "为兵力最少的友军回兵", cost: 2, level: 1, kind: "heal", power: 1 },
-  { id: "tongxian", name: "铜仙计", desc: "为兵力最少的友军回一批兵", cost: 4, level: 12, kind: "heal", power: 4 },
-  { id: "yinxian", name: "银仙计", desc: "为兵力最少的友军回大量兵", cost: 6, level: 20, kind: "heal", power: 10 },
-  { id: "wanfu", name: "完复计", desc: "一名友军兵力几乎回满", cost: 8, level: 26, kind: "heal", power: 25 },
-  { id: "jinxian", name: "金仙计", desc: "全队一起回兵（原版 SP 反而低）", cost: 4, level: 29, kind: "healAll", power: 6 },
+  { id: "huifu", name: "赤心计", desc: "为兵力最少的友军回兵", cost: 2, level: 1, kind: "heal", power: 1, base: 2000 },
+  { id: "tongxian", name: "铜仙计", desc: "为兵力最少的友军回一批兵", cost: 4, level: 12, kind: "heal", power: 4, base: 8000 },
+  { id: "yinxian", name: "银仙计", desc: "为兵力最少的友军回大量兵", cost: 6, level: 20, kind: "heal", power: 10, base: 20000 },
+  { id: "wanfu", name: "完复计", desc: "一名友军兵力几乎回满", cost: 8, level: 26, kind: "heal", power: 25, base: 50000 },
+  { id: "jinxian", name: "金仙计", desc: "全队一起回兵（原版 SP 反而低）", cost: 4, level: 29, kind: "healAll", power: 6, base: 12000 },
   // 特殊系：原版 疑心6/缚杀12/陷阱12/解阵16/暗杀16
   { id: "hunluan", name: "疑心计", desc: "令一名敌将生疑，2 回合不能行动", cost: 6, level: 8, kind: "confuse", turns: 2 },
   { id: "fusha", name: "缚杀计", desc: "以术缚住敌将，3 回合不能行动", cost: 12, level: 22, kind: "confuse", turns: 3 },
@@ -380,6 +380,41 @@ export const SAGA_ITEMS: SagaItemDef[] = [
 ];
 
 export const SAGA_ITEM_BY_ID = new Map(SAGA_ITEMS.map((i) => [i.id, i]));
+
+/**
+ * v19 的装备数值在原表上整体抬高：
+ * - 兵器按 ×2.6 放大，1 级木器 2→7、顶级玄铁戟 98→255；
+ * - 防具按槽位封顶分摊 255：甲 100、盔 60、带 40、佩 20、靴 35。
+ * 旧 v18 行军仍读原表，互不影响。
+ */
+const V19_WEAPON_TIER = [10, 20, 40, 80, 120, 200, 235];
+const V19_WEAPON_CAP_ITEM = "treasure_halberd";
+const V19_DEF_SLOT_CAP: Record<string, { cap: number; top: number }> = {
+  armor: { cap: 100, top: 62 },
+  helmet: { cap: 60, top: 28 },
+  belt: { cap: 40, top: 16 },
+  pendant: { cap: 20, top: 4 },
+};
+const V19_BOOTS_DEF: Record<string, number> = {
+  straw_boots: 5,
+  leather_boots: 9,
+  cloud_boots: 35,
+};
+
+export function sagaItemAtk(item: SagaItemDef, rules = 18): number {
+  const base = item.atk ?? 0;
+  if (rules < 19 || item.kind !== "weapon") return base;
+  if (item.id === V19_WEAPON_CAP_ITEM) return 255;
+  return V19_WEAPON_TIER[Math.max(0, Math.min(6, item.quality ?? 0))];
+}
+
+export function sagaItemDef(item: SagaItemDef, rules = 18): number {
+  if (rules < 19) return item.def ?? 0;
+  if (item.kind === "boots") return V19_BOOTS_DEF[item.id] ?? 0;
+  const slot = V19_DEF_SLOT_CAP[item.kind];
+  if (!slot) return 0;
+  return Math.min(slot.cap, Math.round((item.def ?? 0) * slot.cap / slot.top));
+}
 
 /** 兵器谱：只作为武将的「兵器特性」展示，不再限制能装什么兵器。 */
 const SAGA_ARMS_BY_ID: Record<string, WeaponType[]> = {
