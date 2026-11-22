@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {
   CHAPTER_NAMES,
   chapterName,
@@ -147,7 +147,7 @@ function battleTerrainAsset(value: number | undefined | null): string {
 }
 
 /** 桌面 Battle Character 的五行固定纵坐标：3.6 / 2.45 / 1.3 / 0.15 / -1.0（相机正交 5） */
-const BATTLE_ROW_TOP = [5, 17.5, 30, 42.5, 55];
+const BATTLE_ROW_TOP = [14, 25.5, 37, 48.5, 60];
 
 interface ShopState {
   title: string;
@@ -2288,6 +2288,24 @@ export default function KongmingGame() {
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
   }, []);
 
+  const virtualTimer = useRef<number | null>(null);
+  const stopVirtual = useCallback(() => {
+    if (virtualTimer.current !== null) {
+      window.clearInterval(virtualTimer.current);
+      virtualTimer.current = null;
+    }
+  }, []);
+  const virtualPress = useCallback((e: ReactPointerEvent<HTMLButtonElement>, code: string, hold = false) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const fire = () => window.dispatchEvent(new KeyboardEvent("keydown", { code, key: code, bubbles: true }));
+    fire();
+    if (!hold) return;
+    stopVirtual();
+    virtualTimer.current = window.setInterval(fire, 170);
+  }, [stopVirtual]);
+  useEffect(() => stopVirtual, [stopVirtual]);
+
   const s = snap;
   if (!s.ready || !data) {
     return (
@@ -2376,6 +2394,16 @@ export default function KongmingGame() {
 
   return (
     <div className={styles.root}>
+      <div className={styles.activityHead}>
+        <div className={styles.activityTitleRow}>
+          <span className={styles.activityBadge}>限时活动</span>
+          <h1 className={styles.activityTitle}>诸葛孔明传 · 吞食天地２怀旧版</h1>
+        </div>
+        <p className={styles.activityDesc}>
+          按 Windows 桌面版逐场景复刻。方向键 / WASD 移动，J 确认、K 取消，触屏可直接使用画面内虚拟按键。
+        </p>
+      </div>
+      <div className={styles.frameWrap}>
       <div className={`${styles.frame} ${s.shake ? styles.shake : ""}`}>
         {s.screen === "loading" && (
           <div className={styles.loading}>
@@ -2550,7 +2578,7 @@ export default function KongmingGame() {
                   <span>{u.hp}</span>
                 </div>
                 <div className={styles.battleHpBar}>
-                  <i style={{ width: `${u.maxHp ? (u.hp / u.maxHp) * 100 : 0}%` }} />
+                  <i style={{ clipPath: `inset(0 ${100 - (u.maxHp ? (u.hp / u.maxHp) * 100 : 0)}% 0 0)` }} />
                 </div>
                 <div className={styles.battleSprite}>
                   {spriteForModel(u.model) ? <img src={spriteForModel(u.model)!} alt="" /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span>{u.name[0]}</span>}
@@ -2571,7 +2599,7 @@ export default function KongmingGame() {
                     {spriteForModel(u.model) ? <img src={spriteForModel(u.model)!} alt="" /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span>{u.name[0]}</span>}
                   </div>
                   <div className={`${styles.battleHpBar} ${styles.battleHpBarEnemy}`}>
-                    <i style={{ width: `${u.maxHp ? (u.hp / u.maxHp) * 100 : 0}%` }} />
+                    <i style={{ clipPath: `inset(0 0 0 ${100 - (u.maxHp ? (u.hp / u.maxHp) * 100 : 0)}%)` }} />
                   </div>
                   <div className={`${styles.battleStats} ${styles.battleStatsEnemy}`}>
                     <strong>{u.name}</strong>
@@ -2837,7 +2865,10 @@ export default function KongmingGame() {
         )}
 
         {s.dialogue && (
-          <div className={styles.dialogueLayer}>
+          <div
+            className={styles.dialogueLayer}
+            onPointerDown={() => { if (!s.dialogue?.ask) finishDialogue(true); }}
+          >
             <div className={styles.dialogueBox} />
             {showDialoguePortrait && (
               <div className={styles.dialoguePortrait}>
@@ -2855,7 +2886,13 @@ export default function KongmingGame() {
               {s.dialogue.ask && (
                 <div className={styles.choices}>
                   {["是", "否"].map((label, i) => (
-                    <span key={label} className={s.dialogue?.choice === i ? styles.choiceOn : undefined}>
+                    <span
+                      key={label}
+                      role="button"
+                      tabIndex={0}
+                      className={s.dialogue?.choice === i ? styles.choiceOn : undefined}
+                      onClick={(e) => { e.stopPropagation(); finishDialogue(i === 0); }}
+                    >
                       {s.dialogue?.choice === i ? "◆ " : ""}{label}
                     </span>
                   ))}
@@ -2873,6 +2910,21 @@ export default function KongmingGame() {
         {s.banner && <div className={styles.banner}>{s.banner}</div>}
         {s.toast && <div className={styles.toast}>{s.toast}</div>}
         {s.faded && <div className={styles.fade} />}
+        {(s.screen === "field" || s.screen === "battle") && !s.dialogue && !s.panel && !s.shop && (
+          <div className={styles.touchControls}>
+            <div className={styles.touchDpad}>
+              <button type="button" aria-label="向上" className={`${styles.touchKey} ${styles.touchUp}`} onPointerDown={(e) => virtualPress(e, "KeyW", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>W</button>
+              <button type="button" aria-label="向左" className={`${styles.touchKey} ${styles.touchLeft}`} onPointerDown={(e) => virtualPress(e, "KeyA", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>A</button>
+              <button type="button" aria-label="向下" className={`${styles.touchKey} ${styles.touchDown}`} onPointerDown={(e) => virtualPress(e, "KeyS", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>S</button>
+              <button type="button" aria-label="向右" className={`${styles.touchKey} ${styles.touchRight}`} onPointerDown={(e) => virtualPress(e, "KeyD", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>D</button>
+            </div>
+            <div className={styles.touchActions}>
+              <button type="button" aria-label="确认" className={`${styles.touchKey} ${styles.touchJ}`} onPointerDown={(e) => virtualPress(e, "KeyJ")}>J<small>确认</small></button>
+              <button type="button" aria-label="取消" className={`${styles.touchKey} ${styles.touchK}`} onPointerDown={(e) => virtualPress(e, "KeyK")}>K<small>取消</small></button>
+            </div>
+          </div>
+        )}
+      </div>
       </div>
     </div>
   );
