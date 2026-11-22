@@ -18,6 +18,6 @@ export const config = {
      * - favicon.ico
      * - test     Debug-only page
      */
-    "/((?!api|v1|_next/static|_next/image|favicon.ico|test).*)",
+    "/((?!api|v1|_next/static|_next/image|favicon.ico|game-assets|test).*)",
   ],
 };

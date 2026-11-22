@@ -70,6 +70,10 @@ export default {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isAuthed = !!auth?.user;
+      // 本地开发允许直接打开游戏页做键位与场景验收；生产环境仍走登录。
+      if (process.env.NODE_ENV !== "production" && nextUrl.pathname === "/kongming") {
+        return true;
+      }
       const onAuthPage =
         nextUrl.pathname === "/login" || nextUrl.pathname === "/register";
 

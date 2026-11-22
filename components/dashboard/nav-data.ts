@@ -4,6 +4,7 @@ import {
   DollarSign,
   Eye,
   Gift,
+  Gamepad2,
   History,
   Inbox,
   Image as ImageIcon,
@@ -60,6 +61,7 @@ export const NAV: NavGroup[] = [
   {
     title: "在线体验",
     items: [
+      { href: "/kongming", label: "孔明传", icon: Gamepad2 },
       { href: "/chat", label: "AI 对话", icon: MessagesSquare },
       { href: "/playground/image", label: "文生图", icon: ImageIcon },
       { href: "/playground/vision", label: "图像理解", icon: Eye },
