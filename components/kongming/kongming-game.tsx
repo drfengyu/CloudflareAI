@@ -239,6 +239,13 @@ const PROLOGUE = [
   "曹操等人也加入了讨伐黄巾军的战斗\n他们协力激战  终于战胜了张角 黄巾军被镇压了\n但是  乱世并未结束\n",
   "在平乱中按兵不动保存实力的西凉太守  董卓\n借机进入都城洛阳  专政弄权  无恶不作\n刘备等人又举兵声讨  终于消灭了董卓\n天下似乎又太平了\n\n然而......\n乱世还刚刚开始\n奸雄曹操乘乱势逐步扩大力量想一统天下\n淮南袁术无视汉王朝  妄自称帝\n\n还有......\n乱世还在继续......",
 ];
+
+// 原版“序”是三页：第一页纯叙述；第二页上句 + 桃园结义 CG + 下句；第三页纯叙述。
+const PROLOGUE_PAGES: { text?: string; top?: string; image?: string; bottom?: string }[] = [
+  { text: PROLOGUE[0] },
+  { top: PROLOGUE[1], image: "/game-assets/kongming/ui/Story2.png", bottom: PROLOGUE[2] },
+  { text: PROLOGUE[3] },
+];
 const SCENE_ALIAS: Record<string, string> = {
   大地图: "世界地图",
   徐州城: "徐州",
@@ -610,21 +617,47 @@ export default function KongmingGame() {
   }, [decodeMask]);
 
   const spawnFor = useCallback((scene: Scene, tag?: string) => {
-    const wanted = tag?.trim();
-    if (wanted) {
-      const exact = scene.destinations.find((d) => d.tag === wanted);
-      if (exact) return { x: exact.pos[0], y: exact.pos[1] };
+    const raw = (() => {
+      const wanted = tag?.trim();
+      if (wanted) {
+        const exact = scene.destinations.find((d) => d.tag === wanted);
+        if (exact) return { x: exact.pos[0], y: exact.pos[1] };
+      }
+      if (scene.start) return { x: scene.start[0], y: scene.start[1] };
+      const first = scene.destinations[0];
+      if (first) return { x: first.pos[0], y: first.pos[1] };
+      if (scene.map) {
+        const dest = scene.destinations.find((d) => d.tag);
+        if (dest) return { x: dest.pos[0], y: dest.pos[1] };
+        return { x: scene.map.x + Math.floor(scene.map.w / 2), y: scene.map.y + Math.floor(scene.map.h / 2) };
+      }
+      return { x: 0, y: 0 };
+    })();
+    // 桌面场景的入口点偶尔落在 TilemapCollider 覆盖的格子内；向外找最近的可走格，
+    // 避免进城 / 出城后原地卡死。找不到时保持原入口。
+    if (!blockedAt(scene, raw.x, raw.y)) return raw;
+    let best: { x: number; y: number } | null = null;
+    let bestScore = -Infinity;
+    for (let r = 1; r <= 8; r++) {
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          const x = raw.x + dx;
+          const y = raw.y + dy;
+          if (blockedAt(scene, x, y)) continue;
+          const exits = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+            .filter(([ox, oy]) => !blockedAt(scene, x + ox, y + oy)).length;
+          const score = exits * 100 - Math.hypot(dx, dy);
+          if (score > bestScore) {
+            bestScore = score;
+            best = { x, y };
+          }
+        }
+      }
+      if (best) return best;
     }
-    if (scene.start) return { x: scene.start[0], y: scene.start[1] };
-    const first = scene.destinations[0];
-    if (first) return { x: first.pos[0], y: first.pos[1] };
-    if (scene.map) {
-      const dest = scene.destinations.find((d) => d.tag);
-      if (dest) return { x: dest.pos[0], y: dest.pos[1] };
-      return { x: scene.map.x + Math.floor(scene.map.w / 2), y: scene.map.y + Math.floor(scene.map.h / 2) };
-    }
-    return { x: 0, y: 0 };
-  }, []);
+    return raw;
+  }, [blockedAt]);
 
   const chooseScene = useCallback((name: string, tag?: string, preferredLevel?: number, previousLevel?: number) => {
     const d = currentData();
@@ -1741,27 +1774,9 @@ export default function KongmingGame() {
     const start = d.scenes.find((x) => x.level === 12) ?? d.scenes[0];
     if (!start) return;
     loadScene(start.level, "开场", false);
-    banner("第一章　徐州沉浮");
-  }, [banner, currentData, loadScene]);
+  }, [currentData, loadScene]);
 
-  useEffect(() => {
-    if (snap.screen !== "prologue") return;
-    const view = storyViewRef.current;
-    if (!view) return;
-    let frame = 0;
-    const started = performance.now();
-    const duration = 66000;
-    const tick = (now: number) => {
-      const t = Math.min(1, (now - started) / duration);
-      const max = Math.max(0, view.scrollHeight - view.clientHeight);
-      view.scrollTop = max * t;
-      if (t < 1) frame = requestAnimationFrame(tick);
-      else proceedPrologue();
-    };
-    view.scrollTop = 0;
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [snap.screen, proceedPrologue]);
+  // 原版序章是按键翻页，不再自动滚动；J 下一页，K 直接跳过。
 
   /* ------------------------------------------------------------------ */
   /* Terminal / input                                                    */
@@ -1780,11 +1795,26 @@ export default function KongmingGame() {
     const nx = fromX + dx;
     const ny = fromY + dy;
     mutate((prev) => ({ ...prev, dir: [dx, dy] }));
+    // 原版 TeamMove 在移动前先用 TriggerQuestEvent(vector, ...) 判定目标格：
+    // 踩到 Trigger 事件格时脚本先执行，不会因为格上站着 NPC 而被阻挡。
+    const triggerEvent = s.scene.events
+      .filter((e) => {
+        if (!e.id || s.flags[e.id] || e.when !== 1) return false;
+        if (!eventVisible(e, s.flags, chapterName(s.chapter))) return false;
+        if (e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) return false;
+        const p = s.eventPos[e.id] ?? e.pos;
+        return dist(p[0], p[1], nx, ny) < 0.8;
+      })
+      .sort((a, b) => dist(a.pos[0], a.pos[1], nx, ny) - dist(b.pos[0], b.pos[1], nx, ny))[0];
+    if (triggerEvent) {
+      void runEvent(triggerEvent);
+      return;
+    }
     if (blockedAt(s.scene, nx, ny)) {
       return;
     }
     const blockingNpc = s.scene.events.find((e) => {
-      if (!e.id || s.flags[e.id] || !eventVisible(e, s.flags, chapterName(s.chapter))) return false;
+      if (!e.id || s.flags[e.id] || e.when !== 2) return false;
       if (e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) return false;
       const p = s.eventPos[e.id] ?? e.pos;
       return dist(p[0], p[1], nx, ny) < 0.72;
@@ -1837,7 +1867,7 @@ export default function KongmingGame() {
       const [ndx, ndy] = DIR_KEYS[held];
       if (!locked.current) void moveRef.current?.(ndx, ndy);
     }
-  }, [blockedAt, boxed, mutate, toast, triggerOnEnter]);
+  }, [blockedAt, boxed, mutate, runEvent, toast, triggerOnEnter]);
   moveRef.current = move;
 
   const interact = useCallback(async () => {
@@ -2101,18 +2131,20 @@ export default function KongmingGame() {
     }
 
     if (s.screen === "title") {
-      if (key === "KeyW" || key === "KeyS") mutate((prev) => ({ ...prev, titleCursor: (prev.titleCursor + (key === "KeyW" ? 3 : 1)) % 4 }));
+      // 原版标题是四列横排：A/D 左右选择，W/S 也保留为等价操作。
+      if (key === "KeyD" || key === "KeyS") mutate((prev) => ({ ...prev, titleCursor: (prev.titleCursor + 1) % 4 }));
+      if (key === "KeyA" || key === "KeyW") mutate((prev) => ({ ...prev, titleCursor: (prev.titleCursor + 3) % 4 }));
       if (key === "KeyJ") activateTitle(s.titleCursor);
       if (key === "KeyK") return;
       return;
     }
 
     if (s.screen === "prologue") {
-      if (key === "KeyK") {
-        const d = currentData();
-        const start = d.scenes.find((x) => x.level === 12) ?? d.scenes[0];
-        if (start) { loadScene(start.level, "开场", false); banner("第一章　徐州沉浮"); }
+      if (key === "KeyJ") {
+        if (s.prologuePage < PROLOGUE_PAGES.length - 1) mutate((prev) => ({ ...prev, prologuePage: prev.prologuePage + 1 }));
+        else proceedPrologue();
       }
+      if (key === "KeyK") proceedPrologue();
       return;
     }
 
@@ -2172,12 +2204,10 @@ export default function KongmingGame() {
 
   const scene = s.scene;
   const map = scene?.map ?? null;
-  const viewW = 960;
-  const viewH = 540;
+  const viewW = 400;
+  const viewH = 400;
   const baseCell = map?.scale ?? 32;
-  const baseW = map ? map.w * baseCell : 0;
-  const baseH = map ? map.h * baseCell : 0;
-  const zoom = map ? Math.max(1, viewW / Math.max(1, baseW), viewH / Math.max(1, baseH)) : 1;
+  const zoom = map ? Math.max(1, 32 / Math.max(1, baseCell)) : 1;
   const cell = baseCell * zoom;
   const mapW = map ? map.w * cell : 0;
   const mapH = map ? map.h * cell : 0;
@@ -2288,15 +2318,17 @@ export default function KongmingGame() {
         {s.screen === "prologue" && (
           <div className={styles.storyScreen}>
             <div className={styles.storyViewport} ref={storyViewRef}>
-              <div className={styles.storyContent}>
-                <p className={styles.storyText}>{PROLOGUE[0]}</p>
-                <img className={styles.storyImage} src="/game-assets/kongming/ui/Story1.png" alt="" draggable={false} />
-                <p className={styles.storyText}>{PROLOGUE[1]}</p>
-                <img className={styles.storyImage} src="/game-assets/kongming/ui/Story2.png" alt="" draggable={false} />
-                <p className={styles.storyText}>{PROLOGUE[2]}</p>
-                <img className={styles.storyImage} src="/game-assets/kongming/ui/Story3.png" alt="" draggable={false} />
-                <p className={styles.storyText}>{PROLOGUE[3]}</p>
-              </div>
+              {(() => {
+                const page = PROLOGUE_PAGES[clamp(s.prologuePage, 0, PROLOGUE_PAGES.length - 1)];
+                return (
+                  <div className={styles.storyPage}>
+                    {page.text && <p className={styles.storyText}>{page.text}</p>}
+                    {page.top && <p className={styles.storyText}>{page.top}</p>}
+                    {page.image && <img className={styles.storyImage} src={page.image} alt="" draggable={false} />}
+                    {page.bottom && <p className={styles.storyText}>{page.bottom}</p>}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -2307,11 +2339,11 @@ export default function KongmingGame() {
               <rect width={viewW} height={viewH} fill="#10130f" />
               <defs>
                 <clipPath id="clip-player">
-                  <rect x={playerSX - 32} y={playerSY - 58} width={64} height={64} />
+                  <rect x={playerSX - 18} y={playerSY - 33} width={36} height={36} />
                 </clipPath>
                 {followerEntries.map(({ pos }, i) => (
                   <clipPath id={`clip-follower-${i}`} key={`clip-${i}`}>
-                    <rect x={sx(pos.x) - 32} y={sy(pos.y) - 58} width={64} height={64} />
+                    <rect x={sx(pos.x) - 18} y={sy(pos.y) - 33} width={36} height={36} />
                   </clipPath>
                 ))}
               </defs>
@@ -2336,8 +2368,8 @@ export default function KongmingGame() {
                 if (!sprite) return null;
                 return (
                   <g key={`${e.id}-${i}`}>
-                    <ellipse cx={ex} cy={ey + 4} rx={22} ry={8} fill="rgba(0,0,0,.35)" />
-                    <svg x={ex - 32} y={ey - 58} width={64} height={64} viewBox="0 0 64 64" preserveAspectRatio="xMidYMid meet" overflow="hidden">
+                    <ellipse cx={ex} cy={ey + 3} rx={12} ry={5} fill="rgba(0,0,0,.35)" />
+                    <svg x={ex - 18} y={ey - 33} width={36} height={36} viewBox="0 0 64 64" preserveAspectRatio="xMidYMid meet" overflow="hidden">
                       <image href={sprite} x={0} y={0} width={64} height={64} className={styles.pixel} />
                     </svg>
                     {name && null}
@@ -2363,48 +2395,40 @@ export default function KongmingGame() {
                 const fy = sy(pos.y);
                 return (
                   <g key={m.key}>
-                    <ellipse cx={fx} cy={fy + 4} rx={22} ry={8} fill="rgba(0,0,0,.35)" />
+                    <ellipse cx={fx} cy={fy + 3} rx={12} ry={5} fill="rgba(0,0,0,.35)" />
                     {strip ? (
                       <image
                         href={strip}
-                        x={fx - 32 - frame * 64}
-                        y={fy - 58}
-                        width={512}
-                        height={64}
+                        x={fx - 18 - frame * 36}
+                        y={fy - 33}
+                        width={288}
+                        height={36}
                         clipPath={`url(#clip-follower-${i})`}
                         className={styles.pixel}
                       />
                     ) : (
-                      <circle cx={fx} cy={fy - 28} r={18} fill="#3b4c45" stroke="#d8c38f" strokeWidth={2} />
+                      <circle cx={fx} cy={fy - 17} r={11} fill="#3b4c45" stroke="#d8c38f" strokeWidth={2} />
                     )}
                   </g>
                 );
               })}
-              <ellipse cx={playerSX} cy={playerSY + 4} rx={22} ry={8} fill="rgba(0,0,0,.45)" />
+              <ellipse cx={playerSX} cy={playerSY + 3} rx={12} ry={5} fill="rgba(0,0,0,.45)" />
               {playerSprite ? (
                 <image
                   href={playerSprite}
-                  x={playerSX - 32 - playerFrame * 64}
-                  y={playerSY - 58}
-                  width={512}
-                  height={64}
+                  x={playerSX - 18 - playerFrame * 36}
+                  y={playerSY - 33}
+                  width={288}
+                  height={36}
                   clipPath="url(#clip-player)"
                   className={styles.pixel}
                 />
               ) : (
-                <circle cx={playerSX} cy={playerSY - 26} r={22} fill="#294b63" stroke="#d8c38f" strokeWidth={2} />
+                <circle cx={playerSX} cy={playerSY - 17} r={11} fill="#294b63" stroke="#d8c38f" strokeWidth={2} />
               )}
               {!playerSprite && (
-                <text x={playerSX} y={playerSY - 20} textAnchor="middle" fill="#fff" fontSize={15}>{leader?.name?.[0] ?? "刘"}</text>
+                <text x={playerSX} y={playerSY - 13} textAnchor="middle" fill="#fff" fontSize={10}>{leader?.name?.[0] ?? "刘"}</text>
               )}
-              <text x={playerSX} y={playerSY - 72} textAnchor="middle" fill="#fff6df" fontSize={19} stroke="#1c140b" strokeWidth={4} paintOrder="stroke">
-                {leader?.name ?? ""}
-              </text>
-              {followerEntries.map(({ member: m, pos }) => (
-                <text key={`label-${m.key}`} x={sx(pos.x)} y={sy(pos.y) - 72} textAnchor="middle" fill="#f5e7c8" fontSize={18} stroke="#20150b" strokeWidth={4} paintOrder="stroke">
-                  {m.name}
-                </text>
-              ))}
             </svg>
 
           </div>

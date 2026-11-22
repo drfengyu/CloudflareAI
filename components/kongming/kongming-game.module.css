@@ -249,26 +249,47 @@
   overflow: hidden;
 }
 
-.storyContent {
-  width: 93%;
-  margin: 0 auto;
-  padding: 7vh 0 9vh;
-  color: #fff;
+.storyPage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 6% 9% 3%;
+  box-sizing: border-box;
+  gap: 2.2vh;
+}
+
+.storyPage:has(.storyImage) {
+  justify-content: center;
+  padding-top: 5%;
+  padding-bottom: 4%;
+  gap: 2.2vh;
 }
 
 .storyText {
+  width: 100%;
   margin: 0;
   white-space: pre-wrap;
   font-family: "Songti SC", "Noto Serif SC", "STSong", serif;
-  font-size: clamp(16px, 3.4vw, 48px);
-  line-height: 1.38;
-  letter-spacing: 0.08em;
+  font-size: clamp(14px, 2.1vw, 30px);
+  line-height: 1.62;
+  letter-spacing: 0.04em;
   font-weight: 500;
+  text-align: left;
+}
+
+.storyPage:has(.storyImage) .storyText {
+  text-align: center;
 }
 
 .storyImage {
   display: block;
-  width: 79%;
+  width: min(30%, 230px);
+  height: auto;
+  max-height: 30vh;
+  object-fit: contain;
   margin: 0 auto;
   image-rendering: pixelated;
   user-select: none;
@@ -286,9 +307,11 @@
 
 .world {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  left: 50%;
+  top: 50%;
+  width: 400px;
+  height: 400px;
+  transform: translate(-50%, -50%);
 }
 
 .pixel {
@@ -1296,10 +1319,10 @@
 
 .dialogueLayer {
   position: absolute;
-  left: 0;
+  left: 18%;
   right: 0;
   bottom: 1.8%;
-  height: 33.3%;
+  height: 24%;
   z-index: 22;
   animation: dialogueIn 0.2s ease-out;
 }
@@ -1313,10 +1336,10 @@
   position: absolute;
   inset: 0;
   border-style: solid;
-  border-width: 9px;
+  border-width: 6px;
   border-image-source: url("/game-assets/kongming/ui/DialogueBox.png");
   border-image-slice: 11 fill;
-  border-image-width: 9px;
+  border-image-width: 6px;
   border-image-repeat: stretch;
   background: transparent;
   box-shadow: 0 10px 36px rgba(0, 0, 0, 0.55);
@@ -1325,8 +1348,8 @@
 .dialoguePortrait {
   position: absolute;
   left: 2.7%;
-  bottom: 23%;
-  width: 17.9%;
+  bottom: 0;
+  width: 12%;
   aspect-ratio: 1;
   z-index: 2;
   background: #000;
@@ -1338,6 +1361,7 @@
   height: 100%;
   object-fit: cover;
   image-rendering: auto;
+  filter: grayscale(1) sepia(0.12) contrast(1.06);
 }
 
 .dialogueFaceBoard {
@@ -1356,18 +1380,18 @@
   z-index: 3;
   color: #e2e2e2;
   font-family: "Songti SC", "Noto Serif SC", "STSong", serif;
-  font-size: clamp(14px, 2.8vw, 36px);
-  letter-spacing: 0.2em;
+  font-size: clamp(11px, 1.9vw, 24px);
+  letter-spacing: 0.14em;
   line-height: 1;
   white-space: nowrap;
 }
 
 .dialogueTextBox {
   position: absolute;
-  left: 23.1%;
-  right: 3.5%;
-  top: 7%;
-  bottom: 10%;
+  left: 15%;
+  right: 1%;
+  top: 6%;
+  bottom: 8%;
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -1382,9 +1406,9 @@
   margin: 0;
   color: #fff;
   font-family: "Songti SC", "Noto Serif SC", "STSong", serif;
-  font-size: clamp(13px, 3.36vw, 44px);
-  line-height: 1.38;
-  letter-spacing: 0.08em;
+  font-size: clamp(12px, 2.15vw, 28px);
+  line-height: 1.5;
+  letter-spacing: 0.04em;
   white-space: pre-wrap;
 }
 
@@ -1512,10 +1536,9 @@
 }
 .titleCapcom {
   position: absolute;
-  left: 50%;
-  top: 5.5%;
-  width: clamp(34px, 4.6vw, 70px);
-  transform: translateX(-50%);
+  right: 3%;
+  top: 3%;
+  width: clamp(38px, 5vw, 76px);
   image-rendering: pixelated;
   opacity: 0;
   animation: capcomIntro 2.8s ease-in-out forwards;
@@ -1529,12 +1552,11 @@
 .titleLogo {
   position: absolute;
   left: 50%;
-  top: 9.5%;
-  width: clamp(190px, 36vw, 500px);
+  top: 10.5%;
+  width: clamp(170px, 30.5vw, 430px);
   transform: translateX(-50%);
   image-rendering: pixelated;
-  opacity: 0;
-  animation: logoIn 1.2s ease-out 1.55s forwards;
+  opacity: 1;
   filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.9));
 }
 @keyframes logoIn {
@@ -1544,11 +1566,10 @@
 .titleSwordWrap {
   position: absolute;
   left: 50%;
-  top: 25%;
-  width: clamp(320px, 56vw, 880px);
+  top: 28.5%;
+  width: clamp(170px, 30vw, 410px);
   transform: translateX(-50%);
-  opacity: 0;
-  animation: swordIn 1s ease-out 2.15s forwards;
+  opacity: 1;
 }
 @keyframes swordIn {
   from { opacity: 0; transform: translate(-58%, 0); }
@@ -1557,7 +1578,7 @@
 .titleSword {
   display: block;
   width: 100%;
-  height: clamp(40px, 6vh, 58px);
+  height: clamp(28px, 4.6vh, 46px);
   object-fit: fill;
   image-rendering: pixelated;
 }
@@ -1569,14 +1590,14 @@
   margin: 0;
   transform: translate(-50%, -50%);
   white-space: nowrap;
-  color: #b2252f;
+  color: #f2ece0;
   font-family: "Yu Mincho", "Songti SC", "SimSun", serif;
-  font-size: clamp(28px, 3.9vw, 62px);
+  font-size: clamp(22px, 3.1vw, 42px);
   font-weight: 700;
-  letter-spacing: 0.45em;
+  letter-spacing: 0.3em;
   line-height: 1;
-  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.85), 0 0 6px rgba(0, 0, 0, 0.6);
-  -webkit-text-stroke: 1px rgba(238, 210, 180, 0.45);
+  text-shadow: 0 2px 0 #8c1c22, 0 0 8px rgba(0, 0, 0, 0.6);
+  -webkit-text-stroke: 1px rgba(150, 30, 36, 0.55);
 }
 .titleVersion {
   position: absolute;
@@ -1590,8 +1611,8 @@
 }
 .titleMenu {
   position: absolute;
-  left: 50%;
-  top: 38.5%;
+  left: 39%;
+  top: 56%;
   z-index: 6;
   list-style: none;
   padding: 0;
@@ -1599,10 +1620,9 @@
   display: flex;
   flex-direction: row;
   align-items: flex-start;
-  gap: clamp(38px, 7vw, 118px);
+  gap: clamp(20px, 4.6vw, 52px);
   transform: translateX(-50%);
-  opacity: 0;
-  animation: menuIn 0.9s ease-out 2.95s forwards;
+  opacity: 1;
 }
 @keyframes menuIn {
   from { opacity: 0; transform: translate(-50%, 6px); }
@@ -1612,7 +1632,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 1.9em;
+  min-width: 1.2em;
   color: #8f8f87;
   cursor: pointer;
   user-select: none;
@@ -1632,18 +1652,19 @@
 }
 .menuLabel {
   display: block;
+  white-space: nowrap;
   writing-mode: vertical-rl;
   text-orientation: upright;
   font-family: "Yu Mincho", "Songti SC", "SimSun", serif;
-  font-size: clamp(24px, 3vw, 46px);
-  letter-spacing: 0.18em;
-  line-height: 1.08;
+  font-size: clamp(24px, 3.8vw, 44px);
+  letter-spacing: 0.1em;
+  line-height: 0.98;
   text-shadow: 0 2px 5px #000;
 }
 .titleFoot {
   position: absolute;
   left: 50%;
-  bottom: 3.8%;
+  bottom: 3%;
   z-index: 6;
   transform: translateX(-50%);
   color: #a49b91;
