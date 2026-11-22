@@ -346,6 +346,58 @@ function evalEventCondition(expr: string, flags: Record<string, true>) {
   );
 }
 
+/**
+ * Drops flags whose own event chain was never actually reached.
+ * Example: `11011 车胄` requires `11009 袁术`, and `11009` itself requires `11008 袁胤`.
+ * A stale save may contain `11009` without `11008`; without this check 车胄/陈登 show too early.
+ */
+function pruneInvalidEventFlags(flags: Record<string, true>, scenes: Scene[]) {
+  const byId = new Map<string, SceneEvent>();
+  for (const scene of scenes) for (const ev of scene.events) if (ev.id) byId.set(ev.id, ev);
+  const memo = new Map<string, boolean>();
+  const visiting = new Set<string>();
+
+  function checkExpr(expr: string): boolean {
+    return expr
+      .trim()
+      .split("|")
+      .some((part) =>
+        part.split("&").every((token) => {
+          const raw = token.trim().replace(/^\(+|\)+$/g, "");
+          if (!raw) return true;
+          const negate = raw.startsWith("!");
+          const word = negate ? raw.slice(1) : raw;
+          let ok: boolean;
+          if (word.endsWith("T")) ok = valid(word.slice(0, -1));
+          else if (word.endsWith("F")) ok = !valid(word.slice(0, -1));
+          else if (word.endsWith("SO")) ok = valid(word.slice(0, -2));
+          else ok = valid(word);
+          return negate ? !ok : ok;
+        }),
+      );
+  }
+
+  function valid(id: string): boolean {
+    if (memo.has(id)) return memo.get(id)!;
+    if (!flags[id]) return false;
+    const ev = byId.get(id);
+    if (!ev) return true;
+    if (visiting.has(id)) return true;
+    visiting.add(id);
+    const ok = ev.show ? checkExpr(ev.show) : true;
+    visiting.delete(id);
+    memo.set(id, ok);
+    return ok;
+  }
+
+  const next: Record<string, true> = {};
+  for (const key of Object.keys(flags)) {
+    const ev = byId.get(key);
+    if (!ev || valid(key)) next[key] = true;
+  }
+  return next;
+}
+
 /** Mirrors QuestEvent.Refresh: chapter mismatch, hide condition, show condition, startHide. */
 function eventVisible(ev: SceneEvent, flags: Record<string, true>, chapterName?: string) {
   if (ev.chapter) {
@@ -725,6 +777,7 @@ export default function KongmingGame() {
       y: spawn.y,
       dir: (scene.level === 12 ? [0, 1] : [0, -1]) as [number, number],
       eventPos: {},
+      flags: pruneInvalidEventFlags(s.flags, d.scenes),
       dialogue: null,
       panel: null,
       shop: null,
@@ -1626,10 +1679,16 @@ export default function KongmingGame() {
     toast(`已保存到存档 ${slot + 1}`);
   }, [mutate, toast]);
 
-  const loadSave = useCallback((save: SavePayload) => {
+  const loadSave = useCallback((save: SavePayload, slot?: number) => {
     const d = currentData();
     const scene = d.scenes.find((x) => x.level === save.sceneLevel) ?? d.scenes[0];
     if (!scene) return;
+    const repaired = { ...save, flags: pruneInvalidEventFlags(save.flags, d.scenes) };
+    if (slot !== undefined && Object.keys(repaired.flags).length !== Object.keys(save.flags).length) {
+      localStorage.setItem(SAVE_PREFIX + slot, JSON.stringify(repaired));
+      savesRef.current = { ...savesRef.current, [slot]: repaired };
+    }
+    save = repaired;
     trailRef.current = seedTeamTrail(save.x, save.y, save.dir, Math.max(0, save.party.length - 1));
     followPosRef.current = trailRef.current.map((p) => ({ ...p }));
     mutate((prev) => ({
@@ -1647,7 +1706,7 @@ export default function KongmingGame() {
       level: save.level,
       exp: save.exp,
       inventory: save.inventory,
-      flags: save.flags,
+      flags: pruneInvalidEventFlags(save.flags, d.scenes),
       openedChests: save.openedChests,
       formation: save.formation,
       chapter: save.chapter,
@@ -2117,7 +2176,7 @@ export default function KongmingGame() {
           if (p.kind === "save") saveGame(slot);
           else {
             const save = savesRef.current[slot];
-            if (save) loadSave(save);
+            if (save) loadSave(save, slot);
             else toast("该存档为空");
           }
         }
