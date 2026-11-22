@@ -21,6 +21,8 @@ import {
   type SkillData,
 } from "@/lib/kongming/data";
 import { LuaRuntime } from "@/lib/kongming/lua";
+import { gameAudio, type GameTheme } from "@/lib/game/audio";
+import { SoundToggle } from "@/components/activity/sound-toggle";
 import styles from "./kongming-game.module.css";
 
 type Screen = "loading" | "title" | "prologue" | "field" | "battle" | "gameover";
@@ -86,6 +88,10 @@ interface BattleUnit {
   def: number;
   skills: string[];
   defending: boolean;
+  attackTimes: number;
+  hitRate: number;
+  critRate: number;
+  critPower: number;
 }
 
 interface BattleState {
@@ -111,7 +117,7 @@ interface BattleState {
 }
 
 interface BattleAction {
-  type: "attack" | "defend" | "skill" | "item" | "flee";
+  type: "attack" | "defend" | "skill" | "item" | "flee" | "offensive";
   target?: string;
   skill?: string;
   item?: string;
@@ -545,6 +551,47 @@ export default function KongmingGame() {
     bannerTimer.current = setTimeout(() => mutate((s) => ({ ...s, banner: null })), 2600);
   }, [mutate]);
 
+  /* ------------------------------------------------------------------ */
+  /* Map preload                                                         */
+  /* ------------------------------------------------------------------ */
+
+  // 原版换场是即时的：进新场景前地图纹理已经采样完成。
+  // 这里在当前场景停留时预热所有可去的相邻地图，避免出城后先黑屏再等大图解码。
+  const sceneLevel = snap.scene?.level ?? 0;
+  useEffect(() => {
+    if (!data || !sceneLevel || typeof window === "undefined") return;
+    const scene = data.scenes.find((s) => s.level === sceneLevel);
+    if (!scene) return;
+    const urls = new Set<string>();
+    for (const t of scene.transitions) {
+      const candidates = data.scenesByName.get(baseName(t.scene)) ?? [];
+      for (const c of candidates) {
+        if (c.map?.src) urls.add(c.map.src);
+      }
+    }
+    const imgs: HTMLImageElement[] = [];
+    for (const url of urls) {
+      const img = new Image();
+      img.decoding = "async";
+      img.src = url;
+      imgs.push(img);
+    }
+    return () => {
+      for (const img of imgs) img.src = "";
+    };
+  }, [data, sceneLevel]);
+
+  useEffect(() => {
+    if (snap.screen === "loading") return;
+    const theme: GameTheme =
+      snap.screen === "battle" ? "kongming-battle"
+        : snap.screen === "title" || snap.screen === "prologue" ? "kongming-title"
+          : "kongming-field";
+    gameAudio.setTheme(theme);
+    gameAudio.unlockOnGesture();
+    return () => gameAudio.setTheme(null);
+  }, [snap.screen]);
+
   useEffect(() => {
     loadGameData()
       .then((d) => {
@@ -619,8 +666,8 @@ export default function KongmingGame() {
     const eq = equipmentStats(m);
     return {
       maxHp: hpFor(c, d?.hpLevels ?? new Map(), level),
-      atk: 28 + level * 2 + eq.atk,
-      def: 22 + level * 2 + eq.def,
+      atk: (c?.stats[2] ?? 0) + eq.atk,
+      def: (c?.stats[3] ?? 0) + eq.def,
       str: (c?.stats[4] ?? 60) + eq.str,
       ler: (c?.stats[5] ?? 40) + eq.ler,
       spd: (c?.stats[6] ?? 50) + eq.spd,
@@ -887,6 +934,9 @@ export default function KongmingGame() {
     const battleStats = battleName ? d.content.enemyStats?.[battleName] : undefined;
     const players: BattleUnit[] = s.party.filter((m) => !m.dead).map((m, index) => {
       const st = memberCombatStats(m);
+      const c = d.characters.get(m.name);
+      const weapon = m.equipment[0] ? d.equipment.get(m.equipment[0]) : null;
+      const weaponType = weapon?.weaponType ?? c?.weapon ?? 1;
       const skills = m.skills.filter((name) => {
         const sk = d.skills.get(name);
         return sk && sk.lv <= s.level;
@@ -906,6 +956,10 @@ export default function KongmingGame() {
         def: st.def,
         skills,
         defending: false,
+        attackTimes: weapon?.attackCount ?? ((weaponType & 16) !== 0 ? 2 : 1),
+        hitRate: 92,
+        critRate: c?.critRate ?? 10,
+        critPower: c?.critPower ?? 1.2,
       };
     });
     const enemies: BattleUnit[] = configEnemies.map((name, index) => {
@@ -936,6 +990,10 @@ export default function KongmingGame() {
         def: real && real.def >= 0 ? real.def : (c?.stats[3] || ch?.defense || 10),
         skills: skillNames,
         defending: false,
+        attackTimes: ((c?.weapon ?? 0) & 16) !== 0 ? 2 : 1,
+        hitRate: 92,
+        critRate: c?.critRate ?? 10,
+        critPower: c?.critPower ?? 1.2,
       };
     });
     return { players, enemies, formation };
@@ -978,6 +1036,7 @@ export default function KongmingGame() {
       ? (dataRef.current?.content.battles.find((b) => b.name === config.name) as { terrain?: number } | undefined)
       : undefined;
     locked.current = true;
+    gameAudio.play("encounter");
     mutate((prev) => ({
       ...prev,
       screen: "battle",
@@ -1005,11 +1064,10 @@ export default function KongmingGame() {
 
     const resultPromise = new Promise<number>((resolve) => { battleLoopResolve.current = resolve; });
     const formation = dataRef.current?.formations.get(s.formation);
-    const formationAtk = formation?.flatMags?.[0]?.attack ?? 1;
-    const formationHurt = formation?.flatMags?.[0]?.getHurt ?? 1;
     let round = 1;
     let finished = false;
     let fled = false;
+    let allOut = false;
 
     const updateUnits = (nextUnits: BattleUnit[]) => {
       aliveCountsRef.current = {
@@ -1023,17 +1081,32 @@ export default function KongmingGame() {
       mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, log: [line, ...prev.battle.log].slice(0, 8) } } : prev);
     };
 
-    const damageOf = (attacker: BattleUnit, defender: BattleUnit, mult = 1) => {
+    const unitIndex = (u: BattleUnit) => {
+      const n = Number(u.key.slice(1));
+      return Number.isFinite(n) ? n : 0;
+    };
+    const formationMag = (u: BattleUnit) => {
+      if (u.side !== "player") return { attack: 1, getHurt: 1 };
+      const mag = formation?.flatMags?.[unitIndex(u)];
+      return { attack: mag?.attack ?? 1, getHurt: mag?.getHurt ?? 1 };
+    };
+
+    /** 原版 Hit.AttackDamage：离散 0.8/0.9/1.0/1.1/1.2，暴击倍率，防御减半。 */
+    const damageOf = (attacker: BattleUnit, defender: BattleUnit, opts?: { crit?: boolean; hitIndex?: number }) => {
       const level = snapRef.current.level;
       const atk = Math.max(1, attacker.atk);
       const str = Math.max(1, attacker.str);
-      const hp = Math.min(65535, Math.max(1, attacker.hp));
+      const hp = Math.min(65535, Math.max(0, attacker.hp));
       const def = Math.max(4, defender.def);
-      const sideFactor = attacker.side === "player" ? 1 + level / 100 : 1;
-      const base = (atk * str * hp) * (attacker.side === "player" ? 20 : 10) / def * sideFactor / 10000;
-      const variance = 0.8 + Math.random() * 0.4;
-      const guard = defender.defending ? 0.55 : 1;
-      return Math.max(1, Math.round(base * variance * mult * formationAtk / formationHurt * guard));
+      const variance = [0.8, 0.9, 1.0, 1.1, 1.2][Math.floor(Math.random() * 5)] ?? 1;
+      const critPower = opts?.crit ? attacker.critPower * ((opts.hitIndex ?? 0) % 2 === 0 ? 1.2 : 1.0) : 1;
+      const guard = defender.defending ? 0.5 : 1;
+      const attackMag = formationMag(attacker).attack;
+      const hurtMag = formationMag(defender).getHurt;
+      const base = attacker.side === "player"
+        ? (atk * str * hp) * 20 / def * (1 + level / 100)
+        : (atk * str * hp) * 10 / (def + level);
+      return Math.max(1, Math.floor((base * variance * critPower * attackMag * hurtMag * guard) / 10000));
     };
 
     const skillDamage = (attacker: BattleUnit, defender: BattleUnit, sk: SkillData) => {
@@ -1041,30 +1114,92 @@ export default function KongmingGame() {
         const raw = (sk.damageCoef * attacker.ler) / 3200;
         return Math.max(1, Math.round(raw * (0.85 + Math.random() * 0.3) * (1 + attacker.hp / Math.max(1, attacker.maxHp))));
       }
-      return damageOf(attacker, defender, 1.25);
+      return damageOf(attacker, defender, { crit: false });
     };
 
     const hpAfter = (u: BattleUnit, nextHp: number): BattleUnit => ({ ...u, hp: clamp(Math.round(nextHp), 0, u.maxHp) });
 
+    /** 原版 AttackExecuteCommand：按武器 AttackTimes 连击，92% 命中、暴击、防御减半。 */
+    const performAttack = async (attacker: BattleUnit, target: BattleUnit) => {
+      const attackTimes = Math.max(1, attacker.attackTimes);
+      for (let hitIndex = 0; hitIndex < attackTimes; hitIndex++) {
+        if (finished || !target || target.hp <= 0) break;
+        const isMiss = Math.random() * 100 >= attacker.hitRate;
+        if (isMiss) {
+          gameAudio.play("miss");
+          addLog(`${attacker.name} 攻击 ${target.name}，失败`);
+          await sleep(180 / Math.max(0.5, snapRef.current.speed));
+          continue;
+        }
+        const isCrit = Math.random() * 100 < attacker.critRate;
+        const dmg = damageOf(attacker, target, { crit: isCrit, hitIndex });
+        const real = Math.min(dmg, target.hp);
+        Object.assign(target, hpAfter(target, target.hp - dmg));
+        gameAudio.play(isCrit ? "crit" : "hit");
+        if (target.hp <= 0) gameAudio.play("down");
+        addLog(`${attacker.name}${isCrit ? (attacker.side === "player" ? "奋战" : "苦战") : ""} 攻击 ${target.name}，歼敌 ${real}`);
+        updateUnits(units);
+        await sleep(220 / Math.max(0.5, snapRef.current.speed));
+      }
+    };
+
     while (!finished) {
-      const order = units.filter((u) => u.hp > 0).sort((a, b) => b.spd - a.spd || (a.side === "player" ? -1 : 1));
-      for (const acting of order) {
+      round;
+      const commands = new Map<string, BattleAction>();
+      let retreatAttempted = false;
+      for (const u of units) u.defending = false;
+
+      // 原版 SelectPlayerCommands：全队按队伍顺序选完指令，之后才统一结算。
+      if (!allOut) {
+        const selectable = units.filter((u) => u.side === "player" && u.hp > 0);
+        for (const current of selectable) {
+          if (finished) break;
+          updateUnits(units);
+          const action = await battlePrompt(current, "command");
+          if (action.type === "offensive") {
+            allOut = true;
+            break;
+          }
+          if (action.type === "flee") {
+            retreatAttempted = true;
+            if (Math.random() < 0.35) {
+              gameAudio.play("flee");
+              addLog("全军撤退成功");
+              fled = true;
+              finished = true;
+            } else {
+              gameAudio.play("lose");
+              addLog("撤退失败");
+            }
+            break;
+          }
+          commands.set(current.key, action);
+        }
+      }
+
+      if (finished) break;
+
+      // 原版 ExecuteCommands：TurnSpd = 速度 + [-15,16]，统一降序执行。
+      const order = units
+        .filter((u) => u.hp > 0)
+        .map((u) => ({ u, turnSpd: u.spd + Math.floor(Math.random() * 31) - 15 }))
+        .sort((a, b) => b.turnSpd - a.turnSpd);
+
+      for (const { u: acting } of order) {
         if (finished) break;
         const current = units.find((u) => u.key === acting.key);
         if (!current || current.hp <= 0) continue;
         if (current.side === "player") {
-          current.defending = false;
-          updateUnits(units);
-          const action = await battlePrompt(current, "command");
+          if (retreatAttempted) continue;
+          const action: BattleAction | undefined = allOut ? { type: "attack" } : commands.get(current.key);
+          if (!action) continue;
           if (action.type === "attack") {
-            const target = units.find((u) => u.key === action.target && u.side === "enemy" && u.hp > 0);
-            if (target) {
-              const dmg = damageOf(current, target, 1);
-              Object.assign(target, hpAfter(target, target.hp - dmg));
-              addLog(`${current.name} 攻击 ${target.name}，歼敌 ${Math.min(dmg, target.hp + dmg)}`);
-            }
+            const chosen = units.find((u) => u.key === action.target && u.side === "enemy" && u.hp > 0);
+            const target = chosen ?? units.filter((u) => u.side === "enemy" && u.hp > 0)[0];
+            if (target) await performAttack(current, target);
           } else if (action.type === "defend") {
             current.defending = true;
+            gameAudio.play("guard");
             updateUnits(units);
             addLog(`${current.name} 防御`);
           } else if (action.type === "skill" && action.skill) {
@@ -1073,6 +1208,7 @@ export default function KongmingGame() {
               const cost = sk.cost;
               if (snapRef.current.mp >= cost) {
                 mutate((prev) => ({ ...prev, mp: prev.mp - cost }));
+                gameAudio.play(sk.heal || sk.resurrect ? "heal" : "cast");
                 if (sk.heal || sk.resurrect) {
                   const target = units.filter((u) => u.side === "player" && u.hp > 0);
                   const heal = Math.max(40, Math.round((sk.damageCoef || 800) * current.ler / 2400));
@@ -1084,9 +1220,9 @@ export default function KongmingGame() {
                 } else {
                   const targets = sk.targetScope > 1 ? units.filter((u) => u.side === "enemy" && u.hp > 0) : [units.find((u) => u.key === action.target)].filter(Boolean) as BattleUnit[];
                   for (const t of targets) {
-                    const dmg = skillDamage(current, t, sk);
-                    Object.assign(t, hpAfter(t, t.hp - dmg));
-                    addLog(`${current.name} 施放 ${sk.name}，${t.name} 损失 ${dmg}`);
+                    const dmg = skillDamage(current, t as BattleUnit, sk);
+                    Object.assign(t, hpAfter(t as BattleUnit, (t as BattleUnit).hp - dmg));
+                    addLog(`${current.name} 施放 ${sk.name}，${(t as BattleUnit).name} 损失 ${dmg}`);
                   }
                 }
               } else {
@@ -1102,20 +1238,12 @@ export default function KongmingGame() {
               addLog(`${current.name} 使用 ${itemName}，${target.name} 恢复 ${Math.min(heal, target.maxHp)}`);
               consumeInventory(itemName);
             }
-          } else if (action.type === "flee") {
-            if (Math.random() < 0.35) {
-              addLog("全军撤退成功");
-              fled = true;
-              finished = true;
-              break;
-            }
-            addLog("撤退失败");
           }
         } else {
           await sleep(240 / Math.max(0.5, snapRef.current.speed));
           const alivePlayers = units.filter((u) => u.side === "player" && u.hp > 0);
           if (alivePlayers.length === 0) break;
-          let target = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
+          const target = alivePlayers[Math.floor(Math.random() * alivePlayers.length)];
           const skill = current.skills.find((name) => (dataRef.current?.skills.get(name)?.cost ?? 99) <= 4 && Math.random() < 0.25);
           if (skill) {
             const sk = dataRef.current?.skills.get(skill);
@@ -1134,13 +1262,11 @@ export default function KongmingGame() {
               }
             }
           } else {
-            const dmg = damageOf(current, target, (current as BattleUnit & { defending?: boolean }).defending ? 1.2 : 1);
-            Object.assign(target, hpAfter(target, target.hp - dmg));
-            addLog(`${current.name} 攻击 ${target.name}，${target.name} 损失 ${dmg}`);
+            await performAttack(current, target);
           }
         }
         updateUnits(units);
-        await sleep(360 / Math.max(0.5, snapRef.current.speed));
+        await sleep(allOut ? 180 / Math.max(0.5, snapRef.current.speed) : 300 / Math.max(0.5, snapRef.current.speed));
         const alivePlayers = units.filter((u) => u.side === "player" && u.hp > 0).length;
         const aliveEnemies = units.filter((u) => u.side === "enemy" && u.hp > 0).length;
         if (alivePlayers === 0 || aliveEnemies === 0) {
@@ -1157,6 +1283,7 @@ export default function KongmingGame() {
     const win = units.some((u) => u.side === "player" && u.hp > 0) && !units.some((u) => u.side === "enemy" && u.hp > 0);
     const won = !fled && win;
     const escaped = fled;
+    gameAudio.play(escaped ? "flee" : won ? "win" : "lose");
     const partyAfter = snapRef.current.party.map((m) => {
       const u = units.find((x) => x.side === "player" && x.name === m.name);
       if (!u) return m;
@@ -1662,7 +1789,6 @@ export default function KongmingGame() {
       .sort((a, b) => dist(a.pos[0], a.pos[1], x, y) - dist(b.pos[0], b.pos[1], x, y))[0];
     if (trans) {
       locked.current = true;
-      await sleep(260);
       loadSceneByName(trans.scene, trans.tag || undefined, trans.type);
       locked.current = false;
       return;
@@ -2086,6 +2212,7 @@ export default function KongmingGame() {
       return;
     }
     if (isDir || ["KeyJ", "KeyK"].includes(key)) e.preventDefault();
+    if (key === "KeyJ" || key === "KeyK") gameAudio.play("click");
     const s = snapRef.current;
 
     if (s.dialogue) {
@@ -2162,8 +2289,8 @@ export default function KongmingGame() {
           if (b.cursor === 0) mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, menu: "attack", cursor: 0 } } : prev);
           else if (b.cursor === 1) {
             if (b.pending === b.units.find((u) => u.side === "player")?.key) {
-              const target = enemies[0];
-              if (target) { battleResolve.current = null; mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev); resolve?.({ type: "attack", target: target.key }); }
+              battleResolve.current = null; mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev);
+              resolve?.({ type: "offensive" });
             } else {
               battleResolve.current = null; mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev);
               resolve?.({ type: "defend" });
@@ -2473,6 +2600,7 @@ export default function KongmingGame() {
         <div className={styles.activityTitleRow}>
           <span className={styles.activityBadge}>限时活动</span>
           <h1 className={styles.activityTitle}>诸葛孔明传 · 吞食天地２怀旧版</h1>
+          <SoundToggle game="kongming" battle={s.screen === "battle"} className="ml-auto" />
         </div>
         <p className={styles.activityDesc}>
           按 Windows 桌面版逐场景复刻。方向键 / WASD 移动，J 确认、K 取消，触屏可直接使用画面内虚拟按键。

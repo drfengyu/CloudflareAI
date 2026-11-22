@@ -17,7 +17,7 @@ export function SoundToggle({
   battle = false,
   className,
 }: {
-  game: "workshop";
+  game: "workshop" | "kongming";
   battle?: boolean;
   className?: string;
 }) {

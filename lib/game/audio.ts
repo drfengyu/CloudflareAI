@@ -21,7 +21,7 @@ export type GameSfx =
   | "coin"
   | "click";
 
-export type GameTheme = "workshop-field" | "workshop-battle";
+export type GameTheme = "workshop-field" | "workshop-battle" | "kongming-title" | "kongming-field" | "kongming-battle";
 
 interface ThemeDef {
   bpm: number;
@@ -45,6 +45,27 @@ const THEMES: Record<GameTheme, ThemeDef> = {
     wave: "sawtooth",
     bass: [36, 36, 0, 36, 39, 0, 36, 0, 41, 0, 39, 0, 36, 0, 34, 0],
     lead: [60, 63, 65, 0, 67, 0, 65, 63, 60, 0, 63, 0, 65, 0, 67, 0],
+  },
+  // 孔明传标题：低回的五声音阶，模拟原版标题的箫鼓。
+  "kongming-title": {
+    bpm: 84,
+    wave: "triangle",
+    bass: [36, 0, 0, 0, 41, 0, 0, 0, 38, 0, 0, 0, 43, 0, 0, 0],
+    lead: [69, 0, 67, 0, 64, 0, 62, 0, 60, 0, 62, 0, 64, 0, 67, 0],
+  },
+  // 孔明传行军：木鱼式的稳定节拍，避免把野外和工坊听混。
+  "kongming-field": {
+    bpm: 96,
+    wave: "square",
+    bass: [41, 0, 0, 0, 41, 0, 0, 0, 38, 0, 0, 0, 43, 0, 0, 0],
+    lead: [64, 0, 67, 0, 69, 0, 67, 0, 64, 0, 62, 0, 60, 0, 62, 0],
+  },
+  // 孔明传战斗：更急促的鼓点，仍然用五声调，不套工坊的锯齿波。
+  "kongming-battle": {
+    bpm: 138,
+    wave: "triangle",
+    bass: [40, 40, 0, 40, 43, 0, 40, 0, 45, 0, 43, 0, 40, 0, 38, 0],
+    lead: [67, 69, 72, 0, 69, 0, 67, 0, 64, 0, 67, 0, 69, 0, 72, 0],
   },
 };
 
