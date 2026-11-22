@@ -1240,7 +1240,7 @@ export default function KongmingGame() {
           case "ParametersInScene": {
             const prev = d.scenes.find((x) => x.level === s.previousLevel && !["武", "道具", "宿", "训"].includes(x.name.trim()));
             const key = prev?.name.trim() || s.scene?.name.trim() || "";
-            const params = d.content.parameters?.[key];
+            const params = d.content.parameters?.[s.scene?.name.trim() ?? ""]?.[key];
             if (params && params.length > 0) return params.slice();
             return ["30"];
           }

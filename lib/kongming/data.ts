@@ -139,7 +139,7 @@ export interface Content {
   equipment: EquipmentData[];
   items: ItemData[];
   shops: { name: string; items: string[] }[];
-  parameters?: Record<string, string[]>;
+  parameters?: Record<string, Record<string, string[]>>;
   chapters: ChapterData[];
   skills: SkillData[];
   formations: FormationData[];

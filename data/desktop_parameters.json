@@ -1,5 +1,274 @@
 [
  {
+  "level": "level4",
+  "infos": [
+   {
+    "sceneName": "徐州",
+    "parameters": [
+     "5"
+    ]
+   },
+   {
+    "sceneName": "冀州东南村",
+    "parameters": [
+     "7"
+    ]
+   },
+   {
+    "sceneName": "冀州",
+    "parameters": [
+     "7"
+    ]
+   },
+   {
+    "sceneName": "洛阳",
+    "parameters": [
+     "10"
+    ]
+   },
+   {
+    "sceneName": "荆州",
+    "parameters": [
+     "10"
+    ]
+   },
+   {
+    "sceneName": "荆州村子·一",
+    "parameters": [
+     "10"
+    ]
+   },
+   {
+    "sceneName": "荆州村子·二",
+    "parameters": [
+     "10"
+    ]
+   },
+   {
+    "sceneName": "荆州村子·三",
+    "parameters": [
+     "10"
+    ]
+   },
+   {
+    "sceneName": "新野建成初期",
+    "parameters": [
+     "10"
+    ]
+   },
+   {
+    "sceneName": "新野建成后期",
+    "parameters": [
+     "10"
+    ]
+   },
+   {
+    "sceneName": "江夏",
+    "parameters": [
+     "12"
+    ]
+   },
+   {
+    "sceneName": "柴桑",
+    "parameters": [
+     "15"
+    ]
+   },
+   {
+    "sceneName": "海岛村",
+    "parameters": [
+     "15"
+    ]
+   },
+   {
+    "sceneName": "襄阳",
+    "parameters": [
+     "20"
+    ]
+   },
+   {
+    "sceneName": "夷陵",
+    "parameters": [
+     "25"
+    ]
+   },
+   {
+    "sceneName": "南郡",
+    "parameters": [
+     "25"
+    ]
+   },
+   {
+    "sceneName": "樊城",
+    "parameters": [
+     "25"
+    ]
+   },
+   {
+    "sceneName": "零陵",
+    "parameters": [
+     "30"
+    ]
+   },
+   {
+    "sceneName": "桂阳",
+    "parameters": [
+     "30"
+    ]
+   },
+   {
+    "sceneName": "武陵",
+    "parameters": [
+     "30"
+    ]
+   },
+   {
+    "sceneName": "长沙小村",
+    "parameters": [
+     "30"
+    ]
+   },
+   {
+    "sceneName": "长沙",
+    "parameters": [
+     "30"
+    ]
+   },
+   {
+    "sceneName": "新野",
+    "parameters": [
+     "10"
+    ]
+   },
+   {
+    "sceneName": "涪水",
+    "parameters": [
+     "50"
+    ]
+   },
+   {
+    "sceneName": "葭萌关",
+    "parameters": [
+     "60"
+    ]
+   },
+   {
+    "sceneName": "阳平关",
+    "parameters": [
+     "60"
+    ]
+   },
+   {
+    "sceneName": "南郑关",
+    "parameters": [
+     "70"
+    ]
+   },
+   {
+    "sceneName": "汉中",
+    "parameters": [
+     "70"
+    ]
+   },
+   {
+    "sceneName": "巴城",
+    "parameters": [
+     "80"
+    ]
+   },
+   {
+    "sceneName": "陈家村",
+    "parameters": [
+     "90"
+    ]
+   },
+   {
+    "sceneName": "建宁",
+    "parameters": [
+     "90"
+    ]
+   },
+   {
+    "sceneName": "蒋家村",
+    "parameters": [
+     "100"
+    ]
+   },
+   {
+    "sceneName": "越巂",
+    "parameters": [
+     "100"
+    ]
+   },
+   {
+    "sceneName": "雒城",
+    "parameters": [
+     "110"
+    ]
+   },
+   {
+    "sceneName": "成都",
+    "parameters": [
+     "110"
+    ]
+   },
+   {
+    "sceneName": "南安",
+    "parameters": [
+     "120"
+    ]
+   },
+   {
+    "sceneName": "安定",
+    "parameters": [
+     "120"
+    ]
+   },
+   {
+    "sceneName": "天水",
+    "parameters": [
+     "120"
+    ]
+   },
+   {
+    "sceneName": "陈仓",
+    "parameters": [
+     "120"
+    ]
+   },
+   {
+    "sceneName": "高老庄",
+    "parameters": [
+     "130"
+    ]
+   },
+   {
+    "sceneName": "鲁城",
+    "parameters": [
+     "130"
+    ]
+   },
+   {
+    "sceneName": "渭水关",
+    "parameters": [
+     "140"
+    ]
+   },
+   {
+    "sceneName": "长安",
+    "parameters": [
+     "140"
+    ]
+   },
+   {
+    "sceneName": "长安英杰之地",
+    "parameters": [
+     "150"
+    ]
+   }
+  ]
+ },
+ {
   "level": "level8",
   "infos": [
    {

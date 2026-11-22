@@ -48,23 +48,13 @@ def parse_parameters(raw):
 
 
 rows = []
-files = ["level8"]
-for fn in files:
-    try:
-        env = UnityPy.load(os.path.join(DATA, fn))
-        env.typetree_generator = gen
-    except Exception:
-        continue
+for fn, path_id in [("level4", 2185), ("level8", 2207)]:
+    env = UnityPy.load(os.path.join(DATA, fn))
+    env.typetree_generator = gen
     for o in env.objects:
-        if o.type.name != "MonoBehaviour" or o.path_id != 2207:
+        if o.type.name != "MonoBehaviour" or o.path_id != path_id:
             continue
-        try:
-            cls = class_of(o)
-            if cls != "Tstd2.GamePlay.ParametersBySceneMono":
-                continue
-            infos = parse_parameters(o.get_raw_data())
-        except Exception:
-            continue
+        infos = parse_parameters(o.get_raw_data())
         rows.append({"level": fn, "infos": infos})
         print("FOUND", fn, len(infos))
         break
