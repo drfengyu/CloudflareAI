@@ -27,6 +27,35 @@ import styles from "./kongming-game.module.css";
 
 type Screen = "loading" | "title" | "prologue" | "field" | "battle" | "gameover";
 
+/**
+ * 原版 level3 的 Water Tilemap 有 4 帧、4fps。
+ * 这里只渲染这层水，不和整张大图一起重绘，避免 4fps 把整个战场组件反复渲染。
+ */
+function WaterOverlay({
+  src, x, y, width, height,
+}: { src: string; x: number; y: number; width: number; height: number }) {
+  const [frame, setFrame] = useState(0);
+  const water = src.endsWith("level3.png");
+  useEffect(() => {
+    if (!water) return;
+    const timer = window.setInterval(() => setFrame((prev) => (prev + 1) % 4), 250);
+    return () => window.clearInterval(timer);
+  }, [water]);
+  if (!water) return null;
+  return (
+    <image
+      href={`${src.slice(0, -4)}-water-${frame}.png`}
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      className={styles.pixel}
+      preserveAspectRatio="none"
+      pointerEvents="none"
+    />
+  );
+}
+
 interface Member {
   key: string;
   name: string;
@@ -566,7 +595,12 @@ export default function KongmingGame() {
     for (const t of scene.transitions) {
       const candidates = data.scenesByName.get(baseName(t.scene)) ?? [];
       for (const c of candidates) {
-        if (c.map?.src) urls.add(c.map.src);
+        if (c.map?.src) {
+          urls.add(c.map.src);
+          if (c.map.src.endsWith("level3.png")) {
+            for (let i = 0; i < 4; i++) urls.add(`${c.map.src.slice(0, -4)}-water-${i}.png`);
+          }
+        }
       }
     }
     const imgs: HTMLImageElement[] = [];
@@ -2690,6 +2724,7 @@ export default function KongmingGame() {
                 className={styles.pixel}
                 preserveAspectRatio="none"
               />
+              <WaterOverlay src={map.src} x={-camX} y={-camY} width={mapW} height={mapH} />
               {fieldEvents.map((e, i) => {
                 const p = s.eventPos[e.id] ?? e.pos;
                 const ex = sx(p[0]);
