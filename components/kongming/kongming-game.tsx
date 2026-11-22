@@ -16,6 +16,7 @@ import {
   type EquipmentData,
   type GameData,
   type ItemData,
+  type ModelPalette,
   type Scene,
   type SceneEvent,
   type SkillData,
@@ -23,6 +24,7 @@ import {
 import { LuaRuntime } from "@/lib/kongming/lua";
 import { gameAudio, type GameTheme } from "@/lib/game/audio";
 import { SoundToggle } from "@/components/activity/sound-toggle";
+import { TintedSprite, TintedSvgSprite } from "./tinted-sprite";
 import styles from "./kongming-game.module.css";
 
 type Screen = "loading" | "title" | "prologue" | "field" | "battle" | "gameover";
@@ -2587,6 +2589,8 @@ export default function KongmingGame() {
   const fieldChests = (scene?.chests ?? []).filter((c) => c.show && !s.openedChests[c.id]);
   const leader = s.party[0];
   const playerSprite = walkStripForModel(leader?.model);
+  const playerPalette: ModelPalette | null =
+    data.palettes.get(leader?.name ?? "") ?? data.palettes.get(leader?.profile ?? "") ?? null;
   const playerFrame = frameForDir(
     s.dir,
     moving.current && typeof performance !== "undefined" ? Math.floor(performance.now() / 120) : 0,
@@ -2737,12 +2741,14 @@ export default function KongmingGame() {
                 const name = e.names[0]?.name?.trim() ?? "";
                 const ch = data.characters.get(name) ?? data.characters.get(profile ?? "");
                 const sprite = spriteForModel(e.model ?? ch?.modelTexture);
+                const palette: ModelPalette | null =
+                  data.palettes.get(name) ?? data.palettes.get(profile ?? "") ?? data.palettes.get(ch?.name ?? "") ?? null;
                 if (!sprite) return null;
                 return (
                   <g key={`${e.id}-${i}`}>
                     <ellipse cx={ex} cy={ey + 3} rx={12} ry={5} fill="rgba(0,0,0,.35)" />
                     <svg x={ex - 18} y={ey - 33} width={36} height={36} viewBox="0 0 64 64" preserveAspectRatio="xMidYMid meet" overflow="hidden">
-                      <image href={sprite} x={0} y={0} width={64} height={64} className={styles.pixel} />
+                      <TintedSvgSprite src={sprite} palette={palette} x={0} y={0} width={64} height={64} className={styles.pixel} />
                     </svg>
                     {name && null}
                   </g>
@@ -2763,14 +2769,17 @@ export default function KongmingGame() {
               {followerEntries.map(({ member: m, pos, frame }, i) => {
                 if (m.dead) return null;
                 const strip = walkStripForModel(m.model);
+                const palette: ModelPalette | null =
+                  data.palettes.get(m.name) ?? data.palettes.get(m.profile) ?? null;
                 const fx = sx(pos.x);
                 const fy = sy(pos.y);
                 return (
                   <g key={m.key}>
                     <ellipse cx={fx} cy={fy + 3} rx={12} ry={5} fill="rgba(0,0,0,.35)" />
                     {strip ? (
-                      <image
-                        href={strip}
+                      <TintedSvgSprite
+                        src={strip}
+                        palette={palette}
                         x={fx - 18 - frame * 36}
                         y={fy - 33}
                         width={288}
@@ -2786,8 +2795,9 @@ export default function KongmingGame() {
               })}
               <ellipse cx={playerSX} cy={playerSY + 3} rx={12} ry={5} fill="rgba(0,0,0,.45)" />
               {playerSprite ? (
-                <image
-                  href={playerSprite}
+                <TintedSvgSprite
+                  src={playerSprite}
+                  palette={playerPalette}
                   x={playerSX - 18 - playerFrame * 36}
                   y={playerSY - 33}
                   width={288}
@@ -2810,7 +2820,11 @@ export default function KongmingGame() {
           <div className={styles.battleScreen}>
             <div className={styles.battleTerrain} />
 
-            {battle.units.filter((u) => u.side === "player").slice(0, 5).map((u, i) => (
+            {battle.units.filter((u) => u.side === "player").slice(0, 5).map((u, i) => {
+              const sprite = spriteForModel(u.model);
+              const palette: ModelPalette | null =
+                data.palettes.get(u.name) ?? data.palettes.get(u.profile ?? "") ?? null;
+              return (
               <div
                 key={u.key}
                 className={`${styles.battleRow} ${styles.battleRowPlayer} ${u.hp <= 0 ? styles.unitDown : ""} ${battle.pending === u.key ? styles.battleRowActive : ""}`}
@@ -2824,14 +2838,18 @@ export default function KongmingGame() {
                   <i style={{ clipPath: `inset(0 ${100 - (u.maxHp ? (u.hp / u.maxHp) * 100 : 0)}% 0 0)` }} />
                 </div>
                 <div className={styles.battleSprite}>
-                  {spriteForModel(u.model) ? <img src={spriteForModel(u.model)!} alt="" /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span>{u.name[0]}</span>}
+                  {sprite ? <TintedSprite src={sprite} palette={palette} /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span>{u.name[0]}</span>}
                 </div>
               </div>
-            ))}
+              );
+            })}
 
             {battle.units.filter((u) => u.side === "enemy").slice(0, 5).map((u, i) => {
               const idx = enemies.findIndex((e) => e.key === u.key);
               const lit = (battle.menu === "attack" || battle.menu === "target") && idx === battle.cursor;
+              const sprite = spriteForModel(u.model);
+              const palette: ModelPalette | null =
+                data.palettes.get(u.name) ?? data.palettes.get(u.profile ?? "") ?? null;
               return (
                 <div
                   key={u.key}
@@ -2839,7 +2857,7 @@ export default function KongmingGame() {
                   style={{ top: `${BATTLE_ROW_TOP[i]}%` }}
                 >
                   <div className={styles.battleSprite}>
-                    {spriteForModel(u.model) ? <img src={spriteForModel(u.model)!} alt="" /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span>{u.name[0]}</span>}
+                    {sprite ? <TintedSprite src={sprite} palette={palette} /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span>{u.name[0]}</span>}
                   </div>
                   <div className={`${styles.battleHpBar} ${styles.battleHpBarEnemy}`}>
                     <i style={{ clipPath: `inset(0 0 0 ${100 - (u.maxHp ? (u.hp / u.maxHp) * 100 : 0)}%)` }} />
@@ -3191,17 +3209,21 @@ export default function KongmingGame() {
         {s.banner && <div className={styles.banner}>{s.banner}</div>}
         {s.toast && <div className={styles.toast}>{s.toast}</div>}
         {s.faded && <div className={styles.fade} />}
-        {(s.screen === "field" || s.screen === "battle") && !s.dialogue && !s.panel && !s.shop && (
+        {(s.screen === "field" || s.screen === "battle" || s.screen === "title" || s.screen === "prologue") && !s.dialogue && !s.panel && !s.shop && (
           <div className={styles.touchControls}>
-            <div className={styles.touchDpad}>
-              <button type="button" aria-label="向上" className={`${styles.touchKey} ${styles.touchUp}`} onPointerDown={(e) => virtualPress(e, "KeyW", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>W</button>
-              <button type="button" aria-label="向左" className={`${styles.touchKey} ${styles.touchLeft}`} onPointerDown={(e) => virtualPress(e, "KeyA", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>A</button>
-              <button type="button" aria-label="向下" className={`${styles.touchKey} ${styles.touchDown}`} onPointerDown={(e) => virtualPress(e, "KeyS", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>S</button>
-              <button type="button" aria-label="向右" className={`${styles.touchKey} ${styles.touchRight}`} onPointerDown={(e) => virtualPress(e, "KeyD", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>D</button>
-            </div>
+            {(s.screen === "field" || s.screen === "battle" || s.screen === "title") && (
+              <div className={styles.touchDpad}>
+                {s.screen !== "title" && <button type="button" aria-label="向上" className={`${styles.touchKey} ${styles.touchUp}`} onPointerDown={(e) => virtualPress(e, "KeyW", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>W</button>}
+                <button type="button" aria-label="向左" className={`${styles.touchKey} ${styles.touchLeft}`} onPointerDown={(e) => virtualPress(e, "KeyA", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>A</button>
+                {s.screen !== "title" && <button type="button" aria-label="向下" className={`${styles.touchKey} ${styles.touchDown}`} onPointerDown={(e) => virtualPress(e, "KeyS", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>S</button>}
+                <button type="button" aria-label="向右" className={`${styles.touchKey} ${styles.touchRight}`} onPointerDown={(e) => virtualPress(e, "KeyD", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>D</button>
+              </div>
+            )}
             <div className={styles.touchActions}>
-              <button type="button" aria-label="确认" className={`${styles.touchKey} ${styles.touchJ}`} onPointerDown={(e) => virtualPress(e, "KeyJ")}>J<small>确认</small></button>
-              <button type="button" aria-label="取消" className={`${styles.touchKey} ${styles.touchK}`} onPointerDown={(e) => virtualPress(e, "KeyK")}>K<small>取消</small></button>
+              <button type="button" aria-label="确认" className={`${styles.touchKey} ${styles.touchJ}`} onPointerDown={(e) => virtualPress(e, "KeyJ")}>J<small>{s.screen === "title" ? "确认" : s.screen === "prologue" ? "继续" : "确认"}</small></button>
+              {s.screen !== "title" && (
+                <button type="button" aria-label="取消" className={`${styles.touchKey} ${styles.touchK}`} onPointerDown={(e) => virtualPress(e, "KeyK")}>K<small>{s.screen === "prologue" ? "跳过" : "取消"}</small></button>
+              )}
             </div>
           </div>
         )}

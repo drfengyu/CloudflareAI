@@ -16,6 +16,15 @@ export interface CharacterData {
   modelTexture: string | null;
 }
 
+export interface ModelPalette {
+  first: number[];
+  second: number[];
+  use3?: boolean;
+  three?: number[];
+  name?: string;
+  texture?: string;
+}
+
 export interface EquipmentData {
   id: number;
   name: string;
@@ -206,6 +215,7 @@ export interface GameData {
   scenes: Scene[];
   lua: Record<string, string>;
   characters: Map<string, CharacterData>;
+  palettes: Map<string, ModelPalette>;
   equipment: Map<string, EquipmentData>;
   items: Map<string, ItemData>;
   skills: Map<string, SkillData>;
@@ -220,11 +230,13 @@ let cached: Promise<GameData> | null = null;
 export function loadGameData(): Promise<GameData> {
   if (cached) return cached;
   cached = (async () => {
-    const [content, scenes, lua] = await Promise.all([
+    const [content, scenes, lua, palettesRaw] = await Promise.all([
       fetch("/game-assets/kongming/content.json").then((r) => r.json() as Promise<Content>),
       fetch("/game-assets/kongming/scenes.json").then((r) => r.json() as Promise<Scene[]>),
       fetch("/game-assets/kongming/lua.json").then((r) => r.json() as Promise<Record<string, string>>),
+      fetch("/game-assets/kongming/palettes.json").then((r) => r.json() as Promise<Record<string, ModelPalette>>),
     ]);
+    const palettes = new Map(Object.entries(palettesRaw));
     const characters = new Map<string, CharacterData>();
     for (const s of scenes) {
       if (s.map?.src?.startsWith("/kongming/")) {
@@ -247,7 +259,7 @@ export function loadGameData(): Promise<GameData> {
       list.push(s);
       scenesByName.set(base, list);
     }
-    return { content, scenes, lua, characters, equipment, items, skills, formations, battles, scenesByName, hpLevels };
+    return { content, scenes, lua, palettes, characters, equipment, items, skills, formations, battles, scenesByName, hpLevels };
   })();
   return cached;
 }
