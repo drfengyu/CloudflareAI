@@ -12,6 +12,36 @@
    "asset": "sharedassets10.assets",
    "path": 4
   },
+  "50001": {
+   "model": "npc-老人",
+   "texture": "老人",
+   "asset": "sharedassets11.assets",
+   "path": 4
+  },
+  "11006": {
+   "model": "npc-董承",
+   "texture": "董承",
+   "asset": "sharedassets11.assets",
+   "path": 6
+  },
+  "50004": {
+   "model": "npc-中年",
+   "texture": "中年",
+   "asset": "sharedassets3.assets",
+   "path": 5
+  },
+  "50003": {
+   "model": "npc-书生",
+   "texture": "书生",
+   "asset": "sharedassets10.assets",
+   "path": 4
+  },
+  "50002": {
+   "model": "npc-中年",
+   "texture": "中年",
+   "asset": "sharedassets3.assets",
+   "path": 5
+  },
   "11001": {
    "model": "npc-帝",
    "texture": "帝",
@@ -247,6 +277,21 @@
    "path": 4,
    "texture": "书生"
   },
+  "npc-老人": {
+   "asset": "sharedassets11.assets",
+   "path": 4,
+   "texture": "老人"
+  },
+  "npc-董承": {
+   "asset": "sharedassets11.assets",
+   "path": 6,
+   "texture": "董承"
+  },
+  "npc-中年": {
+   "asset": "sharedassets3.assets",
+   "path": 5,
+   "texture": "中年"
+  },
   "npc-帝": {
    "asset": "sharedassets12.assets",
    "path": 3,
@@ -306,11 +351,6 @@
    "asset": "sharedassets3.assets",
    "path": 4,
    "texture": "小孩3"
-  },
-  "npc-老人": {
-   "asset": "sharedassets11.assets",
-   "path": 4,
-   "texture": "老人"
   },
   "npc-男子": {
    "asset": "sharedassets42.assets",

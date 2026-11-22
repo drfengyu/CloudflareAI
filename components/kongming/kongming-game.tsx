@@ -93,10 +93,12 @@ interface BattleState {
   round: number;
   log: string[];
   pending: string | null;
-  menu: "command" | "attack" | "skill" | "item" | "formation" | "target";
+  menu: "command" | "attack" | "skill" | "item" | "general" | "target";
   cursor: number;
   skill: string | null;
   menuTitle: string;
+  intro?: boolean;
+  terrain?: string;
   result?: "win" | "lose";
   outcome?: {
     kind: "win" | "lose" | "flee";
@@ -109,12 +111,43 @@ interface BattleState {
 }
 
 interface BattleAction {
-  type: "attack" | "skill" | "item" | "formation" | "defend" | "flee";
+  type: "attack" | "skill" | "item" | "flee";
   target?: string;
   skill?: string;
   item?: string;
-  formation?: string;
 }
+
+/** 桌面 TerrainType 位值 -> 原版战斗地形条 */
+const BATTLE_TERRAIN_ASSET: Record<number, string> = {
+  2: "plain",
+  4: "mountain",
+  8: "sea",
+  16: "forest",
+  32: "wasteland",
+  64: "stone-array",
+  128: "city",
+  256: "pass",
+  512: "cave",
+  1024: "camp",
+  2048: "cave-red",
+  4096: "tunnel",
+  8192: "tomb",
+  16384: "canyon",
+  32768: "rock",
+  65536: "cave-green",
+  131072: "cave-red",
+  262144: "cave-blue",
+  524288: "cave-peach",
+  1048576: "cave-yellow",
+};
+
+function battleTerrainAsset(value: number | undefined | null): string {
+  const key = BATTLE_TERRAIN_ASSET[value ?? 2] ?? "plain";
+  return `/trial/tstd2/terrain/${key}.png`;
+}
+
+/** 桌面 Battle Character 的五行固定纵坐标：3.6 / 2.45 / 1.3 / 0.15 / -1.0（相机正交 5） */
+const BATTLE_ROW_TOP = [5, 17.5, 30, 42.5, 55];
 
 interface ShopState {
   title: string;
@@ -165,6 +198,7 @@ interface Snap {
   openedChests: Record<string, true>;
   formation: string;
   chapter: number;
+  eventPos: Record<string, [number, number]>;
   dialogue: DialogueState | null;
   panel: PanelState | null;
   shop: ShopState | null;
@@ -183,6 +217,22 @@ interface Saves {
 }
 
 const SAVE_PREFIX = "kongming.save.";
+const ARROW_TO_KEY: Record<string, string> = {
+  ArrowUp: "KeyW",
+  ArrowDown: "KeyS",
+  ArrowLeft: "KeyA",
+  ArrowRight: "KeyD",
+};
+const DIR_KEYS: Record<string, [number, number]> = {
+  KeyW: [0, 1],
+  ArrowUp: [0, 1],
+  KeyS: [0, -1],
+  ArrowDown: [0, -1],
+  KeyA: [-1, 0],
+  ArrowLeft: [-1, 0],
+  KeyD: [1, 0],
+  ArrowRight: [1, 0],
+};
 const PROLOGUE = [
   "话说天下大势  分久必合  合久必分\n东汉末年  持续了二百年之久的太平盛世终于纷乱了\n大贤良师张角率领黄巾军在各地起事\n一时间  生灵涂炭  怨声载道\n汉王朝已无力平乱\n\n值此乱世  涌现出了三位英雄  立志兴复汉室\n他们是\n中山靖王刘胜的后裔  刘备  刘玄德\n文武双全的美髯公  关羽  关云长\n有万夫不当之勇的  张飞 张翼德\n",
   "不求同年同月同日生  但求同年同月同日死 \n桃园结义的兄弟三人  招募义军  讨伐黄巾\n",
@@ -251,13 +301,53 @@ function dist(ax: number, ay: number, bx: number, by: number) {
 }
 
 /** 单位贴图是 8 帧横向条带：Direction 顺序为 下、上、左、右，各两帧。 */
-function frameForDir(dir: [number, number]) {
+function frameForDir(dir: [number, number], phase = 0) {
   const [dx, dy] = dir;
-  if (dy < 0) return 2;
-  if (dx > 0) return 6;
-  if (dy > 0) return 0;
-  if (dx < 0) return 4;
-  return 0;
+  let base = 0;
+  if (dy > 0) base = 2;
+  else if (dx > 0) base = 6;
+  else if (dx < 0) base = 4;
+  else if (dy < 0) base = 0;
+  return base + (phase % 2);
+}
+
+/** Desktop TeamMove keeps every member on the previous head tile, one step behind the leader. */
+function seedTeamTrail(x: number, y: number, dir: [number, number], count: number) {
+  const [dx, dy] = dir;
+  return Array.from({ length: Math.max(0, count) }, (_, i) => ({
+    x: x - dx * (i + 1),
+    y: y - dy * (i + 1),
+    dir,
+  }));
+}
+
+/** Desktop QuestEvent show/hide conditions: single ids combined with & / | and T / F suffixes. */
+function evalEventCondition(expr: string, flags: Record<string, true>) {
+  const text = expr.trim();
+  if (!text) return true;
+  return text.split("|").some((part) =>
+    part.split("&").every((token) => {
+      const word = token.trim().replace(/^\(+|\)+$/g, "");
+      if (!word) return true;
+      const negate = word.startsWith("!");
+      const key = negate ? word.slice(1) : word;
+      if (key.endsWith("T")) return !negate && !!flags[key.slice(0, -1)];
+      if (key.endsWith("F")) return negate ? false : !flags[key.slice(0, -1)];
+      if (key.endsWith("SO")) return !!flags[key.slice(0, -2)];
+      return negate ? !flags[key] : !!flags[key];
+    }),
+  );
+}
+
+/** Mirrors QuestEvent.Refresh: chapter mismatch, hide condition, show condition, startHide. */
+function eventVisible(ev: SceneEvent, flags: Record<string, true>, chapterName?: string) {
+  if (ev.chapter) {
+    if (!chapterName || ev.chapter.trim() !== chapterName.trim()) return false;
+  }
+  if (ev.hideAfter && flags[ev.id]) return false;
+  if (ev.hide && evalEventCondition(ev.hide, flags)) return false;
+  if (ev.show) return evalEventCondition(ev.show, flags);
+  return !ev.startHide;
 }
 
 function sceneLabel(scene: Scene | null) {
@@ -295,6 +385,7 @@ const EMPTY_SNAP: Snap = {
   openedChests: {},
   formation: "散开阵",
   chapter: 1,
+  eventPos: {},
   dialogue: null,
   panel: null,
   shop: null,
@@ -328,6 +419,13 @@ export default function KongmingGame() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoEventToken = useRef(0);
+  const moving = useRef(false);
+  const moveRef = useRef<((dx: number, dy: number) => void) | null>(null);
+  const heldKeys = useRef<Set<string>>(new Set());
+  const trailRef = useRef<{ x: number; y: number; dir: [number, number] }[]>([]);
+  const followPosRef = useRef<{ x: number; y: number; dir: [number, number] }[]>([]);
+  const storyViewRef = useRef<HTMLDivElement | null>(null);
+  const suppressInteractUntil = useRef(0);
 
   const mutate = useCallback((fn: (prev: Snap) => Snap) => {
     const next = fn(snapRef.current);
@@ -558,11 +656,13 @@ export default function KongmingGame() {
 
   const runAutoEvents = useCallback((scene: Scene, spawn: { x: number; y: number }, token: number) => {
     if (token !== currentSceneToken.current) return;
+    const chapter = chapterName(snapRef.current.chapter);
+    const flags = snapRef.current.flags;
     const events = scene.events.filter((e) => {
       if (!e.id) return false;
       if (e.when !== 0 && e.when !== 5) return false;
-      if (snapRef.current.flags[e.id]) return false;
-      return dist(e.pos[0], e.pos[1], spawn.x, spawn.y) < 3.2;
+      if (flags[e.id]) return false;
+      return eventVisible(e, flags, chapter);
     });
     if (events.length > 0) {
       const ev = events[0];
@@ -581,6 +681,8 @@ export default function KongmingGame() {
     const spawn = spawnFor(scene, tag);
     const token = ++currentSceneToken.current;
     autoEventToken.current = token;
+    trailRef.current = seedTeamTrail(spawn.x, spawn.y, [0, -1], Math.max(0, prev.party.length - 1));
+    followPosRef.current = trailRef.current.map((p) => ({ ...p }));
     mutate((s) => ({
       ...s,
       screen: "field",
@@ -589,6 +691,7 @@ export default function KongmingGame() {
       x: spawn.x,
       y: spawn.y,
       dir: [0, -1],
+      eventPos: {},
       dialogue: null,
       panel: null,
       shop: null,
@@ -630,6 +733,8 @@ export default function KongmingGame() {
   const finishDialogue = useCallback((value: boolean) => {
     const resolve = dialogResolve.current;
     dialogResolve.current = null;
+    // 关闭对话的那一次确认键不应立刻又去调查旁边的 NPC / 事件。
+    suppressInteractUntil.current = performance.now() + 150;
     mutate((s) => ({ ...s, dialogue: null }));
     resolve?.(value);
   }, [mutate]);
@@ -719,7 +824,7 @@ export default function KongmingGame() {
         if (menu === "attack") title = `攻击目标（敌 ${aliveEnemies}）`;
         if (menu === "skill") title = `${unit.name} 的计策`;
         if (menu === "item") title = "使用物品";
-        if (menu === "formation") title = "变更阵型";
+        if (menu === "general") title = "武将";
         if (menu === "target") title = "选择目标";
         return {
           ...s,
@@ -738,8 +843,12 @@ export default function KongmingGame() {
 
   const runBattle = useCallback(async (enemyNames: string[], config?: { money?: number; exp?: number; name?: string }) => {
     const s = snapRef.current;
-    const { players, enemies } = makeBattleUnits(enemyNames.length ? enemyNames : ["兵士", "兵士"], s.formation, config?.name);
+    const battleNames = enemyNames.length ? enemyNames : ["兵士", "兵士"];
+    const { players, enemies } = makeBattleUnits(battleNames, s.formation, config?.name);
     const units = [...players, ...enemies];
+    const battleDef = config?.name
+      ? (dataRef.current?.content.battles.find((b) => b.name === config.name) as { terrain?: number } | undefined)
+      : undefined;
     locked.current = true;
     mutate((prev) => ({
       ...prev,
@@ -747,15 +856,24 @@ export default function KongmingGame() {
       battle: {
         units: units.map((u) => ({ ...u })),
         round: 1,
-        log: [`遭遇敌军：${enemyNames.join("、") || "兵士"}`, "战斗开始"],
+        log: [`${battleNames[0]} 出现了`],
         pending: null,
         menu: "command",
         cursor: 0,
         skill: null,
         menuTitle: "",
+        intro: true,
+        terrain: battleTerrainAsset(battleDef?.terrain),
       },
     }));
-    await sleep(500);
+
+    for (const name of [...new Set(battleNames)]) {
+      mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, log: [`${name} 出现了`] } } : prev);
+      await sleep(420);
+    }
+    await sleep(260);
+    mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, intro: false, log: ["战斗开始"] } } : prev);
+    await sleep(240);
 
     const resultPromise = new Promise<number>((resolve) => { battleLoopResolve.current = resolve; });
     const formation = dataRef.current?.formations.get(s.formation);
@@ -851,12 +969,6 @@ export default function KongmingGame() {
               addLog(`${current.name} 使用 ${itemName}，${target.name} 恢复 ${Math.min(heal, target.maxHp)}`);
               consumeInventory(itemName);
             }
-          } else if (action.type === "formation" && action.formation) {
-            mutate((prev) => ({ ...prev, formation: action.formation!, battle: prev.battle ? { ...prev.battle, log: [`${current.name} 变更为 ${action.formation}`, ...prev.battle.log].slice(0, 8) } : prev.battle }));
-            addLog(`${current.name} 变更为 ${action.formation}`);
-          } else if (action.type === "defend") {
-            current.defending = true;
-            addLog(`${current.name} 进入防御`);
           } else if (action.type === "flee") {
             if (Math.random() < 0.35) {
               addLog("全军撤退成功");
@@ -986,6 +1098,32 @@ export default function KongmingGame() {
     }
     const leader = () => snapRef.current.party[0];
     const addFlag = (key: string) => mutate((prev) => ({ ...prev, flags: { ...prev.flags, [key]: true } }));
+    const setEventPosition = (x: number, y: number) => {
+      if (!ev?.id) return;
+      mutate((prev) => ({ ...prev, eventPos: { ...prev.eventPos, [ev.id]: [x, y] } }));
+    };
+    const moveCurrentEvent = async (positions: number[][]) => {
+      if (!ev?.id) return;
+      for (const target of positions) {
+        if (!target || target.length < 2) continue;
+        const start = snapRef.current.eventPos[ev.id] ?? [ev.pos[0], ev.pos[1]];
+        const tx = Number(target[0]);
+        const ty = Number(target[1]);
+        const span = Math.hypot(tx - start[0], ty - start[1]);
+        const duration = Math.min(900, Math.max(120, span * 65));
+        const began = performance.now();
+        await new Promise<void>((resolve) => {
+          const tick = (now: number) => {
+            const t = Math.min(1, (now - began) / duration);
+            setEventPosition(start[0] + (tx - start[0]) * t, start[1] + (ty - start[1]) * t);
+            if (t < 1) requestAnimationFrame(tick);
+            else resolve();
+          };
+          requestAnimationFrame(tick);
+        });
+        setEventPosition(tx, ty);
+      }
+    };
     const applySceneByTag = async (type: number, name: string, tag?: string) => {
       loadSceneByName(name, tag, type);
       await sleep(280);
@@ -1114,10 +1252,7 @@ export default function KongmingGame() {
           case "MoveToAsync":
           case "BoatMoveTo": {
             const positions = flattenArgs(args).filter((x) => Array.isArray(x)) as number[][];
-            const last = positions[positions.length - 1];
-            if (last && last.length >= 2) {
-              mutate((prev) => ({ ...prev, x: last[0], y: last[1] }));
-            }
+            await moveCurrentEvent(positions);
             return undefined;
           }
           case "TeamMoveTo": {
@@ -1132,7 +1267,11 @@ export default function KongmingGame() {
             if (pos && pos.length >= 2) mutate((prev) => ({ ...prev, x: Number(pos[0]), y: Number(pos[1]) }));
             return undefined;
           }
-          case "SetPosition":
+          case "SetPosition": {
+            const pos = args.find((a) => Array.isArray(a)) as number[] | undefined;
+            if (pos && pos.length >= 2) setEventPosition(Number(pos[0]), Number(pos[1]));
+            return undefined;
+          }
           case "SetTeamPosition":
             return undefined;
           case "TeamPosition":
@@ -1347,8 +1486,9 @@ export default function KongmingGame() {
       locked.current = false;
       return;
     }
+    const chapter = chapterName(s.chapter);
     const ev = scene.events
-      .filter((e) => (e.when === 1 || e.when === 3) && e.id && !s.flags[e.id] && dist(e.pos[0], e.pos[1], x, y) < 0.8)
+      .filter((e) => (e.when === 1 || e.when === 3) && e.id && !s.flags[e.id] && eventVisible(e, s.flags, chapter) && dist(e.pos[0], e.pos[1], x, y) < 0.8)
       .sort((a, b) => dist(a.pos[0], a.pos[1], x, y) - dist(b.pos[0], b.pos[1], x, y))[0];
     if (ev) await runEvent(ev);
   }, [loadSceneByName, runEvent]);
@@ -1457,6 +1597,8 @@ export default function KongmingGame() {
     const d = currentData();
     const scene = d.scenes.find((x) => x.level === save.sceneLevel) ?? d.scenes[0];
     if (!scene) return;
+    trailRef.current = seedTeamTrail(save.x, save.y, save.dir, Math.max(0, save.party.length - 1));
+    followPosRef.current = trailRef.current.map((p) => ({ ...p }));
     mutate((prev) => ({
       ...prev,
       screen: "field",
@@ -1476,6 +1618,7 @@ export default function KongmingGame() {
       openedChests: save.openedChests,
       formation: save.formation,
       chapter: save.chapter,
+      eventPos: {},
       panel: null,
       dialogue: null,
       battle: null,
@@ -1580,6 +1723,7 @@ export default function KongmingGame() {
       openedChests: {},
       formation: start.defaultFormation,
       chapter: 1,
+      eventPos: {},
       dialogue: null,
       panel: null,
       shop: null,
@@ -1593,17 +1737,31 @@ export default function KongmingGame() {
   }, [autoEquip, currentData, makeMember, mutate]);
 
   const proceedPrologue = useCallback(() => {
-    const s = snapRef.current;
-    if (s.prologuePage < PROLOGUE.length - 1) {
-      mutate((prev) => ({ ...prev, prologuePage: prev.prologuePage + 1 }));
-      return;
-    }
     const d = currentData();
     const start = d.scenes.find((x) => x.level === 12) ?? d.scenes[0];
     if (!start) return;
     loadScene(start.level, "开场", false);
     banner("第一章　徐州沉浮");
-  }, [banner, currentData, loadScene, mutate]);
+  }, [banner, currentData, loadScene]);
+
+  useEffect(() => {
+    if (snap.screen !== "prologue") return;
+    const view = storyViewRef.current;
+    if (!view) return;
+    let frame = 0;
+    const started = performance.now();
+    const duration = 66000;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - started) / duration);
+      const max = Math.max(0, view.scrollHeight - view.clientHeight);
+      view.scrollTop = max * t;
+      if (t < 1) frame = requestAnimationFrame(tick);
+      else proceedPrologue();
+    };
+    view.scrollTop = 0;
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [snap.screen, proceedPrologue]);
 
   /* ------------------------------------------------------------------ */
   /* Terminal / input                                                    */
@@ -1614,28 +1772,83 @@ export default function KongmingGame() {
     return s.screen === "field" && !s.panel && !s.shop && !s.battle;
   }, []);
 
-  const move = useCallback((dx: number, dy: number) => {
+  const move = useCallback(async (dx: number, dy: number) => {
     const s = snapRef.current;
-    if (!boxed() || !s.scene || locked.current) return;
-    const nx = s.x + dx;
-    const ny = s.y + dy;
-    mutate((prev) => ({ ...prev, dir: [dx, dy], x: nx, y: ny }));
+    if (!boxed() || !s.scene || locked.current || moving.current) return;
+    const fromX = s.x;
+    const fromY = s.y;
+    const nx = fromX + dx;
+    const ny = fromY + dy;
+    mutate((prev) => ({ ...prev, dir: [dx, dy] }));
     if (blockedAt(s.scene, nx, ny)) {
-      mutate((prev) => ({ ...prev, x: s.x, y: s.y }));
-      toast("前方无法通行");
       return;
     }
+    const blockingNpc = s.scene.events.find((e) => {
+      if (!e.id || s.flags[e.id] || !eventVisible(e, s.flags, chapterName(s.chapter))) return false;
+      if (e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) return false;
+      const p = s.eventPos[e.id] ?? e.pos;
+      return dist(p[0], p[1], nx, ny) < 0.72;
+    });
+    if (blockingNpc) {
+      return;
+    }
+    trailRef.current = [
+      { x: fromX, y: fromY, dir: [dx, dy] as [number, number] },
+      ...trailRef.current,
+    ].slice(0, Math.max(0, s.party.length - 1));
+    const followCount = trailRef.current.length;
+    const followFallback = seedTeamTrail(fromX, fromY, [dx, dy], followCount);
+    followPosRef.current = Array.from({ length: followCount }, (_, i) => {
+      const cur = followPosRef.current[i] ?? followFallback[i] ?? { x: fromX, y: fromY, dir: [dx, dy] as [number, number] };
+      return { ...cur };
+    });
+    const followStart = followPosRef.current.map((p) => ({ ...p }));
+    const followTargets = trailRef.current.slice(0, followCount);
+    moving.current = true;
+    const duration = 180;
+    const started = performance.now();
+    await new Promise<void>((resolve) => {
+      const step = (now: number) => {
+        const t = Math.min(1, (now - started) / duration);
+        followPosRef.current = followTargets.map((target, i) => {
+          const start = followStart[i] ?? target;
+          return {
+            x: start.x + (target.x - start.x) * t,
+            y: start.y + (target.y - start.y) * t,
+            dir: target.dir,
+          };
+        });
+        mutate((prev) => ({
+          ...prev,
+          x: fromX + (nx - fromX) * t,
+          y: fromY + (ny - fromY) * t,
+        }));
+        if (t < 1) requestAnimationFrame(step);
+        else resolve();
+      };
+      requestAnimationFrame(step);
+    });
+    followPosRef.current = followTargets.map((p) => ({ ...p }));
+    mutate((prev) => ({ ...prev, x: nx, y: ny }));
+    moving.current = false;
     void triggerOnEnter(s.scene, nx, ny);
+    const held = [...heldKeys.current].reverse().find((k) => DIR_KEYS[k]);
+    if (held) {
+      const [ndx, ndy] = DIR_KEYS[held];
+      if (!locked.current) void moveRef.current?.(ndx, ndy);
+    }
   }, [blockedAt, boxed, mutate, toast, triggerOnEnter]);
+  moveRef.current = move;
 
   const interact = useCallback(async () => {
     const s = snapRef.current;
     if (!s.scene || locked.current) return;
+    if (performance.now() < suppressInteractUntil.current) return;
     const scene = s.scene;
 
     const ev = scene.events
-      .filter((e) => e.when === 2 && e.id && !s.flags[e.id] && dist(e.pos[0], e.pos[1], s.x, s.y) < 1.1)
-      .sort((a, b) => dist(a.pos[0], a.pos[1], s.x, s.y) - dist(b.pos[0], b.pos[1], s.x, s.y))[0];
+      .filter((e) => e.when === 2 && e.id && !s.flags[e.id] && eventVisible(e, s.flags, chapterName(s.chapter)) && !(e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) && dist((s.eventPos[e.id] ?? e.pos)[0], (s.eventPos[e.id] ?? e.pos)[1], s.x, s.y) < 1.1)
+      .sort((a, b) => dist((s.eventPos[a.id!] ?? a.pos)[0], (s.eventPos[a.id!] ?? a.pos)[1], s.x, s.y) - dist((s.eventPos[b.id!] ?? b.pos)[0], (s.eventPos[b.id!] ?? b.pos)[1], s.x, s.y))[0];
     if (ev) { await runEvent(ev); return; }
 
     const chest = scene.chests.find((c) => !s.openedChests[c.id] && dist(c.pos[0], c.pos[1], s.x, s.y) < 0.8);
@@ -1665,16 +1878,7 @@ export default function KongmingGame() {
       loadSceneByName(trans.scene, trans.tag || undefined, trans.type);
       return;
     }
-
-    const nearbyEvent = scene.events
-      .filter((e) => e.id && !s.flags[e.id] && !e.startHide && dist(e.pos[0], e.pos[1], s.x, s.y) < 2.0)
-      .sort((a, b) => dist(a.pos[0], a.pos[1], s.x, s.y) - dist(b.pos[0], b.pos[1], s.x, s.y))[0];
-    if (nearbyEvent) {
-      await talk(nearbyEvent.names[0]?.name ?? "路人", nearbyEvent.names[0]?.profile ?? null, "……");
-      return;
-    }
-    toast("这里没有可以调查的东西");
-  }, [loadSceneByName, mutate, runEvent, toast, talk]);
+  }, [loadSceneByName, mutate, runEvent]);
 
   const activateTitle = useCallback((index: number) => {
     mutate((prev) => ({ ...prev, titleCursor: index }));
@@ -1688,11 +1892,14 @@ export default function KongmingGame() {
   }, [mutate, openPanel, startNewGame, toast]);
 
   const handleKey = useCallback(async (e: KeyboardEvent) => {
-    if (e.repeat && !["KeyW", "KeyA", "KeyS", "KeyD"].includes(e.code)) return;
-    const s = snapRef.current;
-    const key = e.code;
+    const key = ARROW_TO_KEY[e.code] ?? e.code;
     const isDir = ["KeyW", "KeyA", "KeyS", "KeyD"].includes(key);
+    if (e.repeat) {
+      if (isDir) e.preventDefault();
+      return;
+    }
     if (isDir || ["KeyJ", "KeyK"].includes(key)) e.preventDefault();
+    const s = snapRef.current;
 
     if (s.dialogue) {
       if (key === "KeyW" || key === "KeyS") {
@@ -1734,10 +1941,24 @@ export default function KongmingGame() {
         if (b.menu === "attack" || b.menu === "target") return Math.max(1, enemies.length);
         if (b.menu === "skill") return Math.max(1, skills.length);
         if (b.menu === "item") return Math.max(1, items.length);
-        if (b.menu === "formation") return Math.max(1, dataRef.current?.content.formations.length ?? 1);
+        if (b.menu === "general") return Math.max(1, s.party.length);
         return 6;
       };
-      if (key === "KeyW") mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, cursor: (prev.battle.cursor + cursorMax() - 1) % cursorMax() } } : prev);
+      const moveCommandCursor = (delta: number) => {
+        mutate((prev) => {
+          if (!prev.battle) return prev;
+          const next = clamp(prev.battle.cursor + delta, 0, 5);
+          return { ...prev, battle: { ...prev.battle, cursor: next } };
+        });
+      };
+      if (b.menu === "command" && (key === "KeyW" || key === "KeyS")) {
+        moveCommandCursor(key === "KeyW" ? -2 : 2);
+      } else if (b.menu === "command" && (key === "KeyA" || key === "KeyD")) {
+        const row = Math.floor(b.cursor / 2);
+        const col = b.cursor % 2;
+        const nextCol = clamp(col + (key === "KeyA" ? -1 : 1), 0, 1);
+        mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, cursor: row * 2 + nextCol } } : prev);
+      } else if (key === "KeyW") mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, cursor: (prev.battle.cursor + cursorMax() - 1) % cursorMax() } } : prev);
       else if (key === "KeyS") mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, cursor: (prev.battle.cursor + 1) % cursorMax() } } : prev);
       else if (key === "KeyK") {
         if (b.menu !== "command") mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, menu: "command", cursor: 0, skill: null } } : prev);
@@ -1749,11 +1970,17 @@ export default function KongmingGame() {
             if (skills.length === 0) toast("尚未习得计策");
             else mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, menu: "skill", cursor: 0 } } : prev);
           } else if (b.cursor === 2) {
+            const target = enemies[0];
+            if (target) { battleResolve.current = null; mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev); resolve?.({ type: "attack", target: target.key }); }
+          } else if (b.cursor === 3) mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, menu: "general", cursor: 0 } } : prev);
+          else if (b.cursor === 4) {
             if (items.length === 0) toast("没有可用物品");
             else mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, menu: "item", cursor: 0 } } : prev);
-          } else if (b.cursor === 3) mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, menu: "formation", cursor: 0 } } : prev);
-          else if (b.cursor === 4) { battleResolve.current = null; mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev); resolve?.({ type: "defend" }); }
-          else if (b.cursor === 5) { battleResolve.current = null; mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev); resolve?.({ type: "flee" }); }
+          } else if (b.cursor === 5) { battleResolve.current = null; mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev); resolve?.({ type: "flee" }); }
+        } else if (b.menu === "general") {
+          const m = s.party[b.cursor];
+          const mu = b.units.find((u) => u.side === "player" && u.name === m?.name);
+          if (m) toast(`${m.name}　武力 ${mu?.str ?? "?"}　智力 ${mu?.ler ?? "?"}　兵力 ${mu?.hp ?? m.hp}`);
         } else if (b.menu === "attack") {
           const target = enemies[b.cursor];
           if (target) { battleResolve.current = null; mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev); resolve?.({ type: "attack", target: target.key }); }
@@ -1779,18 +2006,9 @@ export default function KongmingGame() {
         } else if (b.menu === "item") {
           const item = items[b.cursor];
           if (item) {
-            const target = s.party[0];
             battleResolve.current = null;
             mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev);
-            resolve?.({ type: "item", item: item.name, target: `p0` });
-            void target;
-          }
-        } else if (b.menu === "formation") {
-          const f = dataRef.current?.content.formations[b.cursor];
-          if (f) {
-            battleResolve.current = null;
-            mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev);
-            resolve?.({ type: "formation", formation: f.name });
+            resolve?.({ type: "item", item: item.name, target: "p0" });
           }
         }
       }
@@ -1890,7 +2108,6 @@ export default function KongmingGame() {
     }
 
     if (s.screen === "prologue") {
-      if (key === "KeyJ") proceedPrologue();
       if (key === "KeyK") {
         const d = currentData();
         const start = d.scenes.find((x) => x.level === 12) ?? d.scenes[0];
@@ -1915,9 +2132,26 @@ export default function KongmingGame() {
   }, [activateTitle, banner, buyShopItem, changeFormation, closePanel, closeShop, currentData, equipItem, finishDialogue, loadSave, loadScene, move, mutate, openPanel, proceedPrologue, saveGame, startNewGame, toast, useInventoryItem, useSkillInfo, interact]);
 
   useEffect(() => {
-    const listener = (e: KeyboardEvent) => { void handleKey(e); };
+    const listener = (e: KeyboardEvent) => {
+      if (DIR_KEYS[e.code]) {
+        heldKeys.current.delete(e.code);
+        heldKeys.current.add(e.code);
+        e.preventDefault();
+      }
+      void handleKey(e);
+    };
+    const release = (e: KeyboardEvent) => {
+      heldKeys.current.delete(e.code);
+    };
+    const clear = () => heldKeys.current.clear();
     window.addEventListener("keydown", listener);
-    return () => window.removeEventListener("keydown", listener);
+    window.addEventListener("keyup", release);
+    window.addEventListener("blur", clear);
+    return () => {
+      window.removeEventListener("keydown", listener);
+      window.removeEventListener("keyup", release);
+      window.removeEventListener("blur", clear);
+    };
   }, [handleKey]);
 
   useEffect(() => {
@@ -1952,19 +2186,21 @@ export default function KongmingGame() {
   let playerSX = 0;
   let playerSY = 0;
   if (scene && map) {
-    const rawX = (s.x - map.x) * cell;
-    const rawY = (map.y + map.h - s.y) * cell;
+    const rawX = (s.x - map.x + 0.5) * cell;
+    const rawY = (map.y + map.h - s.y - 0.5) * cell;
     camX = mapW <= viewW ? (mapW - viewW) / 2 : clamp(rawX - viewW / 2, 0, mapW - viewW);
     camY = mapH <= viewH ? (mapH - viewH) / 2 : clamp(rawY - viewH / 2, 0, mapH - viewH);
     playerSX = rawX - camX;
     playerSY = rawY - camY;
   }
-  const sx = (gx: number) => (map ? (gx - map.x) * cell - camX : 0);
-  const sy = (gy: number) => (map ? (map.y + map.h - gy) * cell - camY : 0);
+  const sx = (gx: number) => (map ? (gx - map.x + 0.5) * cell - camX : 0);
+  const sy = (gy: number) => (map ? (map.y + map.h - gy - 0.5) * cell - camY : 0);
 
   const seenEvents = new Set<string>();
+  const currentChapter = chapterName(s.chapter);
   const fieldEvents = (scene?.events ?? []).filter((e) => {
-    if (!e.id || (s.flags[e.id] && e.hideAfter) || e.startHide || !e.names.length) return false;
+    if (!e.id || !eventVisible(e, s.flags, currentChapter)) return false;
+    if (e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) return false;
     const k = `${e.id}:${e.pos[0]}:${e.pos[1]}`;
     if (seenEvents.has(k)) return false;
     seenEvents.add(k);
@@ -1973,7 +2209,20 @@ export default function KongmingGame() {
   const fieldChests = (scene?.chests ?? []).filter((c) => c.show && !s.openedChests[c.id]);
   const leader = s.party[0];
   const playerSprite = walkStripForModel(leader?.model);
-  const playerFrame = frameForDir(s.dir);
+  const playerFrame = frameForDir(
+    s.dir,
+    moving.current && typeof performance !== "undefined" ? Math.floor(performance.now() / 120) : 0,
+  );
+  const fieldPhase = moving.current && typeof performance !== "undefined" ? Math.floor(performance.now() / 120) : 0;
+  const fallbackTrail = seedTeamTrail(s.x, s.y, s.dir, Math.max(0, s.party.length - 1));
+  const followerEntries = s.party.slice(1).map((m, i) => {
+    const pos = followPosRef.current[i] ?? trailRef.current[i] ?? fallbackTrail[i] ?? { x: s.x, y: s.y, dir: s.dir };
+    return { member: m, pos, frame: frameForDir(pos.dir, fieldPhase) };
+  });
+  const dialogueFace = s.dialogue
+    ? faceForProfile(s.dialogue.profile) ?? faceForProfile(s.dialogue.name)
+    : null;
+  const showDialoguePortrait = Boolean(s.dialogue && (s.dialogue.name || dialogueFace));
   const titleLabels = ["解甲归田", "厉兵秣马", "匡扶汉室", "初出茅庐"];
   const rootLabels = ["队伍", "物品", "装备", "谋略", "阵型", "剧情", "保存", "设置", "返回"];
   const panelTitle: Record<string, string> = {
@@ -1994,7 +2243,7 @@ export default function KongmingGame() {
   const enemies = battle ? battle.units.filter((u) => u.side === "enemy" && u.hp > 0) : [];
   const battleSkills = pendingUnit?.skills ?? [];
   const battleItems = s.inventory.filter((i) => data.items.get(i.name)?.heal);
-  const battleCommands = ["攻击", "计策", "物品", "阵型", "防御", "撤退"];
+  const battleCommands = ["攻击", "计策", "总攻", "武将", "宝物", "撤退"];
   const equipmentInv = s.inventory.filter((i) => data.equipment.has(i.name));
 
   return (
@@ -2037,13 +2286,16 @@ export default function KongmingGame() {
         )}
 
         {s.screen === "prologue" && (
-          <div className={styles.prologueScreen}>
-            <div className={styles.prologuePaper}>
-              <div className={styles.prologueHead}>序</div>
-              <p className={styles.prologueText}>{PROLOGUE[s.prologuePage]}</p>
-              <div className={styles.prologueFoot}>
-                <span>{s.prologuePage + 1} / {PROLOGUE.length}</span>
-                <span>J 继续　K 跳过</span>
+          <div className={styles.storyScreen}>
+            <div className={styles.storyViewport} ref={storyViewRef}>
+              <div className={styles.storyContent}>
+                <p className={styles.storyText}>{PROLOGUE[0]}</p>
+                <img className={styles.storyImage} src="/game-assets/kongming/ui/Story1.png" alt="" draggable={false} />
+                <p className={styles.storyText}>{PROLOGUE[1]}</p>
+                <img className={styles.storyImage} src="/game-assets/kongming/ui/Story2.png" alt="" draggable={false} />
+                <p className={styles.storyText}>{PROLOGUE[2]}</p>
+                <img className={styles.storyImage} src="/game-assets/kongming/ui/Story3.png" alt="" draggable={false} />
+                <p className={styles.storyText}>{PROLOGUE[3]}</p>
               </div>
             </div>
           </div>
@@ -2053,6 +2305,16 @@ export default function KongmingGame() {
           <div className={styles.field}>
             <svg className={styles.world} viewBox={`0 0 ${viewW} ${viewH}`} preserveAspectRatio="xMidYMid slice">
               <rect width={viewW} height={viewH} fill="#10130f" />
+              <defs>
+                <clipPath id="clip-player">
+                  <rect x={playerSX - 32} y={playerSY - 58} width={64} height={64} />
+                </clipPath>
+                {followerEntries.map(({ pos }, i) => (
+                  <clipPath id={`clip-follower-${i}`} key={`clip-${i}`}>
+                    <rect x={sx(pos.x) - 32} y={sy(pos.y) - 58} width={64} height={64} />
+                  </clipPath>
+                ))}
+              </defs>
               <image
                 href={map.src}
                 x={-camX}
@@ -2063,8 +2325,9 @@ export default function KongmingGame() {
                 preserveAspectRatio="none"
               />
               {fieldEvents.map((e, i) => {
-                const ex = sx(e.pos[0]);
-                const ey = sy(e.pos[1]);
+                const p = s.eventPos[e.id] ?? e.pos;
+                const ex = sx(p[0]);
+                const ey = sy(p[1]);
                 if (ex < -80 || ex > viewW + 80 || ey < -100 || ey > viewH + 80) return null;
                 const profile = e.names[0]?.profile ?? null;
                 const name = e.names[0]?.name?.trim() ?? "";
@@ -2074,14 +2337,10 @@ export default function KongmingGame() {
                 return (
                   <g key={`${e.id}-${i}`}>
                     <ellipse cx={ex} cy={ey + 4} rx={22} ry={8} fill="rgba(0,0,0,.35)" />
-                    <svg x={ex - 26} y={ey - 52} width={52} height={52} viewBox="0 0 64 64" preserveAspectRatio="xMidYMid meet">
+                    <svg x={ex - 32} y={ey - 58} width={64} height={64} viewBox="0 0 64 64" preserveAspectRatio="xMidYMid meet" overflow="hidden">
                       <image href={sprite} x={0} y={0} width={64} height={64} className={styles.pixel} />
                     </svg>
-                    {name && (
-                      <text x={ex} y={ey - 33} textAnchor="middle" fill="#f5e7c8" fontSize={12} stroke="#20150b" strokeWidth={3} paintOrder="stroke">
-                        {name}
-                      </text>
-                    )}
+                    {name && null}
                   </g>
                 );
               })}
@@ -2097,80 +2356,122 @@ export default function KongmingGame() {
                   </g>
                 );
               })}
+              {followerEntries.map(({ member: m, pos, frame }, i) => {
+                if (m.dead) return null;
+                const strip = walkStripForModel(m.model);
+                const fx = sx(pos.x);
+                const fy = sy(pos.y);
+                return (
+                  <g key={m.key}>
+                    <ellipse cx={fx} cy={fy + 4} rx={22} ry={8} fill="rgba(0,0,0,.35)" />
+                    {strip ? (
+                      <image
+                        href={strip}
+                        x={fx - 32 - frame * 64}
+                        y={fy - 58}
+                        width={512}
+                        height={64}
+                        clipPath={`url(#clip-follower-${i})`}
+                        className={styles.pixel}
+                      />
+                    ) : (
+                      <circle cx={fx} cy={fy - 28} r={18} fill="#3b4c45" stroke="#d8c38f" strokeWidth={2} />
+                    )}
+                  </g>
+                );
+              })}
               <ellipse cx={playerSX} cy={playerSY + 4} rx={22} ry={8} fill="rgba(0,0,0,.45)" />
               {playerSprite ? (
-                <svg x={playerSX - 32} y={playerSY - 58} width={64} height={64} viewBox={`${playerFrame * 64} 0 64 64`} preserveAspectRatio="xMidYMid meet">
-                  <image href={playerSprite} x={0} y={0} width={512} height={64} className={styles.pixel} />
-                </svg>
+                <image
+                  href={playerSprite}
+                  x={playerSX - 32 - playerFrame * 64}
+                  y={playerSY - 58}
+                  width={512}
+                  height={64}
+                  clipPath="url(#clip-player)"
+                  className={styles.pixel}
+                />
               ) : (
                 <circle cx={playerSX} cy={playerSY - 26} r={22} fill="#294b63" stroke="#d8c38f" strokeWidth={2} />
               )}
               {!playerSprite && (
                 <text x={playerSX} y={playerSY - 20} textAnchor="middle" fill="#fff" fontSize={15}>{leader?.name?.[0] ?? "刘"}</text>
               )}
-              <text x={playerSX} y={playerSY - 34} textAnchor="middle" fill="#fff6df" fontSize={12} stroke="#1c140b" strokeWidth={3} paintOrder="stroke">
+              <text x={playerSX} y={playerSY - 72} textAnchor="middle" fill="#fff6df" fontSize={19} stroke="#1c140b" strokeWidth={4} paintOrder="stroke">
                 {leader?.name ?? ""}
               </text>
+              {followerEntries.map(({ member: m, pos }) => (
+                <text key={`label-${m.key}`} x={sx(pos.x)} y={sy(pos.y) - 72} textAnchor="middle" fill="#f5e7c8" fontSize={18} stroke="#20150b" strokeWidth={4} paintOrder="stroke">
+                  {m.name}
+                </text>
+              ))}
             </svg>
-
-            <div className={styles.hudTop}>
-              <div className={styles.hudStats}>
-                <span>金 <b>{s.money}</b></span>
-                <span>等级 <b>{s.level}</b></span>
-                <span>计力 <b>{s.mp}/{s.maxMp}</b></span>
-              </div>
-            </div>
 
           </div>
         )}
 
         {s.screen === "battle" && battle && (
           <div className={styles.battleScreen}>
-            <div className={styles.battleSky} />
-            <div className={styles.battleHeader}>
-              <span>会战</span>
-              <strong>第 {battle.round} 回合</strong>
-            </div>
-            <div className={styles.battleArena}>
-              <div className={styles.battleSide}>
-                {battle.units.filter((u) => u.side === "player").map((u) => (
-                  <div key={u.key} className={`${styles.unitCard} ${u.hp <= 0 ? styles.unitDown : ""} ${battle.pending === u.key ? styles.unitActive : ""}`}>
-                    {spriteForModel(u.model) ? <img className={styles.unitSprite} src={spriteForModel(u.model)!} alt="" /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span className={styles.faceFallback}>{u.name[0]}</span>}
-                    <div className={styles.unitInfo}>
-                      <span>{u.name}</span>
-                      <small>{u.hp} / {u.maxHp}</small>
-                      <i><b style={{ width: `${u.maxHp ? (u.hp / u.maxHp) * 100 : 0}%` }} /></i>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className={styles.vsMark}>战</div>
-              <div className={styles.battleSide}>
-                {battle.units.filter((u) => u.side === "enemy").map((u) => {
-                  const idx = enemies.findIndex((e) => e.key === u.key);
-                  const lit = (battle.menu === "attack" || battle.menu === "target") && idx === battle.cursor;
-                  return (
-                    <div key={u.key} className={`${styles.unitCard} ${styles.enemyCard} ${u.hp <= 0 ? styles.unitDown : ""} ${lit ? styles.unitActive : ""}`}>
-                      {spriteForModel(u.model) ? <img className={styles.unitSprite} src={spriteForModel(u.model)!} alt="" /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span className={styles.faceFallback}>{u.name[0]}</span>}
-                      <div className={styles.unitInfo}>
-                        <span>{u.name}</span>
-                        <small>{u.hp} / {u.maxHp}</small>
-                        <i><b style={{ width: `${u.maxHp ? (u.hp / u.maxHp) * 100 : 0}%` }} /></i>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <div
+              className={styles.battleTerrain}
+              style={{ backgroundImage: `url(${battle.terrain ?? "/trial/tstd2/terrain/plain.png"})` }}
+            />
 
-            <div className={styles.battleLog}>
-              {battle.log.slice(-4).map((line, i) => <p key={i}>{line}</p>)}
-            </div>
+            {battle.units.filter((u) => u.side === "player").slice(0, 5).map((u, i) => (
+              <div
+                key={u.key}
+                className={`${styles.battleRow} ${styles.battleRowPlayer} ${u.hp <= 0 ? styles.unitDown : ""} ${battle.pending === u.key ? styles.battleRowActive : ""}`}
+                style={{ top: `${BATTLE_ROW_TOP[i]}%` }}
+              >
+                <div className={styles.battleStats}>
+                  <strong>{u.name}</strong>
+                  <span>{u.hp}</span>
+                </div>
+                <div className={styles.battleHpBar}>
+                  <i style={{ width: `${u.maxHp ? (u.hp / u.maxHp) * 100 : 0}%` }} />
+                </div>
+                <div className={styles.battleSprite}>
+                  {spriteForModel(u.model) ? <img src={spriteForModel(u.model)!} alt="" /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span>{u.name[0]}</span>}
+                </div>
+              </div>
+            ))}
+
+            {battle.units.filter((u) => u.side === "enemy").slice(0, 5).map((u, i) => {
+              const idx = enemies.findIndex((e) => e.key === u.key);
+              const lit = (battle.menu === "attack" || battle.menu === "target") && idx === battle.cursor;
+              return (
+                <div
+                  key={u.key}
+                  className={`${styles.battleRow} ${styles.battleRowEnemy} ${u.hp <= 0 ? styles.unitDown : ""} ${lit ? styles.battleRowActive : ""}`}
+                  style={{ top: `${BATTLE_ROW_TOP[i]}%` }}
+                >
+                  <div className={styles.battleSprite}>
+                    {spriteForModel(u.model) ? <img src={spriteForModel(u.model)!} alt="" /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span>{u.name[0]}</span>}
+                  </div>
+                  <div className={`${styles.battleHpBar} ${styles.battleHpBarEnemy}`}>
+                    <i style={{ width: `${u.maxHp ? (u.hp / u.maxHp) * 100 : 0}%` }} />
+                  </div>
+                  <div className={`${styles.battleStats} ${styles.battleStatsEnemy}`}>
+                    <strong>{u.name}</strong>
+                    <span>{u.hp}</span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {!battle.outcome && (() => {
+              const faceUnit = pendingUnit ?? battle.units.find((u) => u.side === "player" && u.hp > 0);
+              const face = faceUnit ? faceForProfile(faceUnit.profile) : null;
+              return face ? (
+                <div className={styles.battlePortrait}>
+                  <img src={face} alt="" />
+                </div>
+              ) : null;
+            })()}
 
             {battle.outcome && (
               <div className={styles.battleResult}>
-                <div className={styles.battleResultCard}>
-                  <p className={styles.battleResultKicker}>{battle.outcome.title}</p>
+                <div className={styles.battleOutcomePanel}>
                   <h2 className={
                     battle.outcome.kind === "win" ? styles.resultWin
                       : battle.outcome.kind === "flee" ? styles.resultFlee
@@ -2179,106 +2480,78 @@ export default function KongmingGame() {
                     {battle.outcome.kind === "win" ? "战斗胜利" : battle.outcome.kind === "flee" ? "撤退成功" : "全军覆没"}
                   </h2>
                   {battle.outcome.kind === "win" && (
-                    <div className={styles.battleRewards}>
-                      <span>获金 <b>{battle.outcome.money}</b></span>
-                      <span>经验 <b>{battle.outcome.exp}</b></span>
-                      <span>等级 <b>Lv {battle.outcome.level}</b></span>
-                      {battle.outcome.learned.length > 0 && (
-                        <p>习得 {battle.outcome.learned.join("、")}</p>
-                      )}
-                    </div>
+                    <p className={styles.battleOutcomeText}>
+                      获金 <b>{battle.outcome.money}</b>　经验 <b>{battle.outcome.exp}</b>　等级 <b>Lv {battle.outcome.level}</b>
+                      {battle.outcome.learned.length > 0 ? `　习得 ${battle.outcome.learned.join("、")}` : ""}
+                    </p>
                   )}
-                  {battle.outcome.kind === "flee" && <p className={styles.battleResultNote}>暂且避其锋芒，来日再战。</p>}
-                  {battle.outcome.kind === "lose" && <p className={styles.battleResultNote}>刘玄德兵败，只得暂避锋芒。</p>}
+                  {battle.outcome.kind === "flee" && <p className={styles.battleOutcomeText}>暂且避其锋芒，来日再战。</p>}
+                  {battle.outcome.kind === "lose" && <p className={styles.battleOutcomeText}>刘玄德兵败，只得暂避锋芒。</p>}
                   <span className={styles.battleResultNext}>{battle.outcome.kind === "lose" ? "J 返回标题" : "J 继续行军"}</span>
                 </div>
               </div>
             )}
 
-            {!battle.outcome && battle.menu === "command" && (
-              <div className={styles.commandBox}>
-                <div className={styles.commandHead}>{pendingUnit?.name ?? "武将"} 的指令</div>
-                <div className={styles.commandGrid}>
-                  {battleCommands.map((label, i) => (
-                    <div key={label} className={battle.cursor === i ? styles.commandOn : undefined}>
-                      <span>{battle.cursor === i ? "▶" : ""}</span>{label}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {battle.menu === "attack" && (
-              <div className={styles.commandBox}>
-                <div className={styles.commandHead}>选择目标</div>
-                <div className={styles.commandList}>
-                  {enemies.map((u, i) => (
-                    <div key={u.key} className={battle.cursor === i ? styles.commandOn : undefined}>
-                      <span>{battle.cursor === i ? "▶" : ""}</span>{u.name}　{u.hp}
-                    </div>
-                  ))}
-                </div>
-                <small>J 攻击　K 返回</small>
-              </div>
-            )}
-
-            {battle.menu === "skill" && (
-              <div className={styles.commandBox}>
-                <div className={styles.commandHead}>选择计策</div>
-                <div className={styles.commandList}>
-                  {battleSkills.map((name, i) => {
-                    const sk = data.skills.get(name);
-                    return (
-                      <div key={name} className={battle.cursor === i ? styles.commandOn : undefined}>
-                        <span>{battle.cursor === i ? "▶" : ""}</span>{name}
-                        <em>{sk?.cost ? `${sk.cost} 计力` : ""}</em>
+            {!battle.outcome && (
+              <div className={styles.battleDialogBox}>
+                {battle.intro ? (
+                  <p className={styles.battleIntroText}>{battle.log[0]}</p>
+                ) : battle.menu === "command" ? (
+                  <div className={styles.battleCommandGrid}>
+                    {battleCommands.map((label, i) => (
+                      <div key={label} className={battle.cursor === i ? styles.commandOn : undefined}>
+                        <span>{battle.cursor === i ? "▶" : ""}</span>{label}
                       </div>
-                    );
-                  })}
-                </div>
-                <small>J 使用　K 返回</small>
-              </div>
-            )}
-
-            {battle.menu === "target" && (
-              <div className={styles.commandBox}>
-                <div className={styles.commandHead}>{battle.skill} · 选择目标</div>
-                <div className={styles.commandList}>
-                  {enemies.map((u, i) => (
-                    <div key={u.key} className={battle.cursor === i ? styles.commandOn : undefined}>
-                      <span>{battle.cursor === i ? "▶" : ""}</span>{u.name}　{u.hp}
-                    </div>
-                  ))}
-                </div>
-                <small>J 确认　K 返回</small>
-              </div>
-            )}
-
-            {battle.menu === "item" && (
-              <div className={styles.commandBox}>
-                <div className={styles.commandHead}>使用物品</div>
-                <div className={styles.commandList}>
-                  {battleItems.map((it, i) => (
-                    <div key={it.name} className={battle.cursor === i ? styles.commandOn : undefined}>
-                      <span>{battle.cursor === i ? "▶" : ""}</span>{it.name} × {it.count}
-                    </div>
-                  ))}
-                </div>
-                <small>J 使用于 {leader?.name}　K 返回</small>
-              </div>
-            )}
-
-            {battle.menu === "formation" && (
-              <div className={styles.commandBox}>
-                <div className={styles.commandHead}>变更阵型</div>
-                <div className={styles.commandList}>
-                  {data.content.formations.map((f, i) => (
-                    <div key={f.name} className={battle.cursor === i ? styles.commandOn : undefined}>
-                      <span>{battle.cursor === i ? "▶" : ""}</span>{f.name}
-                    </div>
-                  ))}
-                </div>
-                <small>J 变阵　K 返回</small>
+                    ))}
+                  </div>
+                ) : battle.menu === "general" ? (
+                  <div className={styles.battleGeneralList}>
+                    <p className={styles.battlePanelTitle}>武将</p>
+                    {s.party.map((m, i) => {
+                      const mu = battle.units.find((u) => u.side === "player" && u.name === m.name);
+                      return (
+                        <div key={m.key} className={battle.cursor === i ? styles.commandOn : undefined}>
+                          <span>{battle.cursor === i ? "▶" : ""}</span>{m.name}
+                          <em>武 {mu?.str ?? "-"}　智 {mu?.ler ?? "-"}　兵 {mu?.hp ?? m.hp}</em>
+                        </div>
+                      );
+                    })}
+                    <small>W/S 选择　K 返回</small>
+                  </div>
+                ) : battle.menu === "attack" || battle.menu === "target" ? (
+                  <div className={styles.battleTargetList}>
+                    <p className={styles.battlePanelTitle}>{battle.menu === "target" ? `${battle.skill} · 选择目标` : "攻击"}</p>
+                    {enemies.map((u, i) => (
+                      <div key={u.key} className={battle.cursor === i ? styles.commandOn : undefined}>
+                        <span>{battle.cursor === i ? "▶" : ""}</span>{u.name}<em>{u.hp}</em>
+                      </div>
+                    ))}
+                    <small>W/S 选择　J 确认　K 返回</small>
+                  </div>
+                ) : battle.menu === "skill" ? (
+                  <div className={styles.battleTargetList}>
+                    <p className={styles.battlePanelTitle}>计策</p>
+                    {battleSkills.map((name, i) => {
+                      const sk = data.skills.get(name);
+                      return (
+                        <div key={name} className={battle.cursor === i ? styles.commandOn : undefined}>
+                          <span>{battle.cursor === i ? "▶" : ""}</span>{name}<em>{sk?.cost ? `${sk.cost} 计力` : ""}</em>
+                        </div>
+                      );
+                    })}
+                    <small>W/S 选择　J 使用　K 返回</small>
+                  </div>
+                ) : battle.menu === "item" ? (
+                  <div className={styles.battleTargetList}>
+                    <p className={styles.battlePanelTitle}>宝物</p>
+                    {battleItems.map((it, i) => (
+                      <div key={it.name} className={battle.cursor === i ? styles.commandOn : undefined}>
+                        <span>{battle.cursor === i ? "▶" : ""}</span>{it.name}<em>× {it.count}</em>
+                      </div>
+                    ))}
+                    <small>J 使用于 {leader?.name}　K 返回</small>
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
@@ -2443,13 +2716,21 @@ export default function KongmingGame() {
 
         {s.dialogue && (
           <div className={styles.dialogueLayer}>
-            <div className={styles.dialogueBox}>
-              {faceForProfile(s.dialogue.profile) && (
-                <img className={styles.dialogueFace} src={faceForProfile(s.dialogue.profile)!} alt="" />
-              )}
-              <div className={styles.dialogueName}>{s.dialogue.name}</div>
+            <div className={styles.dialogueBox} />
+            {showDialoguePortrait && (
+              <div className={styles.dialoguePortrait}>
+                <img
+                  className={styles.dialogueFace}
+                  src={dialogueFace ?? "/game-assets/kongming/ui/DialogueDefault.png"}
+                  alt=""
+                />
+                <img className={styles.dialogueFaceBoard} src="/game-assets/kongming/ui/DialogueBoard.png" alt="" />
+              </div>
+            )}
+            {s.dialogue.name && <div className={styles.dialogueName}>{s.dialogue.name}</div>}
+            <div className={`${styles.dialogueTextBox} ${showDialoguePortrait ? "" : styles.noPortrait}`}>
               <p className={styles.dialogueText}>{s.dialogue.text}</p>
-              {s.dialogue.ask ? (
+              {s.dialogue.ask && (
                 <div className={styles.choices}>
                   {["是", "否"].map((label, i) => (
                     <span key={label} className={s.dialogue?.choice === i ? styles.choiceOn : undefined}>
@@ -2457,10 +2738,13 @@ export default function KongmingGame() {
                     </span>
                   ))}
                 </div>
-              ) : (
-                <div className={styles.dialogueNext}>J 继续</div>
               )}
             </div>
+            {!s.dialogue.ask && (
+              <div className={styles.dialogueNext}>
+                <img src="/game-assets/kongming/ui/DialogueNext.png" alt="" />
+              </div>
+            )}
           </div>
         )}
 

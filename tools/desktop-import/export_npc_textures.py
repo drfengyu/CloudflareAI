@@ -17,7 +17,7 @@ from UnityPy.helpers.TypeTreeGenerator import TypeTreeGenerator
 DATA = r"D:\Github\民间改版学习\Windows64_v1.0.5\Windows_v1.0.5\tstd2_Data"
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT = os.path.join(ROOT, "data", "npc_textures")
-TARGET_LEVELS = [4, 5, 6, 10, 12, 16, 24, 25, 38, 48, 54, 58, 75, 110, 121, 124, 133, 137, 143, 144, 161, 162, 171]
+TARGET_LEVELS = [4, 5, 6, 10, 11, 12, 16, 24, 25, 38, 48, 54, 58, 75, 110, 121, 124, 133, 137, 143, 144, 161, 162, 171]
 
 gen = TypeTreeGenerator("2022.2.11f1")
 gen.load_local_dll_folder(os.path.join(DATA, "Managed"))

@@ -237,70 +237,41 @@
 /* Prologue                                                            */
 /* ------------------------------------------------------------------ */
 
-.prologueScreen {
+.storyScreen {
   height: 100%;
-  display: grid;
-  place-items: center;
-  background:
-    radial-gradient(ellipse at 50% 42%, #322f24, #161711 55%, #080907 100%);
+  background: #000;
+  overflow: hidden;
 }
 
-.prologuePaper {
-  position: relative;
-  width: 70%;
-  max-height: 80%;
-  padding: 5% 6%;
-  background:
-    linear-gradient(90deg, rgba(231, 220, 196, 0.04), transparent 12%, transparent 88%, rgba(0, 0, 0, 0.24)),
-    #ddd0b0;
-  color: #29251c;
-  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.7), inset 0 0 60px rgba(103, 83, 45, 0.22);
-  transform: rotate(-0.25deg);
-}
-
-.prologuePaper::before,
-.prologuePaper::after {
-  content: "";
+.storyViewport {
   position: absolute;
-  left: 5%;
-  right: 5%;
-  height: 1px;
-  background: rgba(78, 63, 38, 0.32);
+  inset: 0;
+  overflow: hidden;
 }
 
-.prologuePaper::before { top: 4%; }
-.prologuePaper::after { bottom: 4%; }
-
-.prologueHead {
-  position: absolute;
-  right: 5%;
-  top: 4%;
-  width: 2.5em;
-  height: 2.5em;
-  display: grid;
-  place-items: center;
-  border: 2px solid #8d3126;
-  color: #8d3126;
-  font-size: clamp(18px, 2.1vw, 30px);
-  opacity: 0.8;
+.storyContent {
+  width: 93%;
+  margin: 0 auto;
+  padding: 7vh 0 9vh;
+  color: #fff;
 }
 
-.prologueText {
+.storyText {
   margin: 0;
   white-space: pre-wrap;
-  font-size: clamp(13px, 1.45vw, 21px);
-  line-height: 2.05;
+  font-family: "Songti SC", "Noto Serif SC", "STSong", serif;
+  font-size: clamp(16px, 3.4vw, 48px);
+  line-height: 1.38;
   letter-spacing: 0.08em;
-  text-align: justify;
+  font-weight: 500;
 }
 
-.prologueFoot {
-  margin-top: 3.2vh;
-  display: flex;
-  justify-content: space-between;
-  color: #75664b;
-  font-size: clamp(10px, 1.05vw, 14px);
-  letter-spacing: 0.12em;
+.storyImage {
+  display: block;
+  width: 79%;
+  margin: 0 auto;
+  image-rendering: pixelated;
+  user-select: none;
 }
 
 /* ------------------------------------------------------------------ */
@@ -461,62 +432,41 @@
   position: absolute;
   inset: 0;
   z-index: 5;
-  background:
-    linear-gradient(180deg, rgba(9, 12, 14, 0.68), rgba(10, 11, 9, 0.96)),
-    radial-gradient(ellipse at 50% 35%, #565b4f 0%, #232822 45%, #0d100d 100%);
-  animation: battleIn 0.45s ease-out;
+  background: #000;
+  animation: battleIn 0.25s ease-out;
 }
 
 @keyframes battleIn {
-  from { opacity: 0; transform: scale(1.04); }
-  to { opacity: 1; transform: scale(1); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .battleSky {
-  position: absolute;
-  inset: 0;
-  opacity: 0.22;
-  background:
-    repeating-linear-gradient(115deg, transparent 0 30px, rgba(255, 255, 255, 0.04) 31px 32px),
-    radial-gradient(ellipse 40% 25% at 50% 20%, #fff1ce, transparent 70%);
+  display: none;
 }
 
 .battleHeader {
-  position: absolute;
-  top: 3%;
-  left: 4%;
-  right: 4%;
-  display: flex;
-  justify-content: space-between;
-  color: #d9c99d;
-  letter-spacing: 0.26em;
-  font-size: clamp(10px, 1.15vw, 16px);
-  z-index: 9;
-}
-
-.battleHeader span {
-  color: #e8d4a8;
-  border-left: 3px solid #b03a2c;
-  padding-left: 0.7em;
-  font-size: 1.25em;
+  display: none;
 }
 
 .battleArena {
   position: absolute;
-  left: 6%;
-  right: 6%;
-  top: 12%;
-  height: 42%;
+  left: 4%;
+  right: 4%;
+  top: 2.5%;
+  height: 61%;
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: 2.5%;
+  grid-template-columns: 1fr 0 1fr;
+  align-items: start;
+  gap: 1.2%;
 }
 
 .battleSide {
   display: flex;
   flex-direction: column;
-  gap: 1.6vh;
+  justify-content: flex-start;
+  gap: 0.9vh;
+  min-width: 0;
 }
 
 .battleSide:last-child {
@@ -525,181 +475,211 @@
 
 .unitCard {
   display: flex;
+  flex-direction: row-reverse;
   align-items: center;
-  gap: 0.65em;
-  padding: 0.45em 0.65em;
-  background: rgba(10, 14, 13, 0.78);
-  border: 1px solid rgba(195, 168, 107, 0.26);
-  min-width: 11em;
-  transition: border-color 0.15s, background 0.15s;
+  justify-content: flex-end;
+  gap: 0.45vw;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  transition: filter 0.1s;
 }
 
 .enemyCard {
-  flex-direction: row-reverse;
-  text-align: right;
+  flex-direction: row;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .unitDown {
-  opacity: 0.25;
+  opacity: 0.28;
   filter: grayscale(1);
 }
 
 .unitActive {
-  border-color: #e8c06b;
-  background: rgba(66, 48, 20, 0.72);
-  box-shadow: 0 0 18px rgba(232, 192, 107, 0.22);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  filter: drop-shadow(0 0 0.28vw #f2c952);
+}
+
+.unitActive .unitInfo span {
+  color: #ffe06a;
 }
 
 .unitCard img,
 .unitCard .faceFallback {
-  width: 2.3em;
-  height: 2.3em;
-  object-fit: cover;
-  border: 1px solid #8c7748;
+  width: 4.8vw;
+  height: 4.8vw;
+  min-width: 34px;
+  min-height: 34px;
+  object-fit: contain;
+  border: 0;
+  background: transparent;
 }
 
 .unitCard img.unitSprite {
   object-fit: contain;
   image-rendering: pixelated;
-  background: #171f18;
+  background: transparent;
 }
 
 .unitInfo {
   display: flex;
   flex-direction: column;
-  gap: 0.18em;
-  min-width: 6em;
+  gap: 0.15em;
+  width: 9.2em;
+  min-width: 9.2em;
 }
 
 .unitInfo span {
-  color: #eadbbc;
-  font-size: clamp(9px, 1vw, 14px);
-  letter-spacing: 0.1em;
+  color: #fff;
+  font-size: clamp(10px, 1.1vw, 18px);
+  letter-spacing: 0.06em;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .unitInfo small {
-  color: #9a9681;
-  font-size: clamp(8px, 0.8vw, 11px);
+  color: #fff;
+  font-size: clamp(9px, 0.92vw, 15px);
+  line-height: 1;
+  letter-spacing: 0.02em;
 }
 
 .unitInfo i {
-  height: 4px;
-  background: #2a2c25;
+  height: 0.45vw;
+  min-height: 4px;
+  background: #303030;
   display: block;
 }
 
 .unitInfo i b {
   display: block;
   height: 100%;
-  background: #b84734;
+  background: #e6942f;
+}
+
+.enemyCard .unitInfo i b {
+  background: #2e8fe6;
 }
 
 .vsMark {
-  width: 2.3em;
-  height: 2.3em;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(199, 171, 111, 0.45);
-  color: #d7c293;
-  font-size: clamp(15px, 1.8vw, 26px);
-  transform: rotate(8deg);
+  display: none;
+}
+
+.battlePortrait {
+  position: absolute;
+  left: 5%;
+  bottom: 11%;
+  width: 22%;
+  height: 25.4%;
+  z-index: 9;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.battlePortrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 
 .battleLog {
-  position: absolute;
-  left: 7%;
-  right: 7%;
-  bottom: 30%;
-  min-height: 5.4em;
-  padding: 0.65em 1em;
-  background: rgba(6, 8, 7, 0.82);
-  border: 1px solid rgba(171, 148, 96, 0.3);
-  color: #d8ccb0;
-  font-size: clamp(9px, 1vw, 14px);
-  line-height: 1.65;
-  letter-spacing: 0.06em;
-  z-index: 8;
+  display: none;
 }
 
-.battleLog p {
-  margin: 0;
-}
-
-.battleLog p:last-child {
-  color: #f2dfb5;
+.battleMessage {
+  margin: 0 0 0.45em;
+  color: #f5f5f5;
+  font-size: clamp(10px, 1.05vw, 17px);
+  line-height: 1.35;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .commandBox {
   position: absolute;
-  right: 4%;
-  bottom: 3%;
-  width: 27%;
-  min-width: 210px;
-  padding: 0.8em 1em 0.65em;
-  background: rgba(8, 11, 9, 0.94);
-  border: 1px solid rgba(194, 165, 103, 0.45);
+  left: 23%;
+  right: 3%;
+  bottom: 2%;
+  width: auto;
+  height: 30%;
+  min-width: 0;
+  padding: 0.75vw 1.3vw 0.6vw;
+  background: #000;
+  border: max(3px, 0.42vw) solid #f5f5f5;
+  box-shadow: inset 0 0 0 max(2px, 0.24vw) #000, 0 0 0 max(1px, 0.14vw) #8a8a8a;
   z-index: 10;
+  overflow: hidden;
 }
 
 .commandHead {
-  color: #cbb88c;
-  border-bottom: 1px solid rgba(194, 165, 103, 0.22);
-  padding-bottom: 0.4em;
-  margin-bottom: 0.35em;
-  font-size: clamp(9px, 1vw, 14px);
-  letter-spacing: 0.12em;
+  color: #d8d8d8;
+  border-bottom: 1px solid #5d5d5d;
+  padding-bottom: 0.28em;
+  margin-bottom: 0.24em;
+  font-size: clamp(9px, 1vw, 16px);
+  letter-spacing: 0.08em;
 }
 
 .commandGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.2em 0.6em;
-  font-size: clamp(10px, 1.05vw, 15px);
+  gap: 0.12em 1.2em;
+  font-size: clamp(10px, 1.12vw, 18px);
 }
 
 .commandGrid > div,
 .commandList > div {
-  padding: 0.18em 0.2em;
-  color: #a9a58f;
+  padding: 0.12em 0.15em;
+  color: #f2f2f2;
 }
 
 .commandOn {
-  color: #f4dfb0 !important;
-  background: linear-gradient(90deg, rgba(151, 44, 31, 0.45), transparent);
+  color: #ffe06a !important;
+  background: transparent;
 }
 
 .commandOn span {
-  color: #e05b45;
+  color: #ff5b47;
 }
 
 .commandGrid > div span,
 .commandList > div span {
   display: inline-block;
-  width: 1.4em;
+  width: 1.2em;
 }
 
 .commandList {
-  max-height: 9em;
+  max-height: 8em;
   overflow: hidden;
 }
 
 .commandList > div {
   display: flex;
   justify-content: space-between;
-  font-size: clamp(10px, 1.05vw, 15px);
+  font-size: clamp(10px, 1.12vw, 18px);
 }
 
 .commandList em {
-  color: #8e8c7d;
+  color: #a5a5a5;
   font-style: normal;
   font-size: 0.8em;
 }
 
 .commandBox small {
   display: block;
-  margin-top: 0.45em;
-  color: #807d6c;
-  font-size: clamp(8px, 0.8vw, 11px);
+  margin-top: 0.35em;
+  color: #8f8f8f;
+  font-size: clamp(8px, 0.8vw, 13px);
 }
 
 .battleResult {
@@ -777,6 +757,264 @@
   color: #7f7a67;
   font-size: clamp(9px, 0.9vw, 12px);
   letter-spacing: 0.18em;
+}
+
+/* 桌面 BattleUI：黑底、五行纵向队列、姓名+兵力+血条+人物、底部地形条 */
+.battleTerrain {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 11%;
+  background-position: center bottom;
+  background-repeat: repeat-x;
+  background-size: 100% 100%;
+  image-rendering: pixelated;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.battleRow {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 12.6%;
+  transform: translateY(-50%);
+  z-index: 2;
+  transition: filter 0.12s;
+}
+
+.battleRowPlayer {
+  color: #fff;
+}
+
+.battleRowEnemy {
+  color: #fff;
+}
+
+.battleRowActive {
+  filter: none;
+}
+
+.battleStats {
+  position: absolute;
+  left: 5.2%;
+  width: 19%;
+  top: 50%;
+  transform: translateY(-52%);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.05em;
+  white-space: nowrap;
+}
+
+.battleStats strong {
+  font-size: clamp(14px, 3.15vw, 38px);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-shadow: 1px 1px 0 #000, -1px 0 0 #000, 0 -1px 0 #000;
+}
+
+.battleStats span {
+  font-size: clamp(12px, 2.1vw, 27px);
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-shadow: 1px 1px 0 #000, -1px 0 0 #000;
+}
+
+.battleStatsEnemy {
+  left: auto;
+  right: 5.2%;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.battleHpBar {
+  position: absolute;
+  left: 25.8%;
+  width: 11.7%;
+  top: 50%;
+  transform: translateY(-32%);
+  height: clamp(8px, 2vh, 22px);
+  background: #353535;
+  border: max(1px, 0.09vw) solid #d8d8d8;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.battleHpBar i {
+  display: block;
+  height: 100%;
+  background: repeating-linear-gradient(90deg, #f0a000 0 6%, #f0a000 6%, #5a3a00 6% 7.6%);
+}
+
+.battleHpBarEnemy {
+  left: auto;
+  right: 25.8%;
+}
+
+.battleHpBarEnemy i {
+  margin-left: auto;
+  background: repeating-linear-gradient(90deg, #5f6be8 0 6%, #5f6be8 6%, #24284f 6% 7.6%);
+}
+
+.battleSprite {
+  position: absolute;
+  left: 37.2%;
+  width: 8%;
+  height: 150%;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.battleSprite img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  background: transparent;
+}
+
+.battleRowEnemy .battleSprite {
+  left: auto;
+  right: 37.2%;
+}
+
+.battleSprite span {
+  display: grid;
+  place-items: center;
+  width: 72%;
+  aspect-ratio: 1;
+  color: #fff;
+  font-size: clamp(14px, 1.5vh, 24px);
+  border: 1px solid #fff;
+}
+
+.battleRowActive .battleSprite::after {
+  content: none;
+  display: none;
+}
+
+.battleDialogBox {
+  position: absolute;
+  left: 31.8%;
+  width: 61%;
+  bottom: 11%;
+  height: 25.4%;
+  background: #000;
+  border: max(3px, 0.34vw) solid #f2f2f2;
+  box-shadow: inset 0 0 0 max(2px, 0.2vw) #000;
+  z-index: 10;
+  box-sizing: border-box;
+  padding: 2.5% 3.4%;
+  overflow: hidden;
+  color: #f5f5f5;
+}
+
+.battleIntroText {
+  margin: 0;
+  font-size: clamp(14px, 2.3vh, 42px);
+  line-height: 1.3;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.battleCommandGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: repeat(3, 1fr);
+  width: 94%;
+  height: 100%;
+  margin: 0 auto;
+  align-items: center;
+  font-size: clamp(18px, 3.6vw, 44px);
+  letter-spacing: 0.06em;
+}
+
+.battleCommandGrid > div {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  line-height: 1;
+}
+
+.battlePanelTitle {
+  margin: 0 0 0.35em;
+  color: #fff;
+  font-size: clamp(13px, 2vh, 34px);
+  letter-spacing: 0.1em;
+}
+
+.battleTargetList,
+.battleGeneralList {
+  height: 100%;
+  font-size: clamp(12px, 2.05vh, 35px);
+  line-height: 1.3;
+}
+
+.battleTargetList > div,
+.battleGeneralList > div {
+  display: flex;
+  align-items: center;
+  gap: 0.35em;
+  white-space: nowrap;
+}
+
+.battleTargetList em,
+.battleGeneralList em {
+  margin-left: auto;
+  color: #cfcfcf;
+  font-style: normal;
+  font-size: 0.78em;
+}
+
+.battleTargetList small,
+.battleGeneralList small {
+  display: block;
+  margin-top: 0.4em;
+  color: #8d8d8d;
+  font-size: clamp(8px, 1.1vh, 16px);
+  letter-spacing: 0.04em;
+}
+
+.battleOutcomePanel {
+  position: absolute;
+  left: 25.25%;
+  width: 49.5%;
+  bottom: 4.6%;
+  min-height: 27.8%;
+  background: #000;
+  border: max(3px, 0.34vw) solid #f2f2f2;
+  box-shadow: inset 0 0 0 max(2px, 0.2vw) #000;
+  z-index: 20;
+  box-sizing: border-box;
+  padding: 2.4% 3.2%;
+  color: #fff;
+}
+
+.battleOutcomePanel h2 {
+  margin: 0 0 0.35em;
+  font-size: clamp(18px, 3.2vh, 54px);
+  font-weight: 500;
+  letter-spacing: 0.16em;
+}
+
+.battleOutcomeText {
+  margin: 0;
+  color: #e8e8e8;
+  font-size: clamp(12px, 1.95vh, 34px);
+  line-height: 1.45;
+  letter-spacing: 0.04em;
+}
+
+.battleOutcomeText b {
+  color: #ffe08a;
+  font-weight: 500;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1058,83 +1296,130 @@
 
 .dialogueLayer {
   position: absolute;
-  left: 6%;
-  right: 6%;
-  bottom: 5%;
+  left: 0;
+  right: 0;
+  bottom: 1.8%;
+  height: 33.3%;
   z-index: 22;
+  animation: dialogueIn 0.2s ease-out;
+}
+
+@keyframes dialogueIn {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
 .dialogueBox {
-  position: relative;
-  min-height: 8.6em;
-  padding: 1.15em 1.5em 1em;
-  background:
-    linear-gradient(180deg, rgba(16, 19, 15, 0.98), rgba(8, 10, 8, 0.99));
-  border: 2px solid rgba(195, 169, 112, 0.62);
-  box-shadow: 0 14px 50px rgba(0, 0, 0, 0.7), inset 0 0 35px rgba(0, 0, 0, 0.45);
+  position: absolute;
+  inset: 0;
+  border-style: solid;
+  border-width: 9px;
+  border-image-source: url("/game-assets/kongming/ui/DialogueBox.png");
+  border-image-slice: 11 fill;
+  border-image-width: 9px;
+  border-image-repeat: stretch;
+  background: transparent;
+  box-shadow: 0 10px 36px rgba(0, 0, 0, 0.55);
 }
 
-.dialogueBox::before {
-  content: "";
+.dialoguePortrait {
   position: absolute;
-  inset: 5px;
-  border: 1px solid rgba(195, 169, 112, 0.18);
-  pointer-events: none;
+  left: 2.7%;
+  bottom: 23%;
+  width: 17.9%;
+  aspect-ratio: 1;
+  z-index: 2;
+  background: #000;
 }
 
 .dialogueFace {
-  position: absolute;
-  left: 1.1em;
-  top: -2.3em;
-  width: 4.6em;
-  height: 4.6em;
+  display: block;
+  width: 100%;
+  height: 100%;
   object-fit: cover;
-  border: 2px solid #b79a61;
-  background: #20251c;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+  image-rendering: auto;
+}
+
+.dialogueFaceBoard {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  image-rendering: pixelated;
 }
 
 .dialogueName {
-  margin-left: 4.6em;
-  color: #d9bb7a;
+  position: absolute;
+  left: 3.1%;
+  bottom: 8%;
+  z-index: 3;
+  color: #e2e2e2;
+  font-family: "Songti SC", "Noto Serif SC", "STSong", serif;
+  font-size: clamp(14px, 2.8vw, 36px);
   letter-spacing: 0.2em;
-  font-size: clamp(11px, 1.25vw, 17px);
-  margin-bottom: 0.45em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dialogueTextBox {
+  position: absolute;
+  left: 23.1%;
+  right: 3.5%;
+  top: 7%;
+  bottom: 10%;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.dialogueTextBox.noPortrait {
+  left: 3.5%;
 }
 
 .dialogueText {
-  margin: 0 0 1.2em 4.6em;
-  color: #e9dfc7;
-  font-size: clamp(12px, 1.36vw, 19px);
-  line-height: 1.85;
-  letter-spacing: 0.05em;
+  margin: 0;
+  color: #fff;
+  font-family: "Songti SC", "Noto Serif SC", "STSong", serif;
+  font-size: clamp(13px, 3.36vw, 44px);
+  line-height: 1.38;
+  letter-spacing: 0.08em;
   white-space: pre-wrap;
 }
 
 .dialogueNext {
-  text-align: right;
-  color: #8f8a76;
-  font-size: clamp(8px, 0.9vw, 12px);
-  letter-spacing: 0.16em;
-  animation: blink 1.4s ease-in-out infinite;
+  position: absolute;
+  right: 3.5%;
+  bottom: 5%;
+  z-index: 3;
+  width: 2.7vw;
+  min-width: 13px;
+  animation: blink 0.9s steps(2, end) infinite;
+}
+
+.dialogueNext img {
+  display: block;
+  width: 100%;
+  image-rendering: pixelated;
 }
 
 @keyframes blink {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 .choices {
   display: flex;
-  gap: 2em;
   justify-content: flex-end;
-  margin-top: -0.4em;
-  color: #8d8a76;
-  font-size: clamp(11px, 1.2vw, 16px);
+  gap: 2em;
+  color: #b9b9b9;
+  font-family: "Songti SC", "Noto Serif SC", "STSong", serif;
+  font-size: clamp(13px, 2.8vw, 36px);
 }
 
 .choiceOn {
-  color: #f0d79e;
+  color: #fff;
 }
 
 /* ------------------------------------------------------------------ */
@@ -1191,12 +1476,9 @@
   .partyBar { flex-wrap: wrap; right: 2%; }
   .partyChip { min-width: 7.4em; }
   .keyHint { display: none; }
-  .commandBox { width: 46%; }
-  .battleArena { top: 9%; height: 48%; }
-  .dialogueBox { min-height: 10em; }
-  .dialogueText { margin-left: 0; }
-  .dialogueName { margin-left: 0; }
-  .dialogueFace { display: none; }
+  .dialogueBox { border-width: 6px; border-image-width: 6px; }
+  .dialoguePortrait { bottom: 20%; }
+  .dialogueName { bottom: 5%; }
 }
 
 /* --- desktop title reproduction --- */
