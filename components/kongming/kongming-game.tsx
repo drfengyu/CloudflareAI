@@ -117,6 +117,9 @@ interface BattleUnit {
   spd: number;
   atk: number;
   def: number;
+  mp: number;
+  weaponBits: number;
+  terrainBits: number;
   skills: string[];
   defending: boolean;
   attackTimes: number;
@@ -126,6 +129,7 @@ interface BattleUnit {
 }
 
 interface BattleState {
+
   units: BattleUnit[];
   round: number;
   log: string[];
@@ -145,6 +149,16 @@ interface BattleState {
     level: number;
     learned: string[];
   } | null;
+}
+
+/** 原版 Character.WeaponNames：剑1 刀2 枪4 斧8 弓16 */
+function weaponTypeNames(bits: number) {
+  return `${bits & 1 ? "剑" : ""}${bits & 2 ? "刀" : ""}${bits & 4 ? "枪" : ""}${bits & 8 ? "斧" : ""}${bits & 16 ? "弓" : ""}` || "--";
+}
+
+/** 原版 Character.TerrainNames：平2 山4 水8 */
+function terrainTypeNames(bits: number) {
+  return `${bits & 2 ? "平" : ""}${bits & 4 ? "山" : ""}${bits & 8 ? "水" : ""}` || "--";
 }
 
 interface BattleAction {
@@ -990,6 +1004,9 @@ export default function KongmingGame() {
         spd: st.spd,
         atk: st.atk,
         def: st.def,
+        mp: c?.stats[1] ?? 0,
+        weaponBits: c?.weapon ?? 0,
+        terrainBits: c?.terrain ?? 0,
         skills,
         defending: false,
         attackTimes: weapon?.attackCount ?? ((weaponType & 16) !== 0 ? 2 : 1),
@@ -1024,6 +1041,9 @@ export default function KongmingGame() {
         spd,
         atk: real && real.atk >= 0 ? real.atk : (c?.stats[2] || ch?.attack || 15),
         def: real && real.def >= 0 ? real.def : (c?.stats[3] || ch?.defense || 10),
+        mp: c?.stats[1] ?? 0,
+        weaponBits: c?.weapon ?? 0,
+        terrainBits: c?.terrain ?? 0,
         skills: skillNames,
         defending: false,
         attackTimes: ((c?.weapon ?? 0) & 16) !== 0 ? 2 : 1,
@@ -2554,8 +2574,10 @@ export default function KongmingGame() {
 
   const scene = s.scene;
   const map = scene?.map ?? null;
-  const viewW = 400;
-  const viewH = 400;
+  // 原版窗口 1366×777，视野约 42×24 个 32px 地块。此前固定 400×400
+  // 会把画面放大约 3 倍，导致“人物巨大、地图只剩一小块”。
+  const viewW = 1366;
+  const viewH = 768;
   const baseCell = map?.scale ?? 32;
   const zoom = map ? Math.max(1, 32 / Math.max(1, baseCell)) : 1;
   const cell = baseCell * zoom;
@@ -2659,7 +2681,6 @@ export default function KongmingGame() {
         {s.screen === "title" && (
           <div className={styles.titleScreen}>
             <div className={styles.titleStars} />
-            <img className={styles.titleCapcom} src="/game-assets/kongming/ui/TitleCapcom.png" alt="" aria-hidden />
             <img className={styles.titleLogo} src="/game-assets/kongming/ui/TitleLogo.png" alt="三国演义" />
             <div className={styles.titleSwordWrap}>
               <img className={styles.titleSword} src="/game-assets/kongming/ui/TitleSword.png" alt="" aria-hidden />
@@ -2873,7 +2894,7 @@ export default function KongmingGame() {
             {battle.menu === "enemy" && enemies[battle.cursor] && (() => {
               const e = enemies[battle.cursor];
               const rows: [string, number][] = [
-                ["武", e.str], ["智", e.ler], ["速", e.spd], ["攻", e.atk], ["防", e.def], ["谋", 0],
+                ["武", e.str], ["智", e.ler], ["速", e.spd], ["攻", e.atk], ["防", e.def], ["谋", e.mp],
               ];
               return (
                 <div className={styles.battleEnemyPage}>
@@ -2892,10 +2913,14 @@ export default function KongmingGame() {
                   </div>
                   <div className={styles.enemyMeta}>
                     <span>兵 <b>{e.hp}</b></span>
-                    <span>武器 <b>剑</b></span>
-                    <span>地形 <b>--</b></span>
+                    <span>武器 <b>{weaponTypeNames(e.weaponBits)}</b></span>
+                    <span>地形 <b>{terrainTypeNames(e.terrainBits)}</b></span>
                   </div>
-                  <div className={styles.enemyMemo} />
+                  <div className={styles.enemyMemo}>
+                    {e.skills.length > 0
+                      ? e.skills.slice(0, 6).map((sk) => <span key={sk}>{sk}</span>)
+                      : <span>--</span>}
+                  </div>
                   <div className={styles.enemyPager}>◀　A / D　▶</div>
                 </div>
               );

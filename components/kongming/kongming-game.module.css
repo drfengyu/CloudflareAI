@@ -771,6 +771,18 @@
   height: 34%;
   border: 2px solid #e8e8e8;
   box-shadow: inset 0 0 0 1px #000;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 0.3em 1em;
+  padding: 0.5em 0.75em;
+  font-size: 3.4cqh;
+  line-height: 1.35;
+  overflow: hidden;
+}
+
+.enemyMemo span {
+  min-width: 4.5em;
 }
 
 .enemyPager {
@@ -1783,7 +1795,7 @@
   position: absolute;
   left: 50%;
   top: 10.5%;
-  width: clamp(170px, 30.5vw, 430px);
+  width: clamp(170px, 38cqw, 760px);
   transform: translateX(-50%);
   image-rendering: pixelated;
   opacity: 1;
@@ -1797,7 +1809,7 @@
   position: absolute;
   left: 50%;
   top: 28.5%;
-  width: clamp(170px, 30vw, 410px);
+  width: clamp(170px, 37cqw, 740px);
   transform: translateX(-50%);
   opacity: 1;
 }
@@ -1820,14 +1832,14 @@
   margin: 0;
   transform: translate(-50%, -50%);
   white-space: nowrap;
-  color: #f2ece0;
+  color: #e24963;
   font-family: "Yu Mincho", "Songti SC", "SimSun", serif;
   font-size: clamp(22px, 3.1vw, 42px);
-  font-weight: 700;
+  font-weight: 900;
   letter-spacing: 0.3em;
   line-height: 1;
-  text-shadow: 0 2px 0 #8c1c22, 0 0 8px rgba(0, 0, 0, 0.6);
-  -webkit-text-stroke: 1px rgba(150, 30, 36, 0.55);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4), 0 0 5px rgba(0, 0, 0, 0.85);
+  -webkit-text-stroke: 0;
 }
 .titleVersion {
   position: absolute;
@@ -1841,8 +1853,8 @@
 }
 .titleMenu {
   position: absolute;
-  left: 39%;
-  top: 56%;
+  left: 50%;
+  top: 48.5%;
   z-index: 6;
   list-style: none;
   padding: 0;
@@ -1850,7 +1862,7 @@
   display: flex;
   flex-direction: row;
   align-items: flex-start;
-  gap: clamp(20px, 4.6vw, 52px);
+  gap: clamp(18px, 5.8cqw, 60px);
   transform: translateX(-50%);
   opacity: 1;
 }
@@ -1886,7 +1898,7 @@
   writing-mode: vertical-rl;
   text-orientation: upright;
   font-family: "Yu Mincho", "Songti SC", "SimSun", serif;
-  font-size: clamp(24px, 3.8vw, 44px);
+  font-size: clamp(16px, 3.2cqw, 40px);
   letter-spacing: 0.1em;
   line-height: 0.98;
   text-shadow: 0 2px 5px #000;
