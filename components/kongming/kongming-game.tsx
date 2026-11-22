@@ -2704,8 +2704,11 @@ export default function KongmingGame() {
         {(s.screen === "field" || s.screen === "battle" || s.screen === "gameover") && scene && map && (
           <div className={styles.field}>
             <svg className={styles.world} viewBox={`0 0 ${viewW} ${viewH}`} preserveAspectRatio="xMidYMid slice">
-              <rect width={viewW} height={viewH} fill="#10130f" />
+              <rect width={viewW} height={viewH} fill={scene.isWorld || scene.isCave ? "#10130f" : "url(#town-grass)"} />
               <defs>
+                <pattern id="town-grass" width={32} height={32} patternUnits="userSpaceOnUse">
+                  <image href="/game-assets/kongming/ui/town-grass.png" width={32} height={32} className={styles.pixel} preserveAspectRatio="none" />
+                </pattern>
                 <clipPath id="clip-player">
                   <rect x={playerSX - 18} y={playerSY - 33} width={36} height={36} />
                 </clipPath>
