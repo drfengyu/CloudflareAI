@@ -696,6 +696,83 @@
   font-size: clamp(8px, 0.8vw, 11px);
 }
 
+.battleResult {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(ellipse at center, rgba(10, 12, 9, 0.55), rgba(4, 5, 4, 0.94));
+  animation: fadeIn 0.4s ease;
+}
+
+.battleResultCard {
+  min-width: min(58%, 520px);
+  padding: 2em 3.2em 1.8em;
+  text-align: center;
+  background: rgba(13, 16, 12, 0.94);
+  border-top: 2px solid #c9a24f;
+  border-bottom: 2px solid #c9a24f;
+  box-shadow: 0 0 60px rgba(201, 162, 79, 0.14), inset 0 0 40px rgba(0, 0, 0, 0.4);
+}
+
+.battleResultKicker {
+  margin: 0 0 0.5em;
+  color: #8b836c;
+  letter-spacing: 0.32em;
+  font-size: clamp(9px, 0.9vw, 12px);
+}
+
+.battleResultCard h2 {
+  margin: 0;
+  font-size: clamp(26px, 3.6vw, 52px);
+  letter-spacing: 0.28em;
+  font-weight: 600;
+}
+
+.resultWin { color: #eed493; text-shadow: 0 0 22px rgba(238, 212, 147, 0.35); }
+.resultFlee { color: #a9b8bd; }
+.resultLose { color: #d15745; }
+
+.battleRewards {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.6em 1.6em;
+  margin-top: 1.5em;
+  padding-top: 1.1em;
+  border-top: 1px solid rgba(201, 162, 79, 0.22);
+  color: #a49d87;
+  font-size: clamp(10px, 1vw, 14px);
+  letter-spacing: 0.1em;
+}
+
+.battleRewards b {
+  color: #eed493;
+  font-weight: 600;
+}
+
+.battleRewards p {
+  flex-basis: 100%;
+  margin: 0.2em 0 0;
+  color: #d8c391;
+}
+
+.battleResultNote {
+  margin: 1.2em 0 0;
+  color: #a49d87;
+  font-size: clamp(10px, 1vw, 14px);
+  letter-spacing: 0.08em;
+}
+
+.battleResultNext {
+  display: block;
+  margin-top: 1.9em;
+  color: #7f7a67;
+  font-size: clamp(9px, 0.9vw, 12px);
+  letter-spacing: 0.18em;
+}
+
 /* ------------------------------------------------------------------ */
 /* Game over                                                           */
 /* ------------------------------------------------------------------ */

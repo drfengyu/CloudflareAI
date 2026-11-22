@@ -98,6 +98,14 @@ interface BattleState {
   skill: string | null;
   menuTitle: string;
   result?: "win" | "lose";
+  outcome?: {
+    kind: "win" | "lose" | "flee";
+    title: string;
+    money: number;
+    exp: number;
+    level: number;
+    learned: string[];
+  } | null;
 }
 
 interface BattleAction {
@@ -308,6 +316,7 @@ export default function KongmingGame() {
   const savesRef = useRef<Saves>({ 0: null, 1: null, 2: null });
   const dialogResolve = useRef<((value: boolean) => void) | null>(null);
   const battleResolve = useRef<((value: BattleAction) => void) | null>(null);
+  const battleEndResolve = useRef<(() => void) | null>(null);
   const shopResolve = useRef<(() => void) | null>(null);
   const battleLoopResolve = useRef<((result: number) => void) | null>(null);
   const runEventRef = useRef<((ev: SceneEvent) => Promise<void>) | null>(null);
@@ -901,38 +910,43 @@ export default function KongmingGame() {
     });
     const rewardMoney = won ? Math.max(20, (config?.money && config.money > 0 ? config.money : 0) + 30 + snapRef.current.level * 4) : 0;
     const rewardExp = won ? Math.max(12, config?.exp && config.exp > 0 ? config.exp : 8 + snapRef.current.level * 2) : 0;
-    mutate((prev) => {
-      let level = prev.level;
-      let exp = prev.exp;
-      let skillsLearned: string[] = [];
-      let formationsLearned: string[] = [];
-      if (rewardExp > 0) {
-        const leveled = addExp(rewardExp, prev.level, prev.exp);
-        level = leveled.level;
-        exp = leveled.exp;
-        skillsLearned = leveled.skills;
-        formationsLearned = leveled.formations;
-      }
-      const party = partyAfter.map((m) => {
-        const updated = recalcHp(m, level);
-        const newSkills = skillsLearned.filter((s) => !updated.skills.includes(s));
-        return { ...updated, level, skills: [...updated.skills, ...newSkills] };
-      });
-      return {
-        ...prev,
-        screen: escaped ? "field" : won ? "field" : "gameover",
-        battle: null,
-        party,
-        level,
-        exp,
-        money: prev.money + rewardMoney,
-        gameoverReason: escaped || won ? "" : "全军覆没",
-        log: [...prev.log, `${config?.name ?? "战斗"}${escaped ? "撤退" : won ? "胜利" : "失败"}`].slice(-30),
-      };
+    const leveled = rewardExp > 0
+      ? addExp(rewardExp, snapRef.current.level, snapRef.current.exp)
+      : { level: snapRef.current.level, exp: snapRef.current.exp, skills: [] as string[], formations: [] as string[] };
+    const learned = [...leveled.skills, ...leveled.formations].filter((name, i, all) => all.indexOf(name) === i);
+    const partyLevel = partyAfter.map((m) => {
+      const updated = recalcHp(m, leveled.level);
+      const newSkills = leveled.skills.filter((s) => !updated.skills.includes(s));
+      return { ...updated, level: leveled.level, skills: [...updated.skills, ...newSkills] };
     });
-    await sleep(450);
+    const outcomeTitle = config?.name?.replace(/^\d+-/, "") || "遭遇战";
+    const ended = new Promise<void>((resolve) => { battleEndResolve.current = resolve; });
+    mutate((prev) => ({
+      ...prev,
+      party: partyLevel,
+      level: leveled.level,
+      exp: leveled.exp,
+      money: prev.money + rewardMoney,
+      battle: prev.battle ? {
+        ...prev.battle,
+        pending: null,
+        menu: "command",
+        result: won ? "win" : "lose",
+        outcome: { kind: escaped ? "flee" : won ? "win" : "lose", title: outcomeTitle, money: rewardMoney, exp: rewardExp, level: leveled.level, learned },
+      } : null,
+      log: [...prev.log, `${outcomeTitle}${escaped ? "撤退" : won ? "胜利" : "失败"}`].slice(-30),
+    }));
+    await ended;
+    const result = escaped ? 0 : won ? 1 : 0;
+    mutate((prev) => ({
+      ...prev,
+      screen: escaped || won ? "field" : "gameover",
+      battle: null,
+      gameoverReason: escaped || won ? "" : "全军覆没",
+      toast: won ? `战斗胜利　获得 ${rewardMoney} 金、${rewardExp} 经验` : escaped ? "全军撤退" : "",
+    }));
+    await sleep(300);
     locked.current = false;
-    const result = escaped ? 2 : won ? 1 : 0;
     finishBattle(result);
     return result;
   }, [addExp, battlePrompt, finishBattle, makeBattleUnits, mutate, recalcHp]);
@@ -1012,12 +1026,15 @@ export default function KongmingGame() {
           case "BattleCount":
             return ev?.battles.length ?? 0;
           case "AddRole": {
-            const ids = flattenArgs(args).map(Number);
+            const ids = flattenArgs(args).map(Number).filter((n) => Number.isFinite(n) && n > 0);
             const found: Member[] = [];
+            const slots = Math.max(0, 5 - s.party.length);
             for (const id of ids) {
+              if (found.length >= slots) break;
               const c = [...d.characters.values()].find((x) => x.id === id);
               if (!c) continue;
               if (snapRef.current.party.some((m) => m.name === c.name)) continue;
+              if (found.some((m) => m.name === c.name)) continue;
               const m = makeMember(c.name, s.level, d);
               if (m) found.push(m);
             }
@@ -1221,7 +1238,10 @@ export default function KongmingGame() {
             return row?.next ?? 0;
           }
           case "ParametersInScene": {
-            if (s.scene?.name.includes("宿") || s.scene?.name.includes("客栈")) return ["30"];
+            const prev = d.scenes.find((x) => x.level === s.previousLevel && !["武", "道具", "宿", "训"].includes(x.name.trim()));
+            const key = prev?.name.trim() || s.scene?.name.trim() || "";
+            const params = d.content.parameters?.[key];
+            if (params && params.length > 0) return params.slice();
             return ["30"];
           }
           case "EventParameters":
@@ -1301,7 +1321,6 @@ export default function KongmingGame() {
     } finally {
       activeEvent.current = null;
       locked.current = false;
-      document.documentElement.dataset.kongmingLock = "false";
     }
   }, [executeLua, talk]);
   runEventRef.current = runEvent;
@@ -1333,13 +1352,23 @@ export default function KongmingGame() {
     const d = currentData();
     const s = snapRef.current;
     const scene = s.scene?.name ?? "";
-    let shop = d.content.shops.find((x) => scene.includes("武器店") && x.name.includes("武器店"));
-    if (!shop && scene.includes("道具")) shop = d.content.shops.find((x) => x.name.includes("道具店"));
-    if (!shop) {
-      const key = scene.replace(/[0-9#·一二三四五六七八九十]/g, "").slice(0, 2);
-      shop = d.content.shops.find((x) => x.name.includes(key));
-    }
+    const kind = scene.includes("武器") || scene.trim() === "武"
+      ? "武器店"
+      : scene.includes("道具")
+        ? "道具店"
+        : "";
+    const prevScene = d.scenes.find((x) => x.level === s.previousLevel && !["武", "道具"].includes(x.name.trim()));
+    const townText = `${scene} ${prevScene?.name ?? ""}`;
+    const typed = kind ? d.content.shops.filter((x) => x.name.endsWith(kind)) : d.content.shops;
+    let shop = typed.find((x) => {
+      const town = x.name.split("-")[0];
+      return town.length > 0 && townText.includes(town);
+    });
+    if (!shop) shop = typed.find((x) => townText.includes(x.name.split("-")[0]));
+    if (!shop) shop = typed[0];
+    if (!shop) shop = d.content.shops.find((x) => scene.includes(x.name.split("-")[0]));
     if (!shop) shop = d.content.shops[0];
+    if (!shop) { toast("此处没有店铺"); return; }
     const items = shop.items.map((name) => {
       if (d.equipment.has(name)) return { name, price: d.equipment.get(name)!.price, kind: "equipment" as const };
       const item = d.items.get(name);
@@ -1666,6 +1695,14 @@ export default function KongmingGame() {
 
     if (s.battle) {
       const b = s.battle;
+      if (b.outcome) {
+        if (key === "KeyJ" || key === "KeyK") {
+          const resolve = battleEndResolve.current;
+          battleEndResolve.current = null;
+          resolve?.();
+        }
+        return;
+      }
       if (!b.pending) return;
       const enemies = b.units.filter((u) => u.side === "enemy" && u.hp > 0);
       const skills = b.units.find((u) => u.key === b.pending)?.skills ?? [];
@@ -2137,7 +2174,35 @@ export default function KongmingGame() {
               {battle.log.slice(-4).map((line, i) => <p key={i}>{line}</p>)}
             </div>
 
-            {battle.menu === "command" && (
+            {battle.outcome && (
+              <div className={styles.battleResult}>
+                <div className={styles.battleResultCard}>
+                  <p className={styles.battleResultKicker}>{battle.outcome.title}</p>
+                  <h2 className={
+                    battle.outcome.kind === "win" ? styles.resultWin
+                      : battle.outcome.kind === "flee" ? styles.resultFlee
+                        : styles.resultLose
+                  }>
+                    {battle.outcome.kind === "win" ? "战斗胜利" : battle.outcome.kind === "flee" ? "撤退成功" : "全军覆没"}
+                  </h2>
+                  {battle.outcome.kind === "win" && (
+                    <div className={styles.battleRewards}>
+                      <span>获金 <b>{battle.outcome.money}</b></span>
+                      <span>经验 <b>{battle.outcome.exp}</b></span>
+                      <span>等级 <b>Lv {battle.outcome.level}</b></span>
+                      {battle.outcome.learned.length > 0 && (
+                        <p>习得 {battle.outcome.learned.join("、")}</p>
+                      )}
+                    </div>
+                  )}
+                  {battle.outcome.kind === "flee" && <p className={styles.battleResultNote}>暂且避其锋芒，来日再战。</p>}
+                  {battle.outcome.kind === "lose" && <p className={styles.battleResultNote}>刘玄德兵败，只得暂避锋芒。</p>}
+                  <span className={styles.battleResultNext}>{battle.outcome.kind === "lose" ? "J 返回标题" : "J 继续行军"}</span>
+                </div>
+              </div>
+            )}
+
+            {!battle.outcome && battle.menu === "command" && (
               <div className={styles.commandBox}>
                 <div className={styles.commandHead}>{pendingUnit?.name ?? "武将"} 的指令</div>
                 <div className={styles.commandGrid}>
