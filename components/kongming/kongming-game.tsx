@@ -398,6 +398,44 @@ function pruneInvalidEventFlags(flags: Record<string, true>, scenes: Scene[]) {
   return next;
 }
 
+/** All scene events by id, used to validate `show` prerequisite chains on every visibility check. */
+let EVENT_INDEX: Map<string, SceneEvent> | null = null;
+function indexEventChain(scenes: Scene[]) {
+  const map = new Map<string, SceneEvent>();
+  for (const scene of scenes) for (const ev of scene.events) if (ev.id) map.set(ev.id, ev);
+  EVENT_INDEX = map;
+}
+
+function showChainReached(expr: string, flags: Record<string, true>, seen = new Set<string>()): boolean {
+  const index = EVENT_INDEX;
+  if (!index || !expr.trim()) return true;
+  const memo = new Map<string, boolean>();
+  const valid = (id: string): boolean => {
+    if (!flags[id]) return false;
+    const ev = index.get(id);
+    if (!ev || !ev.show) return true;
+    if (memo.has(id)) return memo.get(id)!;
+    if (seen.has(id)) return true;
+    seen.add(id);
+    const ok = showChainReached(ev.show, flags, seen);
+    seen.delete(id);
+    memo.set(id, ok);
+    return ok;
+  };
+  return expr
+    .trim()
+    .split("|")
+    .some((part) =>
+      part.split("&").every((token) => {
+        const raw = token.trim().replace(/^\(+|\)+$/g, "");
+        if (!raw || raw.startsWith("!")) return true;
+        if (raw.endsWith("T") || raw.endsWith("SO")) return valid(raw.slice(0, raw.endsWith("SO") ? -2 : -1));
+        if (raw.endsWith("F")) return !valid(raw.slice(0, -1));
+        return valid(raw);
+      }),
+    );
+}
+
 /** Mirrors QuestEvent.Refresh: chapter mismatch, hide condition, show condition, startHide. */
 function eventVisible(ev: SceneEvent, flags: Record<string, true>, chapterName?: string) {
   if (ev.chapter) {
@@ -405,7 +443,7 @@ function eventVisible(ev: SceneEvent, flags: Record<string, true>, chapterName?:
   }
   if (ev.hideAfter && flags[ev.id]) return false;
   if (ev.hide && evalEventCondition(ev.hide, flags)) return false;
-  if (ev.show) return evalEventCondition(ev.show, flags);
+  if (ev.show) return evalEventCondition(ev.show, flags) && showChainReached(ev.show, flags);
   return !ev.startHide;
 }
 
@@ -510,6 +548,7 @@ export default function KongmingGame() {
       .then((d) => {
         dataRef.current = d;
         setData(d);
+        indexEventChain(d.scenes);
         savesRef.current = readSaves();
         mutate((s) => ({ ...s, ready: true, screen: "title", titleCursor: 2 }));
       })
