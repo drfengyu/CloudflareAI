@@ -2441,6 +2441,7 @@ export default function KongmingGame() {
     : null;
   const showDialoguePortrait = Boolean(s.dialogue && (s.dialogue.name || dialogueFace));
   const titleLabels = ["解甲归田", "厉兵秣马", "匡扶汉室", "初出茅庐"];
+  const titleHints = ["退出游戏", "设置", "读取存档", "开始新游戏"];
   const rootLabels = ["队伍", "物品", "装备", "谋略", "阵型", "剧情", "保存", "设置", "返回"];
   const panelTitle: Record<string, string> = {
     root: "军帐",
@@ -2476,6 +2477,9 @@ export default function KongmingGame() {
         <p className={styles.activityDesc}>
           按 Windows 桌面版逐场景复刻。方向键 / WASD 移动，J 确认、K 取消，触屏可直接使用画面内虚拟按键。
         </p>
+        <p className={styles.activityNote}>
+          封面四项：解甲归田 退出 · 厉兵秣马 设置 · 匡扶汉室 读取存档 · 初出茅庐 开始新游戏
+        </p>
       </div>
       <div className={styles.frameWrap}>
       <div className={`${styles.frame} ${s.shake ? styles.shake : ""}`}>
@@ -2505,6 +2509,8 @@ export default function KongmingGame() {
                   onClick={() => activateTitle(i)}
                   role="button"
                   tabIndex={0}
+                  title={titleHints[i]}
+                  aria-label={`${label}（${titleHints[i]}）`}
                 >
                   <span className={styles.menuArrow}>{s.titleCursor === i ? "▼" : ""}</span>
                   <span className={styles.menuLabel}>{label}</span>
