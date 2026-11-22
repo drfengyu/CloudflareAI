@@ -93,7 +93,7 @@ interface BattleState {
   round: number;
   log: string[];
   pending: string | null;
-  menu: "command" | "attack" | "skill" | "item" | "general" | "target";
+  menu: "command" | "attack" | "skill" | "item" | "general" | "enemy" | "target";
   cursor: number;
   skill: string | null;
   menuTitle: string;
@@ -111,7 +111,7 @@ interface BattleState {
 }
 
 interface BattleAction {
-  type: "attack" | "skill" | "item" | "flee";
+  type: "attack" | "defend" | "skill" | "item" | "flee";
   target?: string;
   skill?: string;
   item?: string;
@@ -147,7 +147,7 @@ function battleTerrainAsset(value: number | undefined | null): string {
 }
 
 /** 桌面 Battle Character 的五行固定纵坐标：3.6 / 2.45 / 1.3 / 0.15 / -1.0（相机正交 5） */
-const BATTLE_ROW_TOP = [14, 25.5, 37, 48.5, 60];
+const BATTLE_ROW_TOP = [18, 28.5, 39, 49.5, 60];
 
 interface ShopState {
   title: string;
@@ -392,7 +392,7 @@ function pruneInvalidEventFlags(flags: Record<string, true>, scenes: Scene[]) {
   }
 
   const next: Record<string, true> = {};
-  for (const key of Object.keys(flags)) {
+  for (const key of Object.keys(flags ?? {})) {
     const ev = byId.get(key);
     if (!ev || valid(key)) next[key] = true;
   }
@@ -1032,7 +1032,8 @@ export default function KongmingGame() {
       const sideFactor = attacker.side === "player" ? 1 + level / 100 : 1;
       const base = (atk * str * hp) * (attacker.side === "player" ? 20 : 10) / def * sideFactor / 10000;
       const variance = 0.8 + Math.random() * 0.4;
-      return Math.max(1, Math.round(base * variance * mult * formationAtk / formationHurt));
+      const guard = defender.defending ? 0.55 : 1;
+      return Math.max(1, Math.round(base * variance * mult * formationAtk / formationHurt * guard));
     };
 
     const skillDamage = (attacker: BattleUnit, defender: BattleUnit, sk: SkillData) => {
@@ -1062,6 +1063,10 @@ export default function KongmingGame() {
               Object.assign(target, hpAfter(target, target.hp - dmg));
               addLog(`${current.name} 攻击 ${target.name}，歼敌 ${Math.min(dmg, target.hp + dmg)}`);
             }
+          } else if (action.type === "defend") {
+            current.defending = true;
+            updateUnits(units);
+            addLog(`${current.name} 防御`);
           } else if (action.type === "skill" && action.skill) {
             const sk = dataRef.current?.skills.get(action.skill);
             if (sk) {
@@ -2123,6 +2128,7 @@ export default function KongmingGame() {
         if (b.menu === "attack" || b.menu === "target") return Math.max(1, enemies.length);
         if (b.menu === "skill") return Math.max(1, skills.length);
         if (b.menu === "item") return Math.max(1, items.length);
+        if (b.menu === "enemy") return Math.max(1, enemies.length);
         if (b.menu === "general") return Math.max(1, s.party.length);
         return 6;
       };
@@ -2133,7 +2139,13 @@ export default function KongmingGame() {
           return { ...prev, battle: { ...prev.battle, cursor: next } };
         });
       };
-      if (b.menu === "command" && (key === "KeyW" || key === "KeyS")) {
+      if (b.menu === "enemy" && (key === "KeyA" || key === "KeyD")) {
+        mutate((prev) => {
+          if (!prev.battle) return prev;
+          const next = (prev.battle.cursor + (key === "KeyA" ? -1 : 1) + enemies.length) % Math.max(1, enemies.length);
+          return { ...prev, battle: { ...prev.battle, cursor: next } };
+        });
+      } else if (b.menu === "command" && (key === "KeyW" || key === "KeyS")) {
         moveCommandCursor(key === "KeyW" ? -2 : 2);
       } else if (b.menu === "command" && (key === "KeyA" || key === "KeyD")) {
         const row = Math.floor(b.cursor / 2);
@@ -2149,16 +2161,21 @@ export default function KongmingGame() {
         if (b.menu === "command") {
           if (b.cursor === 0) mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, menu: "attack", cursor: 0 } } : prev);
           else if (b.cursor === 1) {
+            if (b.pending === b.units.find((u) => u.side === "player")?.key) {
+              const target = enemies[0];
+              if (target) { battleResolve.current = null; mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev); resolve?.({ type: "attack", target: target.key }); }
+            } else {
+              battleResolve.current = null; mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev);
+              resolve?.({ type: "defend" });
+            }
+          } else if (b.cursor === 2) {
             if (skills.length === 0) toast("尚未习得计策");
             else mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, menu: "skill", cursor: 0 } } : prev);
-          } else if (b.cursor === 2) {
-            const target = enemies[0];
-            if (target) { battleResolve.current = null; mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev); resolve?.({ type: "attack", target: target.key }); }
-          } else if (b.cursor === 3) mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, menu: "general", cursor: 0 } } : prev);
+          } else if (b.cursor === 3) mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, menu: "enemy", cursor: 0 } } : prev);
           else if (b.cursor === 4) {
             if (items.length === 0) toast("没有可用物品");
             else mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, menu: "item", cursor: 0 } } : prev);
-          } else if (b.cursor === 5) { battleResolve.current = null; mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev); resolve?.({ type: "flee" }); }
+          } else if (b.cursor === 5 && b.pending === b.units.find((u) => u.side === "player")?.key) { battleResolve.current = null; mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, pending: null, menu: "command" } } : prev); resolve?.({ type: "flee" }); }
         } else if (b.menu === "general") {
           const m = s.party[b.cursor];
           const mu = b.units.find((u) => u.side === "player" && u.name === m?.name);
@@ -2443,7 +2460,10 @@ export default function KongmingGame() {
   const enemies = battle ? battle.units.filter((u) => u.side === "enemy" && u.hp > 0) : [];
   const battleSkills = pendingUnit?.skills ?? [];
   const battleItems = s.inventory.filter((i) => data.items.get(i.name)?.heal);
-  const battleCommands = ["攻击", "计策", "总攻", "武将", "宝物", "撤退"];
+  const battleLeaderKey = battle?.units.find((u) => u.side === "player")?.key;
+  const battleCommands = pendingUnit?.key === battleLeaderKey
+    ? ["攻击", "总攻", "谋略", "部将", "宝物", "撤退"]
+    : ["攻击", "防御", "谋略", "部将", "宝物", ""];
   const equipmentInv = s.inventory.filter((i) => data.equipment.has(i.name));
 
   return (
@@ -2616,10 +2636,7 @@ export default function KongmingGame() {
 
         {s.screen === "battle" && battle && (
           <div className={styles.battleScreen}>
-            <div
-              className={styles.battleTerrain}
-              style={{ backgroundImage: `url(${battle.terrain ?? "/trial/tstd2/terrain/plain.png"})` }}
-            />
+            <div className={styles.battleTerrain} />
 
             {battle.units.filter((u) => u.side === "player").slice(0, 5).map((u, i) => (
               <div
@@ -2662,6 +2679,37 @@ export default function KongmingGame() {
                 </div>
               );
             })}
+
+            {battle.menu === "enemy" && enemies[battle.cursor] && (() => {
+              const e = enemies[battle.cursor];
+              const rows: [string, number][] = [
+                ["武", e.str], ["智", e.ler], ["速", e.spd], ["攻", e.atk], ["防", e.def], ["谋", 0],
+              ];
+              return (
+                <div className={styles.battleEnemyPage}>
+                  <div className={styles.enemyPortrait}>
+                    {faceForProfile(e.profile) ? <img src={faceForProfile(e.profile)!} alt="" /> : <span>{e.name[0]}</span>}
+                    <strong>{e.name}</strong>
+                  </div>
+                  <div className={styles.enemyStats}>
+                    {rows.map(([label, value]) => (
+                      <div key={label}>
+                        <b>{label}</b>
+                        <span>{value}</span>
+                        <i><em style={{ width: `${clamp(value / 100, 0, 1) * 100}%` }} /></i>
+                      </div>
+                    ))}
+                  </div>
+                  <div className={styles.enemyMeta}>
+                    <span>兵 <b>{e.hp}</b></span>
+                    <span>武器 <b>剑</b></span>
+                    <span>地形 <b>--</b></span>
+                  </div>
+                  <div className={styles.enemyMemo} />
+                  <div className={styles.enemyPager}>◀　A / D　▶</div>
+                </div>
+              );
+            })()}
 
             {!battle.outcome && (() => {
               const faceUnit = pendingUnit ?? battle.units.find((u) => u.side === "player" && u.hp > 0);
@@ -2734,12 +2782,12 @@ export default function KongmingGame() {
                   </div>
                 ) : battle.menu === "skill" ? (
                   <div className={styles.battleTargetList}>
-                    <p className={styles.battlePanelTitle}>计策</p>
+                    <p className={styles.battlePanelTitle}>谋略</p>
                     {battleSkills.map((name, i) => {
                       const sk = data.skills.get(name);
                       return (
                         <div key={name} className={battle.cursor === i ? styles.commandOn : undefined}>
-                          <span>{battle.cursor === i ? "▶" : ""}</span>{name}<em>{sk?.cost ? `${sk.cost} 计力` : ""}</em>
+                          <span>{battle.cursor === i ? "▶" : ""}</span>{name}<em>{sk?.cost ? `${sk.cost} 策略点` : ""}</em>
                         </div>
                       );
                     })}
@@ -2756,6 +2804,13 @@ export default function KongmingGame() {
                     <small>J 使用于 {leader?.name}　K 返回</small>
                   </div>
                 ) : null}
+              </div>
+            )}
+
+            {!battle.outcome && battle.menu === "skill" && (
+              <div className={styles.battleSkillInfo}>
+                <div><span>策略点</span><b>{s.mp}</b></div>
+                <div><span>消耗</span><b>{data.skills.get(battleSkills[battle.cursor])?.cost ?? 0}</b></div>
               </div>
             )}
           </div>

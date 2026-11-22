@@ -656,12 +656,135 @@
   display: none;
 }
 
-.battlePortrait {
+.battleEnemyPage {
   position: absolute;
-  left: 5%;
-  bottom: 11%;
-  width: 22%;
-  height: 25.4%;
+  inset: 0;
+  z-index: 20;
+  background: #262626;
+  color: #fff;
+}
+
+.enemyPortrait {
+  position: absolute;
+  left: 17.5%;
+  top: 12%;
+  width: 12.5%;
+  height: 26%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.enemyPortrait img {
+  width: 82%;
+  height: 78%;
+  object-fit: cover;
+  object-position: center 22%;
+  image-rendering: pixelated;
+  border: 1px solid #8a8a8a;
+}
+
+.enemyPortrait span {
+  display: grid;
+  place-items: center;
+  width: 82%;
+  height: 78%;
+  border: 1px solid #8a8a8a;
+  font-size: 6cqh;
+}
+
+.enemyPortrait strong {
+  margin-top: 5%;
+  font-size: 5.6cqh;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+}
+
+.enemyStats {
+  position: absolute;
+  left: 33%;
+  top: 11%;
+  width: 28%;
+  font-size: 5cqh;
+  line-height: 1.45;
+}
+
+.enemyStats > div {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+}
+
+.enemyStats b {
+  width: 1.2em;
+  font-weight: 500;
+}
+
+.enemyStats span {
+  width: 2.2em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.enemyStats i {
+  flex: 1;
+  height: 2.4cqh;
+  border: 1px solid #7a7a7a;
+  background: #4b4b4b;
+  overflow: hidden;
+}
+
+.enemyStats i em {
+  display: block;
+  height: 100%;
+  background:
+    repeating-linear-gradient(90deg, #fff 0 1px, transparent 1px 7px),
+    #ff7818;
+}
+
+.enemyMeta {
+  position: absolute;
+  left: 17.5%;
+  top: 48%;
+  width: 44%;
+  display: flex;
+  gap: 12%;
+  font-size: 5cqh;
+}
+
+.enemyMeta b {
+  font-weight: 500;
+  margin-left: 0.5em;
+}
+
+.enemyMemo {
+  position: absolute;
+  left: 29.5%;
+  top: 80%;
+  width: 41.5%;
+  height: 34%;
+  border: 2px solid #e8e8e8;
+  box-shadow: inset 0 0 0 1px #000;
+}
+
+.enemyPager {
+  position: absolute;
+  left: 2%;
+  right: 2%;
+  top: 42%;
+  display: flex;
+  justify-content: space-between;
+  color: #fff;
+  font-size: 5cqh;
+  pointer-events: none;
+}
+
+
+  position: absolute;
+  left: 12.8%;
+  bottom: 6.5%;
+  width: 13.5%;
+  height: 20%;
   z-index: 9;
   display: flex;
   align-items: flex-end;
@@ -851,10 +974,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  height: 11%;
-  background-position: center bottom;
-  background-repeat: repeat-x;
-  background-size: 100% 100%;
+  height: 12.4%;
+  background: url("/game-assets/kongming/ui/battle_ground.png") left bottom / auto 100% repeat-x;
   image-rendering: pixelated;
   z-index: 1;
   pointer-events: none;
@@ -864,7 +985,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  height: 12.6%;
+  height: 10.5%;
   transform: translateY(-50%);
   z-index: 2;
   transition: filter 0.12s;
@@ -883,19 +1004,19 @@
 
 .battleStats {
   position: absolute;
-  left: 5.2%;
-  width: 19%;
+  left: 20.1%;
+  width: 6.6%;
   top: 50%;
-  transform: translateY(-52%);
+  transform: translateY(-58%);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.05em;
+  gap: 0.02em;
   white-space: nowrap;
 }
 
 .battleStats strong {
-  font-size: clamp(14px, 3.15vw, 38px);
+  font-size: 5cqh;
   font-weight: 500;
   letter-spacing: 0.04em;
   line-height: 1;
@@ -903,7 +1024,7 @@
 }
 
 .battleStats span {
-  font-size: clamp(12px, 2.1vw, 27px);
+  font-size: 4.1cqh;
   line-height: 1;
   letter-spacing: 0.02em;
   text-shadow: 1px 1px 0 #000, -1px 0 0 #000;
@@ -911,7 +1032,7 @@
 
 .battleStatsEnemy {
   left: auto;
-  right: 5.2%;
+  right: 20.1%;
   align-items: flex-end;
   text-align: right;
 }
@@ -919,10 +1040,10 @@
 .battleHpBar {
   position: absolute;
   left: 25.8%;
-  width: 11.7%;
-  top: 58%;
+  width: 17%;
+  top: 48%;
   transform: translateY(-50%);
-  height: clamp(5px, 1.35vh, 9px);
+  height: 2.05cqh;
   background: transparent;
   border: 0;
   box-sizing: border-box;
@@ -933,7 +1054,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  background: url("/game-assets/kongming/ui/hpbar.png") center / 100% 100% no-repeat;
+  background: url("/game-assets/kongming/ui/hpbar-pink.png") center / 100% 100% no-repeat;
   image-rendering: pixelated;
 }
 
@@ -944,14 +1065,15 @@
 
 .battleHpBarEnemy i {
   margin-left: auto;
-  filter: hue-rotate(188deg) saturate(1.05) brightness(1.02);
+  background-image: url("/game-assets/kongming/ui/hpbar-blue.png");
+  filter: none;
 }
 
 .battleSprite {
   position: absolute;
-  left: 37.2%;
-  width: 8%;
-  height: 150%;
+  left: 36.1%;
+  width: 6%;
+  height: 80%;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -969,7 +1091,7 @@
 
 .battleRowEnemy .battleSprite {
   left: auto;
-  right: 37.2%;
+  right: 36.1%;
 }
 
 .battleSprite span {
@@ -989,23 +1111,23 @@
 
 .battleDialogBox {
   position: absolute;
-  left: 31.8%;
-  width: 61%;
-  bottom: 11%;
-  height: 25.4%;
+  left: 37.5%;
+  width: 24.7%;
+  bottom: 1%;
+  height: 25.5%;
   background: #000;
-  border: max(3px, 0.34vw) solid #f2f2f2;
-  box-shadow: inset 0 0 0 max(2px, 0.2vw) #000;
+  border: 2px solid #f2f2f2;
+  box-shadow: inset 0 0 0 1.5px #000;
   z-index: 10;
   box-sizing: border-box;
-  padding: 2.5% 3.4%;
+  padding: 1.5% 2%;
   overflow: hidden;
   color: #f5f5f5;
 }
 
 .battleIntroText {
   margin: 0;
-  font-size: clamp(14px, 2.3vh, 42px);
+  font-size: 4.6cqh;
   line-height: 1.3;
   letter-spacing: 0.08em;
   white-space: nowrap;
@@ -1015,12 +1137,12 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: repeat(3, 1fr);
-  width: 94%;
+  width: 100%;
   height: 100%;
   margin: 0 auto;
   align-items: center;
-  font-size: clamp(18px, 3.6vw, 44px);
-  letter-spacing: 0.06em;
+  font-size: 5.1cqh;
+  letter-spacing: 0.04em;
 }
 
 .battleCommandGrid > div {
@@ -1030,17 +1152,50 @@
   line-height: 1;
 }
 
+.battleSkillInfo {
+  position: absolute;
+  left: 68%;
+  right: 16.5%;
+  bottom: 10%;
+  height: 18%;
+  z-index: 11;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.battleSkillInfo > div {
+  height: 7.7%;
+  min-height: 24px;
+  border: 2px solid #f2f2f2;
+  box-shadow: inset 0 0 0 1.5px #000;
+  background: #000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8%;
+  font-size: 4.3cqh;
+  color: #fff;
+  letter-spacing: 0.12em;
+}
+
+.battleSkillInfo b {
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
 .battlePanelTitle {
   margin: 0 0 0.35em;
   color: #fff;
-  font-size: clamp(13px, 2vh, 34px);
+  font-size: 4.6cqh;
   letter-spacing: 0.1em;
 }
 
 .battleTargetList,
 .battleGeneralList {
   height: 100%;
-  font-size: clamp(12px, 2.05vh, 35px);
+  font-size: 4.3cqh;
   line-height: 1.3;
 }
 
@@ -1058,6 +1213,11 @@
   color: #cfcfcf;
   font-style: normal;
   font-size: 0.78em;
+}
+
+.battleTargetList small,
+.battleGeneralList small {
+  display: none;
 }
 
 .battleTargetList small,
