@@ -723,7 +723,7 @@ export default function KongmingGame() {
       previousLevel: keepPrevious && s.scene && s.scene.level !== level ? s.scene.level : s.previousLevel,
       x: spawn.x,
       y: spawn.y,
-      dir: [0, -1],
+      dir: (scene.level === 12 ? [0, 1] : [0, -1]) as [number, number],
       eventPos: {},
       dialogue: null,
       panel: null,
@@ -1492,7 +1492,7 @@ export default function KongmingGame() {
   const runEvent = useCallback(async (ev: SceneEvent) => {
     if (!ev.id) return;
     if (locked.current || luaBusy.current) return;
-    if (snapRef.current.flags[ev.id]) return;
+    if (snapRef.current.flags[ev.id] && ev.hideAfter) return;
     locked.current = true;
     activeEvent.current = ev;
     const s = snapRef.current;
@@ -1799,7 +1799,7 @@ export default function KongmingGame() {
     // 踩到 Trigger 事件格时脚本先执行，不会因为格上站着 NPC 而被阻挡。
     const triggerEvent = s.scene.events
       .filter((e) => {
-        if (!e.id || s.flags[e.id] || e.when !== 1) return false;
+        if (!e.id || e.when !== 1) return false;
         if (!eventVisible(e, s.flags, chapterName(s.chapter))) return false;
         if (e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) return false;
         const p = s.eventPos[e.id] ?? e.pos;
@@ -1814,7 +1814,7 @@ export default function KongmingGame() {
       return;
     }
     const blockingNpc = s.scene.events.find((e) => {
-      if (!e.id || s.flags[e.id] || e.when !== 2) return false;
+      if (!e.id || e.when !== 2) return false;
       if (e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) return false;
       const p = s.eventPos[e.id] ?? e.pos;
       return dist(p[0], p[1], nx, ny) < 0.72;
@@ -1877,7 +1877,7 @@ export default function KongmingGame() {
     const scene = s.scene;
 
     const ev = scene.events
-      .filter((e) => e.when === 2 && e.id && !s.flags[e.id] && eventVisible(e, s.flags, chapterName(s.chapter)) && !(e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) && dist((s.eventPos[e.id] ?? e.pos)[0], (s.eventPos[e.id] ?? e.pos)[1], s.x, s.y) < 1.1)
+      .filter((e) => e.when === 2 && e.id && eventVisible(e, s.flags, chapterName(s.chapter)) && !(e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) && dist((s.eventPos[e.id] ?? e.pos)[0], (s.eventPos[e.id] ?? e.pos)[1], s.x, s.y) < 1.1)
       .sort((a, b) => dist((s.eventPos[a.id!] ?? a.pos)[0], (s.eventPos[a.id!] ?? a.pos)[1], s.x, s.y) - dist((s.eventPos[b.id!] ?? b.pos)[0], (s.eventPos[b.id!] ?? b.pos)[1], s.x, s.y))[0];
     if (ev) { await runEvent(ev); return; }
 

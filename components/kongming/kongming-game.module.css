@@ -1360,8 +1360,8 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  image-rendering: auto;
-  filter: grayscale(1) sepia(0.12) contrast(1.06);
+  image-rendering: pixelated;
+  filter: none;
 }
 
 .dialogueFaceBoard {
