@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CalendarDays, Coins, Gift, Inbox, Trophy } from "lucide-react";
+import { ArrowRight, CalendarDays, Coins, Gamepad2, Gift, Inbox, Trophy } from "lucide-react";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CashbackTierPanel } from "@/components/cashback/cashback-tier-panel";
@@ -69,7 +69,7 @@ export default async function CashbackPage() {
     <>
       <PageHeader
         title="活动中心"
-        description={`三种在线玩法的进度与倒计时 · 限时充值、消费返利与活动券 · 经典玩法保留入口 · 奖励统一发到站内信领取 · 消费榜近 ${settings.leaderboardDays} 天`}
+        description={`限时玩法、单机复刻与充值返利 · 经典玩法保留入口 · 奖励统一发到站内信领取 · 消费榜近 ${settings.leaderboardDays} 天`}
       />
       <PageBody className="space-y-4">
         <div className="flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-muted-foreground">
@@ -79,6 +79,33 @@ export default async function CashbackPage() {
             未领取的附件不会被自动清理，领取后这封信满 3 天自动删除。
           </span>
         </div>
+
+        <Link
+          href="/kongming"
+          className="group flex flex-col gap-4 rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/10 via-card to-card p-5 transition-colors hover:border-primary/50 hover:from-primary/15 sm:flex-row sm:items-center"
+        >
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-primary/25 bg-primary/10 text-[color:var(--primary)]">
+            <Gamepad2 className="h-6 w-6" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="flex flex-wrap items-center gap-2">
+              <span className="text-lg font-semibold">诸葛孔明传</span>
+              <span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] text-[color:var(--primary)]">
+                新玩法已上线
+              </span>
+            </span>
+            <span className="mt-1 block text-sm text-muted-foreground">
+              按 Windows 桌面端复刻 · 徐州起兵 · 序章、场景、战斗与军帐
+            </span>
+            <span className="mt-1 block text-[11px] text-muted-foreground">
+              WASD 移动 · J 确认 · K 取消 / 军帐
+            </span>
+          </span>
+          <span className="inline-flex shrink-0 items-center justify-center gap-1 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors group-hover:bg-primary/90">
+            进入游戏
+            <ArrowRight className="h-4 w-4" />
+          </span>
+        </Link>
 
         <section className="space-y-2">
           <div className="flex flex-wrap items-baseline justify-between gap-2">

@@ -1,4 +1,5 @@
-import { CalendarDays, CalendarRange, Inbox } from "lucide-react";
+import { ArrowRight, CalendarDays, CalendarRange, Gamepad2, Inbox } from "lucide-react";
+import Link from "next/link";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageBody } from "@/components/dashboard/section";
@@ -46,6 +47,25 @@ export default async function TasksPage() {
             会自动把随机货币奖励发到<b className="text-foreground">站内信</b>，打开站内信领取后才到账。
           </span>
         </div>
+
+        <Link
+          href="/kongming"
+          className="group flex items-center gap-3 rounded-xl border border-primary/25 bg-primary/5 px-4 py-3 transition-colors hover:border-primary/50 hover:bg-primary/10"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/25 bg-primary/10 text-[color:var(--primary)]">
+            <Gamepad2 className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-medium">诸葛孔明传 · 新玩法已上线</span>
+            <span className="block text-[11px] text-muted-foreground">
+              桌面端复刻 · WASD 移动 · J 确认 · K 取消 / 军帐
+            </span>
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-0.5 text-xs text-[color:var(--primary)]">
+            进入
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          </span>
+        </Link>
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card className="flex flex-col">
