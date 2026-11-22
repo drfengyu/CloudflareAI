@@ -5,6 +5,18 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [0.105.5] - 2026-11-22
+
+### 修复
+
+- **对话立绘原色**：去掉对白立绘上的 `grayscale(1) sepia(.12)`，恢复桌面原版调色板与像素边缘（`image-rendering: pixelated`）。
+- **宫殿初始朝向**：进入徐州宫殿时刘备改为面朝上方的皇帝，不再背对；其余场景仍按进入方向朝下。
+- **皇帝可重复对话**：`11001` 同时存在 `When.TransitionEntrance`（自动开场）与 `When.InteractiveConfirm`（按 J 交谈）两条同 ID 事件。
+  旧逻辑用 `flags[id]` 一刀切拦截，导致自动开场后 `When.InteractiveConfirm` 也被判为已完成。现在只按 `hideAfter` 判定是否隐藏，
+  面对皇帝按 J 可再次交谈；曹操 `11002` 等交互事件同样恢复。
+- **场景阴影**：确认 Tilemap 按 `SortingLayer + SortingOrder` 排序，`Shadow` 层为 `order 10`、黑底 `alpha 128`，位于台阶/建筑之上、前景之下；
+  后续逐场景核对暗部位置，不再用 CSS 近似阴影替代。
+
 ## [0.105.4] - 2026-11-22
 
 ### 修复
