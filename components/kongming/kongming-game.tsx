@@ -198,6 +198,7 @@ interface Snap {
   openedChests: Record<string, true>;
   formation: string;
   chapter: number;
+  meetStep: number;
   eventPos: Record<string, [number, number]>;
   dialogue: DialogueState | null;
   panel: PanelState | null;
@@ -482,6 +483,7 @@ const EMPTY_SNAP: Snap = {
   openedChests: {},
   formation: "散开阵",
   chapter: 1,
+  meetStep: 0,
   eventPos: {},
   dialogue: null,
   panel: null,
@@ -815,6 +817,7 @@ export default function KongmingGame() {
       x: spawn.x,
       y: spawn.y,
       dir: (scene.level === 12 ? [0, 1] : [0, -1]) as [number, number],
+      meetStep: 0,
       eventPos: {},
       flags: pruneInvalidEventFlags(s.flags, d.scenes),
       dialogue: null,
@@ -1196,6 +1199,54 @@ export default function KongmingGame() {
     finishBattle(result);
     return result;
   }, [addExp, battlePrompt, finishBattle, makeBattleUnits, mutate, recalcHp]);
+
+  /**
+   * 原版 TeamMove.CheckMeetEnemy：每走一格 MeetStep++；超过 30 格后按
+   * min(MeetStep, MeetEnemyRatio) / 100 的概率遇敌，超过 90 格必遇。
+   * Special 格（事件/传送点）不计遇敌。仅野外与洞窟参与。
+   */
+  const tryEncounter = useCallback((scene: Scene, x: number, y: number) => {
+    if (!scene.isWorld && !scene.isCave) return false;
+    const s = snapRef.current;
+    const step = s.meetStep + 1;
+    mutate((prev) => ({ ...prev, meetStep: step }));
+    const special =
+      scene.events.some((e) => dist((s.eventPos[e.id] ?? e.pos)[0], (s.eventPos[e.id] ?? e.pos)[1], x, y) < 0.8) ||
+      scene.transitions.some((t) => dist(t.pos[0], t.pos[1], x, y) < 0.8);
+    if (special) return false;
+    if (step > 30 && Math.random() * 100 < Math.min(step, 5)) {
+      mutate((prev) => ({ ...prev, meetStep: 0 }));
+      const d = currentData();
+      const ch = d.content.chapters.find((c) => c.id === s.chapter) ?? d.content.chapters[0];
+      const alive = Math.max(1, s.party.filter((m) => !m.dead).length);
+      const roll = Math.floor(Math.random() * 100);
+      let offset = -2;
+      if (roll >= 85) offset = 2;
+      else if (roll >= 65) offset = 1;
+      else if (roll >= 35) offset = 0;
+      else if (roll >= 15) offset = -1;
+      const count = clamp(alive + offset, 1, 5);
+      const pool = [...(ch?.generals ?? [])];
+      const picked: string[] = [];
+      if (pool.length > 0 && Math.floor(Math.random() * 4) !== 0) {
+        for (let i = 0; i < count && pool.length > 0; i++) {
+          if (Math.floor(Math.random() * 4) === 0) {
+            const idx = Math.floor(Math.random() * pool.length);
+            picked.push(pool[idx]);
+            pool.splice(idx, 1);
+          }
+        }
+      }
+      const terrain = scene.terrain ?? 2;
+      let generic = terrain & 8 ? "海贼" : terrain & 0x14 ? "山贼" : "兵士";
+      if (generic === "兵士" && ch && Math.random() * 100 < (ch.solidRatio ?? 0)) generic = ch.changeTo ?? generic;
+      const enemies = [...picked];
+      while (enemies.length < count) enemies.push(generic);
+      void runBattle(enemies);
+      return true;
+    }
+    return false;
+  }, [currentData, mutate, runBattle]);
 
   const consumeInventory = useCallback((name: string) => {
     mutate((prev) => {
@@ -1749,6 +1800,7 @@ export default function KongmingGame() {
       openedChests: save.openedChests,
       formation: save.formation,
       chapter: save.chapter,
+      meetStep: 0,
       eventPos: {},
       panel: null,
       dialogue: null,
@@ -1854,6 +1906,7 @@ export default function KongmingGame() {
       openedChests: {},
       formation: start.defaultFormation,
       chapter: 1,
+      meetStep: 0,
       eventPos: {},
       dialogue: null,
       panel: null,
@@ -1959,13 +2012,14 @@ export default function KongmingGame() {
     followPosRef.current = followTargets.map((p) => ({ ...p }));
     mutate((prev) => ({ ...prev, x: nx, y: ny }));
     moving.current = false;
+    if (tryEncounter(s.scene, nx, ny)) return;
     void triggerOnEnter(s.scene, nx, ny);
     const held = [...heldKeys.current].reverse().find((k) => DIR_KEYS[k]);
     if (held) {
       const [ndx, ndy] = DIR_KEYS[held];
       if (!locked.current) void moveRef.current?.(ndx, ndy);
     }
-  }, [blockedAt, boxed, mutate, runEvent, toast, triggerOnEnter]);
+  }, [blockedAt, boxed, mutate, runEvent, toast, triggerOnEnter, tryEncounter]);
   moveRef.current = move;
 
   const interact = useCallback(async () => {

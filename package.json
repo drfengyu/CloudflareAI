@@ -1,6 +1,6 @@
 {
   "name": "cloudflare-ai-console",
-  "version": "0.105.7",
+  "version": "0.105.8",
   "private": true,
   "scripts": {
     "dev": "next dev",
