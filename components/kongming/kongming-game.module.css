@@ -558,6 +558,12 @@
   border: 1px solid #8c7748;
 }
 
+.unitCard img.unitSprite {
+  object-fit: contain;
+  image-rendering: pixelated;
+  background: #171f18;
+}
+
 .unitInfo {
   display: flex;
   flex-direction: column;
@@ -1192,3 +1198,176 @@
   .dialogueName { margin-left: 0; }
   .dialogueFace { display: none; }
 }
+
+/* --- desktop title reproduction --- */
+.titleScreen {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  color: #d8d1be;
+}
+.titleStars {
+  position: absolute;
+  inset: 0;
+  opacity: 0.85;
+  background-image:
+    radial-gradient(circle at 8% 16%, rgba(237, 181, 74, 0.95) 0 1px, transparent 2px),
+    radial-gradient(circle at 24% 42%, rgba(245, 222, 158, 0.85) 0 1px, transparent 2px),
+    radial-gradient(circle at 41% 7%, rgba(233, 174, 60, 0.75) 0 1px, transparent 2px),
+    radial-gradient(circle at 63% 31%, rgba(248, 227, 164, 0.8) 0 1px, transparent 2px),
+    radial-gradient(circle at 82% 12%, rgba(240, 190, 83, 0.9) 0 1px, transparent 2px),
+    radial-gradient(circle at 93% 57%, rgba(245, 218, 146, 0.75) 0 1px, transparent 2px),
+    radial-gradient(circle at 14% 78%, rgba(233, 177, 66, 0.7) 0 1px, transparent 2px),
+    radial-gradient(circle at 71% 88%, rgba(248, 223, 159, 0.7) 0 1px, transparent 2px);
+  background-size: 260px 210px, 210px 190px, 300px 240px, 250px 220px;
+  animation: titleTwinkle 4s ease-in-out infinite alternate;
+}
+@keyframes titleTwinkle {
+  0% { opacity: 0.55; }
+  50% { opacity: 0.95; }
+  100% { opacity: 0.7; }
+}
+.titleCapcom {
+  position: absolute;
+  left: 50%;
+  top: 5.5%;
+  width: clamp(34px, 4.6vw, 70px);
+  transform: translateX(-50%);
+  image-rendering: pixelated;
+  opacity: 0;
+  animation: capcomIntro 2.8s ease-in-out forwards;
+}
+@keyframes capcomIntro {
+  0% { opacity: 0; }
+  18% { opacity: 1; }
+  58% { opacity: 1; }
+  100% { opacity: 0; visibility: hidden; }
+}
+.titleLogo {
+  position: absolute;
+  left: 50%;
+  top: 9.5%;
+  width: clamp(190px, 36vw, 500px);
+  transform: translateX(-50%);
+  image-rendering: pixelated;
+  opacity: 0;
+  animation: logoIn 1.2s ease-out 1.55s forwards;
+  filter: drop-shadow(0 3px 0 rgba(0, 0, 0, 0.9));
+}
+@keyframes logoIn {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.titleSwordWrap {
+  position: absolute;
+  left: 50%;
+  top: 25%;
+  width: clamp(320px, 56vw, 880px);
+  transform: translateX(-50%);
+  opacity: 0;
+  animation: swordIn 1s ease-out 2.15s forwards;
+}
+@keyframes swordIn {
+  from { opacity: 0; transform: translate(-58%, 0); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.titleSword {
+  display: block;
+  width: 100%;
+  height: clamp(40px, 6vh, 58px);
+  object-fit: fill;
+  image-rendering: pixelated;
+}
+.titleName {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 2;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  color: #b2252f;
+  font-family: "Yu Mincho", "Songti SC", "SimSun", serif;
+  font-size: clamp(28px, 3.9vw, 62px);
+  font-weight: 700;
+  letter-spacing: 0.45em;
+  line-height: 1;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, 0.85), 0 0 6px rgba(0, 0, 0, 0.6);
+  -webkit-text-stroke: 1px rgba(238, 210, 180, 0.45);
+}
+.titleVersion {
+  position: absolute;
+  right: -6%;
+  bottom: -18%;
+  color: #cfc5ab;
+  font-size: clamp(9px, 0.92vw, 14px);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  text-shadow: 0 2px 4px #000;
+}
+.titleMenu {
+  position: absolute;
+  left: 50%;
+  top: 38.5%;
+  z-index: 6;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: clamp(38px, 7vw, 118px);
+  transform: translateX(-50%);
+  opacity: 0;
+  animation: menuIn 0.9s ease-out 2.95s forwards;
+}
+@keyframes menuIn {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.titleMenu li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 1.9em;
+  color: #8f8f87;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.12s;
+}
+.titleMenu li:hover,
+.titleMenu .menuOn {
+  color: #f8f4e9;
+}
+.menuArrow {
+  display: block;
+  height: 1.25em;
+  width: auto;
+  color: #f7f2e6;
+  font-size: 0.7em;
+  line-height: 1;
+}
+.menuLabel {
+  display: block;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  font-family: "Yu Mincho", "Songti SC", "SimSun", serif;
+  font-size: clamp(24px, 3vw, 46px);
+  letter-spacing: 0.18em;
+  line-height: 1.08;
+  text-shadow: 0 2px 5px #000;
+}
+.titleFoot {
+  position: absolute;
+  left: 50%;
+  bottom: 3.8%;
+  z-index: 6;
+  transform: translateX(-50%);
+  color: #a49b91;
+  font-size: clamp(9px, 0.9vw, 14px);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  text-align: center;
+}
+.hudTop { justify-content: flex-end; }

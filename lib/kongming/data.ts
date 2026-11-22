@@ -133,9 +133,25 @@ export interface StartConfig {
   formations: string[];
 }
 
+export interface EnemyStat {
+  name: string;
+  tag: string;
+  maxHp: number;
+  hp: number;
+  maxMp: number;
+  atk: number;
+  def: number;
+  character: string | null;
+  model: string | null;
+  enemySkills: string | null;
+  award: string | null;
+  skills: (string | null)[];
+}
+
 export interface Content {
   characters: CharacterData[];
   battles: BattleData[];
+  enemyStats?: Record<string, (EnemyStat | null)[]>;
   equipment: EquipmentData[];
   items: ItemData[];
   shops: { name: string; items: string[] }[];
@@ -162,6 +178,7 @@ export interface SceneEvent {
   battles: string[];
   startHide: boolean;
   hideAfter: boolean;
+  model?: string | null;
 }
 
 export interface Scene {
@@ -268,7 +285,11 @@ export function priceOf(data: GameData, name: string) {
 }
 
 export function spriteForModel(model: string | null | undefined) {
-  return model ? `/game-assets/kongming/units/${model}.png` : null;
+  return model ? `/game-assets/kongming/units_field/${model}.png` : null;
+}
+
+export function walkStripForModel(model: string | null | undefined) {
+  return model ? `/game-assets/kongming/units_field_walk/${model}.png` : null;
 }
 
 export function faceForProfile(profile: string | null | undefined) {

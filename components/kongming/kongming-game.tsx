@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   CHAPTER_NAMES,
@@ -10,6 +9,7 @@ import {
   hpFor,
   loadGameData,
   spriteForModel,
+  walkStripForModel,
   type ChapterData,
   type CharacterData,
   type Content,
@@ -184,10 +184,10 @@ interface Saves {
 
 const SAVE_PREFIX = "kongming.save.";
 const PROLOGUE = [
-  "话说天下大势，分久必合，合久必分。\n东汉末年，持续了二百年之久的太平盛世终于纷乱了。\n大贤良师张角率领黄巾军在各地起事，一时间生灵涂炭、怨声载道，汉王朝已无力平乱。\n\n值此乱世，涌现出了三位英雄，立志兴复汉室。\n他们是：\n中山靖王刘胜的后裔——刘备，刘玄德；\n文武双全的美髯公——关羽，关云长；\n有万夫不当之勇的——张飞，张翼德。",
-  "不求同年同月同日生，但求同年同月同日死。\n桃园结义的兄弟三人，招募义军，讨伐黄巾。\n曹操等人也加入了讨伐黄巾军的战斗，他们协力激战，终于战胜了张角，黄巾军被镇压了。\n但是，乱世并未结束。",
-  "在平乱中按兵不动、保存实力的西凉太守董卓，借机进入都城洛阳，专政弄权，无恶不作。\n刘备等人又举兵声讨，终于消灭了董卓。\n天下似乎又太平了。\n\n然而……\n乱世还刚刚开始。\n奸雄曹操乘乱势逐步扩大力量，想一统天下；\n淮南袁术无视汉王朝，妄自称帝。\n\n还有……\n乱世还在继续……",
-  "建安元年，曹操迎天子于许都，挟天子以令诸侯。\n徐州牧陶谦病故，刘备领徐州牧。\n淮南袁术僭号称帝，天下震动。\n\n汉室倾颓，群雄并起。\n诸葛孔明尚未出山，刘玄德仍在颠沛之中。\n\n一段属于刘备与诸葛亮的乱世传奇，就此拉开帷幕。",
+  "话说天下大势  分久必合  合久必分\n东汉末年  持续了二百年之久的太平盛世终于纷乱了\n大贤良师张角率领黄巾军在各地起事\n一时间  生灵涂炭  怨声载道\n汉王朝已无力平乱\n\n值此乱世  涌现出了三位英雄  立志兴复汉室\n他们是\n中山靖王刘胜的后裔  刘备  刘玄德\n文武双全的美髯公  关羽  关云长\n有万夫不当之勇的  张飞 张翼德\n",
+  "不求同年同月同日生  但求同年同月同日死 \n桃园结义的兄弟三人  招募义军  讨伐黄巾\n",
+  "曹操等人也加入了讨伐黄巾军的战斗\n他们协力激战  终于战胜了张角 黄巾军被镇压了\n但是  乱世并未结束\n",
+  "在平乱中按兵不动保存实力的西凉太守  董卓\n借机进入都城洛阳  专政弄权  无恶不作\n刘备等人又举兵声讨  终于消灭了董卓\n天下似乎又太平了\n\n然而......\n乱世还刚刚开始\n奸雄曹操乘乱势逐步扩大力量想一统天下\n淮南袁术无视汉王朝  妄自称帝\n\n还有......\n乱世还在继续......",
 ];
 const SCENE_ALIAS: Record<string, string> = {
   大地图: "世界地图",
@@ -250,13 +250,13 @@ function dist(ax: number, ay: number, bx: number, by: number) {
   return Math.hypot(ax - bx, ay - by);
 }
 
-/** 单位贴图是 8 帧横向条带：上、右、下、左各两帧。 */
+/** 单位贴图是 8 帧横向条带：Direction 顺序为 下、上、左、右，各两帧。 */
 function frameForDir(dir: [number, number]) {
   const [dx, dy] = dir;
-  if (dy < 0) return 0;
-  if (dx > 0) return 2;
-  if (dy > 0) return 4;
-  if (dx < 0) return 6;
+  if (dy < 0) return 2;
+  if (dx > 0) return 6;
+  if (dy > 0) return 0;
+  if (dx < 0) return 4;
   return 0;
 }
 
@@ -277,7 +277,7 @@ function clamp(n: number, min: number, max: number) {
 const EMPTY_SNAP: Snap = {
   ready: false,
   screen: "loading",
-  titleCursor: 0,
+  titleCursor: 2,
   prologuePage: 0,
   scene: null,
   previousLevel: 0,
@@ -354,7 +354,7 @@ export default function KongmingGame() {
         dataRef.current = d;
         setData(d);
         savesRef.current = readSaves();
-        mutate((s) => ({ ...s, ready: true, screen: "title", titleCursor: 3 }));
+        mutate((s) => ({ ...s, ready: true, screen: "title", titleCursor: 2 }));
       })
       .catch((e) => {
         console.error(e);
@@ -647,10 +647,11 @@ export default function KongmingGame() {
   /* Battle                                                              */
   /* ------------------------------------------------------------------ */
 
-  const makeBattleUnits = useCallback((configEnemies: string[], formation: string) => {
+  const makeBattleUnits = useCallback((configEnemies: string[], formation: string, battleName?: string) => {
     const d = currentData();
     const s = snapRef.current;
     const ch = d.content.chapters.find((c) => c.id === s.chapter) ?? d.content.chapters[0];
+    const battleStats = battleName ? d.content.enemyStats?.[battleName] : undefined;
     const players: BattleUnit[] = s.party.filter((m) => !m.dead).map((m, index) => {
       const st = memberCombatStats(m);
       const skills = m.skills.filter((name) => {
@@ -675,23 +676,31 @@ export default function KongmingGame() {
       };
     });
     const enemies: BattleUnit[] = configEnemies.map((name, index) => {
-      const c = d.characters.get(name);
-      const baseHp = ch?.hpList[index % Math.max(1, ch.hpList.length)] ?? 180;
-      const maxHp = Math.max(baseHp, hpFor(c, d.hpLevels, s.level));
-      const skillNames = c?.skills?.filter((sk) => (d.skills.get(sk)?.lv ?? 99) <= 3).slice(0, 4) ?? [];
+      const real = battleStats?.[index] ?? null;
+      const characterName = real?.character ?? name;
+      const c = d.characters.get(characterName) ?? d.characters.get(name);
+      const hpList = ch?.hpList ?? [];
+      const chapterHp = hpList.length > 1
+        ? hpList[Math.floor(Math.random() * (hpList.length - 1))]
+        : (hpList[0] ?? 180);
+      const maxHp = real && real.maxHp >= 0 ? real.maxHp : (real ? chapterHp : Math.max(chapterHp, hpFor(c, d.hpLevels, s.level)));
+      const skillNames = (c?.skills ?? []).filter((sk) => (d.skills.get(sk)?.lv ?? 99) <= 3).slice(0, 4);
+      const str = c?.stats[4] ?? ch?.str ?? 55;
+      const ler = c?.stats[5] ?? ch?.ler ?? 30;
+      const spd = c?.stats[6] ?? ch?.spd ?? 30;
       return {
         key: `e${index}`,
         side: "enemy",
-        name: name || "兵士",
-        profile: c?.profile ?? name,
-        model: c?.modelTexture ?? null,
+        name: real?.name ?? (name || "兵士"),
+        profile: c?.profile ?? characterName,
+        model: real?.model ?? c?.modelTexture ?? null,
         hp: maxHp,
         maxHp,
-        str: Math.max(ch?.str ?? 55, c?.stats[4] ?? 55),
-        ler: Math.max(ch?.ler ?? 30, c?.stats[5] ?? 30),
-        spd: Math.max(ch?.spd ?? 30, c?.stats[6] ?? 30),
-        atk: Math.max(ch?.attack ?? 15, c?.stats[2] ?? 0) + s.level,
-        def: Math.max(ch?.defense ?? 10, c?.stats[3] ?? 0) + s.level,
+        str,
+        ler,
+        spd,
+        atk: real && real.atk >= 0 ? real.atk : (c?.stats[2] || ch?.attack || 15),
+        def: real && real.def >= 0 ? real.def : (c?.stats[3] || ch?.defense || 10),
         skills: skillNames,
         defending: false,
       };
@@ -729,7 +738,7 @@ export default function KongmingGame() {
 
   const runBattle = useCallback(async (enemyNames: string[], config?: { money?: number; exp?: number; name?: string }) => {
     const s = snapRef.current;
-    const { players, enemies } = makeBattleUnits(enemyNames.length ? enemyNames : ["兵士", "兵士"], s.formation);
+    const { players, enemies } = makeBattleUnits(enemyNames.length ? enemyNames : ["兵士", "兵士"], s.formation, config?.name);
     const units = [...players, ...enemies];
     locked.current = true;
     mutate((prev) => ({
@@ -1667,6 +1676,17 @@ export default function KongmingGame() {
     toast("这里没有可以调查的东西");
   }, [loadSceneByName, mutate, runEvent, toast, talk]);
 
+  const activateTitle = useCallback((index: number) => {
+    mutate((prev) => ({ ...prev, titleCursor: index }));
+    if (index === 0) {
+      toast("解甲归田");
+      window.setTimeout(() => window.close(), 180);
+    }
+    else if (index === 1) openPanel("settings");
+    else if (index === 2) openPanel("load");
+    else if (index === 3) startNewGame();
+  }, [mutate, openPanel, startNewGame, toast]);
+
   const handleKey = useCallback(async (e: KeyboardEvent) => {
     if (e.repeat && !["KeyW", "KeyA", "KeyS", "KeyD"].includes(e.code)) return;
     const s = snapRef.current;
@@ -1864,12 +1884,7 @@ export default function KongmingGame() {
 
     if (s.screen === "title") {
       if (key === "KeyW" || key === "KeyS") mutate((prev) => ({ ...prev, titleCursor: (prev.titleCursor + (key === "KeyW" ? 3 : 1)) % 4 }));
-      if (key === "KeyJ") {
-        if (s.titleCursor === 0) toast("请直接关闭本页面退出");
-        else if (s.titleCursor === 1) openPanel("settings");
-        else if (s.titleCursor === 2) openPanel("load");
-        else if (s.titleCursor === 3) startNewGame();
-      }
+      if (key === "KeyJ") activateTitle(s.titleCursor);
       if (key === "KeyK") return;
       return;
     }
@@ -1897,7 +1912,7 @@ export default function KongmingGame() {
       else if (key === "KeyJ") void interact();
       else if (key === "KeyK") openPanel("root");
     }
-  }, [banner, buyShopItem, changeFormation, closePanel, closeShop, currentData, equipItem, finishDialogue, loadSave, loadScene, move, mutate, openPanel, proceedPrologue, saveGame, startNewGame, toast, useInventoryItem, useSkillInfo, interact]);
+  }, [activateTitle, banner, buyShopItem, changeFormation, closePanel, closeShop, currentData, equipItem, finishDialogue, loadSave, loadScene, move, mutate, openPanel, proceedPrologue, saveGame, startNewGame, toast, useInventoryItem, useSkillInfo, interact]);
 
   useEffect(() => {
     const listener = (e: KeyboardEvent) => { void handleKey(e); };
@@ -1949,7 +1964,7 @@ export default function KongmingGame() {
 
   const seenEvents = new Set<string>();
   const fieldEvents = (scene?.events ?? []).filter((e) => {
-    if (!e.id || s.flags[e.id] || e.startHide || !e.names.length) return false;
+    if (!e.id || (s.flags[e.id] && e.hideAfter) || e.startHide || !e.names.length) return false;
     const k = `${e.id}:${e.pos[0]}:${e.pos[1]}`;
     if (seenEvents.has(k)) return false;
     seenEvents.add(k);
@@ -1957,9 +1972,9 @@ export default function KongmingGame() {
   });
   const fieldChests = (scene?.chests ?? []).filter((c) => c.show && !s.openedChests[c.id]);
   const leader = s.party[0];
-  const playerSprite = spriteForModel(leader?.model);
+  const playerSprite = walkStripForModel(leader?.model);
   const playerFrame = frameForDir(s.dir);
-  const titleLabels = ["退出", "设置", "读取存档", "新游戏"];
+  const titleLabels = ["解甲归田", "厉兵秣马", "匡扶汉室", "初出茅庐"];
   const rootLabels = ["队伍", "物品", "装备", "谋略", "阵型", "剧情", "保存", "设置", "返回"];
   const panelTitle: Record<string, string> = {
     root: "军帐",
@@ -1994,33 +2009,30 @@ export default function KongmingGame() {
 
         {s.screen === "title" && (
           <div className={styles.titleScreen}>
-            <div className={styles.titleWash} />
-            <div className={styles.titleClouds} />
-            <div className={styles.titleTags} aria-hidden>
-              <span>初出茅庐</span>
-              <span>匡扶汉室</span>
-              <span>厉兵秣马</span>
-              <span>解甲归田</span>
+            <div className={styles.titleStars} />
+            <img className={styles.titleCapcom} src="/game-assets/kongming/ui/TitleCapcom.png" alt="" aria-hidden />
+            <img className={styles.titleLogo} src="/game-assets/kongming/ui/TitleLogo.png" alt="三国演义" />
+            <div className={styles.titleSwordWrap}>
+              <img className={styles.titleSword} src="/game-assets/kongming/ui/TitleSword.png" alt="" aria-hidden />
+              <h1 className={styles.titleName}>諸葛孔明伝</h1>
+              <span className={styles.titleVersion}>怀旧版 v1.0.5</span>
             </div>
-            <div className={styles.titleSeal}>汉</div>
-            <div className={styles.titleMain}>
-              <p className={styles.titleKicker}>三国志通俗演义 · 刘备传</p>
-              <h1 className={styles.titleText}>诸葛孔明传</h1>
-              <div className={styles.titleRule} />
-              <p className={styles.titleSub}>吞食天地２ · 怀旧版复刻</p>
-              <ul className={styles.titleMenu}>
-                {titleLabels.map((label, i) => (
-                  <li key={label} className={s.titleCursor === i ? styles.menuOn : undefined}>
-                    <span className={styles.menuArrow}>{s.titleCursor === i ? "◆" : ""}</span>
-                    {label}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className={styles.titleFoot}>
-              <span>W/S 选择　J 确认</span>
-              <Link href="/dashboard">返回网站</Link>
-            </div>
+            <ul className={styles.titleMenu}>
+              {titleLabels.map((label, i) => (
+                <li
+                  key={label}
+                  className={s.titleCursor === i ? styles.menuOn : undefined}
+                  onMouseEnter={() => mutate((prev) => ({ ...prev, titleCursor: i }))}
+                  onClick={() => activateTitle(i)}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <span className={styles.menuArrow}>{s.titleCursor === i ? "▼" : ""}</span>
+                  <span className={styles.menuLabel}>{label}</span>
+                </li>
+              ))}
+            </ul>
+            <div className={styles.titleFoot}>© 本宮ひろ志 / M&amp;M / 集英社 / CAPCOM 1991</div>
           </div>
         )}
 
@@ -2054,18 +2066,22 @@ export default function KongmingGame() {
                 const ex = sx(e.pos[0]);
                 const ey = sy(e.pos[1]);
                 if (ex < -80 || ex > viewW + 80 || ey < -100 || ey > viewH + 80) return null;
-                const face = faceForProfile(e.names[0]?.profile);
+                const profile = e.names[0]?.profile ?? null;
+                const name = e.names[0]?.name?.trim() ?? "";
+                const ch = data.characters.get(name) ?? data.characters.get(profile ?? "");
+                const sprite = spriteForModel(e.model ?? ch?.modelTexture);
+                if (!sprite) return null;
                 return (
                   <g key={`${e.id}-${i}`}>
                     <ellipse cx={ex} cy={ey + 4} rx={22} ry={8} fill="rgba(0,0,0,.35)" />
-                    {face ? (
-                      <image href={face} x={ex - 21} y={ey - 54} width={42} height={42} preserveAspectRatio="xMidYMid slice" />
-                    ) : (
-                      <circle cx={ex} cy={ey - 33} r={21} fill="#4a3a27" stroke="#c9a86a" strokeWidth={1.5} />
+                    <svg x={ex - 26} y={ey - 52} width={52} height={52} viewBox="0 0 64 64" preserveAspectRatio="xMidYMid meet">
+                      <image href={sprite} x={0} y={0} width={64} height={64} className={styles.pixel} />
+                    </svg>
+                    {name && (
+                      <text x={ex} y={ey - 33} textAnchor="middle" fill="#f5e7c8" fontSize={12} stroke="#20150b" strokeWidth={3} paintOrder="stroke">
+                        {name}
+                      </text>
                     )}
-                    <text x={ex} y={ey - 62} textAnchor="middle" fill="#f5e7c8" fontSize={12} stroke="#20150b" strokeWidth={3} paintOrder="stroke">
-                      {e.names[0]?.name ?? "人"}
-                    </text>
                   </g>
                 );
               })}
@@ -2083,8 +2099,8 @@ export default function KongmingGame() {
               })}
               <ellipse cx={playerSX} cy={playerSY + 4} rx={22} ry={8} fill="rgba(0,0,0,.45)" />
               {playerSprite ? (
-                <svg x={playerSX - 32} y={playerSY - 58} width={64} height={64} viewBox={`${playerFrame * 69} 0 69 69`} preserveAspectRatio="xMidYMid meet">
-                  <image href={playerSprite} x={0} y={0} width={552} height={69} className={styles.pixel} />
+                <svg x={playerSX - 32} y={playerSY - 58} width={64} height={64} viewBox={`${playerFrame * 64} 0 64 64`} preserveAspectRatio="xMidYMid meet">
+                  <image href={playerSprite} x={0} y={0} width={512} height={64} className={styles.pixel} />
                 </svg>
               ) : (
                 <circle cx={playerSX} cy={playerSY - 26} r={22} fill="#294b63" stroke="#d8c38f" strokeWidth={2} />
@@ -2092,16 +2108,12 @@ export default function KongmingGame() {
               {!playerSprite && (
                 <text x={playerSX} y={playerSY - 20} textAnchor="middle" fill="#fff" fontSize={15}>{leader?.name?.[0] ?? "刘"}</text>
               )}
-              <text x={playerSX} y={playerSY - 64} textAnchor="middle" fill="#fff6df" fontSize={12} stroke="#1c140b" strokeWidth={3} paintOrder="stroke">
+              <text x={playerSX} y={playerSY - 34} textAnchor="middle" fill="#fff6df" fontSize={12} stroke="#1c140b" strokeWidth={3} paintOrder="stroke">
                 {leader?.name ?? ""}
               </text>
             </svg>
 
             <div className={styles.hudTop}>
-              <div className={styles.hudChapter}>
-                <span className={styles.hudSmall}>{chapterName(s.chapter)}</span>
-                <strong>{sceneLabel(scene)}</strong>
-              </div>
               <div className={styles.hudStats}>
                 <span>金 <b>{s.money}</b></span>
                 <span>等级 <b>{s.level}</b></span>
@@ -2109,25 +2121,6 @@ export default function KongmingGame() {
               </div>
             </div>
 
-            <div className={styles.partyBar}>
-              {s.party.map((m) => {
-                const face = faceForProfile(m.profile);
-                return (
-                  <div key={m.key} className={`${styles.partyChip} ${m.dead ? styles.partyDead : ""}`}>
-                    {face ? <img src={face} alt="" /> : <span className={styles.faceFallback}>{m.name[0]}</span>}
-                    <div>
-                      <span className={styles.partyName}>{m.name}</span>
-                      <span className={styles.hpLine}>
-                        <i style={{ width: `${m.maxHp ? (m.hp / m.maxHp) * 100 : 0}%` }} />
-                      </span>
-                      <small>{m.hp} / {m.maxHp}</small>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className={styles.keyHint}>WASD 移动　J 调查 / 确认　K 军帐</div>
           </div>
         )}
 
@@ -2142,7 +2135,7 @@ export default function KongmingGame() {
               <div className={styles.battleSide}>
                 {battle.units.filter((u) => u.side === "player").map((u) => (
                   <div key={u.key} className={`${styles.unitCard} ${u.hp <= 0 ? styles.unitDown : ""} ${battle.pending === u.key ? styles.unitActive : ""}`}>
-                    {faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span className={styles.faceFallback}>{u.name[0]}</span>}
+                    {spriteForModel(u.model) ? <img className={styles.unitSprite} src={spriteForModel(u.model)!} alt="" /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span className={styles.faceFallback}>{u.name[0]}</span>}
                     <div className={styles.unitInfo}>
                       <span>{u.name}</span>
                       <small>{u.hp} / {u.maxHp}</small>
@@ -2158,7 +2151,7 @@ export default function KongmingGame() {
                   const lit = (battle.menu === "attack" || battle.menu === "target") && idx === battle.cursor;
                   return (
                     <div key={u.key} className={`${styles.unitCard} ${styles.enemyCard} ${u.hp <= 0 ? styles.unitDown : ""} ${lit ? styles.unitActive : ""}`}>
-                      {faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span className={styles.faceFallback}>{u.name[0]}</span>}
+                      {spriteForModel(u.model) ? <img className={styles.unitSprite} src={spriteForModel(u.model)!} alt="" /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span className={styles.faceFallback}>{u.name[0]}</span>}
                       <div className={styles.unitInfo}>
                         <span>{u.name}</span>
                         <small>{u.hp} / {u.maxHp}</small>

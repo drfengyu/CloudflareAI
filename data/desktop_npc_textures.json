@@ -1,0 +1,331 @@
+{
+ "events": {
+  "12150": {
+   "model": "npc-书生",
+   "texture": "书生",
+   "asset": "sharedassets10.assets",
+   "path": 4
+  },
+  "12155": {
+   "model": "npc-书生",
+   "texture": "书生",
+   "asset": "sharedassets10.assets",
+   "path": 4
+  },
+  "11001": {
+   "model": "npc-帝",
+   "texture": "帝",
+   "asset": "sharedassets12.assets",
+   "path": 3
+  },
+  "11015": {
+   "model": "npc-4B",
+   "texture": "4B",
+   "asset": "resources.assets",
+   "path": 57
+  },
+  "12001": {
+   "model": "npc-袁绍",
+   "texture": "袁绍",
+   "asset": "sharedassets3.assets",
+   "path": 9
+  },
+  "12007": {
+   "model": "npc-24",
+   "texture": "24",
+   "asset": "resources.assets",
+   "path": 127
+  },
+  "12152": {
+   "model": "npc-袁绍",
+   "texture": "袁绍",
+   "asset": "sharedassets3.assets",
+   "path": 9
+  },
+  "12052": {
+   "model": "npc-青年",
+   "texture": "青年",
+   "asset": "sharedassets19.assets",
+   "path": 4
+  },
+  "18070": {
+   "model": "npc-4B",
+   "texture": "4B",
+   "asset": "resources.assets",
+   "path": 57
+  },
+  "12049": {
+   "model": "npc-4B",
+   "texture": "4B",
+   "asset": "resources.assets",
+   "path": 57
+  },
+  "16003": {
+   "model": "npc-帝",
+   "texture": "帝",
+   "asset": "sharedassets12.assets",
+   "path": 3
+  },
+  "13010": {
+   "model": "npc-帝",
+   "texture": "帝",
+   "asset": "sharedassets12.assets",
+   "path": 3
+  },
+  "14064": {
+   "model": "npc-帝",
+   "texture": "帝",
+   "asset": "sharedassets12.assets",
+   "path": 3
+  },
+  "13001": {
+   "model": "npc-52",
+   "texture": "52",
+   "asset": "resources.assets",
+   "path": 89
+  },
+  "13005": {
+   "model": "npc-丞相",
+   "texture": "丞相",
+   "asset": "sharedassets54.assets",
+   "path": 2
+  },
+  "14005": {
+   "model": "npc-丞相",
+   "texture": "丞相",
+   "asset": "sharedassets54.assets",
+   "path": 2
+  },
+  "13008": {
+   "model": "npc-7A",
+   "texture": "7A",
+   "asset": "resources.assets",
+   "path": 157
+  },
+  "13007": {
+   "model": "npc-丞相",
+   "texture": "丞相",
+   "asset": "sharedassets54.assets",
+   "path": 2
+  },
+  "14055": {
+   "model": "npc-女子",
+   "texture": "女子",
+   "asset": "sharedassets8.assets",
+   "path": 3
+  },
+  "14054": {
+   "model": "npc-船",
+   "texture": "船",
+   "asset": "sharedassets0.assets",
+   "path": 19
+  },
+  "14056": {
+   "model": "npc-船",
+   "texture": "船",
+   "asset": "sharedassets0.assets",
+   "path": 19
+  },
+  "55302": {
+   "model": "npc-52",
+   "texture": "52",
+   "asset": "resources.assets",
+   "path": 89
+  },
+  "55303": {
+   "model": "npc-52",
+   "texture": "52",
+   "asset": "resources.assets",
+   "path": 89
+  },
+  "55301": {
+   "model": "npc-52",
+   "texture": "52",
+   "asset": "resources.assets",
+   "path": 89
+  },
+  "14062": {
+   "model": "npc-2A",
+   "texture": "2A",
+   "asset": "sharedassets75.assets",
+   "path": 2
+  },
+  "16024": {
+   "model": "npc-52",
+   "texture": "52",
+   "asset": "resources.assets",
+   "path": 89
+  },
+  "16074": {
+   "model": "npc-小孩3",
+   "texture": "小孩3",
+   "asset": "sharedassets3.assets",
+   "path": 4
+  },
+  "16075": {
+   "model": "npc-小孩3",
+   "texture": "小孩3",
+   "asset": "sharedassets3.assets",
+   "path": 4
+  },
+  "16082_1": {
+   "model": "npc-老人",
+   "texture": "老人",
+   "asset": "sharedassets11.assets",
+   "path": 4
+  },
+  "17013": {
+   "model": "npc-帝",
+   "texture": "帝",
+   "asset": "sharedassets12.assets",
+   "path": 3
+  },
+  "17011": {
+   "model": "npc-男子",
+   "texture": "男子",
+   "asset": "sharedassets42.assets",
+   "path": 2
+  },
+  "17014_2": {
+   "model": "npc-帝",
+   "texture": "帝",
+   "asset": "sharedassets12.assets",
+   "path": 3
+  },
+  "17014": {
+   "model": "npc-小孩3",
+   "texture": "小孩3",
+   "asset": "sharedassets3.assets",
+   "path": 4
+  },
+  "17014_1": {
+   "model": "npc-男子",
+   "texture": "男子",
+   "asset": "sharedassets42.assets",
+   "path": 2
+  },
+  "18006": {
+   "model": "npc-39",
+   "texture": "39",
+   "asset": "resources.assets",
+   "path": 176
+  },
+  "18055": {
+   "model": "npc-老人",
+   "texture": "老人",
+   "asset": "sharedassets11.assets",
+   "path": 4
+  },
+  "67251": {
+   "model": "npc-女子",
+   "texture": "女子",
+   "asset": "sharedassets8.assets",
+   "path": 3
+  },
+  "67201": {
+   "model": "npc-老人",
+   "texture": "老人",
+   "asset": "sharedassets11.assets",
+   "path": 4
+  },
+  "67202": {
+   "model": "npc-33",
+   "texture": "33",
+   "asset": "resources.assets",
+   "path": 17
+  },
+  "67250": {
+   "model": "npc-2A",
+   "texture": "2A",
+   "asset": "sharedassets75.assets",
+   "path": 2
+  }
+ },
+ "textures": {
+  "npc-书生": {
+   "asset": "sharedassets10.assets",
+   "path": 4,
+   "texture": "书生"
+  },
+  "npc-帝": {
+   "asset": "sharedassets12.assets",
+   "path": 3,
+   "texture": "帝"
+  },
+  "npc-4B": {
+   "asset": "resources.assets",
+   "path": 57,
+   "texture": "4B"
+  },
+  "npc-袁绍": {
+   "asset": "sharedassets3.assets",
+   "path": 9,
+   "texture": "袁绍"
+  },
+  "npc-24": {
+   "asset": "resources.assets",
+   "path": 127,
+   "texture": "24"
+  },
+  "npc-青年": {
+   "asset": "sharedassets19.assets",
+   "path": 4,
+   "texture": "青年"
+  },
+  "npc-52": {
+   "asset": "resources.assets",
+   "path": 89,
+   "texture": "52"
+  },
+  "npc-丞相": {
+   "asset": "sharedassets54.assets",
+   "path": 2,
+   "texture": "丞相"
+  },
+  "npc-7A": {
+   "asset": "resources.assets",
+   "path": 157,
+   "texture": "7A"
+  },
+  "npc-女子": {
+   "asset": "sharedassets8.assets",
+   "path": 3,
+   "texture": "女子"
+  },
+  "npc-船": {
+   "asset": "sharedassets0.assets",
+   "path": 19,
+   "texture": "船"
+  },
+  "npc-2A": {
+   "asset": "sharedassets75.assets",
+   "path": 2,
+   "texture": "2A"
+  },
+  "npc-小孩3": {
+   "asset": "sharedassets3.assets",
+   "path": 4,
+   "texture": "小孩3"
+  },
+  "npc-老人": {
+   "asset": "sharedassets11.assets",
+   "path": 4,
+   "texture": "老人"
+  },
+  "npc-男子": {
+   "asset": "sharedassets42.assets",
+   "path": 2,
+   "texture": "男子"
+  },
+  "npc-39": {
+   "asset": "resources.assets",
+   "path": 176,
+   "texture": "39"
+  },
+  "npc-33": {
+   "asset": "resources.assets",
+   "path": 17,
+   "texture": "33"
+  }
+ }
+}
