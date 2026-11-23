@@ -395,7 +395,7 @@ function movementAreaEmpty(area: [number, number]) {
 
 /** 桌面版室内场景的相机底色是纯黑，不能拿城外草地纹理去补边。 */
 function isIndoorScene(name: string) {
-  return /(宫殿|皇宫|宫|殿|府|宅|屋|寺|观|酒楼|客栈|衙门|民居|房|室)/.test(name);
+  return /(宫殿|皇宫|宫|殿|府|宅|屋|寺|观|酒楼|客栈|衙门|民居|房|室|宿|武器店|店|馆)/.test(name);
 }
 
 /** 单位贴图是 8 帧横向条带：Direction 顺序为 下、上、左、右，各两帧。 */
