@@ -3523,7 +3523,7 @@ export default function KongmingGame({
             )}
             <div className={styles.touchActions}>
               <button type="button" aria-label="确认" className={`${styles.touchKey} ${styles.touchJ}`} onPointerDown={(e) => virtualPress(e, "KeyJ")}>J<small>{s.screen === "title" ? "确认" : s.screen === "prologue" ? "继续" : "确认"}</small></button>
-              {s.screen !== "title" && (
+              {(s.screen !== "title" || s.panel) && (
                 <button type="button" aria-label="取消" className={`${styles.touchKey} ${styles.touchK}`} onPointerDown={(e) => virtualPress(e, "KeyK")}>K<small>{s.screen === "prologue" ? "跳过" : "取消"}</small></button>
               )}
             </div>
