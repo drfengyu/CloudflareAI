@@ -10,6 +10,7 @@ import {
   type ActivityCouponView,
   type ActivityKind,
 } from "./coupons";
+import { getKongmingActivityConfig } from "@/lib/kongming/activity-settings";
 import {
   activityCountdown,
   activityPhaseText,
@@ -94,12 +95,14 @@ function couponAlert(card: HubActivity): string | null {
 
 export async function loadActivityHub(userId: string): Promise<ActivityHub> {
   const now = Date.now();
-  const [workshopCoupon, collectionCoupon, workshopConfig, collectionConfig] =
+  const [workshopCoupon, collectionCoupon, kongmingCoupon, workshopConfig, collectionConfig, kongmingConfig] =
     await Promise.all([
       getActivityCouponView(userId, "workshop"),
       getActivityCouponView(userId, "collection"),
+      getActivityCouponView(userId, "kongming"),
       getWorkshopConfig(),
       getCollectionConfig(),
+      getKongmingActivityConfig(),
     ]);
 
   const workshopKey = workshopCoupon.activityKey;
@@ -188,6 +191,37 @@ export async function loadActivityHub(userId: string): Promise<ActivityHub> {
         kind: "collection",
         label: "星图共鸣",
         href: "/collection",
+        status: card.status,
+        items: [card.statusText],
+      });
+    }
+    cards.push(card);
+  }
+
+  // 诸葛孔明传：没有服务端存档进度，只展示券与可换军资。
+  {
+    const card = base(kongmingCoupon, now);
+    card.cta = "进入游戏";
+    if (kongmingCoupon.status === "active") {
+      const gold = kongmingCoupon.tickets * kongmingConfig.goldPerCoupon;
+      card.progress = [
+        { label: "当前券", value: kongmingCoupon.tickets, max: null },
+        { label: "可换军资", value: gold, max: null, hint: "金" },
+      ];
+      const alert = couponAlert(card);
+      if (alert) card.alerts.push(alert);
+      daily.push({
+        kind: "kongming",
+        label: "诸葛孔明传",
+        href: "/kongming",
+        status: card.status,
+        items: [`${kongmingCoupon.tickets} 张券`, `可换 ${gold} 金`],
+      });
+    } else {
+      daily.push({
+        kind: "kongming",
+        label: "诸葛孔明传",
+        href: "/kongming",
         status: card.status,
         items: [card.statusText],
       });

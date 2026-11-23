@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Library, PawPrint, Ticket, type LucideIcon } from "lucide-react";
+import { AlertTriangle, ArrowRight, Library, PawPrint, Swords, Ticket, type LucideIcon } from "lucide-react";
 import { formatCnWallClock } from "@/lib/date";
 import { formatCredits } from "@/lib/billing/credits";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ import { Countdown } from "./countdown";
 const ACTIVITY_ICON: Record<ActivityKind, LucideIcon> = {
   workshop: PawPrint,
   collection: Library,
+  kongming: Swords,
   lottery: Ticket,
   flip: Ticket,
   raiden: Ticket,

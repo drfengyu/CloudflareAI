@@ -43,6 +43,12 @@ import {
   sanitizeCollectionConfig,
 } from "@/lib/collection/config";
 import {
+  KONGMING_ACTIVITY_CONFIG_KEY,
+  kongmingActivityKey,
+  kongmingActivityWindow,
+  sanitizeKongmingActivityConfig,
+} from "@/lib/kongming/activity-config";
+import {
   COUPON_PACK_CONFIG_KEY,
   sanitizeCouponPackConfig,
   type CouponPackConfig,
@@ -81,10 +87,11 @@ export const ACTIVITY_META: Record<ActivityKind, ActivityMeta> = {
   raiden: { kind: "raiden", label: "雷电行动", short: "雷电券", href: "/raiden" },
   workshop: { kind: "workshop", label: "灵宠工坊", short: "工坊券", href: "/workshop" },
   collection: { kind: "collection", label: "星图共鸣", short: "星图券", href: "/collection" },
+  kongming: { kind: "kongming", label: "诸葛孔明传", short: "孔明券", href: "/kongming" },
 };
 
-/** 当前上线的两个玩法：活动中心、顶栏默认只展示它们。 */
-export const LIVE_ACTIVITY_KINDS: ActivityKind[] = ["workshop", "collection"];
+/** 当前上线的三个玩法：活动中心、顶栏默认只展示它们。 */
+export const LIVE_ACTIVITY_KINDS: ActivityKind[] = ["workshop", "collection", "kongming"];
 
 /** 保留可玩的经典玩法：入口收在活动中心的「经典玩法」里。 */
 export const LEGACY_ACTIVITY_KINDS: ActivityKind[] = ["lottery", "flip", "raiden"];
@@ -98,6 +105,7 @@ const COUPON_NAMES: Record<ActivityKind, string[]> = {
   raiden: ["雷霆券", "疾风券", "破阵券", "闪电券", "龙吟券", "霜刃券"],
   workshop: ["育灵券", "萌宠券", "藤蔓券", "绒尾券", "灵犀券", "匠心券"],
   collection: ["星图券", "观星券", "拾光券", "星辉券", "银河匣券", "寻踪券"],
+  kongming: ["孔明券", "卧龙券", "隆中券", "三分券", "出师券", "锦囊券"],
 };
 
 export type ActivityStatus = "disabled" | "pending" | "active" | "ended";
@@ -226,6 +234,7 @@ const ACTIVITY_CONFIG_KEYS: Record<ActivityKind, string> = {
   raiden: RAIDEN_CONFIG_KEY,
   workshop: WORKSHOP_CONFIG_KEY,
   collection: COLLECTION_CONFIG_KEY,
+  kongming: KONGMING_ACTIVITY_CONFIG_KEY,
 };
 
 interface ActivityWindowInfo {
@@ -280,7 +289,7 @@ function resolveActivityFromConfig(kind: ActivityKind, raw: unknown): ResolvedAc
       activityKey: workshopActivityKey(config),
       unitCredits: config.couponUnitCredits,
     };
-  } else {
+  } else if (kind === "collection") {
     const config = sanitizeCollectionConfig(raw);
     const win = collectionActivityWindow(config);
     info = {
@@ -288,6 +297,16 @@ function resolveActivityFromConfig(kind: ActivityKind, raw: unknown): ResolvedAc
       startMs: win.startMs,
       endMs: win.endMs,
       activityKey: collectionActivityKey(config),
+      unitCredits: config.couponUnitCredits,
+    };
+  } else {
+    const config = sanitizeKongmingActivityConfig(raw);
+    const win = kongmingActivityWindow(config);
+    info = {
+      status: win.status,
+      startMs: win.startMs,
+      endMs: win.endMs,
+      activityKey: kongmingActivityKey(config),
       unitCredits: config.couponUnitCredits,
     };
   }

@@ -12,12 +12,16 @@ import { RaidenForm } from "./raiden-form";
 import { FlipForm } from "./flip-form";
 import { WorkshopForm } from "./workshop-form";
 import { CollectionForm } from "./collection-form";
+import { KongmingForm } from "./kongming-form";
 import { CouponPackForm } from "./pack-form";
 import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
 import { sanitizeRaidenConfig } from "@/lib/raiden/config";
 import { sanitizeFlipConfig } from "@/lib/flip/config";
 import { sanitizeWorkshopConfig } from "@/lib/workshop/config";
 import { sanitizeCollectionConfig } from "@/lib/collection/config";
+import {
+  sanitizeKongmingActivityConfig,
+} from "@/lib/kongming/activity-config";
 import { sanitizeCouponPackConfig } from "@/lib/activity/pack-config";
 import { sanitizeCashbackTiers } from "@/lib/cashback/config";
 import { RECHARGE_ACTIVITY_DEFAULT_START, sanitizeBonusTiers } from "@/lib/payment/bonus";
@@ -80,6 +84,7 @@ export default async function AdminSettingsPage() {
   const flipConfig = parseConfig(settings.flip_config, sanitizeFlipConfig);
   const workshopConfig = parseConfig(settings.workshop_config, sanitizeWorkshopConfig);
   const collectionConfig = parseConfig(settings.collection_config, sanitizeCollectionConfig);
+  const kongmingConfig = parseConfig(settings.kongming_config, sanitizeKongmingActivityConfig);
   const packConfig = parseConfig(settings.coupon_pack_config, sanitizeCouponPackConfig);
 
   // 充值赠送与消费返利档位在库里是 JSON，交给表单前先还原成结构化值：
@@ -308,6 +313,15 @@ export default async function AdminSettingsPage() {
 
         <Card>
           <CardHeader>
+            <CardTitle className="text-base">限时活动（诸葛孔明传）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <KongmingForm initialConfig={kongmingConfig} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle className="text-base">经典玩法（幸运转盘）</CardTitle>
           </CardHeader>
           <CardContent>
@@ -346,6 +360,7 @@ export default async function AdminSettingsPage() {
                 raiden: raidenConfig.couponUnitCredits,
                 workshop: workshopConfig.couponUnitCredits,
                 collection: collectionConfig.couponUnitCredits,
+                kongming: kongmingConfig.couponUnitCredits,
               }}
             />
           </CardContent>

@@ -1,9 +1,9 @@
 "use client";
 
-import { Crosshair, Layers, Library, PawPrint, Sparkles, type LucideIcon } from "lucide-react";
+import { Crosshair, Layers, Library, PawPrint, Sparkles, Swords, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export type CouponKind = "lottery" | "flip" | "raiden" | "workshop" | "collection";
+export type CouponKind = "lottery" | "flip" | "raiden" | "workshop" | "collection" | "kongming";
 
 const KIND_STYLE: Record<CouponKind, { Icon: LucideIcon; color: string }> = {
   lottery: { Icon: Sparkles, color: "text-fuchsia-500" },
@@ -11,6 +11,7 @@ const KIND_STYLE: Record<CouponKind, { Icon: LucideIcon; color: string }> = {
   raiden: { Icon: Crosshair, color: "text-amber-500" },
   workshop: { Icon: PawPrint, color: "text-orange-500" },
   collection: { Icon: Library, color: "text-violet-500" },
+  kongming: { Icon: Swords, color: "text-rose-500" },
 };
 
 /** 对应活动的券图标：各玩法各用一种颜色与记号。 */

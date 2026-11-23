@@ -561,10 +561,10 @@ export const activityTaskClaims = sqliteTable(
 );
 
 /**
- * 活动 id：前三项是 2026-11 之前上线的经典玩法，保留可玩；后三项是替换上线的新玩法。
+ * 活动 id：前三项是 2026-11 之前上线的经典玩法，保留可玩；后四项是替换上线的新玩法。
  * 券行、礼包记录与里程碑都按这个值隔离，所以只能加、不能改已有值。
  */
-export type ActivityKind = "lottery" | "flip" | "raiden" | "workshop" | "collection";
+export type ActivityKind = "lottery" | "flip" | "raiden" | "workshop" | "collection" | "kongming";
 
 /**
  * 任务成就领取记录：一行 = 一个用户领取过某个任务，之后不再重复发。

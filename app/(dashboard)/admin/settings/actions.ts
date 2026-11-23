@@ -44,6 +44,10 @@ import {
   CONSTELLATIONS,
   sanitizeCollectionConfig,
 } from "@/lib/collection/config";
+import {
+  KONGMING_ACTIVITY_CONFIG_KEY,
+  sanitizeKongmingActivityConfig,
+} from "@/lib/kongming/activity-config";
 import { setSetting } from "@/lib/settings";
 import { saveSmtpSettings, type SmtpSettings } from "@/lib/email";
 import { sanitizeBonusTiers } from "@/lib/payment/bonus";
@@ -1120,6 +1124,57 @@ export async function updateCollectionSettings(formData: {
 
   revalidatePath("/admin/settings");
   revalidatePath("/collection");
+
+  return { success: true };
+}
+
+/** 限时活动（诸葛孔明传）配置的保存入口 */
+export async function updateKongmingSettings(formData: {
+  enabled: boolean;
+  startAt: string;
+  endAt: string;
+  /** 1 张孔明券兑换所需的 cr。 */
+  couponUnitCredits: number;
+  /** 1 张孔明券可换多少游戏内金。 */
+  goldPerCoupon: number;
+  maxCouponsPerExchange: number;
+}) {
+  const currentUserId = await requireUser();
+  const currentUser = await db
+    .select()
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const startAt = formData.startAt.trim();
+  const endAt = formData.endAt.trim();
+  if (formData.enabled) {
+    const startMs = parseCnWallClock(startAt);
+    const endMs = parseCnWallClock(endAt);
+    if (startMs === null) throw new Error("开始时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs === null) throw new Error("结束时间格式应为 YYYY-MM-DD HH:mm（北京时间）");
+    if (endMs <= startMs) throw new Error("结束时间必须晚于开始时间");
+  }
+
+  const config = sanitizeKongmingActivityConfig({
+    enabled: formData.enabled === true,
+    startAt,
+    endAt,
+    couponUnitCredits: requireNumber(formData.couponUnitCredits, "孔明券单价", 0.01, 1_000_000),
+    goldPerCoupon: Math.trunc(requireNumber(formData.goldPerCoupon, "每张券兑换金", 1, 1_000_000)),
+    maxCouponsPerExchange: Math.trunc(
+      requireNumber(formData.maxCouponsPerExchange, "单次兑换上限", 1, 10_000),
+    ),
+  });
+
+  await upsertOption(KONGMING_ACTIVITY_CONFIG_KEY, JSON.stringify(config));
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/kongming");
 
   return { success: true };
 }

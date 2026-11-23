@@ -80,6 +80,10 @@
   box-shadow: 0 18px 46px rgba(0, 0, 0, 0.32);
 }
 
+.couponWrap {
+  width: min(100%, 1400px, calc((100dvh - 200px) * 1.7778));
+}
+
 .frame {
   position: relative;
   width: 100%;
@@ -871,12 +875,25 @@
 }
 
 .commandOn {
-  color: #ffe06a !important;
+  color: #f2f2f2 !important;
   background: transparent;
 }
 
-.commandOn span {
-  color: #ff5b47;
+/* 原版 Battle Commands/Cursor：13×8 白色三角（素材已转成向右），
+   Animator Hover 循环约 62 帧（60fps ≈1.03s）做明暗脉冲。 */
+.commandCursor {
+  display: inline-block;
+  width: 1.2em;
+  height: 1em;
+  vertical-align: -0.08em;
+  background: url("/game-assets/kongming/ui/Cursor.png") center / 0.58em 0.92em no-repeat;
+  image-rendering: pixelated;
+  animation: commandCursorPulse 1.03s ease-in-out infinite;
+}
+
+@keyframes commandCursorPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
 
 .commandGrid > div span,
@@ -1125,6 +1142,18 @@
 .battleRowActive .battleSprite::after {
   content: none;
   display: none;
+}
+
+/* 原版 GetHurtShake：+0.05 → -0.05 → 回正，共 9 帧（0.15s）。 */
+.battleRowHurt {
+  animation: battleHurt 0.15s steps(9, end);
+}
+
+@keyframes battleHurt {
+  0% { translate: 0; }
+  33% { translate: 0.06em; }
+  66% { translate: -0.06em; }
+  100% { translate: 0; }
 }
 
 .battleDialogBox {

@@ -1,3 +1,6 @@
+import attackFrameCounts from "./attack-frames.json";
+import npcMotionData from "./npc-motion.json";
+
 export interface CharacterData {
   id: number;
   name: string;
@@ -302,6 +305,59 @@ export function spriteForModel(model: string | null | undefined) {
 
 export function walkStripForModel(model: string | null | undefined) {
   return model ? `/game-assets/kongming/units_field_walk/${model}.png` : null;
+}
+
+/** 桌面版 `NPC.MoveSprites` 的漫游参数，按场景 + 事件 id 索引。 */
+export interface NpcMotion {
+  speed: number;
+  wait: number;
+  area: [number, number];
+  dirs: number[];
+  base: [number, number];
+  /** 具名武将复用 Character 模型条带。 */
+  model?: string;
+  /** 通用 NPC 的 8 帧条带名（`npc_walk/<strip>.png`）。 */
+  strip?: string;
+}
+
+export function npcMotionFor(
+  level: number | null | undefined,
+  eventId: string | null | undefined,
+): NpcMotion | null {
+  if (level == null || !eventId) return null;
+  const table = npcMotionData as unknown as Record<string, Record<string, NpcMotion>>;
+  return table[String(level)]?.[eventId] ?? null;
+}
+
+export function npcWalkStripFor(motion: NpcMotion | null): string | null {
+  if (!motion) return null;
+  if (motion.strip) return `/game-assets/kongming/npc_walk/${motion.strip}.png`;
+  return walkStripForModel(motion.model);
+}
+
+/**
+ * 桌面版 `Character.AttackSprites` 的帧序：贴图从 x=424 起每 64px 一帧，
+ * 2 帧时按 [1,0] 播放；3 帧时原版逐个 Insert 再 Reverse，实际为 [2,0,1]。
+ * 没有攻击帧的模型（48/60px 的小图）退回待机动作。
+ */
+export function attackSequenceForModel(model: string | null | undefined): number[] {
+  if (!model) return [];
+  const count = (attackFrameCounts as Record<string, number>)[model] ?? 0;
+  if (count <= 0) return [];
+  if (count === 1) return [0];
+  if (count === 2) return [1, 0];
+  const order = [count - 1];
+  for (let i = 0; i < count - 1; i++) order.push(i);
+  return order;
+}
+
+export function attackFrameForModel(
+  model: string | null | undefined,
+  frame: number,
+) {
+  return model && frame >= 0
+    ? `/game-assets/kongming/units_attack/${model}-${frame}.png`
+    : null;
 }
 
 export function faceForProfile(profile: string | null | undefined) {

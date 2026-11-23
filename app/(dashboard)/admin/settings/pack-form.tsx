@@ -81,7 +81,7 @@ function Field({
   );
 }
 
-type ActivityKindKey = "lottery" | "flip" | "raiden" | "workshop" | "collection";
+type ActivityKindKey = "lottery" | "flip" | "raiden" | "workshop" | "collection" | "kongming";
 
 export function CouponPackForm({
   initialConfig,
@@ -165,6 +165,7 @@ export function CouponPackForm({
           const perActivity = [
             { label: "工坊", credits: unitCredits.workshop },
             { label: "图鉴", credits: unitCredits.collection },
+            { label: "孔明", credits: unitCredits.kongming },
             { label: "转盘", credits: unitCredits.lottery },
             { label: "翻牌", credits: unitCredits.flip },
             { label: "雷电", credits: unitCredits.raiden },

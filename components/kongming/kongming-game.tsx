@@ -3,11 +3,15 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import {
   CHAPTER_NAMES,
+  attackFrameForModel,
+  attackSequenceForModel,
   chapterName,
   equipmentSlot,
   faceForProfile,
   hpFor,
   loadGameData,
+  npcMotionFor,
+  npcWalkStripFor,
   spriteForModel,
   walkStripForModel,
   type ChapterData,
@@ -22,6 +26,8 @@ import {
   type SkillData,
 } from "@/lib/kongming/data";
 import { LuaRuntime } from "@/lib/kongming/lua";
+import type { ActivityCouponView } from "@/lib/activity/coupons";
+import { KongmingCouponPanel } from "./kongming-coupon-panel";
 import { gameAudio, type GameTheme } from "@/lib/game/audio";
 import { SoundToggle } from "@/components/activity/sound-toggle";
 import { TintedSprite, TintedSvgSprite } from "./tinted-sprite";
@@ -128,6 +134,24 @@ interface BattleUnit {
   critPower: number;
 }
 
+interface NpcWalkState {
+  x: number;
+  y: number;
+  dir: [number, number];
+  wait: number;
+  move?: { tx: number; ty: number; progress: number };
+}
+
+interface BattleFx {  /** 正在播放攻击帧的我方 / 敌方单位 key。 */
+  actor: string | null;
+  /** 本次攻击的目标 key，用来触发受击抖动。 */
+  target: string | null;
+  /** 当前攻击帧序号，null 表示不在攻击中。 */
+  frame: number | null;
+  /** 目标被命中的瞬间（伤害结算后）。 */
+  hurt: boolean;
+}
+
 interface BattleState {
 
   units: BattleUnit[];
@@ -140,6 +164,7 @@ interface BattleState {
   menuTitle: string;
   intro?: boolean;
   terrain?: string;
+  fx?: BattleFx | null;
   result?: "win" | "lose";
   outcome?: {
     kind: "win" | "lose" | "flee";
@@ -269,6 +294,8 @@ interface Saves {
 }
 
 const SAVE_PREFIX = "kongming.save.";
+/** 未开局时先兑换的金暂存键；下一次开局 / 读档并入存档。 */
+const PENDING_GOLD_KEY = "kongming.pendingGold";
 const ARROW_TO_KEY: Record<string, string> = {
   ArrowUp: "KeyW",
   ArrowDown: "KeyS",
@@ -357,6 +384,18 @@ function normalizeSceneName(name: string) {
 
 function dist(ax: number, ay: number, bx: number, by: number) {
   return Math.hypot(ax - bx, ay - by);
+}
+
+/** 桌面版 Direction：0 下、1 上、2 左、3 右。 */
+const DIR_VECTORS: [number, number][] = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+
+function movementAreaEmpty(area: [number, number]) {
+  return area[0] <= 0 && area[1] <= 0;
+}
+
+/** 桌面版室内场景的相机底色是纯黑，不能拿城外草地纹理去补边。 */
+function isIndoorScene(name: string) {
+  return /(宫殿|皇宫|宫|殿|府|宅|屋|寺|观|酒楼|客栈|衙门|民居|房|室)/.test(name);
 }
 
 /** 单位贴图是 8 帧横向条带：Direction 顺序为 下、上、左、右，各两帧。 */
@@ -549,8 +588,20 @@ const EMPTY_SNAP: Snap = {
   gameoverReason: "",
 };
 
-export default function KongmingGame() {
+export default function KongmingGame({
+  activity = null,
+  goldPerCoupon = 100,
+  maxCouponsPerExchange = 200,
+}: {
+  /** 已登录时的孔明券视图；未登录 / 活动关闭时为 null，不显示兑换面板。 */
+  activity?: ActivityCouponView | null;
+  goldPerCoupon?: number;
+  maxCouponsPerExchange?: number;
+} = {}) {
   const [snap, setSnap] = useState<Snap>(EMPTY_SNAP);
+  const [npcWalk, setNpcWalk] = useState<Record<string, NpcWalkState>>({});
+  const npcWalkRef = useRef<Record<string, NpcWalkState>>({});
+  const [npcClock, setNpcClock] = useState(0);
   const snapRef = useRef<Snap>(EMPTY_SNAP);
   const [data, setData] = useState<GameData | null>(null);
   const dataRef = useRef<GameData | null>(null);
@@ -595,6 +646,35 @@ export default function KongmingGame() {
     if (bannerTimer.current) clearTimeout(bannerTimer.current);
     bannerTimer.current = setTimeout(() => mutate((s) => ({ ...s, banner: null })), 2600);
   }, [mutate]);
+
+  /**
+   * 活动券兑来的金：已在游戏里就直接入账；还在封面 / 加载页就先落
+   * localStorage，等「初出茅庐」或「匡扶汉室」把金并进存档。
+   */
+  const receiveGold = useCallback((gold: number) => {
+    if (gold <= 0) return;
+    const current = snapRef.current;
+    if (current.screen === "title" || current.screen === "loading") {
+      const pending = Number(localStorage.getItem(PENDING_GOLD_KEY) ?? 0) || 0;
+      localStorage.setItem(PENDING_GOLD_KEY, String(pending + gold));
+      toast(`军资 ${gold} 金已寄存，开局后并入存档`);
+      return;
+    }
+    mutate((s) => ({ ...s, money: Math.min(9_999_999, s.money + gold) }));
+    toast(`军资到账：+${gold} 金`);
+  }, [mutate, toast]);
+
+  const applyPendingGold = useCallback(() => {
+    const pending = Number(localStorage.getItem(PENDING_GOLD_KEY) ?? 0) || 0;
+    if (pending <= 0) return;
+    localStorage.removeItem(PENDING_GOLD_KEY);
+    mutate((s) => ({ ...s, money: Math.min(9_999_999, s.money + pending) }));
+    toast(`活动军资到账：+${pending} 金`);
+  }, [mutate, toast]);
+
+  useEffect(() => {
+    if (snap.screen !== "title" && snap.screen !== "loading") applyPendingGold();
+  }, [snap.screen, applyPendingGold]);
 
   /* ------------------------------------------------------------------ */
   /* Map preload                                                         */
@@ -790,6 +870,9 @@ export default function KongmingGame() {
     if (!scene.map) return false;
     const map = scene.map;
     if (x < map.x || x > map.x + map.w - 1 || y < map.y || y > map.y + map.h - 1) return true;
+    // 城门在原版 TilemapCollider 里仍是整排墙；只要贴着通往大地图的出口，
+    // 就放行这一格，让玩家能从任意一个门走出去再触发切场景。
+    if (scene.transitions.some((t) => t.scene === "大地图" && dist(t.pos[0], t.pos[1], x, y) < 1.6)) return false;
     for (const box of scene.boxes) {
       const [cx, cy, w, h] = box;
       if (Math.abs(x - cx) <= w / 2 && Math.abs(y - cy) <= h / 2) return true;
@@ -805,6 +888,115 @@ export default function KongmingGame() {
     const bit = iy * map.w + ix;
     return !!(bytes[bit >> 3] & (1 << (bit & 7)));
   }, [decodeMask]);
+
+  /** NPC 待机帧计时：桌面版 characterAnimSpeed=0.6s 一帧。 */
+  useEffect(() => {
+    if (snap.screen !== "field") return;
+    const timer = window.setInterval(() => setNpcClock((value) => value + 1), 150);
+    return () => window.clearInterval(timer);
+  }, [snap.screen]);
+
+  useEffect(() => {
+    npcWalkRef.current = npcWalk;
+  }, [npcWalk]);
+
+  /** 进入新场景时，把 NPC 放回事件的落点，按桌面版 dirs 选初始朝向。 */
+  useEffect(() => {
+    const scene = snapRef.current.scene;
+    if (!scene || snap.screen !== "field") {
+      setNpcWalk({});
+      return;
+    }
+    const initial: Record<string, NpcWalkState> = {};
+    for (const event of scene.events) {
+      if (!event.id) continue;
+      const motion = npcMotionFor(scene.level, event.id);
+      if (!motion) continue;
+      initial[event.id] = {
+        x: event.pos[0],
+        y: event.pos[1],
+        dir: DIR_VECTORS[motion.dirs[0]] ?? [0, -1],
+        wait: Math.max(0.2, motion.wait + (Math.random() * 1.6 - 0.8)),
+      };
+    }
+    setNpcWalk(initial);
+  }, [snap.scene?.level, snap.screen]);
+
+  /** 桌面版 NPC.Move：随机方向走一格，约 1±0.8 秒后再走；活动范围 5×3。 */
+  useEffect(() => {
+    if (snap.screen !== "field") return;
+    const scene = snapRef.current.scene;
+    if (!scene) return;
+    const timer = window.setInterval(() => {
+      const current = snapRef.current;
+      if (current.dialogue || current.panel || current.shop || current.battle) return;
+      setNpcWalk((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const event of scene.events) {
+          if (!event.id) continue;
+          const motion = npcMotionFor(scene.level, event.id);
+          if (!motion || motion.speed <= 0 || movementAreaEmpty(motion.area)) continue;
+          const state = prev[event.id];
+          if (!state) continue;
+
+          if (state.move) {
+            const duration = Math.max(150, 1000 / motion.speed);
+            const progress = Math.min(1, state.move.progress + 100 / duration);
+            if (progress >= 1) {
+              next[event.id] = {
+                ...state,
+                x: state.move.tx,
+                y: state.move.ty,
+                move: undefined,
+                wait: Math.max(0.2, motion.wait + (Math.random() * 1.6 - 0.8)),
+              };
+            } else {
+              next[event.id] = {
+                ...state,
+                x: state.x + (state.move.tx - state.x) * progress,
+                y: state.y + (state.move.ty - state.y) * progress,
+                move: { ...state.move, progress },
+              };
+            }
+            changed = true;
+            continue;
+          }
+
+          if (state.wait > 0) {
+            next[event.id] = { ...state, wait: state.wait - 0.1 };
+            changed = true;
+            continue;
+          }
+
+          const dirIndex = motion.dirs[Math.floor(Math.random() * motion.dirs.length)] ?? 0;
+          const [dx, dy] = DIR_VECTORS[dirIndex] ?? [0, -1];
+          const tx = state.x + dx;
+          const ty = state.y + dy;
+          const inside =
+            Math.abs(tx - motion.base[0]) <= motion.area[0] &&
+            Math.abs(ty - motion.base[1]) <= motion.area[1];
+          const occupied = Object.entries(prev).some(([id, other]) =>
+            id !== event.id && Math.abs(other.x - tx) < 0.7 && Math.abs(other.y - ty) < 0.7,
+          );
+          const nearPlayer = Math.abs(current.x - tx) < 0.7 && Math.abs(current.y - ty) < 0.7;
+          if (inside && !blockedAt(scene, tx, ty) && !occupied && !nearPlayer) {
+            next[event.id] = {
+              ...state,
+              dir: [dx, dy],
+              move: { tx, ty, progress: 0 },
+              wait: 0,
+            };
+          } else {
+            next[event.id] = { ...state, dir: [dx, dy], wait: 0.5 };
+          }
+          changed = true;
+        }
+        return changed ? next : prev;
+      });
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [snap.screen, snap.scene?.level, blockedAt]);
 
   const spawnFor = useCallback((scene: Scene, tag?: string) => {
     const raw = (() => {
@@ -1107,6 +1299,7 @@ export default function KongmingGame() {
         menuTitle: "",
         intro: true,
         terrain: battleTerrainAsset(battleDef?.terrain),
+        fx: null,
       },
     }));
 
@@ -1175,11 +1368,40 @@ export default function KongmingGame() {
 
     const hpAfter = (u: BattleUnit, nextHp: number): BattleUnit => ({ ...u, hp: clamp(Math.round(nextHp), 0, u.maxHp) });
 
+    /**
+     * 桌面版 `BattleCharacterMono.AttackAction`：按 `AttackSprites` 顺序每帧
+     * 停 0.15s，播完恢复待机。这里把帧号挂到 battle.fx，由渲染层换图。
+     */
+    const setBattleFx = (fx: BattleFx | null) => {
+      mutate((prev) => (prev.battle ? { ...prev, battle: { ...prev.battle, fx } } : prev));
+    };
+
+    const playAttackFx = async (actor: BattleUnit, target: BattleUnit) => {
+      const sequence = attackSequenceForModel(actor.model);
+      if (sequence.length === 0) return;
+      const speed = Math.max(0.5, snapRef.current.speed);
+      setBattleFx({ actor: actor.key, target: null, frame: null, hurt: false });
+      for (const frame of sequence) {
+        setBattleFx({ actor: actor.key, target: target.key, frame, hurt: false });
+        await sleep(150 / speed);
+      }
+      setBattleFx(null);
+    };
+
+    /** 原版 `GetHurtShake`：受击方 +0.05 → -0.05 → 回正，共 9 帧。 */
+    const playHurtFx = async (target: BattleUnit) => {
+      const speed = Math.max(0.5, snapRef.current.speed);
+      setBattleFx({ actor: null, target: target.key, frame: null, hurt: true });
+      await sleep(150 / speed);
+      setBattleFx(null);
+    };
+
     /** 原版 AttackExecuteCommand：按武器 AttackTimes 连击，92% 命中、暴击、防御减半。 */
     const performAttack = async (attacker: BattleUnit, target: BattleUnit) => {
       const attackTimes = Math.max(1, attacker.attackTimes);
       for (let hitIndex = 0; hitIndex < attackTimes; hitIndex++) {
         if (finished || !target || target.hp <= 0) break;
+        await playAttackFx(attacker, target);
         const isMiss = Math.random() * 100 >= attacker.hitRate;
         if (isMiss) {
           gameAudio.play("miss");
@@ -1193,11 +1415,14 @@ export default function KongmingGame() {
         Object.assign(target, hpAfter(target, target.hp - dmg));
         gameAudio.play(isCrit ? "crit" : "hit");
         if (target.hp <= 0) gameAudio.play("down");
+        updateUnits(units);
+        await playHurtFx(target);
         addLog(`${attacker.name}${isCrit ? (attacker.side === "player" ? "奋战" : "苦战") : ""} 攻击 ${target.name}，歼敌 ${real}`);
         updateUnits(units);
         await sleep(220 / Math.max(0.5, snapRef.current.speed));
       }
     };
+
 
     while (!finished) {
       round;
@@ -1399,7 +1624,11 @@ export default function KongmingGame() {
     const step = s.meetStep + 1;
     mutate((prev) => ({ ...prev, meetStep: step }));
     const special =
-      scene.events.some((e) => dist((s.eventPos[e.id] ?? e.pos)[0], (s.eventPos[e.id] ?? e.pos)[1], x, y) < 0.8) ||
+      scene.events.some((e) => {
+        const walk = npcWalkRef.current[e.id];
+        const p = walk ? [walk.x, walk.y] : s.eventPos[e.id] ?? e.pos;
+        return dist(p[0], p[1], x, y) < 0.8;
+      }) ||
       scene.transitions.some((t) => dist(t.pos[0], t.pos[1], x, y) < 0.8);
     if (special) return false;
     if (step > 30 && Math.random() * 100 < Math.min(step, 5)) {
@@ -1841,7 +2070,13 @@ export default function KongmingGame() {
     if (locked.current) return;
     const s = snapRef.current;
     const trans = scene.transitions
-      .filter((t) => t.when === 1 && dist(t.pos[0], t.pos[1], x, y) < 0.8)
+      .filter((t) => {
+        if (t.when !== 1) return false;
+        // 城门是整排墙，原版铺的触发点带小数；放宽到一格半，避免必须踩中
+        // 某个 0.1 格的精确点才能出门。
+        const radius = t.scene === "大地图" ? 1.6 : 0.8;
+        return dist(t.pos[0], t.pos[1], x, y) < radius;
+      })
       .sort((a, b) => dist(a.pos[0], a.pos[1], x, y) - dist(b.pos[0], b.pos[1], x, y))[0];
     if (trans) {
       locked.current = true;
@@ -2140,7 +2375,8 @@ export default function KongmingGame() {
         if (!e.id || e.when !== 1) return false;
         if (!eventVisible(e, s.flags, chapterName(s.chapter))) return false;
         if (e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) return false;
-        const p = s.eventPos[e.id] ?? e.pos;
+        const walk = npcWalkRef.current[e.id];
+        const p = walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? e.pos;
         return dist(p[0], p[1], nx, ny) < 0.8;
       })
       .sort((a, b) => dist(a.pos[0], a.pos[1], nx, ny) - dist(b.pos[0], b.pos[1], nx, ny))[0];
@@ -2154,7 +2390,8 @@ export default function KongmingGame() {
     const blockingNpc = s.scene.events.find((e) => {
       if (!e.id || e.when !== 2) return false;
       if (e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) return false;
-      const p = s.eventPos[e.id] ?? e.pos;
+      const walk = npcWalkRef.current[e.id];
+      const p = walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? e.pos;
       return dist(p[0], p[1], nx, ny) < 0.72;
     });
     if (blockingNpc) {
@@ -2214,10 +2451,14 @@ export default function KongmingGame() {
     if (!s.scene || locked.current) return;
     if (performance.now() < suppressInteractUntil.current) return;
     const scene = s.scene;
+    const at = (e: SceneEvent) => {
+      const walk = npcWalkRef.current[e.id];
+      return walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? e.pos;
+    };
 
     const ev = scene.events
-      .filter((e) => e.when === 2 && e.id && eventVisible(e, s.flags, chapterName(s.chapter)) && !(e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) && dist((s.eventPos[e.id] ?? e.pos)[0], (s.eventPos[e.id] ?? e.pos)[1], s.x, s.y) < 1.1)
-      .sort((a, b) => dist((s.eventPos[a.id!] ?? a.pos)[0], (s.eventPos[a.id!] ?? a.pos)[1], s.x, s.y) - dist((s.eventPos[b.id!] ?? b.pos)[0], (s.eventPos[b.id!] ?? b.pos)[1], s.x, s.y))[0];
+      .filter((e) => e.when === 2 && e.id && eventVisible(e, s.flags, chapterName(s.chapter)) && !(e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) && dist(at(e)[0], at(e)[1], s.x, s.y) < 1.1)
+      .sort((a, b) => dist(at(a)[0], at(a)[1], s.x, s.y) - dist(at(b)[0], at(b)[1], s.x, s.y))[0];
     if (ev) { await runEvent(ev); return; }
 
     const chest = scene.chests.find((c) => !s.openedChests[c.id] && dist(c.pos[0], c.pos[1], s.x, s.y) < 0.8);
@@ -2574,10 +2815,10 @@ export default function KongmingGame() {
 
   const scene = s.scene;
   const map = scene?.map ?? null;
-  // 原版窗口 1366×777，视野约 42×24 个 32px 地块。此前固定 400×400
-  // 会把画面放大约 3 倍，导致“人物巨大、地图只剩一小块”。
-  const viewW = 1366;
-  const viewH = 768;
+  // 桌面版 Camera.orthographicSize=7：固定 14 个地块高，16:9 即 25×14 格。
+  // 之前按 1366×768 直接当逻辑分辨率，实际看到 42×24 格，整体缩得过小。
+  const viewW = 800;
+  const viewH = 450;
   const baseCell = map?.scale ?? 32;
   const zoom = map ? Math.max(1, 32 / Math.max(1, baseCell)) : 1;
   const cell = baseCell * zoom;
@@ -2655,7 +2896,7 @@ export default function KongmingGame() {
   const equipmentInv = s.inventory.filter((i) => data.equipment.has(i.name));
 
   return (
-    <div className={styles.root}>
+    <div className={styles.root} data-scene={s.scene?.level ?? ""} data-pos={`${s.x},${s.y}`}>
       <div className={styles.activityHead}>
         <div className={styles.activityTitleRow}>
           <span className={styles.activityBadge}>限时活动</span>
@@ -2729,7 +2970,7 @@ export default function KongmingGame() {
         {(s.screen === "field" || s.screen === "battle" || s.screen === "gameover") && scene && map && (
           <div className={styles.field}>
             <svg className={styles.world} viewBox={`0 0 ${viewW} ${viewH}`} preserveAspectRatio="xMidYMid slice">
-              <rect width={viewW} height={viewH} fill={scene.isWorld || scene.isCave ? "#10130f" : "url(#town-grass)"} />
+              <rect width={viewW} height={viewH} fill={scene.isWorld || scene.isCave || isIndoorScene(scene.name) ? "#10130f" : "url(#town-grass)"} />
               <defs>
                 <pattern id="town-grass" width={32} height={32} patternUnits="userSpaceOnUse">
                   <image href="/game-assets/kongming/ui/town-grass.png" width={32} height={32} className={styles.pixel} preserveAspectRatio="none" />
@@ -2754,22 +2995,32 @@ export default function KongmingGame() {
               />
               <WaterOverlay src={map.src} x={-camX} y={-camY} width={mapW} height={mapH} />
               {fieldEvents.map((e, i) => {
-                const p = s.eventPos[e.id] ?? e.pos;
+                const walk = npcWalk[e.id];
+                const p = walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? e.pos;
                 const ex = sx(p[0]);
                 const ey = sy(p[1]);
                 if (ex < -80 || ex > viewW + 80 || ey < -100 || ey > viewH + 80) return null;
                 const profile = e.names[0]?.profile ?? null;
                 const name = e.names[0]?.name?.trim() ?? "";
                 const ch = data.characters.get(name) ?? data.characters.get(profile ?? "");
+                const motion = npcMotionFor(scene?.level, e.id);
                 const sprite = spriteForModel(e.model ?? ch?.modelTexture);
+                const strip = npcWalkStripFor(motion) ?? walkStripForModel(ch?.modelTexture ?? e.model);
                 const palette: ModelPalette | null =
                   data.palettes.get(name) ?? data.palettes.get(profile ?? "") ?? data.palettes.get(ch?.name ?? "") ?? null;
-                if (!sprite) return null;
+                if (!strip && !sprite) return null;
+                const dir = walk?.dir ?? (motion ? DIR_VECTORS[motion.dirs[0]] ?? [0, -1] : [0, -1] as [number, number]);
+                const moving = Boolean(walk?.move);
+                const animFrame = frameForDir(dir, moving ? npcClock % 2 : Math.floor(npcClock / 4) % 2);
                 return (
                   <g key={`${e.id}-${i}`}>
                     <ellipse cx={ex} cy={ey + 3} rx={12} ry={5} fill="rgba(0,0,0,.35)" />
-                    <svg x={ex - 18} y={ey - 33} width={36} height={36} viewBox="0 0 64 64" preserveAspectRatio="xMidYMid meet" overflow="hidden">
-                      <TintedSvgSprite src={sprite} palette={palette} x={0} y={0} width={64} height={64} className={styles.pixel} />
+                    <svg x={ex - 18} y={ey - 33} width={36} height={36} viewBox="0 0 36 36" preserveAspectRatio="xMidYMid meet" overflow="hidden">
+                      {strip ? (
+                        <TintedSvgSprite src={strip} palette={palette} x={-animFrame * 36} y={0} width={288} height={36} className={styles.pixel} />
+                      ) : (
+                        <TintedSvgSprite src={sprite!} palette={palette} x={0} y={0} width={36} height={36} className={styles.pixel} />
+                      )}
                     </svg>
                     {name && null}
                   </g>
@@ -2843,12 +3094,17 @@ export default function KongmingGame() {
 
             {battle.units.filter((u) => u.side === "player").slice(0, 5).map((u, i) => {
               const sprite = spriteForModel(u.model);
+              const attackFrame =
+                battle.fx?.actor === u.key && battle.fx.frame !== null
+                  ? attackFrameForModel(u.model, battle.fx.frame)
+                  : null;
+              const hurt = battle.fx?.target === u.key && battle.fx?.hurt;
               const palette: ModelPalette | null =
                 data.palettes.get(u.name) ?? data.palettes.get(u.profile ?? "") ?? null;
               return (
               <div
                 key={u.key}
-                className={`${styles.battleRow} ${styles.battleRowPlayer} ${u.hp <= 0 ? styles.unitDown : ""} ${battle.pending === u.key ? styles.battleRowActive : ""}`}
+                className={`${styles.battleRow} ${styles.battleRowPlayer} ${u.hp <= 0 ? styles.unitDown : ""} ${battle.pending === u.key ? styles.battleRowActive : ""} ${hurt ? styles.battleRowHurt : ""}`}
                 style={{ top: `${BATTLE_ROW_TOP[i]}%` }}
               >
                 <div className={styles.battleStats}>
@@ -2859,7 +3115,15 @@ export default function KongmingGame() {
                   <i style={{ clipPath: `inset(0 ${100 - (u.maxHp ? (u.hp / u.maxHp) * 100 : 0)}% 0 0)` }} />
                 </div>
                 <div className={styles.battleSprite}>
-                  {sprite ? <TintedSprite src={sprite} palette={palette} /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span>{u.name[0]}</span>}
+                  {attackFrame ? (
+                    <TintedSprite src={attackFrame} palette={palette} alt="" />
+                  ) : sprite ? (
+                    <TintedSprite src={sprite} palette={palette} />
+                  ) : faceForProfile(u.profile) ? (
+                    <img src={faceForProfile(u.profile)!} alt="" />
+                  ) : (
+                    <span>{u.name[0]}</span>
+                  )}
                 </div>
               </div>
               );
@@ -2869,16 +3133,29 @@ export default function KongmingGame() {
               const idx = enemies.findIndex((e) => e.key === u.key);
               const lit = (battle.menu === "attack" || battle.menu === "target") && idx === battle.cursor;
               const sprite = spriteForModel(u.model);
+              const attackFrame =
+                battle.fx?.actor === u.key && battle.fx.frame !== null
+                  ? attackFrameForModel(u.model, battle.fx.frame)
+                  : null;
+              const hurt = battle.fx?.target === u.key && battle.fx?.hurt;
               const palette: ModelPalette | null =
                 data.palettes.get(u.name) ?? data.palettes.get(u.profile ?? "") ?? null;
               return (
                 <div
                   key={u.key}
-                  className={`${styles.battleRow} ${styles.battleRowEnemy} ${u.hp <= 0 ? styles.unitDown : ""} ${lit ? styles.battleRowActive : ""}`}
+                  className={`${styles.battleRow} ${styles.battleRowEnemy} ${u.hp <= 0 ? styles.unitDown : ""} ${lit ? styles.battleRowActive : ""} ${hurt ? styles.battleRowHurt : ""}`}
                   style={{ top: `${BATTLE_ROW_TOP[i]}%` }}
                 >
                   <div className={styles.battleSprite}>
-                    {sprite ? <TintedSprite src={sprite} palette={palette} /> : faceForProfile(u.profile) ? <img src={faceForProfile(u.profile)!} alt="" /> : <span>{u.name[0]}</span>}
+                    {attackFrame ? (
+                      <TintedSprite src={attackFrame} palette={palette} alt="" />
+                    ) : sprite ? (
+                      <TintedSprite src={sprite} palette={palette} />
+                    ) : faceForProfile(u.profile) ? (
+                      <img src={faceForProfile(u.profile)!} alt="" />
+                    ) : (
+                      <span>{u.name[0]}</span>
+                    )}
                   </div>
                   <div className={`${styles.battleHpBar} ${styles.battleHpBarEnemy}`}>
                     <i style={{ clipPath: `inset(0 0 0 ${100 - (u.maxHp ? (u.hp / u.maxHp) * 100 : 0)}%)` }} />
@@ -2967,7 +3244,7 @@ export default function KongmingGame() {
                   <div className={styles.battleCommandGrid}>
                     {battleCommands.map((label, i) => (
                       <div key={label} className={battle.cursor === i ? styles.commandOn : undefined}>
-                        <span>{battle.cursor === i ? "▶" : ""}</span>{label}
+                        <span className={battle.cursor === i ? styles.commandCursor : undefined} />{label}
                       </div>
                     ))}
                   </div>
@@ -2978,7 +3255,7 @@ export default function KongmingGame() {
                       const mu = battle.units.find((u) => u.side === "player" && u.name === m.name);
                       return (
                         <div key={m.key} className={battle.cursor === i ? styles.commandOn : undefined}>
-                          <span>{battle.cursor === i ? "▶" : ""}</span>{m.name}
+                          <span className={battle.cursor === i ? styles.commandCursor : undefined} />{m.name}
                           <em>武 {mu?.str ?? "-"}　智 {mu?.ler ?? "-"}　兵 {mu?.hp ?? m.hp}</em>
                         </div>
                       );
@@ -2990,7 +3267,7 @@ export default function KongmingGame() {
                     <p className={styles.battlePanelTitle}>{battle.menu === "target" ? `${battle.skill} · 选择目标` : "攻击"}</p>
                     {enemies.map((u, i) => (
                       <div key={u.key} className={battle.cursor === i ? styles.commandOn : undefined}>
-                        <span>{battle.cursor === i ? "▶" : ""}</span>{u.name}<em>{u.hp}</em>
+                        <span className={battle.cursor === i ? styles.commandCursor : undefined} />{u.name}<em>{u.hp}</em>
                       </div>
                     ))}
                     <small>W/S 选择　J 确认　K 返回</small>
@@ -3002,7 +3279,7 @@ export default function KongmingGame() {
                       const sk = data.skills.get(name);
                       return (
                         <div key={name} className={battle.cursor === i ? styles.commandOn : undefined}>
-                          <span>{battle.cursor === i ? "▶" : ""}</span>{name}<em>{sk?.cost ? `${sk.cost} 策略点` : ""}</em>
+                          <span className={battle.cursor === i ? styles.commandCursor : undefined} />{name}<em>{sk?.cost ? `${sk.cost} 策略点` : ""}</em>
                         </div>
                       );
                     })}
@@ -3013,7 +3290,7 @@ export default function KongmingGame() {
                     <p className={styles.battlePanelTitle}>宝物</p>
                     {battleItems.map((it, i) => (
                       <div key={it.name} className={battle.cursor === i ? styles.commandOn : undefined}>
-                        <span>{battle.cursor === i ? "▶" : ""}</span>{it.name}<em>× {it.count}</em>
+                        <span className={battle.cursor === i ? styles.commandCursor : undefined} />{it.name}<em>× {it.count}</em>
                       </div>
                     ))}
                     <small>J 使用于 {leader?.name}　K 返回</small>
@@ -3234,13 +3511,13 @@ export default function KongmingGame() {
         {s.banner && <div className={styles.banner}>{s.banner}</div>}
         {s.toast && <div className={styles.toast}>{s.toast}</div>}
         {s.faded && <div className={styles.fade} />}
-        {(s.screen === "field" || s.screen === "battle" || s.screen === "title" || s.screen === "prologue") && !s.dialogue && !s.panel && !s.shop && (
+        {(s.screen === "field" || s.screen === "battle" || s.screen === "title" || s.screen === "prologue") && (
           <div className={styles.touchControls}>
             {(s.screen === "field" || s.screen === "battle" || s.screen === "title") && (
               <div className={styles.touchDpad}>
-                {s.screen !== "title" && <button type="button" aria-label="向上" className={`${styles.touchKey} ${styles.touchUp}`} onPointerDown={(e) => virtualPress(e, "KeyW", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>W</button>}
+                {(s.screen !== "title" || s.panel) && <button type="button" aria-label="向上" className={`${styles.touchKey} ${styles.touchUp}`} onPointerDown={(e) => virtualPress(e, "KeyW", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>W</button>}
                 <button type="button" aria-label="向左" className={`${styles.touchKey} ${styles.touchLeft}`} onPointerDown={(e) => virtualPress(e, "KeyA", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>A</button>
-                {s.screen !== "title" && <button type="button" aria-label="向下" className={`${styles.touchKey} ${styles.touchDown}`} onPointerDown={(e) => virtualPress(e, "KeyS", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>S</button>}
+                {(s.screen !== "title" || s.panel) && <button type="button" aria-label="向下" className={`${styles.touchKey} ${styles.touchDown}`} onPointerDown={(e) => virtualPress(e, "KeyS", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>S</button>}
                 <button type="button" aria-label="向右" className={`${styles.touchKey} ${styles.touchRight}`} onPointerDown={(e) => virtualPress(e, "KeyD", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>D</button>
               </div>
             )}
@@ -3254,6 +3531,16 @@ export default function KongmingGame() {
         )}
       </div>
       </div>
+      {activity ? (
+        <div className={styles.couponWrap}>
+          <KongmingCouponPanel
+            activity={activity}
+            goldPerCoupon={goldPerCoupon}
+            maxCouponsPerExchange={maxCouponsPerExchange}
+            onGold={receiveGold}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
