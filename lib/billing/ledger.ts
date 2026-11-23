@@ -68,6 +68,7 @@ export const TOPUP_TYPE_LABEL: Record<number, string> = {
   17: "已下线活动",
   18: "灵宠工坊",
   19: "星图共鸣",
+  20: "孔明传军资兑换",
 };
 
 const DAY_OF = (column: string) => `strftime('%Y-%m-%d', ${column} / 1000, 'unixepoch', '+8 hours')`;
@@ -82,7 +83,7 @@ const DAY_OF = (column: string) => `strftime('%Y-%m-%d', ${column} / 1000, 'unix
 export const LEDGER_CATEGORY_TYPES: Record<Exclude<LedgerCategory, "usage">, number[]> = {
   recharge: [1, 2, 5, 13],
   reward: [3, 4, 7, 8, 9, 10, 16],
-  activity: [6, 11, 12, 15, 17, 18, 19],
+  activity: [6, 11, 12, 15, 17, 18, 19, 20],
   expire: [TOPUP_TYPE_EXPIRE],
 };
 

@@ -24,6 +24,9 @@ export default async function KongmingPage() {
       activity={activity}
       goldPerCoupon={config.goldPerCoupon}
       maxCouponsPerExchange={config.maxCouponsPerExchange}
+      goldPerTcr={config.goldPerTcr}
+      maxGoldPerTcrDaily={config.maxGoldPerTcrDaily}
+      tcrValidDays={config.tcrValidDays}
     />
   );
 }

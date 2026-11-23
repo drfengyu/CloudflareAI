@@ -1,0 +1,65 @@
+{
+  "4": {
+    "image": "/game-assets/kongming/shopkeepers/innkeeper-4.png",
+    "pos": [
+      6.0,
+      3.0
+    ],
+    "name": "老板娘",
+    "event": "11"
+  },
+  "5": {
+    "image": "/game-assets/kongming/shopkeepers/shopkeeper-5.png",
+    "pos": [
+      5.0,
+      3.0
+    ],
+    "name": "老板",
+    "event": "13"
+  },
+  "6": {
+    "image": "/game-assets/kongming/shopkeepers/shopkeeper-6.png",
+    "pos": [
+      5.0,
+      3.0
+    ],
+    "name": "老板",
+    "event": "12"
+  },
+  "7": {
+    "image": "/game-assets/kongming/shopkeepers/clerk-7.png",
+    "pos": [
+      5.0,
+      3.0
+    ],
+    "name": "老板",
+    "event": "14"
+  },
+  "8": {
+    "image": "/game-assets/kongming/shopkeepers/trainer-8.png",
+    "pos": [
+      4.0,
+      3.0
+    ],
+    "name": "老板",
+    "event": "16"
+  },
+  "9": {
+    "image": "/game-assets/kongming/shopkeepers/editor-9.png",
+    "pos": [
+      5.0,
+      2.0
+    ],
+    "name": "老板",
+    "event": "15"
+  },
+  "172": {
+    "image": "/game-assets/kongming/shopkeepers/clerk-7.png",
+    "pos": [
+      0.0,
+      2.0
+    ],
+    "name": "券商",
+    "event": "99001"
+  }
+}

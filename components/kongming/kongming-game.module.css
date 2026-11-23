@@ -1584,6 +1584,121 @@
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.72);
 }
 
+.couponBox {
+  width: min(560px, 78%);
+  max-height: 82%;
+}
+
+.couponBox .emptyText {
+  color: #b5ad95;
+  line-height: 1.8;
+}
+
+.vendorLogin {
+  color: #e8cc86;
+  margin: 0 0.25em;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.couponTabs {
+  display: flex;
+  gap: 0.5em;
+  padding: 0.9em 1.4em 0;
+}
+
+.couponTabs button,
+.stepper button,
+.vendorButton {
+  font: inherit;
+  cursor: pointer;
+  color: #b9b29c;
+  background: rgba(18, 22, 17, 0.9);
+  border: 1px solid rgba(180, 158, 110, 0.28);
+  padding: 0.35em 0.85em;
+  letter-spacing: 0.08em;
+}
+
+.couponTabs button:hover,
+.stepper button:hover,
+.vendorButton:hover:not(:disabled) {
+  color: #f3e1ba;
+  border-color: rgba(198, 77, 58, 0.75);
+}
+
+.couponTabs .couponTabOn {
+  color: #f3e1ba;
+  border-color: #c64d3a;
+  background: linear-gradient(90deg, rgba(143, 42, 31, 0.4), rgba(143, 42, 31, 0.08));
+}
+
+.vendorLine {
+  margin: 0.45em 0;
+  color: #a29c88;
+  font-size: clamp(10px, 1.05vw, 15px);
+  letter-spacing: 0.05em;
+  line-height: 1.6;
+}
+
+.vendorLine b {
+  color: #e8cc86;
+  font-weight: 600;
+}
+
+.vendorRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1em;
+  margin: 0.8em 0;
+  color: #b9b29c;
+  font-size: clamp(10px, 1.05vw, 15px);
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+}
+
+.stepper b {
+  min-width: 4.5em;
+  text-align: center;
+  color: #f1e1bd;
+  font-size: clamp(13px, 1.35vw, 18px);
+}
+
+.stepper button {
+  min-width: 2.4em;
+  padding: 0.25em 0.5em;
+}
+
+.vendorButton {
+  width: 100%;
+  margin-top: 0.7em;
+  padding: 0.7em 1em;
+  color: #f1e1bd;
+  border-color: rgba(198, 77, 58, 0.55);
+  background: linear-gradient(180deg, rgba(112, 39, 30, 0.45), rgba(40, 18, 14, 0.65));
+  font-size: clamp(11px, 1.15vw, 16px);
+}
+
+.vendorButton:disabled,
+.stepper button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.vendorNote {
+  margin: 0.8em 0 0;
+  padding: 0.6em 0.8em;
+  color: #d8c99c;
+  border-left: 2px solid rgba(198, 77, 58, 0.7);
+  background: rgba(143, 42, 31, 0.12);
+  font-size: clamp(10px, 1vw, 14px);
+  line-height: 1.55;
+}
+
 /* ------------------------------------------------------------------ */
 /* Dialogue                                                            */
 /* ------------------------------------------------------------------ */

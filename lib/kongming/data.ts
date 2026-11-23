@@ -1,5 +1,7 @@
 import attackFrameCounts from "./attack-frames.json";
 import npcMotionData from "./npc-motion.json";
+import shopNpcData from "./shop-npcs.json";
+import { installCouponRoom } from "./coupon-room";
 
 export interface CharacterData {
   id: number;
@@ -233,12 +235,13 @@ let cached: Promise<GameData> | null = null;
 export function loadGameData(): Promise<GameData> {
   if (cached) return cached;
   cached = (async () => {
-    const [content, scenes, lua, palettesRaw] = await Promise.all([
+    const [content, sceneList, lua, palettesRaw] = await Promise.all([
       fetch("/game-assets/kongming/content.json").then((r) => r.json() as Promise<Content>),
       fetch("/game-assets/kongming/scenes.json").then((r) => r.json() as Promise<Scene[]>),
       fetch("/game-assets/kongming/lua.json").then((r) => r.json() as Promise<Record<string, string>>),
       fetch("/game-assets/kongming/palettes.json").then((r) => r.json() as Promise<Record<string, ModelPalette>>),
     ]);
+    const scenes = installCouponRoom(sceneList);
     const palettes = new Map(Object.entries(palettesRaw));
     const characters = new Map<string, CharacterData>();
     for (const s of scenes) {
@@ -333,6 +336,21 @@ export function npcWalkStripFor(motion: NpcMotion | null): string | null {
   if (!motion) return null;
   if (motion.strip) return `/game-assets/kongming/npc_walk/${motion.strip}.png`;
   return walkStripForModel(motion.model);
+}
+
+export interface ShopNpc {
+  image: string;
+  pos: [number, number];
+  name: string;
+  /** 店主对应的场景事件 id；只对该事件绘制店主，避免同场景其他事件被顶替。 */
+  event: string;
+}
+
+/** 桌面版店铺里独立的店主 GameObject（老板/老板娘），按场景 level 取。 */
+export function shopNpcFor(level: number | null | undefined): ShopNpc | null {
+  if (level == null) return null;
+  const table = shopNpcData as unknown as Record<string, ShopNpc>;
+  return table[String(level)] ?? null;
 }
 
 /**

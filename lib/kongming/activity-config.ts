@@ -10,6 +10,9 @@ import { parseCnWallClock } from "@/lib/date";
 
 export const KONGMING_ACTIVITY_CONFIG_KEY = "kongming_config";
 
+/** 孔明传军资换 tcr 的流水类型；账本里与活动奖励分开。 */
+export const KONGMING_TCR_TOPUP_TYPE = 20;
+
 export interface KongmingActivityConfig {
   enabled: boolean;
   startAt: string;
@@ -20,6 +23,12 @@ export interface KongmingActivityConfig {
   goldPerCoupon: number;
   /** 单次最多兑换几张，防手滑输入过大。 */
   maxCouponsPerExchange: number;
+  /** 游戏内多少「金」折 1 tcr；100 金 = 1 tcr 沿用钱庄口径。 */
+  goldPerTcr: number;
+  /** 每个北京自然日最多可用多少「金」换 tcr；默认 600 金 = 6 tcr。 */
+  maxGoldPerTcrDaily: number;
+  /** 换到的 tcr 有效天数。 */
+  tcrValidDays: number;
 }
 
 export const DEFAULT_KONGMING_ACTIVITY_CONFIG: KongmingActivityConfig = {
@@ -30,6 +39,9 @@ export const DEFAULT_KONGMING_ACTIVITY_CONFIG: KongmingActivityConfig = {
   couponUnitCredits: 2,
   goldPerCoupon: 100,
   maxCouponsPerExchange: 200,
+  goldPerTcr: 100,
+  maxGoldPerTcrDaily: 600,
+  tcrValidDays: 30,
 };
 
 const round2 = (value: number): number => Math.round(value * 100) / 100;
@@ -63,6 +75,14 @@ export function sanitizeKongmingActivityConfig(raw: unknown): KongmingActivityCo
       1,
       10_000,
     ),
+    goldPerTcr: boundedInteger(it.goldPerTcr, d.goldPerTcr, 1, 1_000_000),
+    maxGoldPerTcrDaily: boundedInteger(
+      it.maxGoldPerTcrDaily,
+      d.maxGoldPerTcrDaily,
+      0,
+      100_000_000,
+    ),
+    tcrValidDays: boundedInteger(it.tcrValidDays, d.tcrValidDays, 1, 3650),
   };
 }
 
