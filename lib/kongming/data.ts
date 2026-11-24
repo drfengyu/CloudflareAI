@@ -1,4 +1,5 @@
 import attackFrameCounts from "./attack-frames.json";
+import battleSpriteData from "./battle-sprites.json";
 import npcMotionData from "./npc-motion.json";
 import shopNpcData from "./shop-npcs.json";
 import { installCouponRoom } from "./coupon-room";
@@ -306,6 +307,54 @@ export function spriteForModel(model: string | null | undefined) {
   return model ? `/game-assets/kongming/units_field/${model}.png` : null;
 }
 
+const battleSpriteSets = battleSpriteData as { ready: string[]; dead: string[] };
+const battleReadyModels = new Set(battleSpriteSets.ready);
+const battleDeadModels = new Set(battleSpriteSets.dead);
+
+/** 原版 `BattleReadySprite`：`MoveSprites[readyX, 3]`，行 3 朝右，共两帧。 */
+export function battleReadyFrameForModel(
+  model: string | null | undefined,
+  frame: number,
+) {
+  if (!model || !battleReadyModels.has(model)) return null;
+  return `/game-assets/kongming/units_battle/${model}-${frame % 2}.png`;
+}
+
+/** 原版 `DeadSprite`：`Rect(360, 0, 64, 64)`，单独导出为 64×64。 */
+export function deathSpriteForModel(model: string | null | undefined) {
+  if (!model || !battleDeadModels.has(model)) return null;
+  return `/game-assets/kongming/units_dead/${model}.png`;
+}
+
+/**
+ * 按等级累计原版升级表里已习得的计策/阵形。
+ * `exp.levels` 第 N 行是升到 N 级时习得的内容；1 级行通常为空。
+ */
+export function learnedAtLevel(content: Content, level: number) {
+  const rows = content.exp.levels.slice(0, Math.max(0, Math.min(level, content.exp.levels.length)));
+  const skills: string[] = [];
+  const formations: string[] = [];
+  for (const row of rows) {
+    skills.push(...row.skills);
+    formations.push(...row.formations);
+  }
+  return {
+    skills: skills.filter((name, i) => skills.indexOf(name) === i),
+    formations: formations.filter((name, i) => formations.indexOf(name) === i),
+  };
+}
+
+/** 阵形菜单只列出已习得阵形；当前正在使用的阵形始终保留。 */
+export function learnedFormationsAtLevel(
+  content: Content,
+  level: number,
+  current?: string | null,
+) {
+  const learned = new Set(learnedAtLevel(content, level).formations);
+  if (current) learned.add(current);
+  return content.start.formations.filter((name) => learned.has(name));
+}
+
 export function walkStripForModel(model: string | null | undefined) {
   return model ? `/game-assets/kongming/units_field_walk/${model}.png` : null;
 }
@@ -376,6 +425,14 @@ export function attackFrameForModel(
   return model && frame >= 0
     ? `/game-assets/kongming/units_attack/${model}-${frame}.png`
     : null;
+}
+
+/** 桌面版店铺事件自带的 48×48 店主头像，与武将立绘分开导出。 */
+const SHOP_FACE_PROFILES = new Set(["蔡", "武器店老板", "费诗", "陈宫（2）", "蒋琬"]);
+
+export function shopFaceForProfile(profile: string | null | undefined) {
+  if (!profile || !SHOP_FACE_PROFILES.has(profile)) return null;
+  return `/game-assets/kongming/shopfaces/${profile}.png`;
 }
 
 export function faceForProfile(profile: string | null | undefined) {

@@ -5,13 +5,18 @@ import {
   CHAPTER_NAMES,
   attackFrameForModel,
   attackSequenceForModel,
+  battleReadyFrameForModel,
   chapterName,
+  deathSpriteForModel,
   equipmentSlot,
   faceForProfile,
   hpFor,
+  learnedAtLevel,
+  learnedFormationsAtLevel,
   loadGameData,
   npcMotionFor,
   npcWalkStripFor,
+  shopFaceForProfile,
   shopNpcFor,
   spriteForModel,
   walkStripForModel,
@@ -629,6 +634,7 @@ export default function KongmingGame({
   const [npcWalk, setNpcWalk] = useState<Record<string, NpcWalkState>>({});
   const npcWalkRef = useRef<Record<string, NpcWalkState>>({});
   const [npcClock, setNpcClock] = useState(0);
+  const [battleAnimFrame, setBattleAnimFrame] = useState(0);
   const snapRef = useRef<Snap>(EMPTY_SNAP);
   const [data, setData] = useState<GameData | null>(null);
   const dataRef = useRef<GameData | null>(null);
@@ -777,6 +783,7 @@ export default function KongmingGame({
     const c = d.characters.get(name);
     if (!c) return null;
     const maxHp = hpFor(c, d.hpLevels, level);
+    const learned = new Set(learnedAtLevel(d.content, level).skills);
     return {
       key: `c${c.id}-${name}`,
       name,
@@ -787,9 +794,16 @@ export default function KongmingGame({
       hp: maxHp,
       maxHp,
       equipment: {},
-      skills: [...c.skills],
+      skills: c.skills.filter((sk) => learned.has(sk)),
       dead: false,
     };
+  }, []);
+
+  const memberSkillsAtLevel = useCallback((m: Member, level = m.level) => {
+    const d = dataRef.current;
+    if (!d) return [];
+    const learned = new Set(learnedAtLevel(d.content, level).skills);
+    return (d.characters.get(m.name)?.skills ?? []).filter((name) => learned.has(name));
   }, []);
 
   const recalcHp = useCallback((m: Member, level = m.level): Member => {
@@ -1208,10 +1222,7 @@ export default function KongmingGame({
       const c = d.characters.get(m.name);
       const weapon = m.equipment[0] ? d.equipment.get(m.equipment[0]) : null;
       const weaponType = weapon?.weaponType ?? c?.weapon ?? 1;
-      const skills = m.skills.filter((name) => {
-        const sk = d.skills.get(name);
-        return sk && sk.lv <= s.level;
-      });
+      const skills = memberSkillsAtLevel(m, s.level);
       return {
         key: `p${index}`,
         side: "player",
@@ -1274,7 +1285,7 @@ export default function KongmingGame({
       };
     });
     return { players, enemies, formation };
-  }, [currentData, memberCombatStats]);
+  }, [currentData, memberCombatStats, memberSkillsAtLevel]);
 
   const battlePrompt = useCallback((unit: BattleUnit, menu: BattleState["menu"] = "command", skill: string | null = null) => {
     return new Promise<BattleAction>((resolve) => {
@@ -1303,6 +1314,18 @@ export default function KongmingGame({
     battleLoopResolve.current?.(result);
     battleLoopResolve.current = null;
   }, []);
+
+  /** 战斗结算卡：键盘 J/K 与鼠标点击走同一条关闭路径。 */
+  const continueBattleOutcome = useCallback(() => {
+    const resolve = battleEndResolve.current;
+    battleEndResolve.current = null;
+    resolve?.();
+  }, []);
+
+  /** 全军覆没卡：回到标题并清掉本场残留，键盘与点击都可离开。 */
+  const leaveGameOver = useCallback(() => {
+    mutate((prev) => ({ ...prev, screen: "title", scene: null, party: [], battle: null, gameoverReason: "" }));
+  }, [mutate]);
 
   const runBattle = useCallback(async (enemyNames: string[], config?: { money?: number; exp?: number; name?: string }) => {
     const s = snapRef.current;
@@ -1607,8 +1630,7 @@ export default function KongmingGame({
     const learned = [...leveled.skills, ...leveled.formations].filter((name, i, all) => all.indexOf(name) === i);
     const partyLevel = partyAfter.map((m) => {
       const updated = recalcHp(m, leveled.level);
-      const newSkills = leveled.skills.filter((s) => !updated.skills.includes(s));
-      return { ...updated, level: leveled.level, skills: [...updated.skills, ...newSkills] };
+      return { ...updated, level: leveled.level, skills: memberSkillsAtLevel(updated, leveled.level) };
     });
     const outcomeTitle = config?.name?.replace(/^\d+-/, "") || "遭遇战";
     const ended = new Promise<void>((resolve) => { battleEndResolve.current = resolve; });
@@ -1640,7 +1662,7 @@ export default function KongmingGame({
     locked.current = false;
     finishBattle(result);
     return result;
-  }, [addExp, battlePrompt, finishBattle, makeBattleUnits, mutate, recalcHp]);
+  }, [addExp, battlePrompt, finishBattle, makeBattleUnits, memberSkillsAtLevel, mutate, recalcHp]);
 
   /**
    * 原版 TeamMove.CheckMeetEnemy：每走一格 MeetStep++；超过 30 格后按
@@ -2698,10 +2720,8 @@ export default function KongmingGame({
     if (s.battle) {
       const b = s.battle;
       if (b.outcome) {
-        if (key === "KeyJ" || key === "KeyK") {
-          const resolve = battleEndResolve.current;
-          battleEndResolve.current = null;
-          resolve?.();
+        if (key === "KeyJ" || key === "KeyK" || key === "Enter" || key === "Space") {
+          continueBattleOutcome();
         }
         return;
       }
@@ -2854,17 +2874,16 @@ export default function KongmingGame({
       }
       if (p.kind === "skills") {
         const member = s.party[p.member ?? 0];
-        const skills = member?.skills ?? [];
+        const skills = member ? memberSkillsAtLevel(member, s.level) : [];
         if (key === "KeyW" || key === "KeyS") mutate((prev) => prev.panel ? { ...prev, panel: { ...prev.panel, cursor: (prev.panel.cursor + (key === "KeyW" ? Math.max(1, skills.length) - 1 : 1)) % Math.max(1, skills.length) } } : prev);
         if (key === "KeyJ") { const sk = skills[p.cursor]; if (sk) useSkillInfo(sk); }
         return;
       }
       if (p.kind === "formations") {
-        const formations = dataRef.current?.content.start.formations ?? [];
-        const owned = dataRef.current?.content.start.formations ?? [];
+        const d = dataRef.current;
+        const owned = d ? learnedFormationsAtLevel(d.content, s.level, s.formation) : [];
         if (key === "KeyW" || key === "KeyS") mutate((prev) => prev.panel ? { ...prev, panel: { ...prev.panel, cursor: (prev.panel.cursor + (key === "KeyW" ? Math.max(1, owned.length) - 1 : 1)) % Math.max(1, owned.length) } } : prev);
         if (key === "KeyJ") { const f = owned[p.cursor]; if (f) changeFormation(f); }
-        void formations;
         return;
       }
       if (p.kind === "save" || p.kind === "load") {
@@ -2906,7 +2925,7 @@ export default function KongmingGame({
     }
 
     if (s.screen === "gameover") {
-      if (key === "KeyJ") mutate((prev) => ({ ...prev, screen: "title", scene: null, party: [], battle: null }));
+      if (key === "KeyJ" || key === "KeyK" || key === "Enter" || key === "Space") leaveGameOver();
       return;
     }
 
@@ -2918,7 +2937,7 @@ export default function KongmingGame({
       else if (key === "KeyJ") void interact();
       else if (key === "KeyK") openPanel("root");
     }
-  }, [activateTitle, activity, banner, buyCouponsAtVendor, buyShopItem, changeFormation, closeCouponVendor, closePanel, closeShop, currentData, equipItem, exchangeTcrAtVendor, finishDialogue, goldPerTcr, loadSave, loadScene, maxCouponsPerExchange, move, mutate, openPanel, proceedPrologue, saveGame, startNewGame, toast, useInventoryItem, useSkillInfo, interact]);
+  }, [activateTitle, activity, banner, buyCouponsAtVendor, buyShopItem, changeFormation, closeCouponVendor, closePanel, closeShop, continueBattleOutcome, currentData, equipItem, exchangeTcrAtVendor, finishDialogue, goldPerTcr, leaveGameOver, loadSave, loadScene, maxCouponsPerExchange, memberSkillsAtLevel, move, mutate, openPanel, proceedPrologue, saveGame, startNewGame, toast, useInventoryItem, useSkillInfo, interact]);
 
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {
@@ -2946,6 +2965,39 @@ export default function KongmingGame({
   useEffect(() => {
     if ("scrollRestoration" in history) history.scrollRestoration = "manual";
   }, []);
+
+  // 原版 BattleTeamMono.UpdateAnim：战斗进行时每 0.5s 在朝右前进帧 0/1 间切换；
+  // 胜利结算才切到朝下的正面帧。网页端敌方由 CSS 水平镜像，同样面向敌人。
+  useEffect(() => {
+    setBattleAnimFrame(0);
+    if (snap.screen !== "battle" || snap.battle?.outcome) return;
+    const timer = window.setInterval(() => setBattleAnimFrame((f) => (f + 1) % 2), 500);
+    return () => window.clearInterval(timer);
+  }, [snap.screen, snap.battle?.outcome]);
+
+  // 弹窗 / 商店 / 战斗列表的光标移动后，把当前项滚进最近的可滚动容器。
+  const cursorSignature = [
+    snap.panel?.kind,
+    snap.panel?.member,
+    snap.panel?.cursor,
+    snap.shop?.title,
+    snap.shop?.cursor,
+    snap.battle?.menu,
+    snap.battle?.cursor,
+    snap.coupon?.tab,
+  ].join("|");
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      const active = document.querySelector<HTMLElement>('[data-km-cursor="1"]');
+      const box = active?.closest<HTMLElement>("[data-km-scroll]");
+      if (!active || !box) return;
+      const a = active.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      if (a.top < b.top) box.scrollTop -= b.top - a.top - 4;
+      else if (a.bottom > b.bottom) box.scrollTop += a.bottom - b.bottom + 4;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [cursorSignature]);
 
   const virtualTimer = useRef<number | null>(null);
   const stopVirtual = useCallback(() => {
@@ -3028,8 +3080,17 @@ export default function KongmingGame({
     const pos = followPosRef.current[i] ?? trailRef.current[i] ?? fallbackTrail[i] ?? { x: s.x, y: s.y, dir: s.dir };
     return { member: m, pos, frame: frameForDir(pos.dir, fieldPhase) };
   });
+  const shopNpc = scene ? shopNpcFor(scene.level) : null;
+  const activeShopFace =
+    s.dialogue && shopNpc?.event === activeEvent.current?.id
+      ? shopFaceForProfile(s.dialogue.profile)
+      : null;
+  const shopDialogueFace =
+    s.dialogue && shopNpc && activeEvent.current?.id === shopNpc.event
+      ? shopNpc.image
+      : null;
   const dialogueFace = s.dialogue
-    ? faceForProfile(s.dialogue.profile) ?? faceForProfile(s.dialogue.name)
+    ? activeShopFace ?? shopDialogueFace ?? faceForProfile(s.dialogue.profile) ?? faceForProfile(s.dialogue.name)
     : null;
   const showDialoguePortrait = Boolean(s.dialogue && (s.dialogue.name || dialogueFace));
   const titleLabels = ["解甲归田", "厉兵秣马", "匡扶汉室", "初出茅庐"];
@@ -3284,6 +3345,11 @@ export default function KongmingGame({
 
             {battle.units.filter((u) => u.side === "player").slice(0, 5).map((u, i) => {
               const sprite = spriteForModel(u.model);
+              const deadSprite = u.hp <= 0 ? deathSpriteForModel(u.model) : null;
+              const readyFrame =
+                !battle.outcome && u.hp > 0
+                  ? battleReadyFrameForModel(u.model, battleAnimFrame)
+                  : null;
               const attackFrame =
                 battle.fx?.actor === u.key && battle.fx.frame !== null
                   ? attackFrameForModel(u.model, battle.fx.frame)
@@ -3294,7 +3360,7 @@ export default function KongmingGame({
               return (
               <div
                 key={u.key}
-                className={`${styles.battleRow} ${styles.battleRowPlayer} ${u.hp <= 0 ? styles.unitDown : ""} ${battle.pending === u.key ? styles.battleRowActive : ""} ${hurt ? styles.battleRowHurt : ""}`}
+                className={`${styles.battleRow} ${styles.battleRowPlayer} ${u.hp <= 0 && !deadSprite ? styles.unitDown : ""} ${battle.pending === u.key ? styles.battleRowActive : ""} ${hurt ? styles.battleRowHurt : ""}`}
                 style={{ top: `${BATTLE_ROW_TOP[i]}%` }}
               >
                 <div className={styles.battleStats}>
@@ -3305,8 +3371,12 @@ export default function KongmingGame({
                   <i style={{ clipPath: `inset(0 ${100 - (u.maxHp ? (u.hp / u.maxHp) * 100 : 0)}% 0 0)` }} />
                 </div>
                 <div className={styles.battleSprite}>
-                  {attackFrame ? (
-                    <TintedSprite src={attackFrame} palette={palette} alt="" />
+                  {deadSprite ? (
+                    <TintedSprite className={styles.battleFrameTall} src={deadSprite} palette={palette} alt="" />
+                  ) : attackFrame ? (
+                    <TintedSprite className={styles.battleFrameTall} src={attackFrame} palette={palette} alt="" />
+                  ) : readyFrame ? (
+                    <TintedSprite className={styles.battleReadySprite} src={readyFrame} palette={palette} alt="" />
                   ) : sprite ? (
                     <TintedSprite src={sprite} palette={palette} />
                   ) : faceForProfile(u.profile) ? (
@@ -3323,6 +3393,11 @@ export default function KongmingGame({
               const idx = enemies.findIndex((e) => e.key === u.key);
               const lit = (battle.menu === "attack" || battle.menu === "target") && idx === battle.cursor;
               const sprite = spriteForModel(u.model);
+              const deadSprite = u.hp <= 0 ? deathSpriteForModel(u.model) : null;
+              const readyFrame =
+                !battle.outcome && u.hp > 0
+                  ? battleReadyFrameForModel(u.model, battleAnimFrame)
+                  : null;
               const attackFrame =
                 battle.fx?.actor === u.key && battle.fx.frame !== null
                   ? attackFrameForModel(u.model, battle.fx.frame)
@@ -3333,12 +3408,16 @@ export default function KongmingGame({
               return (
                 <div
                   key={u.key}
-                  className={`${styles.battleRow} ${styles.battleRowEnemy} ${u.hp <= 0 ? styles.unitDown : ""} ${lit ? styles.battleRowActive : ""} ${hurt ? styles.battleRowHurt : ""}`}
+                  className={`${styles.battleRow} ${styles.battleRowEnemy} ${u.hp <= 0 && !deadSprite ? styles.unitDown : ""} ${lit ? styles.battleRowActive : ""} ${hurt ? styles.battleRowHurt : ""}`}
                   style={{ top: `${BATTLE_ROW_TOP[i]}%` }}
                 >
-                  <div className={styles.battleSprite}>
-                    {attackFrame ? (
-                      <TintedSprite src={attackFrame} palette={palette} alt="" />
+                  <div className={`${styles.battleSprite} ${!battle.outcome ? styles.battleFlip : ""}`}>
+                    {deadSprite ? (
+                      <TintedSprite className={styles.battleFrameTall} src={deadSprite} palette={palette} alt="" />
+                    ) : attackFrame ? (
+                      <TintedSprite className={styles.battleFrameTall} src={attackFrame} palette={palette} alt="" />
+                    ) : readyFrame ? (
+                      <TintedSprite className={styles.battleReadySprite} src={readyFrame} palette={palette} alt="" />
                     ) : sprite ? (
                       <TintedSprite src={sprite} palette={palette} />
                     ) : faceForProfile(u.profile) ? (
@@ -3388,7 +3467,7 @@ export default function KongmingGame({
                       ? e.skills.slice(0, 6).map((sk) => <span key={sk}>{sk}</span>)
                       : <span>--</span>}
                   </div>
-                  <div className={styles.enemyPager}>◀　A / D　▶</div>
+                  <div className={styles.enemyPager}><span>◀</span><span>▶</span></div>
                 </div>
               );
             })()}
@@ -3404,7 +3483,7 @@ export default function KongmingGame({
             })()}
 
             {battle.outcome && (
-              <div className={styles.battleResult}>
+              <div className={styles.battleResult} onPointerDown={continueBattleOutcome}>
                 <div className={styles.battleOutcomePanel}>
                   <h2 className={
                     battle.outcome.kind === "win" ? styles.resultWin
@@ -3421,7 +3500,7 @@ export default function KongmingGame({
                   )}
                   {battle.outcome.kind === "flee" && <p className={styles.battleOutcomeText}>暂且避其锋芒，来日再战。</p>}
                   {battle.outcome.kind === "lose" && <p className={styles.battleOutcomeText}>刘玄德兵败，只得暂避锋芒。</p>}
-                  <span className={styles.battleResultNext}>{battle.outcome.kind === "lose" ? "J 返回标题" : "J 继续行军"}</span>
+                  <span className={styles.battleResultNext}>{battle.outcome.kind === "lose" ? "J / 点击 返回标题" : "J / 点击 继续行军"}</span>
                 </div>
               </div>
             )}
@@ -3439,12 +3518,12 @@ export default function KongmingGame({
                     ))}
                   </div>
                 ) : battle.menu === "general" ? (
-                  <div className={styles.battleGeneralList}>
+                  <div className={styles.battleGeneralList} data-km-scroll="1">
                     <p className={styles.battlePanelTitle}>武将</p>
                     {s.party.map((m, i) => {
                       const mu = battle.units.find((u) => u.side === "player" && u.name === m.name);
                       return (
-                        <div key={m.key} className={battle.cursor === i ? styles.commandOn : undefined}>
+                        <div key={m.key} data-km-cursor={battle.cursor === i ? "1" : undefined} className={battle.cursor === i ? styles.commandOn : undefined}>
                           <span className={battle.cursor === i ? styles.commandCursor : undefined} />{m.name}
                           <em>武 {mu?.str ?? "-"}　智 {mu?.ler ?? "-"}　兵 {mu?.hp ?? m.hp}</em>
                         </div>
@@ -3453,22 +3532,22 @@ export default function KongmingGame({
                     <small>W/S 选择　K 返回</small>
                   </div>
                 ) : battle.menu === "attack" || battle.menu === "target" ? (
-                  <div className={styles.battleTargetList}>
+                  <div className={styles.battleTargetList} data-km-scroll="1">
                     <p className={styles.battlePanelTitle}>{battle.menu === "target" ? `${battle.skill} · 选择目标` : "攻击"}</p>
                     {enemies.map((u, i) => (
-                      <div key={u.key} className={battle.cursor === i ? styles.commandOn : undefined}>
+                      <div key={u.key} data-km-cursor={battle.cursor === i ? "1" : undefined} className={battle.cursor === i ? styles.commandOn : undefined}>
                         <span className={battle.cursor === i ? styles.commandCursor : undefined} />{u.name}<em>{u.hp}</em>
                       </div>
                     ))}
                     <small>W/S 选择　J 确认　K 返回</small>
                   </div>
                 ) : battle.menu === "skill" ? (
-                  <div className={styles.battleTargetList}>
+                  <div className={styles.battleTargetList} data-km-scroll="1">
                     <p className={styles.battlePanelTitle}>谋略</p>
                     {battleSkills.map((name, i) => {
                       const sk = data.skills.get(name);
                       return (
-                        <div key={name} className={battle.cursor === i ? styles.commandOn : undefined}>
+                        <div key={name} data-km-cursor={battle.cursor === i ? "1" : undefined} className={battle.cursor === i ? styles.commandOn : undefined}>
                           <span className={battle.cursor === i ? styles.commandCursor : undefined} />{name}<em>{sk?.cost ? `${sk.cost} 策略点` : ""}</em>
                         </div>
                       );
@@ -3476,10 +3555,10 @@ export default function KongmingGame({
                     <small>W/S 选择　J 使用　K 返回</small>
                   </div>
                 ) : battle.menu === "item" ? (
-                  <div className={styles.battleTargetList}>
+                  <div className={styles.battleTargetList} data-km-scroll="1">
                     <p className={styles.battlePanelTitle}>宝物</p>
                     {battleItems.map((it, i) => (
-                      <div key={it.name} className={battle.cursor === i ? styles.commandOn : undefined}>
+                      <div key={it.name} data-km-cursor={battle.cursor === i ? "1" : undefined} className={battle.cursor === i ? styles.commandOn : undefined}>
                         <span className={battle.cursor === i ? styles.commandCursor : undefined} />{it.name}<em>× {it.count}</em>
                       </div>
                     ))}
@@ -3499,11 +3578,11 @@ export default function KongmingGame({
         )}
 
         {s.screen === "gameover" && (
-          <div className={styles.gameover}>
-            <div className={styles.gameoverCard}>
+          <div className={styles.gameover} onPointerDown={leaveGameOver}>
+            <div className={styles.gameoverCard} role="button" tabIndex={0} onClick={leaveGameOver}>
               <h2>全军覆没</h2>
               <p>{s.gameoverReason || "刘玄德兵败，只得暂避锋芒。"}</p>
-              <span>J 返回标题</span>
+              <span>J / 点击 返回标题</span>
             </div>
           </div>
         )}
@@ -3527,9 +3606,9 @@ export default function KongmingGame({
               )}
 
               {panel.kind === "party" && (
-                <div className={styles.panelBody}>
+                <div className={styles.panelBody} data-km-scroll="1">
                   {s.party.map((m, i) => (
-                    <div key={m.key} className={`${styles.partyRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
+                    <div key={m.key} data-km-cursor={panel.cursor === i ? "1" : undefined} className={`${styles.partyRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
                       <b>{m.name}</b>
                       <span>Lv {m.level}</span>
                       <span>{m.hp} / {m.maxHp}</span>
@@ -3541,10 +3620,10 @@ export default function KongmingGame({
               )}
 
               {panel.kind === "inventory" && (
-                <div className={styles.panelBody}>
+                <div className={styles.panelBody} data-km-scroll="1">
                   <div className={styles.moneyLine}>所持金 <b>{s.money}</b></div>
                   {s.inventory.map((it, i) => (
-                    <div key={it.name} className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
+                    <div key={it.name} data-km-cursor={panel.cursor === i ? "1" : undefined} className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
                       <span>{it.name}</span><span>× {it.count}</span>
                     </div>
                   ))}
@@ -3553,7 +3632,7 @@ export default function KongmingGame({
               )}
 
               {panel.kind === "equipment" && (
-                <div className={styles.panelBody}>
+                <div className={styles.panelBody} data-km-scroll="1">
                   <div className={styles.memberTabs}>
                     {s.party.map((m, i) => (
                       <span key={m.key} className={(panel.member ?? 0) === i ? styles.tabOn : undefined}>{m.name}</span>
@@ -3578,7 +3657,7 @@ export default function KongmingGame({
                         </div>
                         <div className={styles.invTitle}>可装备</div>
                         {equipmentInv.map((it, i) => (
-                          <div key={it.name} className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
+                          <div key={it.name} data-km-cursor={panel.cursor === i ? "1" : undefined} className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
                             <span>{it.name}</span><span>× {it.count}</span>
                           </div>
                         ))}
@@ -3590,20 +3669,23 @@ export default function KongmingGame({
               )}
 
               {panel.kind === "skills" && (
-                <div className={styles.panelBody}>
-                  {(s.party[panel.member ?? 0]?.skills ?? []).map((name, i) => (
-                    <div key={name} className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
+                <div className={styles.panelBody} data-km-scroll="1">
+                  {(s.party[panel.member ?? 0] ? memberSkillsAtLevel(s.party[panel.member ?? 0], s.level) : []).map((name, i) => (
+                    <div key={name} data-km-cursor={panel.cursor === i ? "1" : undefined} className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
                       <span>{name}</span><span>{data.skills.get(name)?.cost ?? 0} 计力</span>
                     </div>
                   ))}
+                  {(s.party[panel.member ?? 0] ? memberSkillsAtLevel(s.party[panel.member ?? 0], s.level) : []).length === 0 && (
+                    <p className={styles.emptyText}>尚未习得计策</p>
+                  )}
                 </div>
               )}
 
               {panel.kind === "formations" && (
-                <div className={styles.panelBody}>
+                <div className={styles.panelBody} data-km-scroll="1">
                   <div className={styles.moneyLine}>当前阵型 <b>{s.formation}</b></div>
-                  {data.content.start.formations.map((name, i) => (
-                    <div key={name} className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
+                  {learnedFormationsAtLevel(data.content, s.level, s.formation).map((name, i) => (
+                    <div key={name} data-km-cursor={panel.cursor === i ? "1" : undefined} className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
                       <span>{name}</span><span>{name === s.formation ? "使用中" : "J 变阵"}</span>
                     </div>
                   ))}
@@ -3643,9 +3725,9 @@ export default function KongmingGame({
           <div className={styles.panelLayer}>
             <div className={styles.shopBox}>
               <div className={styles.panelHead}><h2>{s.shop.title}</h2><span>所持 {s.money} 金</span></div>
-              <div className={styles.panelBody}>
+              <div className={styles.panelBody} data-km-scroll="1">
                 {s.shop.items.map((it, i) => (
-                  <div key={it.name} className={`${styles.listRow} ${s.shop?.cursor === i ? styles.rowOn : ""}`}>
+                  <div key={it.name} data-km-cursor={s.shop?.cursor === i ? "1" : undefined} className={`${styles.listRow} ${s.shop?.cursor === i ? styles.rowOn : ""}`}>
                     <span>{it.name}</span><span>{it.price} 金</span>
                   </div>
                 ))}

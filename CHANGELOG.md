@@ -1,3 +1,18 @@
+## [0.106.1] - 2026-11-24
+
+### 战斗朝向、阵亡帧与菜单可用性
+
+- **战斗面向敌人**：按桌面版 `BattleTeamMono.UpdateAnim()` 的 `MoveSprites[_animX, 3]` 恢复战斗待机/前进帧，行 3 为朝右；我方在左直接朝右，敌方在右用 CSS 水平镜像朝左。只有 `battle.outcome` 结算时改为正面朝向玩家，对应原版 `IsVictory` 才切行 0。
+- **阵亡帧**：从桌面版 `units/<model>.png` 按 `DeadSprite = Rect(360, 0, 64, 64)` 导出 91 个模型到 `units_dead/`，血量归零即替换为原版倒地帧，不再只做半透明灰度。
+- **攻击帧尺寸**：攻击帧维持原版 64×64、PPU 32 的两倍显示；待机前进帧按 32×32 半尺寸显示，脚底与攻击帧对齐。新增 `units_battle/`（93 个模型 × 2 帧）与 `battle-sprites.json`，由 `tools/desktop-import/export_battle_sprites.py` 重现。
+- **已习得计策/阵形**：不再把 `Character.skills` 全量当已学；按 `content.exp.levels` 从 1 级累计，成员只显示本角色可学且已到等级的计策，阵形菜单只列已习得阵形（保留当前使用中的阵形）。旧存档里多出来的计策也会被过滤。
+- **选项不竖排**：战斗六项指令补 `white-space: nowrap`，缩小字号与列间距；标题四项「解甲归田 / 厉兵秣马 / 匡扶汉室 / 初出茅庐」去掉原 CSS 的 `writing-mode: vertical-rl`，两项都改为横排，不再把单字一列一列挤出来。
+- **敌情页排版**：头像、六维、兵/武器/地形与下方策略框按原版 1710×985 敌情页重新标定；策略框从 `top:80%; height:34%`（总高 114% 被裁）改为 `top:63%; height:32%`，左右翻页箭头拆成两端独立符号，不再压住“兵 / 武器 / 地形”行。
+- **店铺头像框**：按桌面版 `QuestEvent.names[i].profile` 找到店铺事件自带的头像，而不是把 32×32 店主行走图塞进立绘框：徐州宿屋 `蔡`、武店 `武器店老板`、道具店 `费诗`、武器店 `费诗`、训练所 `陈宫（2）`、役店 `蒋琬`。新增 `shopfaces/` 五张原图与 `tools/desktop-import/export_shop_faces.py`；只有自定义券房仍用店主行走图兜底。
+- **全灭弹窗可关闭**：战斗「全军覆没」结算卡与随后的大字「全军覆没」页都支持 J / K / Enter / Space 与鼠标点击关闭，点击后回到标题并清掉本场战斗；战斗胜利 / 撤退结算卡也可直接点击继续。
+- **长列表自动滚动**：给谋略、阵形、队伍、物品、装备、商店与战斗目标/计策列表的当前项加 `data-km-cursor`，容器加 `data-km-scroll`；光标变化后自动把当前项滚进可视区。`.panelBody` 改为 `flex:1; min-height:0`，战斗列表补 `overflow-y:auto`，长列表不会再选到弹窗外面。
+- **站内嵌入**：`/kongming` 从根路由移进 `(dashboard)` 路由组，打开后保留 CloudAI 顶栏、活动中心导航与手机底栏；活动总览的孔明传入口由全屏 iframe 弹层改为和其他限时活动一致的站内跳转。
+
 ## [0.106.0] - 2026-11-24
 
 ### 店铺店主、徐州券房与军资兑换
@@ -4728,5 +4743,3 @@ HTML+CSS，线上域名在本机不可达）。借的是它的**设计语言**�
 [0.2.1]: https://github.com/drfengyu/CloudflareAI/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/drfengyu/CloudflareAI/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/drfengyu/CloudflareAI/releases/tag/v0.1.0
-
-
