@@ -8,7 +8,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { syncModelPricingWithSettings } from "@/lib/billing/model-pricing";
 import { PRICING_CACHE_TAG } from "@/lib/billing/pricing-cache";
 import { invalidateCreditsPerUsdCache } from "@/lib/billing/credits";
-import { parseCnWallClock } from "@/lib/date";
+import { parseCnWallClock, formatCnWallClock } from "@/lib/date";
 import {
   LOTTERY_CONFIG_KEY,
   type LotteryConfig,
@@ -46,8 +46,17 @@ import {
 } from "@/lib/collection/config";
 import {
   KONGMING_ACTIVITY_CONFIG_KEY,
+  KONGMING_TCR_TOPUP_TYPE,
+  kongmingActivityKey,
   sanitizeKongmingActivityConfig,
 } from "@/lib/kongming/activity-config";
+import {
+  KONGMING_RELEASE,
+  KONGMING_RELEASE_COMPENSATION_TICKETS,
+} from "@/lib/announcements/kongming-release";
+import { couponNameFor } from "@/lib/activity/coupons";
+import { sendMessage } from "@/lib/message/messages";
+import { reserveRewardClaim } from "@/lib/rewards/claims";
 import { setSetting } from "@/lib/settings";
 import { saveSmtpSettings, type SmtpSettings } from "@/lib/email";
 import { sanitizeBonusTiers } from "@/lib/payment/bonus";
@@ -1135,9 +1144,14 @@ export async function updateKongmingSettings(formData: {
   endAt: string;
   /** 1 张孔明券兑换所需的 cr。 */
   couponUnitCredits: number;
-  /** 1 张孔明券可换多少游戏内金。 */
+  /** 1 张孔明券可换多少游戏内金（第三档基准）。 */
   goldPerCoupon: number;
   maxCouponsPerExchange: number;
+  couponGoldOffers: { tickets: number; gold: number }[];
+  goldPerTcr: number;
+  goldTcrOffers: { gold: number; tcr: number }[];
+  maxGoldPerTcrDaily: number;
+  tcrValidDays: number;
 }) {
   const currentUserId = await requireUser();
   const currentUser = await db
@@ -1169,6 +1183,13 @@ export async function updateKongmingSettings(formData: {
     maxCouponsPerExchange: Math.trunc(
       requireNumber(formData.maxCouponsPerExchange, "单次兑换上限", 1, 10_000),
     ),
+    couponGoldOffers: formData.couponGoldOffers,
+    goldPerTcr: Math.trunc(requireNumber(formData.goldPerTcr, "金换 tcr 汇率", 1, 1_000_000)),
+    goldTcrOffers: formData.goldTcrOffers,
+    maxGoldPerTcrDaily: Math.trunc(
+      requireNumber(formData.maxGoldPerTcrDaily, "每日金换 tcr 上限", 0, 100_000_000),
+    ),
+    tcrValidDays: Math.trunc(requireNumber(formData.tcrValidDays, "tcr 有效天数", 1, 3650)),
   });
 
   await upsertOption(KONGMING_ACTIVITY_CONFIG_KEY, JSON.stringify(config));
@@ -1292,4 +1313,122 @@ export async function updateSmtpSettings(input: SmtpSettings & { password: strin
   await saveSmtpSettings(input);
   revalidatePath("/admin/settings");
   return { success: true };
+}
+
+/**
+ * 发布本版孔明传更新：写系统公告 + 给每个注册用户发一封带活动券附件的站内信。
+ *
+ * 幂等：公告按版本标题去重；活动券补偿用 `reserveRewardClaim` 的
+ * `(userId, activity, tierKey)` 唯一键，重复点按钮不会重复发券。
+ * 补偿张数取 `KONGMING_RELEASE.items.length`，与公告正文的更新条数一致。
+ */
+export async function publishKongmingReleaseAnnouncement() {
+  const currentUserId = await requireUser();
+  const currentUser = await db
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, currentUserId))
+    .limit(1);
+  if (!currentUser[0] || currentUser[0].role < 10) {
+    throw new Error("权限不足");
+  }
+
+  const configRow = await db
+    .select({ value: options.value })
+    .from(options)
+    .where(eq(options.key, KONGMING_ACTIVITY_CONFIG_KEY))
+    .limit(1);
+  let rawConfig: unknown = null;
+  try {
+    rawConfig = configRow[0]?.value ? JSON.parse(configRow[0].value) : null;
+  } catch {
+    rawConfig = null;
+  }
+  const config = sanitizeKongmingActivityConfig(rawConfig);
+  const activityKey = kongmingActivityKey(config);
+  if (!activityKey) throw new Error("孔明传活动未开启或开始时间无效，无法发放活动券补偿");
+
+  const couponName = couponNameFor("kongming", activityKey);
+  const tickets = KONGMING_RELEASE_COMPENSATION_TICKETS;
+  const credits = Math.round(tickets * config.couponUnitCredits * 100) / 100;
+  const body = KONGMING_RELEASE.items
+    .map((item, index) => `${index + 1}. ${item}`)
+    .join("\n");
+
+  // 1) 系统公告：沿用看板的 dashboard_announcements JSON。
+  const announcementRow = await db
+    .select({ value: options.value })
+    .from(options)
+    .where(eq(options.key, "dashboard_announcements"))
+    .limit(1);
+  let announcements: unknown[] = [];
+  try {
+    const parsed = announcementRow[0]?.value ? JSON.parse(announcementRow[0].value) : [];
+    if (Array.isArray(parsed)) announcements = parsed;
+  } catch {
+    announcements = [];
+  }
+  const alreadyAnnounced = announcements.some((item) => {
+    if (!item || typeof item !== "object") return false;
+    const title = (item as Partial<AnnouncementInput>).title;
+    return typeof title === "string" && title.includes(KONGMING_RELEASE.version);
+  });
+  if (!alreadyAnnounced) {
+    const entry: AnnouncementInput = {
+      title: KONGMING_RELEASE.title,
+      content: `${body}\n\n补偿：每位将军 ${tickets} 张当期${couponName}（按本公告 ${KONGMING_RELEASE.items.length} 条更新发放）。`,
+      type: "info",
+      date: formatCnWallClock(Date.now()),
+    };
+    const next = [entry, ...announcements].slice(0, ANNOUNCEMENT_MAX);
+    await upsertOption("dashboard_announcements", JSON.stringify(next));
+    revalidatePath("/dashboard");
+    revalidatePath("/admin/settings");
+  }
+
+  // 2) 站内信补偿：每位用户一封，券附件在领取时入当期轮次。
+  const recipients = await db.select({ id: users.id }).from(users);
+  const tierKey = `kongming-release-${KONGMING_RELEASE.version}`;
+  let sent = 0;
+  for (const user of recipients) {
+    const claim = await reserveRewardClaim({
+      userId: user.id,
+      activityKind: "activity",
+      tierKey,
+      rewardCredits: credits,
+      validDays: config.tcrValidDays,
+      topupType: KONGMING_TCR_TOPUP_TYPE,
+      rewardKind: "coupon",
+      rewardLabel: `诸葛孔明传 v${KONGMING_RELEASE.version} 更新补偿`,
+    });
+    if (!claim.fresh) continue;
+
+    await sendMessage({
+      userId: user.id,
+      kind: "reward",
+      title: `诸葛孔明传 v${KONGMING_RELEASE.version} 更新补偿`,
+      body: `将军：\n\n本版更新 ${KONGMING_RELEASE.items.length} 条，按条数发放 ${tickets} 张当期${couponName}（${credits} cr 等值）。\n\n${body}\n\n请在站内信领取，领取后进入当期活动轮次，可在游戏券房兑换金或继续兑换商品。`,
+      attachment: {
+        kind: "coupon",
+        activityKind: "kongming",
+        activityKey,
+        couponName,
+        unitCredits: config.couponUnitCredits,
+        tickets,
+        credits,
+        rewardClaimId: claim.id,
+      },
+    });
+    sent += 1;
+  }
+
+  return {
+    success: true,
+    version: KONGMING_RELEASE.version,
+    tickets,
+    credits,
+    announced: !alreadyAnnounced,
+    sent,
+    totalUsers: recipients.length,
+  };
 }

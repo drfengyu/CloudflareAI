@@ -22,9 +22,9 @@ export default async function KongmingPage() {
   return (
     <KongmingGame
       activity={activity}
-      goldPerCoupon={config.goldPerCoupon}
-      maxCouponsPerExchange={config.maxCouponsPerExchange}
+      couponGoldOffers={config.couponGoldOffers}
       goldPerTcr={config.goldPerTcr}
+      goldTcrOffers={config.goldTcrOffers}
       maxGoldPerTcrDaily={config.maxGoldPerTcrDaily}
       tcrValidDays={config.tcrValidDays}
     />

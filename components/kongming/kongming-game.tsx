@@ -33,9 +33,13 @@ import {
 } from "@/lib/kongming/data";
 import { LuaRuntime } from "@/lib/kongming/lua";
 import { COUPON_EVENT_ID } from "@/lib/kongming/coupon-room";
+import type {
+  KongmingCouponGoldOffer,
+  KongmingGoldTcrOffer,
+} from "@/lib/kongming/activity-config";
 import {
-  buyKongmingCouponsAction,
   exchangeKongmingGoldForTcrAction,
+  redeemKongmingGoldAction,
 } from "@/app/kongming/actions";
 import type { ActivityCouponView } from "@/lib/activity/coupons";
 import { KongmingCouponPanel } from "./kongming-coupon-panel";
@@ -47,8 +51,8 @@ import styles from "./kongming-game.module.css";
 type Screen = "loading" | "title" | "prologue" | "field" | "battle" | "gameover";
 
 /**
- * 原版 level3 的 Water Tilemap 有 4 帧、4fps。
- * 这里只渲染这层水，不和整张大图一起重绘，避免 4fps 把整个战场组件反复渲染。
+ * 原版 level3 的 Water Tilemap 有 4 帧。这里只渲染这层水，不和整张大图
+ * 一起重绘；网页按 0.8 秒一帧循环，避免 4fps 的机械闪烁。
  */
 function WaterOverlay({
   src, x, y, width, height,
@@ -57,7 +61,7 @@ function WaterOverlay({
   const water = src.endsWith("level3.png");
   useEffect(() => {
     if (!water) return;
-    const timer = window.setInterval(() => setFrame((prev) => (prev + 1) % 4), 250);
+    const timer = window.setInterval(() => setFrame((prev) => (prev + 1) % 4), 800);
     return () => window.clearInterval(timer);
   }, [water]);
   if (!water) return null;
@@ -262,6 +266,8 @@ interface SavePayload {
   dir: [number, number];
   party: Member[];
   money: number;
+  activityRechargeGold?: number;
+  activityConsumeGold?: number;
   mp: number;
   maxMp: number;
   level: number;
@@ -285,6 +291,10 @@ interface Snap {
   dir: [number, number];
   party: Member[];
   money: number;
+  /** 本档通过活动券等站外货币换得的金，计入「游戏充值活动」。 */
+  activityRechargeGold?: number;
+  /** 本档在游戏内花掉的金，计入「游戏消费活动」。 */
+  activityConsumeGold?: number;
   mp: number;
   maxMp: number;
   level: number;
@@ -347,14 +357,17 @@ const PROLOGUE_PAGES: { text?: string; top?: string; image?: string; bottom?: st
   { text: PROLOGUE[3] },
 ];
 const SCENE_ALIAS: Record<string, string> = {
-  大地图: "世界地图",
+  世界地图: "大地图",
+  道具店: "道",
+  役店: "役",
+  民居: "城镇民房",
   徐州城: "徐州",
   冀州城: "冀州",
   荆州城: "荆州",
   新野城: "新野",
   江夏城: "江夏",
   襄阳城: "襄阳",
-  洛阳城: "洛阳宫殿",
+  洛阳城: "洛阳",
   柴桑城: "柴桑东村",
   长沙城: "长沙小村",
   桂阳城: "桂阳小村",
@@ -588,6 +601,8 @@ const EMPTY_SNAP: Snap = {
   dir: [0, -1],
   party: [],
   money: 0,
+  activityRechargeGold: 0,
+  activityConsumeGold: 0,
   mp: 10,
   maxMp: 10,
   level: 1,
@@ -615,17 +630,25 @@ const EMPTY_SNAP: Snap = {
 
 export default function KongmingGame({
   activity = null,
-  goldPerCoupon = 100,
-  maxCouponsPerExchange = 200,
+  couponGoldOffers = [
+    { tickets: 1, gold: 100 },
+    { tickets: 5, gold: 500 },
+    { tickets: 25, gold: 2500 },
+  ],
   goldPerTcr = 100,
-  maxGoldPerTcrDaily = 600,
+  goldTcrOffers = [
+    { gold: 100, tcr: 1 },
+    { gold: 500, tcr: 5 },
+    { gold: 2500, tcr: 25 },
+  ],
+  maxGoldPerTcrDaily = 2500,
   tcrValidDays = 30,
 }: {
   /** 已登录时的孔明券视图；未登录 / 活动关闭时为 null，不显示兑换面板。 */
   activity?: ActivityCouponView | null;
-  goldPerCoupon?: number;
-  maxCouponsPerExchange?: number;
+  couponGoldOffers?: KongmingCouponGoldOffer[];
   goldPerTcr?: number;
+  goldTcrOffers?: KongmingGoldTcrOffer[];
   maxGoldPerTcrDaily?: number;
   tcrValidDays?: number;
 } = {}) {
@@ -694,7 +717,11 @@ export default function KongmingGame({
       toast(`军资 ${gold} 金已寄存，开局后并入存档`);
       return;
     }
-    mutate((s) => ({ ...s, money: Math.min(9_999_999, s.money + gold) }));
+    mutate((s) => ({
+      ...s,
+      money: Math.min(9_999_999, s.money + gold),
+      activityRechargeGold: (s.activityRechargeGold ?? 0) + gold,
+    }));
     toast(`军资到账：+${gold} 金`);
   }, [mutate, toast]);
 
@@ -702,7 +729,11 @@ export default function KongmingGame({
     const pending = Number(localStorage.getItem(PENDING_GOLD_KEY) ?? 0) || 0;
     if (pending <= 0) return;
     localStorage.removeItem(PENDING_GOLD_KEY);
-    mutate((s) => ({ ...s, money: Math.min(9_999_999, s.money + pending) }));
+    mutate((s) => ({
+      ...s,
+      money: Math.min(9_999_999, s.money + pending),
+      activityRechargeGold: (s.activityRechargeGold ?? 0) + pending,
+    }));
     toast(`活动军资到账：+${pending} 金`);
   }, [mutate, toast]);
 
@@ -727,6 +758,7 @@ export default function KongmingGame({
       for (const c of candidates) {
         if (c.map?.src) {
           urls.add(c.map.src);
+          if (c.map.fg) urls.add(c.map.fg);
           if (c.map.src.endsWith("level3.png")) {
             for (let i = 0; i < 4; i++) urls.add(`${c.map.src.slice(0, -4)}-water-${i}.png`);
           }
@@ -811,8 +843,10 @@ export default function KongmingGame({
     if (!d) return m;
     const c = d.characters.get(m.name);
     const max = hpFor(c, d.hpLevels, level);
-    const ratio = m.maxHp > 0 ? m.hp / m.maxHp : 1;
-    return { ...m, level, maxHp: max, hp: Math.min(max, Math.max(0, Math.round(max * ratio))), dead: ratio <= 0 };
+    // 原版 `Character.LevelUp` 只抬高 `MaxHp`，当前 `Hp` 原样保留；
+    // 升级不回血，也不会按百分比把残血放大。
+    const hp = Math.min(max, Math.max(0, m.hp));
+    return { ...m, level, maxHp: max, hp, dead: hp <= 0 };
   }, []);
 
   const equipmentStats = useCallback((m: Member) => {
@@ -874,17 +908,21 @@ export default function KongmingGame({
   const addExp = useCallback((amount: number, level: number, exp: number) => {
     const d = dataRef.current;
     if (!d) return { level, exp, skills: [] as string[], formations: [] as string[] };
+    const rows = d.content.exp.levels;
     let lv = level;
     let cur = exp + amount;
     const learnedSkills: string[] = [];
     const learnedFormations: string[] = [];
-    for (let guard = 0; guard < 90; guard++) {
-      const row = d.content.exp.levels[lv - 1];
+    // 桌面版 `TeamManager.AddExp` 在 `ExpData.Level(lv)` 取不到更高级行时
+    // 仍返回最后一行的 next，因此 52 级以后每级继续按最后一行经验升级；
+    // 角色等级上限 99。这里同样不把 0 当停止条件，只有真正没有经验表才停。
+    for (let guard = 0; guard < 120; guard++) {
+      const row = rows[Math.min(lv - 1, rows.length - 1)];
       const next = row?.next ?? 0;
-      if (!next || cur < next || lv >= 99) break;
+      if (!next || lv >= 99 || cur < next) break;
       cur -= next;
       lv++;
-      const newRow = d.content.exp.levels[lv - 1];
+      const newRow = rows[lv - 1];
       if (newRow) {
         learnedSkills.push(...newRow.skills);
         learnedFormations.push(...newRow.formations);
@@ -1992,6 +2030,7 @@ export default function KongmingGame({
             mutate((prev) => ({
               ...prev,
               money: Math.max(0, prev.money - money),
+              activityConsumeGold: (prev.activityConsumeGold ?? 0) + Math.min(prev.money, Math.max(0, money)),
               party: prev.party.map((m) => ({ ...m, hp: resurrect || !m.dead ? m.maxHp : m.hp, dead: resurrect ? false : m.dead })),
             }));
             return undefined;
@@ -2006,6 +2045,7 @@ export default function KongmingGame({
               ...prev,
               level: targetLv,
               money: Math.max(0, prev.money - money),
+              activityConsumeGold: (prev.activityConsumeGold ?? 0) + Math.min(prev.money, Math.max(0, money)),
               party: prev.party.map((m) => recalcHp({ ...m, hp: m.maxHp }, targetLv)),
             }));
             return undefined;
@@ -2035,7 +2075,7 @@ export default function KongmingGame({
             return row?.next ?? 0;
           }
           case "ParametersInScene": {
-            const prev = d.scenes.find((x) => x.level === s.previousLevel && !["武", "道具", "宿", "训"].includes(x.name.trim()));
+            const prev = d.scenes.find((x) => x.level === s.previousLevel && !isIndoorScene(x.name) && !x.name.includes("民房"));
             const key = prev?.name.trim() || s.scene?.name.trim() || "";
             const params = d.content.parameters?.[s.scene?.name.trim() ?? ""]?.[key];
             if (params && params.length > 0) return params.slice();
@@ -2157,7 +2197,7 @@ export default function KongmingGame({
     const scene = s.scene?.name ?? "";
     const kind = scene.includes("武器") || scene.trim() === "武"
       ? "武器店"
-      : scene.includes("道具")
+      : scene.includes("道具") || scene.includes("道具店") || scene.trim() === "道"
         ? "道具店"
         : "";
     const prevScene = d.scenes.find((x) => x.level === s.previousLevel && !["武", "道具"].includes(x.name.trim()));
@@ -2184,54 +2224,60 @@ export default function KongmingGame({
   openShopRef.current = openShop;
 
   const openCouponVendor = useCallback(() => {
-    const s = snapRef.current;
-    const maxGold = Math.max(
-      0,
-      Math.min(maxGoldPerTcrDaily, Math.floor(s.money / goldPerTcr) * goldPerTcr),
-    );
     mutate((prev) => ({
       ...prev,
       coupon: {
         tab: "coupon",
-        tickets: 1,
-        gold: maxGold,
+        tickets: 0,
+        gold: 0,
         busy: false,
         note: null,
         dailyGoldLeft: maxGoldPerTcrDaily,
       },
     }));
-  }, [goldPerTcr, maxGoldPerTcrDaily, mutate]);
+  }, [maxGoldPerTcrDaily, mutate]);
   openCouponRef.current = openCouponVendor;
 
   const closeCouponVendor = useCallback(() => {
     mutate((prev) => ({ ...prev, coupon: null }));
   }, [mutate]);
 
-  const buyCouponsAtVendor = useCallback(async (tickets: number) => {
+  const redeemCouponsAtVendor = useCallback(async (offerIndex: number) => {
     mutate((prev) => prev.coupon ? { ...prev, coupon: { ...prev.coupon, busy: true, note: null } } : prev);
     try {
-      const result = await buyKongmingCouponsAction({ tickets });
-      mutate((prev) => prev.coupon ? {
-        ...prev,
-        coupon: { ...prev.coupon, busy: false, note: result.message },
-      } : prev);
+      const result = await redeemKongmingGoldAction({ offerIndex });
       if (result.success) {
-        setCouponTickets(result.remainingTickets ?? ((activity?.tickets ?? 0) + tickets));
+        setCouponTickets(result.remaining ?? Math.max(0, couponTickets - (result.tickets ?? 0)));
+        mutate((prev) => ({
+          ...prev,
+          money: prev.money + (result.gold ?? 0),
+          activityRechargeGold: (prev.activityRechargeGold ?? 0) + (result.gold ?? 0),
+          coupon: prev.coupon ? {
+            ...prev.coupon,
+            busy: false,
+            note: result.message,
+          } : prev.coupon,
+        }));
         toast(result.message);
+      } else {
+        mutate((prev) => prev.coupon ? {
+          ...prev,
+          coupon: { ...prev.coupon, busy: false, note: result.message },
+        } : prev);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "购券失败，请稍后重试";
+      const message = error instanceof Error ? error.message : "兑换失败，请稍后重试";
       mutate((prev) => prev.coupon ? {
         ...prev,
         coupon: { ...prev.coupon, busy: false, note: message },
       } : prev);
     }
-  }, [activity, mutate, toast]);
+  }, [couponTickets, mutate, toast]);
 
-  const exchangeTcrAtVendor = useCallback(async (gold: number) => {
+  const exchangeTcrAtVendor = useCallback(async (offerIndex: number) => {
     mutate((prev) => prev.coupon ? { ...prev, coupon: { ...prev.coupon, busy: true, note: null } } : prev);
     try {
-      const result = await exchangeKongmingGoldForTcrAction({ gold });
+      const result = await exchangeKongmingGoldForTcrAction({ offerIndex });
       if (result.success && result.gold && result.gold > 0) {
         mutate((prev) => {
           const spent = result.gold ?? 0;
@@ -2240,12 +2286,12 @@ export default function KongmingGame({
           return {
             ...prev,
             money: nextMoney,
+            activityConsumeGold: (prev.activityConsumeGold ?? 0) + spent,
             coupon: prev.coupon ? {
               ...prev.coupon,
               busy: false,
               note: result.message,
               dailyGoldLeft: left,
-              gold: Math.max(0, Math.min(left, Math.floor(nextMoney / goldPerTcr) * goldPerTcr)),
             } : prev.coupon,
           };
         });
@@ -2268,7 +2314,7 @@ export default function KongmingGame({
         coupon: { ...prev.coupon, busy: false, note: message },
       } : prev);
     }
-  }, [goldPerTcr, mutate, toast]);
+  }, [mutate, toast]);
 
   const closeShop = useCallback(() => {
     const resolve = shopResolve.current;
@@ -2289,7 +2335,12 @@ export default function KongmingGame({
       const inv = prev.inventory.map((i) => ({ ...i }));
       const hit = inv.find((i) => i.name === entry.name);
       if (hit) hit.count++; else inv.push({ name: entry.name, count: 1 });
-      return { ...prev, money: prev.money - entry.price, inventory: inv };
+      return {
+        ...prev,
+        money: prev.money - entry.price,
+        activityConsumeGold: (prev.activityConsumeGold ?? 0) + entry.price,
+        inventory: inv,
+      };
     });
     toast(`购入 ${entry.name}`);
     void d;
@@ -2319,6 +2370,8 @@ export default function KongmingGame({
       dir: s.dir,
       party: s.party,
       money: s.money,
+      activityRechargeGold: s.activityRechargeGold ?? 0,
+      activityConsumeGold: s.activityConsumeGold ?? 0,
       mp: s.mp,
       maxMp: s.maxMp,
       level: s.level,
@@ -2356,6 +2409,8 @@ export default function KongmingGame({
       dir: save.dir,
       party: save.party,
       money: save.money,
+      activityRechargeGold: save.activityRechargeGold ?? 0,
+      activityConsumeGold: save.activityConsumeGold ?? 0,
       mp: save.mp,
       maxMp: save.maxMp,
       level: save.level,
@@ -2464,6 +2519,8 @@ export default function KongmingGame({
       party: equipped.party,
       inventory: equipped.inventory,
       money: start.money,
+      activityRechargeGold: 0,
+      activityConsumeGold: 0,
       mp: start.maxMp,
       maxMp: start.maxMp,
       level: start.lv,
@@ -2689,30 +2746,30 @@ export default function KongmingGame({
         mutate((prev) => {
           if (!prev.coupon) return prev;
           if (prev.coupon.tab === "coupon") {
+            const count = Math.max(1, couponGoldOffers.length);
             return {
               ...prev,
               coupon: {
                 ...prev.coupon,
-                tickets: Math.min(maxCouponsPerExchange, Math.max(1, prev.coupon.tickets + delta)),
+                tickets: (prev.coupon.tickets + delta + count) % count,
                 note: null,
               },
             };
           }
-          const cap = Math.max(0, Math.min(prev.money, prev.coupon.dailyGoldLeft));
-          const maxGold = Math.floor(cap / goldPerTcr) * goldPerTcr;
-          const gold = Math.min(maxGold, Math.max(0, prev.coupon.gold + delta * goldPerTcr));
-          return { ...prev, coupon: { ...prev.coupon, gold, note: null } };
+          const count = Math.max(1, goldTcrOffers.length);
+          return {
+            ...prev,
+            coupon: {
+              ...prev.coupon,
+              gold: (prev.coupon.gold + delta + count) % count,
+              note: null,
+            },
+          };
         });
       }
       if (key === "KeyJ" && activity?.status === "active" && !s.coupon.busy) {
-        if (s.coupon.tab === "coupon") {
-          const unit = activity.unitCredits > 0 ? activity.unitCredits : 0;
-          if (unit > 0) void buyCouponsAtVendor(s.coupon.tickets);
-        } else {
-          const cap = Math.max(0, Math.min(s.money, s.coupon.dailyGoldLeft));
-          const gold = Math.min(Math.floor(cap / goldPerTcr) * goldPerTcr, s.coupon.gold);
-          if (gold >= goldPerTcr) void exchangeTcrAtVendor(gold);
-        }
+        if (s.coupon.tab === "coupon") void redeemCouponsAtVendor(s.coupon.tickets);
+        else void exchangeTcrAtVendor(s.coupon.gold);
       }
       return;
     }
@@ -2937,7 +2994,7 @@ export default function KongmingGame({
       else if (key === "KeyJ") void interact();
       else if (key === "KeyK") openPanel("root");
     }
-  }, [activateTitle, activity, banner, buyCouponsAtVendor, buyShopItem, changeFormation, closeCouponVendor, closePanel, closeShop, continueBattleOutcome, currentData, equipItem, exchangeTcrAtVendor, finishDialogue, goldPerTcr, leaveGameOver, loadSave, loadScene, maxCouponsPerExchange, memberSkillsAtLevel, move, mutate, openPanel, proceedPrologue, saveGame, startNewGame, toast, useInventoryItem, useSkillInfo, interact]);
+  }, [activateTitle, activity, banner, buyShopItem, changeFormation, closeCouponVendor, closePanel, closeShop, continueBattleOutcome, currentData, equipItem, exchangeTcrAtVendor, finishDialogue, goldPerTcr, leaveGameOver, loadSave, loadScene, memberSkillsAtLevel, move, mutate, openPanel, proceedPrologue, saveGame, startNewGame, toast, useInventoryItem, useSkillInfo, interact]);
 
   useEffect(() => {
     const listener = (e: KeyboardEvent) => {
@@ -3119,14 +3176,6 @@ export default function KongmingGame({
     ? ["攻击", "总攻", "谋略", "部将", "宝物", "撤退"]
     : ["攻击", "防御", "谋略", "部将", "宝物", ""];
   const equipmentInv = s.inventory.filter((i) => data.equipment.has(i.name));
-  const vendorGoldCap = s.coupon
-    ? Math.max(0, Math.min(s.money, s.coupon.dailyGoldLeft))
-    : 0;
-  const vendorGold = s.coupon
-    ? Math.max(0, Math.min(s.coupon.gold, Math.floor(vendorGoldCap / goldPerTcr) * goldPerTcr))
-    : 0;
-  const vendorTicketUnit = activity?.unitCredits && activity.unitCredits > 0 ? activity.unitCredits : 0;
-  const vendorTicketCost = Math.round(s.coupon ? s.coupon.tickets * vendorTicketUnit * 100 : 0) / 100;
 
   return (
     <div className={styles.root} data-scene={s.scene?.level ?? ""} data-pos={`${s.x},${s.y}`}>
@@ -3291,6 +3340,8 @@ export default function KongmingGame({
               })}
               {followerEntries.map(({ member: m, pos, frame }, i) => {
                 if (m.dead) return null;
+                // 换场景时队伍尾段还在门后或墙体里，不把精灵画到建筑上。
+                if (!scene || blockedAt(scene, pos.x, pos.y)) return null;
                 const strip = walkStripForModel(m.model);
                 const palette: ModelPalette | null =
                   data.palettes.get(m.name) ?? data.palettes.get(m.profile) ?? null;
@@ -3333,6 +3384,17 @@ export default function KongmingGame({
               )}
               {!playerSprite && (
                 <text x={playerSX} y={playerSY - 13} textAnchor="middle" fill="#fff" fontSize={10}>{leader?.name?.[0] ?? "刘"}</text>
+              )}
+              {map.fg && (
+                <image
+                  href={map.fg}
+                  x={-camX}
+                  y={-camY}
+                  width={mapW}
+                  height={mapH}
+                  className={styles.pixel}
+                  preserveAspectRatio="none"
+                />
               )}
             </svg>
 
@@ -3724,7 +3786,7 @@ export default function KongmingGame({
         {s.shop && (
           <div className={styles.panelLayer}>
             <div className={styles.shopBox}>
-              <div className={styles.panelHead}><h2>{s.shop.title}</h2><span>所持 {s.money} 金</span></div>
+              <div className={styles.panelHead}><h2>{s.shop.title}</h2><span>所持 {s.money} 金{activity ? ` · ${activity.couponName} ${couponTickets} 张` : ""}</span></div>
               <div className={styles.panelBody} data-km-scroll="1">
                 {s.shop.items.map((it, i) => (
                   <div key={it.name} data-km-cursor={s.shop?.cursor === i ? "1" : undefined} className={`${styles.listRow} ${s.shop?.cursor === i ? styles.rowOn : ""}`}>
@@ -3742,25 +3804,9 @@ export default function KongmingGame({
             <div className={`${styles.shopBox} ${styles.couponBox}`}>
               <div className={styles.panelHead}>
                 <h2>徐州券房</h2>
-                <span>所持 {s.money} 金</span>
+                <span>所持 {s.money} 金{activity ? ` · ${activity.couponName} ${couponTickets} 张` : ""}</span>
               </div>
-              <div className={styles.couponTabs}>
-                <button
-                  type="button"
-                  className={s.coupon?.tab === "coupon" ? styles.couponTabOn : undefined}
-                  onClick={() => mutate((prev) => prev.coupon ? { ...prev, coupon: { ...prev.coupon, tab: "coupon", note: null } } : prev)}
-                >
-                  孔明券
-                </button>
-                <button
-                  type="button"
-                  className={s.coupon?.tab === "tcr" ? styles.couponTabOn : undefined}
-                  onClick={() => mutate((prev) => prev.coupon ? { ...prev, coupon: { ...prev.coupon, tab: "tcr", note: null } } : prev)}
-                >
-                  军资换 tcr
-                </button>
-              </div>
-              <div className={styles.panelBody}>
+              <div className={`${styles.panelBody} ${styles.couponColumns}`}>
                 {!activity ? (
                   <p className={styles.emptyText}>
                     券房只接待登录将军。请先<a className={styles.vendorLogin} href="/login">登录</a>后再来交易。
@@ -3769,69 +3815,73 @@ export default function KongmingGame({
                   <p className={styles.emptyText}>
                     当前不在孔明传活动期（{activity.status === "pending" ? "尚未开始" : activity.status === "ended" ? "已结束" : "未开启"}）。
                   </p>
-                ) : s.coupon.tab === "coupon" ? (
-                  <>
-                    <p className={styles.vendorLine}>
-                      本期 <b>{activity.couponName}</b> · 1 张 = {vendorTicketUnit} cr · 现有 <b>{couponTickets}</b> 张
-                    </p>
-                    <div className={styles.vendorRow}>
-                      <span>购买张数</span>
-                      <div className={styles.stepper}>
-                        <button
-                          type="button"
-                          onClick={() => mutate((prev) => prev.coupon ? { ...prev, coupon: { ...prev.coupon, tickets: Math.max(1, prev.coupon.tickets - 1) } } : prev)}
-                        >−</button>
-                        <b>{s.coupon.tickets}</b>
-                        <button
-                          type="button"
-                          onClick={() => mutate((prev) => prev.coupon ? { ...prev, coupon: { ...prev.coupon, tickets: Math.min(maxCouponsPerExchange, prev.coupon.tickets + 1) } } : prev)}
-                        >＋</button>
-                      </div>
-                    </div>
-                    <p className={styles.vendorLine}>应付 <b>{vendorTicketCost}</b> cr（先扣 tcr，再扣 cr）</p>
-                    <button
-                      type="button"
-                      className={styles.vendorButton}
-                      disabled={s.coupon.busy || vendorTicketUnit <= 0}
-                      onClick={() => void buyCouponsAtVendor(s.coupon!.tickets)}
-                    >
-                      {s.coupon.busy ? "正在办理…" : "购买孔明券"}
-                    </button>
-                  </>
                 ) : (
                   <>
-                    <p className={styles.vendorLine}>军资兑换：<b>{goldPerTcr} 金 = 1 tcr</b>，{tcrValidDays} 天内有效。</p>
-                    <p className={styles.vendorLine}>今日还可使用 <b>{s.coupon.dailyGoldLeft}</b> 金 · 当前军资 <b>{s.money}</b> 金</p>
-                    <div className={styles.vendorRow}>
-                      <span>投入军资</span>
-                      <div className={styles.stepper}>
+                    <section className={`${styles.couponColumn} ${s.coupon!.tab === "coupon" ? styles.couponColumnOn : ""}`}>
+                      <header>
+                        <h3>活动券换金</h3>
+                        <p>本期 {activity.couponName} · 现有 {couponTickets} 张</p>
+                      </header>
+                      {couponGoldOffers.map((offer, index) => (
                         <button
+                          key={`coupon-${index}`}
                           type="button"
-                          onClick={() => mutate((prev) => prev.coupon ? { ...prev, coupon: { ...prev.coupon, gold: Math.max(0, Math.min(vendorGold, prev.coupon.gold) - goldPerTcr) } } : prev)}
-                        >−</button>
-                        <b>{vendorGold}</b>
+                          className={`${styles.couponOffer} ${s.coupon!.tab === "coupon" && s.coupon!.tickets === index ? styles.couponOfferOn : ""}`}
+                          disabled={s.coupon!.busy || couponTickets < offer.tickets}
+                          onClick={() => {
+                            mutate((prev) => prev.coupon ? {
+                              ...prev,
+                              coupon: { ...prev.coupon, tab: "coupon", tickets: index, note: null },
+                            } : prev);
+                            void redeemCouponsAtVendor(index);
+                          }}
+                        >
+                          <span>{offer.tickets} 张 {activity.couponName}</span>
+                          <b>{offer.gold} 金</b>
+                          <small>{couponTickets < offer.tickets ? "券不足" : "点击兑换"}</small>
+                        </button>
+                      ))}
+                    </section>
+
+                    <section className={`${styles.couponColumn} ${s.coupon!.tab === "tcr" ? styles.couponColumnOn : ""}`}>
+                      <header>
+                        <h3>金换 tcr</h3>
+                        <p>现有 {s.money} 金 · 今日可用 {s.coupon!.dailyGoldLeft} 金</p>
+                      </header>
+                      {goldTcrOffers.map((offer, index) => (
                         <button
+                          key={`tcr-${index}`}
                           type="button"
-                          onClick={() => mutate((prev) => prev.coupon ? { ...prev, coupon: { ...prev.coupon, gold: Math.min(vendorGoldCap, prev.coupon.gold + goldPerTcr) } } : prev)}
-                        >＋</button>
-                      </div>
-                    </div>
-                    <p className={styles.vendorLine}>
-                      可得 <b>{Math.floor(vendorGold / goldPerTcr)}</b> tcr
+                          className={`${styles.couponOffer} ${s.coupon!.tab === "tcr" && s.coupon!.gold === index ? styles.couponOfferOn : ""}`}
+                          disabled={
+                            s.coupon!.busy ||
+                            s.money < offer.gold ||
+                            s.coupon!.dailyGoldLeft < offer.gold
+                          }
+                          onClick={() => {
+                            mutate((prev) => prev.coupon ? {
+                              ...prev,
+                              coupon: { ...prev.coupon, tab: "tcr", gold: index, note: null },
+                            } : prev);
+                            void exchangeTcrAtVendor(index);
+                          }}
+                        >
+                          <span>{offer.gold} 金</span>
+                          <b>{offer.tcr} tcr</b>
+                          <small>{s.coupon!.dailyGoldLeft < offer.gold ? "超出今日上限" : "点击兑换"}</small>
+                        </button>
+                      ))}
+                    </section>
+                    <p className={styles.couponCurrencyNote}>
+                      交易货币：活动券 ×{couponTickets} · 金 {s.money}；{goldPerTcr} 金 = 1 tcr，到账后 {tcrValidDays} 天有效。
+                      <br />
+                      本档活动累计：充值（券换金）{s.activityRechargeGold ?? 0} 金 · 消费（金币交易）{s.activityConsumeGold ?? 0} 金
                     </p>
-                    <button
-                      type="button"
-                      className={styles.vendorButton}
-                      disabled={s.coupon.busy || vendorGold < goldPerTcr}
-                      onClick={() => void exchangeTcrAtVendor(vendorGold)}
-                    >
-                      {s.coupon.busy ? "正在办理…" : "兑换 tcr"}
-                    </button>
                   </>
                 )}
                 {s.coupon.note && <p className={styles.vendorNote}>{s.coupon.note}</p>}
               </div>
-              <div className={styles.panelFoot}>A / D 切换　K 离开　鼠标可直接点按钮</div>
+              <div className={styles.panelFoot}>K 离开　点击商品成交</div>
             </div>
           </div>
         )}
@@ -3906,8 +3956,7 @@ export default function KongmingGame({
         <div className={styles.couponWrap}>
           <KongmingCouponPanel
             activity={activity}
-            goldPerCoupon={goldPerCoupon}
-            maxCouponsPerExchange={maxCouponsPerExchange}
+            couponGoldOffers={couponGoldOffers}
             onGold={receiveGold}
           />
         </div>

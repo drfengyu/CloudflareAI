@@ -25,6 +25,15 @@ export function KongmingForm({ initialConfig }: { initialConfig: KongmingActivit
   const [couponUnit, setCouponUnit] = useState(String(initialConfig.couponUnitCredits));
   const [goldPerCoupon, setGoldPerCoupon] = useState(String(initialConfig.goldPerCoupon));
   const [maxPerExchange, setMaxPerExchange] = useState(String(initialConfig.maxCouponsPerExchange));
+  const [couponGoldOffers, setCouponGoldOffers] = useState(
+    initialConfig.couponGoldOffers.map((item) => ({ tickets: String(item.tickets), gold: String(item.gold) })),
+  );
+  const [goldPerTcr, setGoldPerTcr] = useState(String(initialConfig.goldPerTcr));
+  const [goldTcrOffers, setGoldTcrOffers] = useState(
+    initialConfig.goldTcrOffers.map((item) => ({ gold: String(item.gold), tcr: String(item.tcr) })),
+  );
+  const [dailyGold, setDailyGold] = useState(String(initialConfig.maxGoldPerTcrDaily));
+  const [tcrValidDays, setTcrValidDays] = useState(String(initialConfig.tcrValidDays));
   const [loading, setLoading] = useState(false);
 
   const preview = useMemo(
@@ -36,8 +45,31 @@ export function KongmingForm({ initialConfig }: { initialConfig: KongmingActivit
         couponUnitCredits: Number(couponUnit),
         goldPerCoupon: Number(goldPerCoupon),
         maxCouponsPerExchange: Number(maxPerExchange),
+        couponGoldOffers: couponGoldOffers.map((item) => ({
+          tickets: Number(item.tickets),
+          gold: Number(item.gold),
+        })),
+        goldPerTcr: Number(goldPerTcr),
+        goldTcrOffers: goldTcrOffers.map((item) => ({
+          gold: Number(item.gold),
+          tcr: Number(item.tcr),
+        })),
+        maxGoldPerTcrDaily: Number(dailyGold),
+        tcrValidDays: Number(tcrValidDays),
       }),
-    [enabled, startAt, endAt, couponUnit, goldPerCoupon, maxPerExchange],
+    [
+      enabled,
+      startAt,
+      endAt,
+      couponUnit,
+      goldPerCoupon,
+      maxPerExchange,
+      couponGoldOffers,
+      goldPerTcr,
+      goldTcrOffers,
+      dailyGold,
+      tcrValidDays,
+    ],
   );
 
   async function handleSubmit(e: React.FormEvent) {
@@ -51,6 +83,17 @@ export function KongmingForm({ initialConfig }: { initialConfig: KongmingActivit
         couponUnitCredits: Number(couponUnit),
         goldPerCoupon: Number(goldPerCoupon),
         maxCouponsPerExchange: Number(maxPerExchange),
+        couponGoldOffers: couponGoldOffers.map((item) => ({
+          tickets: Number(item.tickets),
+          gold: Number(item.gold),
+        })),
+        goldPerTcr: Number(goldPerTcr),
+        goldTcrOffers: goldTcrOffers.map((item) => ({
+          gold: Number(item.gold),
+          tcr: Number(item.tcr),
+        })),
+        maxGoldPerTcrDaily: Number(dailyGold),
+        tcrValidDays: Number(tcrValidDays),
       });
       toast.success("诸葛孔明传活动配置已保存");
     } catch (error) {
@@ -75,8 +118,8 @@ export function KongmingForm({ initialConfig }: { initialConfig: KongmingActivit
         </label>
       </div>
       <p className="text-xs text-muted-foreground">
-        活动页先按「1 张 = 券面 cr」购买孔明券，进游戏后可在同页把券换成存档里的金。
-        修改开始时间等于开启新一轮：旧券不跨期，需重新兑换。
+        券房改成了武器店式柜台：第一栏消耗孔明券换游戏金，第二栏用游戏金换 tcr。
+        两栏各三档，默认按基准值 ×1 / ×5 / ×25；单日金换 tcr 上限按三档金额配置。
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -110,7 +153,18 @@ export function KongmingForm({ initialConfig }: { initialConfig: KongmingActivit
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">每张券兑换金</label>
+          <label className="mb-1 block text-sm font-medium">单次购券上限（张）</label>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={maxPerExchange}
+            onChange={(e) => setMaxPerExchange(e.target.value)}
+            className={FIELD_CLASS}
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">每张券基准金</label>
           <input
             type="number"
             min="1"
@@ -121,26 +175,126 @@ export function KongmingForm({ initialConfig }: { initialConfig: KongmingActivit
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium">单次兑换上限（张）</label>
+          <label className="mb-1 block text-sm font-medium">金换 tcr 汇率（金 / 1 tcr）</label>
           <input
             type="number"
             min="1"
             step="1"
-            value={maxPerExchange}
-            onChange={(e) => setMaxPerExchange(e.target.value)}
+            value={goldPerTcr}
+            onChange={(e) => setGoldPerTcr(e.target.value)}
             className={FIELD_CLASS}
           />
         </div>
-        <div className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
-          <p className="font-medium text-foreground">兑换预览</p>
-          <p className="mt-1 tabular-nums">
-            1 张 = {preview.couponUnitCredits} cr → {preview.goldPerCoupon} 金
-          </p>
-          <p className="tabular-nums">
-            单次最多 {preview.maxCouponsPerExchange} 张 →{" "}
-            {preview.maxCouponsPerExchange * preview.goldPerCoupon} 金
-          </p>
+        <div>
+          <label className="mb-1 block text-sm font-medium">每日金换 tcr 上限（金）</label>
+          <input
+            type="number"
+            min="0"
+            step="1"
+            value={dailyGold}
+            onChange={(e) => setDailyGold(e.target.value)}
+            className={FIELD_CLASS}
+          />
         </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium">tcr 有效天数</label>
+          <input
+            type="number"
+            min="1"
+            step="1"
+            value={tcrValidDays}
+            onChange={(e) => setTcrValidDays(e.target.value)}
+            className={FIELD_CLASS}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2 rounded-lg border border-border p-3">
+        <p className="text-sm font-medium">第一栏 · 活动券换金</p>
+        {couponGoldOffers.map((item, index) => (
+          <div key={index} className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">孔明券（张）</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={item.tickets}
+                onChange={(e) =>
+                  setCouponGoldOffers((prev) =>
+                    prev.map((row, i) => (i === index ? { ...row, tickets: e.target.value } : row)),
+                  )
+                }
+                className={FIELD_CLASS}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">到账金</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={item.gold}
+                onChange={(e) =>
+                  setCouponGoldOffers((prev) =>
+                    prev.map((row, i) => (i === index ? { ...row, gold: e.target.value } : row)),
+                  )
+                }
+                className={FIELD_CLASS}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-2 rounded-lg border border-border p-3">
+        <p className="text-sm font-medium">第二栏 · 金换 tcr</p>
+        {goldTcrOffers.map((item, index) => (
+          <div key={index} className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">消耗金</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={item.gold}
+                onChange={(e) =>
+                  setGoldTcrOffers((prev) =>
+                    prev.map((row, i) => (i === index ? { ...row, gold: e.target.value } : row)),
+                  )
+                }
+                className={FIELD_CLASS}
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-muted-foreground">到账 tcr</label>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={item.tcr}
+                onChange={(e) =>
+                  setGoldTcrOffers((prev) =>
+                    prev.map((row, i) => (i === index ? { ...row, tcr: e.target.value } : row)),
+                  )
+                }
+                className={FIELD_CLASS}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-lg border border-dashed border-border p-3 text-xs text-muted-foreground">
+        <p className="font-medium text-foreground">兑换预览</p>
+        <p className="mt-1 tabular-nums">
+          1 张 = {preview.couponUnitCredits} cr；三档券价：
+          {preview.couponGoldOffers.map((item) => `${item.tickets} 张→${item.gold} 金`).join(" / ")}
+        </p>
+        <p className="tabular-nums">
+          三档金换 tcr：
+          {preview.goldTcrOffers.map((item) => `${item.gold} 金→${item.tcr} tcr`).join(" / ")}
+        </p>
       </div>
 
       <Button type="submit" disabled={loading}>

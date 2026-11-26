@@ -1624,8 +1624,105 @@
 }
 
 .couponBox {
-  width: min(560px, 78%);
+  width: min(760px, 88%);
   max-height: 82%;
+}
+
+.couponColumns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: start;
+  gap: 0.9em 1.1em;
+}
+
+.couponColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55em;
+  min-width: 0;
+  padding: 0.35em;
+  border: 1px solid transparent;
+}
+
+.couponColumnOn {
+  border-color: rgba(198, 77, 58, 0.36);
+  background: rgba(143, 42, 31, 0.08);
+}
+
+.couponColumn header {
+  padding-bottom: 0.45em;
+  border-bottom: 1px solid rgba(194, 165, 103, 0.2);
+}
+
+.couponColumn h3 {
+  margin: 0;
+  color: #f1e1bd;
+  font-size: clamp(14px, 1.5vw, 20px);
+  letter-spacing: 0.12em;
+}
+
+.couponColumn header p {
+  margin: 0.25em 0 0;
+  color: #8b8878;
+  font-size: clamp(9px, 0.95vw, 13px);
+  line-height: 1.4;
+}
+
+.couponOffer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.12em 0.7em;
+  align-items: center;
+  padding: 0.55em 0.75em;
+  border: 1px solid rgba(180, 158, 110, 0.28);
+  background: rgba(18, 22, 17, 0.9);
+  color: #c8c1ac;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.couponOffer span {
+  font-size: clamp(11px, 1.1vw, 15px);
+}
+
+.couponOffer b {
+  color: #e8cc86;
+  font-size: clamp(12px, 1.2vw, 17px);
+  text-align: right;
+}
+
+.couponOffer small {
+  grid-column: 1 / -1;
+  color: #7f7c6c;
+  font-size: clamp(9px, 0.85vw, 11px);
+}
+
+.couponOffer:hover:not(:disabled) {
+  border-color: rgba(198, 77, 58, 0.82);
+  color: #f3e1ba;
+  background: rgba(143, 42, 31, 0.16);
+}
+
+.couponOfferOn {
+  border-color: #c64d3a;
+  color: #f3e1ba;
+  background: linear-gradient(90deg, rgba(143, 42, 31, 0.32), rgba(143, 42, 31, 0.06));
+}
+
+.couponOffer:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.couponCurrencyNote {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: 0.6em;
+  border-top: 1px dashed rgba(194, 165, 103, 0.2);
+  color: #8b8878;
+  font-size: clamp(9px, 0.95vw, 13px);
+  line-height: 1.5;
 }
 
 .couponBox .emptyText {

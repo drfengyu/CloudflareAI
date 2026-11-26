@@ -200,7 +200,10 @@ export interface Scene {
   level: number;
   id: string;
   name: string;
-  map: { src: string; x: number; y: number; w: number; h: number; scale: number } | null;
+  /** `SceneData.sceneName` 的旧名字；改版包里部分场景名被复用过，保留给旧传送点兼容。 */
+  legacyName?: string;
+  /** `fg` 是原版 `Foreground` 图层单独导出的透明覆盖层，画在角色之上。 */
+  map: { src: string; fg?: string; x: number; y: number; w: number; h: number; scale: number } | null;
   blockedMask: string | null;
   boxes: number[][];
   events: SceneEvent[];
@@ -261,10 +264,13 @@ export function loadGameData(): Promise<GameData> {
     const hpLevels = new Map(content.hpLevels.map((h) => [h.name, h]));
     const scenesByName = new Map<string, Scene[]>();
     for (const s of scenes) {
-      const base = s.name.split("#")[0];
-      const list = scenesByName.get(base) ?? [];
-      list.push(s);
-      scenesByName.set(base, list);
+      for (const key of [s.name, s.legacyName]) {
+        if (!key) continue;
+        const base = key.split("#")[0];
+        const list = scenesByName.get(base) ?? [];
+        if (!list.includes(s)) list.push(s);
+        scenesByName.set(base, list);
+      }
     }
     return { content, scenes, lua, palettes, characters, equipment, items, skills, formations, battles, scenesByName, hpLevels };
   })();
@@ -277,18 +283,32 @@ export function chapterName(id: number) {
   return CHAPTER_NAMES[Math.max(0, Math.min(7, id - 1))] ?? `第${id}章`;
 }
 
+/**
+ * 桌面版 `HpLevelData.Level(lv)` 的原样实现：
+ *
+ *     num  = lv1 - deltas[0]
+ *     num2 = lv / 10
+ *     num3 = lv % 10
+ *     for i in 0..num2-1: num += 10 * deltas[i]
+ *     return num + num3 * deltas[num2]
+ *
+ * 不是「每 10 级加一次 delta」的近似版。1 级 = lv1；2–10 级每级涨
+ * deltas[0]，11 级起换 deltas[1]，以此类推。没有 `hpLevel` 的角色沿用
+ * `Character.fixedHp`（普通敌将为 0，战斗里由章节数值接管）。
+ */
 export function hpFor(data: CharacterData | undefined, hpLevels: Map<string, HpLevelData>, lv: number) {
-  const level = hpLevels.get(data?.hpLevel ?? "") ?? hpLevels.get("备良琦");
-  if (!level) return 100 + lv * 18;
-  let hp = level.lv1;
-  const tens = Math.floor((lv - 1) / 10);
-  for (let i = 0; i < Math.min(tens, level.deltas.length); i++) hp += level.deltas[i];
-  if (lv > 1) {
-    const rem = (lv - 1) % 10;
-    const idx = Math.min(tens, level.deltas.length - 1);
-    hp += (level.deltas[idx] / 10) * rem;
+  const levelData = hpLevels.get(data?.hpLevel ?? "");
+  if (!levelData) return Math.max(0, data?.fixedHp ?? 0);
+  const level = Math.max(1, Math.trunc(lv));
+  const deltas = levelData.deltas;
+  const tens = Math.floor(level / 10);
+  let hp = levelData.lv1 - deltas[0];
+  for (let i = 0; i < tens; i++) {
+    hp += 10 * (deltas[Math.min(i, deltas.length - 1)] ?? 0);
   }
-  return Math.round(hp);
+  const rem = level % 10;
+  hp += rem * (deltas[Math.min(tens, deltas.length - 1)] ?? 0);
+  return Math.max(0, Math.round(hp));
 }
 
 export function equipmentSlot(name: string): number {

@@ -13,23 +13,43 @@ export const KONGMING_ACTIVITY_CONFIG_KEY = "kongming_config";
 /** 孔明传军资换 tcr 的流水类型；账本里与活动奖励分开。 */
 export const KONGMING_TCR_TOPUP_TYPE = 20;
 
+export interface KongmingCouponGoldOffer {
+  /** 需要多少张当期活动券。 */
+  tickets: number;
+  /** 到账多少游戏内「金」。 */
+  gold: number;
+}
+
+export interface KongmingGoldTcrOffer {
+  /** 需要多少游戏内「金」。 */
+  gold: number;
+  /** 到账多少 tcr。 */
+  tcr: number;
+}
+
 export interface KongmingActivityConfig {
   enabled: boolean;
   startAt: string;
   endAt: string;
   /** 1 张活动券 = 多少 cr（券面单价，也用于礼包折算）。 */
   couponUnitCredits: number;
-  /** 1 张活动券可换多少游戏内「金」。 */
+  /** 1 张活动券可换多少游戏内「金」；旧配置与第三档基准。 */
   goldPerCoupon: number;
   /** 单次最多兑换几张，防手滑输入过大。 */
   maxCouponsPerExchange: number;
-  /** 游戏内多少「金」折 1 tcr；100 金 = 1 tcr 沿用钱庄口径。 */
+  /** 券房第一栏：活动券换金，后台可配置三档。 */
+  couponGoldOffers: KongmingCouponGoldOffer[];
+  /** 游戏内多少「金」折 1 tcr；旧配置与第三档基准。 */
   goldPerTcr: number;
-  /** 每个北京自然日最多可用多少「金」换 tcr；默认 600 金 = 6 tcr。 */
+  /** 券房第二栏：金换 tcr，后台可配置三档。 */
+  goldTcrOffers: KongmingGoldTcrOffer[];
+  /** 每个北京自然日最多可用多少「金」换 tcr；默认 2500 金 = 25 tcr。 */
   maxGoldPerTcrDaily: number;
   /** 换到的 tcr 有效天数。 */
   tcrValidDays: number;
 }
+
+const offerTiers = [1, 5, 25] as const;
 
 export const DEFAULT_KONGMING_ACTIVITY_CONFIG: KongmingActivityConfig = {
   // 新活动默认开启，后台可随时关停；改开始时间等于开新一轮（券按轮次隔离）。
@@ -39,8 +59,16 @@ export const DEFAULT_KONGMING_ACTIVITY_CONFIG: KongmingActivityConfig = {
   couponUnitCredits: 2,
   goldPerCoupon: 100,
   maxCouponsPerExchange: 200,
+  couponGoldOffers: offerTiers.map((multiple) => ({
+    tickets: multiple,
+    gold: 100 * multiple,
+  })),
   goldPerTcr: 100,
-  maxGoldPerTcrDaily: 600,
+  goldTcrOffers: offerTiers.map((multiple) => ({
+    gold: 100 * multiple,
+    tcr: multiple,
+  })),
+  maxGoldPerTcrDaily: 2500,
   tcrValidDays: 30,
 };
 
@@ -56,10 +84,38 @@ function boundedInteger(value: unknown, fallback: number, min: number, max: numb
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
 }
 
+function sanitizeCouponGoldOffers(raw: unknown, fallback: KongmingCouponGoldOffer[]) {
+  const source = Array.isArray(raw) ? raw : [];
+  return fallback.map((item, index) => {
+    const input = source[index];
+    if (!input || typeof input !== "object") return item;
+    const row = input as Partial<KongmingCouponGoldOffer>;
+    return {
+      tickets: boundedInteger(row.tickets, item.tickets, 1, 10_000),
+      gold: boundedInteger(row.gold, item.gold, 1, 100_000_000),
+    };
+  });
+}
+
+function sanitizeGoldTcrOffers(raw: unknown, fallback: KongmingGoldTcrOffer[]) {
+  const source = Array.isArray(raw) ? raw : [];
+  return fallback.map((item, index) => {
+    const input = source[index];
+    if (!input || typeof input !== "object") return item;
+    const row = input as Partial<KongmingGoldTcrOffer>;
+    return {
+      gold: boundedInteger(row.gold, item.gold, 1, 100_000_000),
+      tcr: boundedInteger(row.tcr, item.tcr, 1, 1_000_000),
+    };
+  });
+}
+
 export function sanitizeKongmingActivityConfig(raw: unknown): KongmingActivityConfig {
   const d = DEFAULT_KONGMING_ACTIVITY_CONFIG;
   if (!raw || typeof raw !== "object") return d;
   const it = raw as Partial<KongmingActivityConfig>;
+  const goldPerCoupon = boundedInteger(it.goldPerCoupon, d.goldPerCoupon, 1, 1_000_000);
+  const goldPerTcr = boundedInteger(it.goldPerTcr, d.goldPerTcr, 1, 1_000_000);
   return {
     enabled: it.enabled === true,
     startAt: typeof it.startAt === "string" ? it.startAt.trim() : "",
@@ -68,14 +124,22 @@ export function sanitizeKongmingActivityConfig(raw: unknown): KongmingActivityCo
       1_000_000,
       round2(positiveNumber(it.couponUnitCredits, d.couponUnitCredits)),
     ),
-    goldPerCoupon: boundedInteger(it.goldPerCoupon, d.goldPerCoupon, 1, 1_000_000),
+    goldPerCoupon,
     maxCouponsPerExchange: boundedInteger(
       it.maxCouponsPerExchange,
       d.maxCouponsPerExchange,
       1,
       10_000,
     ),
-    goldPerTcr: boundedInteger(it.goldPerTcr, d.goldPerTcr, 1, 1_000_000),
+    couponGoldOffers: sanitizeCouponGoldOffers(
+      it.couponGoldOffers,
+      offerTiers.map((multiple) => ({ tickets: multiple, gold: goldPerCoupon * multiple })),
+    ),
+    goldPerTcr,
+    goldTcrOffers: sanitizeGoldTcrOffers(
+      it.goldTcrOffers,
+      offerTiers.map((multiple) => ({ gold: goldPerTcr * multiple, tcr: multiple })),
+    ),
     maxGoldPerTcrDaily: boundedInteger(
       it.maxGoldPerTcrDaily,
       d.maxGoldPerTcrDaily,

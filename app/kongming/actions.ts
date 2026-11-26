@@ -75,11 +75,11 @@ export interface KongmingTcrExchangeResult {
 
 /**
  * 券房 NPC 军资换 tcr：游戏币在浏览器存档里，服务端无法核验真实余额，
- * 因此按每日上限封顶（默认 600 金 = 6 tcr），超限直接拒绝。
+ * 因此按每日上限封顶，超限直接拒绝；档位必须命中后台 `goldTcrOffers`。
  * 客户端只有在服务端成功后才会扣存档金，避免「扣了金没到账」。
  */
 export async function exchangeKongmingGoldForTcrAction(input: {
-  gold: number;
+  offerIndex: number;
 }): Promise<KongmingTcrExchangeResult> {
   try {
     const userId = await requireUser();
@@ -88,17 +88,15 @@ export async function exchangeKongmingGoldForTcrAction(input: {
     if (activity.status !== "active") {
       return { success: false, message: "孔明传活动未开启或不在活动期内" };
     }
+    const offer = config.goldTcrOffers[Math.trunc(Number(input.offerIndex))];
+    if (!offer) return { success: false, message: "商品档位不存在，请刷新页面" };
+    const gold = offer.gold;
+    const tcr = offer.tcr;
+    if (!Number.isFinite(gold) || gold <= 0 || tcr <= 0) {
+      return { success: false, message: "商品档位无效，请刷新页面" };
+    }
     const rate = Math.max(1, config.goldPerTcr);
     const daily = Math.max(0, config.maxGoldPerTcrDaily);
-    const gold = Math.trunc(Number(input.gold));
-    if (!Number.isFinite(gold) || gold <= 0) {
-      return { success: false, message: "请输入要兑换的金" };
-    }
-    const tcr = Math.floor(gold / rate);
-    if (tcr <= 0) {
-      return { success: false, message: `${rate} 金才能兑换 1 tcr` };
-    }
-    const spentGold = tcr * rate;
 
     const rows = await db
       .select({ total: sql<number>`COALESCE(SUM(${topups.amount}), 0)` })
@@ -114,7 +112,7 @@ export async function exchangeKongmingGoldForTcrAction(input: {
     const usedTcr = Number(rows[0]?.total ?? 0);
     const usedGold = Math.round(usedTcr * rate);
     const remainingGold = Math.max(0, daily - usedGold);
-    if (spentGold > remainingGold) {
+    if (gold > remainingGold) {
       return {
         success: false,
         message: `今日军资兑换上限 ${daily} 金，还剩 ${remainingGold} 金`,
@@ -126,16 +124,16 @@ export async function exchangeKongmingGoldForTcrAction(input: {
       userId,
       amount: tcr,
       topupType: KONGMING_TCR_TOPUP_TYPE,
-      description: `诸葛孔明传军资兑换：${spentGold} 金 → ${tcr} tcr`,
+      description: `诸葛孔明传军资兑换：${gold} 金 → ${tcr} tcr`,
       validDays: config.tcrValidDays,
     });
     revalidatePath("/kongming");
     return {
       success: true,
-      message: `已用 ${spentGold} 金换得 ${tcr} tcr（${config.tcrValidDays} 天内有效）`,
-      gold: spentGold,
+      message: `已用 ${gold} 金换得 ${tcr} tcr（${config.tcrValidDays} 天内有效）`,
+      gold,
       tcr,
-      remainingGold: Math.max(0, remainingGold - spentGold),
+      remainingGold: Math.max(0, remainingGold - gold),
     };
   } catch (error) {
     return {
@@ -150,6 +148,8 @@ export interface KongmingGoldRedeemResult {
   message: string;
   /** 本次实际发放的游戏内「金」。 */
   gold?: number;
+  /** 本次扣掉的当期活动券张数。 */
+  tickets?: number;
   /** 结算后剩余的当期活动券张数，界面直接刷新。 */
   remaining?: number;
 }
@@ -158,10 +158,11 @@ export interface KongmingGoldRedeemResult {
  * 把当期孔明券换成《诸葛孔明传》存档里的金。
  *
  * 券在服务端扣减（`payWithCoupon` 只动当期 `activity_coupon`），金由客户端
- * 写进 localStorage 存档；兑换比例与单次上限取自 `kongming_config`。
+ * 写进 localStorage 存档。档位必须命中后台 `couponGoldOffers`，客户端不能
+ * 自带价格。
  */
 export async function redeemKongmingGoldAction(input: {
-  tickets: number;
+  offerIndex: number;
 }): Promise<KongmingGoldRedeemResult> {
   try {
     const userId = await requireUser();
@@ -170,10 +171,9 @@ export async function redeemKongmingGoldAction(input: {
     if (activity.status !== "active" || !activity.activityKey) {
       return { success: false, message: "孔明传活动未开启或不在活动期内" };
     }
-    const tickets = Math.trunc(Number(input.tickets));
-    if (!Number.isFinite(tickets) || tickets <= 0) {
-      return { success: false, message: "请输入要兑换的整张数" };
-    }
+    const offer = config.couponGoldOffers[Math.trunc(Number(input.offerIndex))];
+    if (!offer) return { success: false, message: "商品档位不存在，请刷新页面" };
+    const tickets = offer.tickets;
     if (tickets > config.maxCouponsPerExchange) {
       return {
         success: false,
@@ -186,12 +186,12 @@ export async function redeemKongmingGoldAction(input: {
     const paid = await payWithCoupon(userId, "kongming", activity.activityKey, cost, unit);
     if (!paid.ok) return { success: false, message: paid.reason };
 
-    const gold = tickets * config.goldPerCoupon;
     revalidatePath("/kongming");
     return {
       success: true,
-      message: `已用 ${tickets} 张${activity.couponName}换得 ${gold} 金`,
-      gold,
+      message: `已用 ${tickets} 张${activity.couponName}换得 ${offer.gold} 金`,
+      gold: offer.gold,
+      tickets,
       remaining: activity.tickets - tickets,
     };
   } catch (error) {

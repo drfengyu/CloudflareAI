@@ -13,6 +13,7 @@ import { FlipForm } from "./flip-form";
 import { WorkshopForm } from "./workshop-form";
 import { CollectionForm } from "./collection-form";
 import { KongmingForm } from "./kongming-form";
+import { ReleaseAnnouncementButton } from "./release-announcement-button";
 import { CouponPackForm } from "./pack-form";
 import { sanitizeLotteryConfig } from "@/lib/lottery/prize-math";
 import { sanitizeRaidenConfig } from "@/lib/raiden/config";
@@ -317,6 +318,7 @@ export default async function AdminSettingsPage() {
           </CardHeader>
           <CardContent>
             <KongmingForm initialConfig={kongmingConfig} />
+            <ReleaseAnnouncementButton />
           </CardContent>
         </Card>
 
