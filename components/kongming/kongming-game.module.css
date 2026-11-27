@@ -80,6 +80,66 @@
   box-shadow: 0 18px 46px rgba(0, 0, 0, 0.32);
 }
 
+/* 横版全屏：把 16:9 画面居中铺满屏幕，竖屏设备左右留黑边，不拉伸像素。 */
+.frameWrapFull,
+.frameWrap:fullscreen {
+  width: 100vw;
+  height: 100vh;
+  max-width: none;
+  aspect-ratio: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0;
+  background: #000;
+  box-shadow: none;
+}
+
+.frameWrapFull .frame,
+.frameWrap:fullscreen .frame {
+  width: min(100vw, 177.78vh);
+  height: min(56.25vw, 100vh);
+  flex: 0 0 auto;
+}
+
+.fullscreenButton {
+  font: inherit;
+  font-size: clamp(10px, 0.95vw, 14px);
+  color: #e8d8b0;
+  background: rgba(20, 25, 18, 0.9);
+  border: 1px solid rgba(194, 165, 103, 0.5);
+  padding: 0.35em 0.8em;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.fullscreenButton:hover {
+  border-color: rgba(214, 173, 92, 0.9);
+  color: #fff2cc;
+}
+
+.fullscreenToggle {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 40;
+  font: inherit;
+  font-size: clamp(9px, 1.05cqh, 13px);
+  color: rgba(255, 242, 204, 0.85);
+  background: rgba(4, 7, 5, 0.55);
+  border: 1px solid rgba(194, 165, 103, 0.42);
+  padding: 0.32em 0.7em;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.fullscreenToggle:hover {
+  opacity: 1;
+  border-color: rgba(214, 173, 92, 0.85);
+}
+
 .couponWrap {
   width: min(100%, 1400px, calc((100dvh - 200px) * 1.7778));
 }
@@ -676,10 +736,10 @@
 
 .enemyPortrait {
   position: absolute;
-  left: 18%;
-  top: 12%;
-  width: 10.5%;
-  height: 18%;
+  left: 8%;
+  top: 11%;
+  width: 13%;
+  height: 23%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -713,9 +773,9 @@
 
 .enemyStats {
   position: absolute;
-  left: 31.5%;
+  left: 24%;
   top: 11%;
-  width: 32%;
+  width: 31%;
   font-size: 4.2cqh;
   line-height: 1.42;
 }
@@ -756,12 +816,13 @@
 
 .enemyMeta {
   position: absolute;
-  left: 17.5%;
-  top: 46%;
-  width: 44%;
+  left: 24%;
+  top: 47%;
+  width: 31%;
   display: flex;
-  gap: 9%;
-  font-size: 4.4cqh;
+  flex-wrap: wrap;
+  gap: 0.45em 0.9em;
+  font-size: 3.9cqh;
 }
 
 .enemyMeta b {
@@ -769,27 +830,59 @@
   margin-left: 0.5em;
 }
 
-.enemyMemo {
+.enemySkillPanel {
   position: absolute;
-  left: 29.5%;
-  top: 63%;
-  width: 41.5%;
-  height: 32%;
+  left: 57%;
+  top: 11%;
+  width: 35%;
+  height: 66%;
   box-sizing: border-box;
   border: 2px solid #e8e8e8;
   box-shadow: inset 0 0 0 1px #000;
   display: flex;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  gap: 0.3em 1em;
-  padding: 0.5em 0.75em;
-  font-size: 3.4cqh;
+  flex-direction: column;
+  padding: 0.45em 0.7em 0.55em;
+}
+
+.enemySkillPanel h3 {
+  margin: 0 0 0.4em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid #777;
+  color: #fff;
+  font-size: 3.7cqh;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+}
+
+.enemyMemo {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: start;
+  gap: 0.35em 0.9em;
+  font-size: 3.25cqh;
   line-height: 1.35;
-  overflow: auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .enemyMemo span {
-  min-width: 4.5em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.enemyPageHint {
+  position: absolute;
+  left: 24%;
+  bottom: 6%;
+  width: 68%;
+  color: #cfcfcf;
+  font-size: 3cqh;
+  letter-spacing: 0.08em;
+  text-align: center;
 }
 
 .enemyPager {
@@ -1154,6 +1247,21 @@
   right: 36.1%;
 }
 
+/* 原版选择敌人时不在下方列名单，而是把闪烁箭头压在敌军武将身上。 */
+.battleTargetMark {
+  position: absolute;
+  right: 43.1%;
+  top: 50%;
+  width: 2.6%;
+  height: 4.8%;
+  transform: translateY(-50%);
+  background: url("/game-assets/kongming/ui/Cursor.png") center / 100% 100% no-repeat;
+  image-rendering: pixelated;
+  z-index: 3;
+  animation: commandCursorPulse 1.03s ease-in-out infinite;
+  filter: drop-shadow(0 0 2px #fff);
+}
+
 .battleSprite span {
   display: grid;
   place-items: center;
@@ -1183,10 +1291,10 @@
 
 .battleDialogBox {
   position: absolute;
-  left: 37.5%;
-  width: 24.7%;
+  left: 29.5%;
+  width: 44%;
   bottom: 1%;
-  height: 25.5%;
+  height: 31%;
   background: #000;
   border: 2px solid #f2f2f2;
   box-shadow: inset 0 0 0 1.5px #000;
@@ -1195,6 +1303,11 @@
   padding: 1.5% 2%;
   overflow: hidden;
   color: #f5f5f5;
+}
+
+/* 谋略是 2 列 × 3 行网格，需要比常规 2×3 指令窗略高，避免最后一行被裁掉。 */
+.battleDialogTall {
+  height: 38%;
 }
 
 .battleIntroText {
@@ -1263,6 +1376,112 @@
   color: #fff;
   font-size: 4.6cqh;
   letter-spacing: 0.1em;
+}
+
+/* 原版攻击 / 策略选目标：战场上的箭头选敌，下方只保留当前目标。 */
+.battleTargetPrompt {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.battleTargetPrompt small,
+.battleSkillFoot small {
+  color: #9a9a9a;
+  font-size: 3cqh;
+  letter-spacing: 0.04em;
+}
+
+.battleTargetNow {
+  display: flex;
+  align-items: center;
+  gap: 0.8em;
+  font-size: 3.5cqh;
+  line-height: 1.2;
+}
+
+.battleTargetNow b {
+  font-size: 5.8cqh;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+}
+
+.battleTargetNow em {
+  margin-left: auto;
+  color: #d8d8d8;
+  font-style: normal;
+  font-size: 3.8cqh;
+}
+
+.battleSkillMenu {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.battleSkillHead {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 0.22em;
+  margin-bottom: 0.22em;
+  border-bottom: 1px solid #c8c8c8;
+  font-size: 3.9cqh;
+  letter-spacing: 0.1em;
+}
+
+.battleSkillHead b {
+  font-size: 3.2cqh;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.battleSkillGrid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-auto-rows: minmax(0, 1fr);
+  gap: 0 0.75em;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: 3.55cqh;
+  line-height: 1.15;
+}
+
+.battleSkillCell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 0.08em 0.35em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+}
+
+.battleSkillCell span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.battleSkillCell em {
+  color: #a7a7a7;
+  font-style: normal;
+  font-size: 0.82em;
+}
+
+.battleSkillFoot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6em;
+  margin-top: 0.25em;
+  color: #cfcfcf;
+  font-size: 3.2cqh;
 }
 
 .battleTargetList,
@@ -1409,12 +1628,12 @@
 }
 
 .panel {
-  width: 62%;
-  max-height: 78%;
+  width: min(86%, 920px);
+  max-height: 92%;
   display: flex;
   flex-direction: column;
   background:
-    linear-gradient(145deg, rgba(27, 31, 24, 0.98), rgba(9, 12, 9, 0.99));
+    linear-gradient(145deg, rgba(27, 31, 24, 0.995), rgba(9, 12, 9, 0.999));
   border: 1px solid rgba(194, 165, 103, 0.45);
   box-shadow: 0 26px 80px rgba(0, 0, 0, 0.7), inset 0 0 40px rgba(0, 0, 0, 0.35);
   overflow: hidden;
@@ -1424,7 +1643,7 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: 1.2em 1.6em 0.9em;
+  padding: 0.8em 1.3em 0.62em;
   border-bottom: 1px solid rgba(194, 165, 103, 0.26);
   background: linear-gradient(90deg, rgba(120, 39, 31, 0.23), transparent);
 }
@@ -1453,7 +1672,7 @@
 .panelBody {
   flex: 1;
   min-height: 0;
-  padding: 1.2em 1.6em;
+  padding: 0.85em 1.2em;
   overflow: auto;
   overscroll-behavior: contain;
 }
@@ -1461,12 +1680,16 @@
 .rootMenu {
   list-style: none;
   margin: 0;
-  padding: 1.4em 2.2em 1.8em;
+  padding: 1.1em 2.2em 1.4em;
   display: flex;
+  flex: 1;
+  min-height: 0;
   flex-direction: column;
-  gap: 0.52em;
+  gap: 0.45em;
   font-size: clamp(13px, 1.5vw, 20px);
   letter-spacing: 0.24em;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .rootMenu li {
@@ -1493,7 +1716,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1em;
+  flex-wrap: wrap;
+  gap: 0.45em 1em;
   padding: 0.7em 0.9em;
   border-bottom: 1px solid rgba(207, 187, 143, 0.12);
   color: #b9b29c;
@@ -1504,6 +1728,13 @@
 .saveRow b {
   color: #ead9b6;
   font-weight: 500;
+}
+
+.listRow span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rowOn {
@@ -1534,7 +1765,8 @@
 .memberTabs {
   display: flex;
   align-items: center;
-  gap: 1em;
+  flex-wrap: wrap;
+  gap: 0.45em 0.8em;
   margin-bottom: 0.9em;
   color: #8d8a78;
 }
@@ -1554,6 +1786,293 @@
 .memberTabs small {
   margin-left: auto;
   font-size: clamp(8px, 0.8vw, 11px);
+}
+
+.generalBody {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.generalCard {
+  display: flex;
+  gap: 0.9em;
+  align-items: flex-start;
+  margin-bottom: 0.65em;
+  padding: 0.6em;
+  border: 1px solid rgba(185, 161, 109, 0.22);
+  background: rgba(0, 0, 0, 0.18);
+}
+
+.generalPortrait {
+  flex: 0 0 15%;
+  min-width: 92px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.22em;
+}
+
+.generalPortrait img,
+.generalPortrait > span {
+  width: min(100%, 92px);
+  aspect-ratio: 1;
+  object-fit: cover;
+  image-rendering: pixelated;
+  border: 1px solid rgba(194, 165, 103, 0.45);
+}
+
+.generalPortrait > span {
+  display: grid;
+  place-items: center;
+  color: #ead9b6;
+  font-size: clamp(26px, 3.4vw, 48px);
+}
+
+.generalPortrait strong {
+  color: #f1dfb6;
+  font-size: clamp(14px, 1.35vw, 20px);
+  font-weight: 500;
+  letter-spacing: 0.16em;
+}
+
+.generalPortrait em {
+  color: #8f8b78;
+  font-style: normal;
+  font-size: clamp(9px, 0.88vw, 12px);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.generalStats {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: start;
+  gap: 0.32em 1.1em;
+  padding-top: 0.1em;
+}
+
+.generalStats > div {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  font-size: clamp(10px, 1.02vw, 14px);
+}
+
+.generalStats b {
+  width: 2.1em;
+  color: #a8a28c;
+  font-weight: 500;
+}
+
+.generalStats span {
+  width: 2.6em;
+  color: #ead9b6;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.generalStats i {
+  flex: 1;
+  min-width: 2em;
+  height: 0.62em;
+  border: 1px solid #565244;
+  background: #24251f;
+  overflow: hidden;
+}
+
+.generalStats i em {
+  display: block;
+  height: 100%;
+  background: repeating-linear-gradient(90deg, #e9b64a 0 2px, transparent 2px 5px);
+}
+
+.generalColumns {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 0.9em;
+  min-height: 0;
+  flex: 1;
+}
+
+.generalColumns section {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.generalColumns h3,
+.enemySkillPanel h3 {
+  margin: 0 0 0.35em;
+  padding-bottom: 0.24em;
+  border-bottom: 1px solid rgba(194, 165, 103, 0.24);
+  color: #d8c59a;
+  font-size: clamp(11px, 1.12vw, 15px);
+  font-weight: 500;
+  letter-spacing: 0.16em;
+}
+
+.generalEquip {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45em;
+}
+
+.generalEquip > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5em;
+  padding: 0.45em 0.6em;
+  border: 1px solid rgba(185, 161, 109, 0.2);
+  background: rgba(0, 0, 0, 0.14);
+  font-size: clamp(9px, 0.92vw, 13px);
+}
+
+.generalEquip span {
+  color: #7e7c6e;
+}
+
+.generalEquip b {
+  color: #d9c59d;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.generalSkills {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-content: start;
+  gap: 0.35em 0.6em;
+  overflow-y: auto;
+}
+
+.generalSkills > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4em;
+  min-width: 0;
+  padding: 0.35em 0.5em;
+  border: 1px solid rgba(185, 161, 109, 0.16);
+  background: rgba(0, 0, 0, 0.12);
+  color: #d3c7ac;
+  font-size: clamp(9px, 0.95vw, 13px);
+}
+
+.generalSkills em {
+  color: #8f8b78;
+  font-style: normal;
+  font-size: 0.82em;
+  white-space: nowrap;
+}
+
+.menuSkillHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 0.7em;
+  padding: 0.45em 0.6em;
+  border-left: 2px solid rgba(198, 77, 58, 0.7);
+  background: linear-gradient(90deg, rgba(143, 42, 31, 0.18), transparent);
+  color: #a49e88;
+  font-size: clamp(10px, 1vw, 14px);
+  letter-spacing: 0.1em;
+}
+
+.menuSkillHead b {
+  color: #ead9b6;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.menuSkillGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4em 0.7em;
+}
+
+.menuSkillCell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5em;
+  min-width: 0;
+  padding: 0.55em 0.65em;
+  border: 1px solid rgba(185, 161, 109, 0.2);
+  background: rgba(0, 0, 0, 0.12);
+  color: #c9c0a9;
+  font-size: clamp(10px, 1.02vw, 14px);
+}
+
+.menuSkillCell span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menuSkillCell em {
+  color: #8f8b78;
+  font-style: normal;
+  font-size: 0.82em;
+  white-space: nowrap;
+}
+
+.formationsHint,
+.formationHint {
+  color: #8f8b78;
+  font-size: clamp(8px, 0.82vw, 11px);
+  margin-left: 0.7em;
+}
+
+.formationGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55em 0.7em;
+}
+
+.formationCard {
+  min-width: 0;
+  padding: 0.55em 0.7em;
+  border: 1px solid rgba(185, 161, 109, 0.2);
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.formationCard > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5em;
+}
+
+.formationCard strong {
+  color: #e3d3ad;
+  font-size: clamp(11px, 1.15vw, 15px);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+}
+
+.formationCard span {
+  color: #8f8b78;
+  font-size: clamp(8px, 0.8vw, 11px);
+  white-space: nowrap;
+}
+
+.formationCard small {
+  display: block;
+  margin-top: 0.25em;
+  color: #9c9782;
+  font-size: clamp(8px, 0.82vw, 11px);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .equipSlots {
@@ -1844,7 +2363,9 @@
   left: 18%;
   right: 0;
   bottom: 1.8%;
-  height: 24%;
+  height: auto;
+  min-height: 24%;
+  max-height: 42%;
   z-index: 22;
   animation: dialogueIn 0.2s ease-out;
 }
@@ -1918,6 +2439,8 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .dialogueTextBox.noPortrait {
@@ -1928,10 +2451,13 @@
   margin: 0;
   color: #fff;
   font-family: "Songti SC", "Noto Serif SC", "STSong", serif;
-  font-size: clamp(12px, 2.15vw, 28px);
-  line-height: 1.5;
+  font-size: clamp(12px, 3.1cqh, 28px);
+  line-height: 1.45;
   letter-spacing: 0.04em;
   white-space: pre-wrap;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .dialogueNext {
@@ -2247,6 +2773,13 @@
 .touchKey:active {
   background: rgba(210, 180, 96, 0.34);
   transform: scale(0.94);
+}
+
+/* 桌面端已有实体键盘，隐藏虚拟按键，避免遮住面板、武将头像与战斗窗口。 */
+@media (hover: hover) and (pointer: fine) {
+  .touchControls {
+    display: none;
+  }
 }
 
 .touchUp { grid-area: 1 / 2; }

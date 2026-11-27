@@ -24,6 +24,7 @@ import {
   type CharacterData,
   type Content,
   type EquipmentData,
+  type FormationData,
   type GameData,
   type ItemData,
   type ModelPalette,
@@ -100,6 +101,7 @@ interface InventorySlot {
 
 type PanelKind =
   | "root"
+  | "generals"
   | "party"
   | "inventory"
   | "equipment"
@@ -109,6 +111,19 @@ type PanelKind =
   | "load"
   | "settings"
   | "story";
+
+/** 军帐根菜单顺序；末尾“返回”不占 PanelKind。 */
+const ROOT_ITEMS: PanelKind[] = [
+  "generals",
+  "party",
+  "equipment",
+  "inventory",
+  "skills",
+  "formations",
+  "story",
+  "save",
+  "settings",
+];
 
 interface PanelState {
   kind: PanelKind;
@@ -199,6 +214,22 @@ function weaponTypeNames(bits: number) {
 /** 原版 Character.TerrainNames：平2 山4 水8 */
 function terrainTypeNames(bits: number) {
   return `${bits & 2 ? "平" : ""}${bits & 4 ? "山" : ""}${bits & 8 ? "水" : ""}` || "--";
+}
+
+/** 阵形第一格的原版攻防倍率 + 速度修正，给军帐阵形页做简要说明。 */
+function formationEffectText(f: FormationData | null | undefined) {
+  if (!f) return "原版阵形";
+  const first = f.flatMags[0];
+  const atk = first?.attack ?? 1;
+  const hurt = first?.getHurt ?? 1;
+  const buffs = (first?.buffs ?? []) as { type?: number; value?: number }[];
+  const speed = buffs.find((b) => b.type === 5)?.value ?? 0;
+  const parts: string[] = [];
+  if (Math.abs(atk - 1) > 0.001) parts.push(`攻 ×${atk.toFixed(2)}`);
+  if (Math.abs(hurt - 1) > 0.001) parts.push(`承伤 ×${hurt.toFixed(2)}`);
+  if (Math.abs(speed) > 0.001) parts.push(`速 ${speed > 0 ? "+" : ""}${Math.round(speed)}`);
+  if (f.useTerrain === 2) parts.push("限水边");
+  return parts.join(" · ") || "无额外加成";
 }
 
 interface BattleAction {
@@ -653,6 +684,33 @@ export default function KongmingGame({
   tcrValidDays?: number;
 } = {}) {
   const [snap, setSnap] = useState<Snap>(EMPTY_SNAP);
+  const frameWrapRef = useRef<HTMLDivElement | null>(null);
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => {
+    const sync = () => setFullscreen(document.fullscreenElement === frameWrapRef.current);
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+  const toggleFullscreen = useCallback(async () => {
+    const wrap = frameWrapRef.current;
+    if (!wrap) return;
+    try {
+      if (document.fullscreenElement === wrap) {
+        (screen.orientation as ScreenOrientation & { unlock?: () => void })?.unlock?.();
+        await document.exitFullscreen();
+        return;
+      }
+      const legacy = wrap as HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void };
+      if (typeof wrap.requestFullscreen === "function") await wrap.requestFullscreen({ navigationUI: "hide" });
+      else await legacy.webkitRequestFullscreen?.();
+      const orientation = screen.orientation as ScreenOrientation & {
+        lock?: (mode: string) => Promise<void>;
+      };
+      await orientation?.lock?.("landscape");
+    } catch {
+      // 浏览器不支持元素全屏 / 屏幕方向锁时保持窗口内布局。
+    }
+  }, []);
   const [couponTickets, setCouponTickets] = useState(activity?.tickets ?? 0);
   const [npcWalk, setNpcWalk] = useState<Record<string, NpcWalkState>>({});
   const npcWalkRef = useRef<Record<string, NpcWalkState>>({});
@@ -2529,7 +2587,7 @@ export default function KongmingGame({
     const f = d.formations.get(name);
     if (!f) return;
     mutate((prev) => ({ ...prev, formation: name }));
-    toast(`阵型变更为 ${name}`);
+    toast(`阵形变更为 ${name}`);
   }, [mutate, toast]);
 
   /* ------------------------------------------------------------------ */
@@ -2916,18 +2974,33 @@ export default function KongmingGame({
 
     if (s.panel) {
       const p = s.panel;
-      const rootItems: PanelKind[] = ["party", "inventory", "equipment", "skills", "formations", "story", "save", "settings"];
+      const rootCount = ROOT_ITEMS.length + 1;
       if (p.kind === "root") {
         if (key === "KeyK") { closePanel(); return; }
         if (key === "KeyW" || key === "KeyS") {
-          mutate((prev) => prev.panel ? { ...prev, panel: { ...prev.panel, cursor: (prev.panel.cursor + (key === "KeyW" ? 8 : 1)) % 9 } } : prev);
+          mutate((prev) => prev.panel ? { ...prev, panel: { ...prev.panel, cursor: (prev.panel.cursor + (key === "KeyW" ? rootCount - 1 : 1)) % rootCount } } : prev);
           return;
         }
         if (key === "KeyJ") {
-          if (p.cursor === 8) { closePanel(); return; }
-          openPanel(rootItems[p.cursor]);
+          if (p.cursor >= ROOT_ITEMS.length) { closePanel(); return; }
+          openPanel(ROOT_ITEMS[p.cursor]);
           return;
         }
+      }
+
+      if (p.kind === "generals") {
+        if (key === "KeyK") { openPanel("root"); return; }
+        if (key === "KeyA" || key === "KeyD") {
+          mutate((prev) => prev.panel ? {
+            ...prev,
+            panel: {
+              ...prev.panel,
+              member: ((prev.panel.member ?? 0) + (key === "KeyA" ? prev.party.length - 1 : 1)) % Math.max(1, prev.party.length),
+              cursor: 0,
+            },
+          } : prev);
+        }
+        return;
       }
 
       if (p.kind === "settings") {
@@ -2967,6 +3040,17 @@ export default function KongmingGame({
       if (p.kind === "skills") {
         const member = s.party[p.member ?? 0];
         const skills = member ? memberSkillsAtLevel(member, s.level) : [];
+        if (key === "KeyA" || key === "KeyD") {
+          mutate((prev) => prev.panel ? {
+            ...prev,
+            panel: {
+              ...prev.panel,
+              member: ((prev.panel.member ?? 0) + (key === "KeyA" ? prev.party.length - 1 : 1)) % Math.max(1, prev.party.length),
+              cursor: 0,
+            },
+          } : prev);
+          return;
+        }
         if (key === "KeyW" || key === "KeyS") mutate((prev) => prev.panel ? { ...prev, panel: { ...prev.panel, cursor: (prev.panel.cursor + (key === "KeyW" ? Math.max(1, skills.length) - 1 : 1)) % Math.max(1, skills.length) } } : prev);
         if (key === "KeyJ") { const sk = skills[p.cursor]; if (sk) useSkillInfo(sk); }
         return;
@@ -3187,14 +3271,15 @@ export default function KongmingGame({
   const showDialoguePortrait = Boolean(s.dialogue && (s.dialogue.name || dialogueFace));
   const titleLabels = ["解甲归田", "厉兵秣马", "匡扶汉室", "初出茅庐"];
   const titleHints = ["退出游戏", "设置", "读取存档", "开始新游戏"];
-  const rootLabels = ["队伍", "物品", "装备", "谋略", "阵型", "剧情", "保存", "设置", "返回"];
+  const rootLabels = ["部将", "队列", "装备", "物品", "谋略", "阵形", "剧情", "保存", "设置", "返回"];
   const panelTitle: Record<string, string> = {
     root: "军帐",
-    party: "队伍",
+    generals: "部将",
+    party: "队列",
     inventory: "物品",
     equipment: "装备",
     skills: "谋略",
-    formations: "阵型",
+    formations: "阵形",
     story: "剧情",
     save: "保存进度",
     load: "读取进度",
@@ -3219,6 +3304,9 @@ export default function KongmingGame({
           <span className={styles.activityBadge}>限时活动</span>
           <h1 className={styles.activityTitle}>诸葛孔明传 · 吞食天地２怀旧版</h1>
           <SoundToggle game="kongming" battle={s.screen === "battle"} className="ml-auto" />
+          <button type="button" className={styles.fullscreenButton} onClick={() => void toggleFullscreen()}>
+            {fullscreen ? "退出全屏" : "全屏游玩"}
+          </button>
         </div>
         <p className={styles.activityDesc}>
           按 Windows 桌面版逐场景复刻。方向键 / WASD 移动，J 确认、K 取消，触屏可直接使用画面内虚拟按键。
@@ -3227,7 +3315,7 @@ export default function KongmingGame({
           封面四项：解甲归田 退出 · 厉兵秣马 设置 · 匡扶汉室 读取存档 · 初出茅庐 开始新游戏
         </p>
       </div>
-      <div className={styles.frameWrap}>
+      <div ref={frameWrapRef} className={`${styles.frameWrap} ${fullscreen ? styles.frameWrapFull : ""}`}>
       <div className={`${styles.frame} ${s.shake ? styles.shake : ""}`}>
         {s.screen === "loading" && (
           <div className={styles.loading}>
@@ -3508,6 +3596,7 @@ export default function KongmingGame({
                   className={`${styles.battleRow} ${styles.battleRowEnemy} ${u.hp <= 0 && !deadSprite ? styles.unitDown : ""} ${lit ? styles.battleRowActive : ""} ${hurt ? styles.battleRowHurt : ""}`}
                   style={{ top: `${BATTLE_ROW_TOP[i]}%` }}
                 >
+                  {lit && <span className={styles.battleTargetMark} aria-hidden />}
                   <div className={`${styles.battleSprite} ${!battle.outcome ? styles.battleFlip : ""}`}>
                     {deadSprite ? (
                       <TintedSprite className={styles.battleFrameTall} src={deadSprite} palette={palette} alt="" />
@@ -3550,7 +3639,7 @@ export default function KongmingGame({
                       <div key={label}>
                         <b>{label}</b>
                         <span>{value}</span>
-                        <i><em style={{ width: `${clamp(value / 100, 0, 1) * 100}%` }} /></i>
+                        <i><em style={{ width: `${clamp(value / 255, 0, 1) * 100}%` }} /></i>
                       </div>
                     ))}
                   </div>
@@ -3559,11 +3648,15 @@ export default function KongmingGame({
                     <span>武器 <b>{weaponTypeNames(e.weaponBits)}</b></span>
                     <span>地形 <b>{terrainTypeNames(e.terrainBits)}</b></span>
                   </div>
-                  <div className={styles.enemyMemo}>
-                    {e.skills.length > 0
-                      ? e.skills.slice(0, 6).map((sk) => <span key={sk}>{sk}</span>)
-                      : <span>--</span>}
-                  </div>
+                  <section className={styles.enemySkillPanel}>
+                    <h3>谋略</h3>
+                    <div className={styles.enemyMemo} data-km-scroll="1">
+                      {e.skills.length > 0
+                        ? e.skills.map((sk) => <span key={sk}>{sk}</span>)
+                        : <span>尚未习得计策</span>}
+                    </div>
+                  </section>
+                  <div className={styles.enemyPageHint}>W/S 查看敌将　K 返回</div>
                   <div className={styles.enemyPager}><span>◀</span><span>▶</span></div>
                 </div>
               );
@@ -3603,7 +3696,7 @@ export default function KongmingGame({
             )}
 
             {!battle.outcome && (
-              <div className={styles.battleDialogBox}>
+              <div className={`${styles.battleDialogBox} ${battle.menu === "skill" ? styles.battleDialogTall : ""}`}>
                 {battle.intro ? (
                   <p className={styles.battleIntroText}>{battle.log[0]}</p>
                 ) : battle.menu === "command" ? (
@@ -3629,27 +3722,33 @@ export default function KongmingGame({
                     <small>W/S 选择　K 返回</small>
                   </div>
                 ) : battle.menu === "attack" || battle.menu === "target" ? (
-                  <div className={styles.battleTargetList} data-km-scroll="1">
-                    <p className={styles.battlePanelTitle}>{battle.menu === "target" ? `${battle.skill} · 选择目标` : "攻击"}</p>
-                    {enemies.map((u, i) => (
-                      <div key={u.key} data-km-cursor={battle.cursor === i ? "1" : undefined} className={battle.cursor === i ? styles.commandOn : undefined}>
-                        <span className={battle.cursor === i ? styles.commandCursor : undefined} />{u.name}<em>{u.hp}</em>
-                      </div>
-                    ))}
-                    <small>W/S 选择　J 确认　K 返回</small>
+                  <div className={styles.battleTargetPrompt}>
+                    <p className={styles.battlePanelTitle}>{battle.menu === "target" ? `${battle.skill} · 选择目标` : "攻击 · 选择目标"}</p>
+                    <div className={styles.battleTargetNow}>
+                      <span className={styles.commandCursor} />
+                      <b>{enemies[battle.cursor]?.name ?? "无目标"}</b>
+                      <em>兵 {enemies[battle.cursor]?.hp ?? 0}</em>
+                    </div>
+                    <small>W/S 选敌　J 确认　K 返回</small>
                   </div>
                 ) : battle.menu === "skill" ? (
-                  <div className={styles.battleTargetList} data-km-scroll="1">
-                    <p className={styles.battlePanelTitle}>谋略</p>
-                    {battleSkills.map((name, i) => {
-                      const sk = data.skills.get(name);
-                      return (
-                        <div key={name} data-km-cursor={battle.cursor === i ? "1" : undefined} className={battle.cursor === i ? styles.commandOn : undefined}>
-                          <span className={battle.cursor === i ? styles.commandCursor : undefined} />{name}<em>{sk?.cost ? `${sk.cost} 策略点` : ""}</em>
-                        </div>
-                      );
-                    })}
-                    <small>W/S 选择　J 使用　K 返回</small>
+                  <div className={styles.battleSkillMenu}>
+                    <div className={styles.battleSkillHead}><span>谋略</span><b>剩余 SP {s.mp}</b></div>
+                    <div className={styles.battleSkillGrid} data-km-scroll="1">
+                      {battleSkills.map((name, i) => {
+                        const sk = data.skills.get(name);
+                        return (
+                          <div key={name} data-km-cursor={battle.cursor === i ? "1" : undefined} className={`${styles.battleSkillCell} ${battle.cursor === i ? styles.rowOn : ""}`}>
+                            <span>{battle.cursor === i ? "◆ " : ""}{name}</span>
+                            <em>{sk?.cost ?? 0}</em>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className={styles.battleSkillFoot}>
+                      <span>消耗 {data.skills.get(battleSkills[battle.cursor])?.cost ?? 0}</span>
+                      <small>W/S 选择　J 使用　K 返回</small>
+                    </div>
                   </div>
                 ) : battle.menu === "item" ? (
                   <div className={styles.battleTargetList} data-km-scroll="1">
@@ -3662,13 +3761,6 @@ export default function KongmingGame({
                     <small>J 使用于 {leader?.name}　K 返回</small>
                   </div>
                 ) : null}
-              </div>
-            )}
-
-            {!battle.outcome && battle.menu === "skill" && (
-              <div className={styles.battleSkillInfo}>
-                <div><span>策略点</span><b>{s.mp}</b></div>
-                <div><span>消耗</span><b>{data.skills.get(battleSkills[battle.cursor])?.cost ?? 0}</b></div>
               </div>
             )}
           </div>
@@ -3702,11 +3794,77 @@ export default function KongmingGame({
                 </ul>
               )}
 
+              {panel.kind === "generals" && (() => {
+                const m = s.party[panel.member ?? 0];
+                if (!m) {
+                  return <div className={styles.panelBody}><p className={styles.emptyText}>尚无武将</p></div>;
+                }
+                const combat = memberCombatStats(m, s.level);
+                const skills = memberSkillsAtLevel(m, s.level);
+                const face = faceForProfile(m.profile);
+                const rows: [string, number][] = [
+                  ["武力", combat.str], ["智力", combat.ler], ["速度", combat.spd],
+                  ["攻击", combat.atk], ["防御", combat.def], ["兵力", combat.maxHp],
+                ];
+                return (
+                  <div className={`${styles.panelBody} ${styles.generalBody}`} data-km-scroll="1">
+                    <div className={styles.memberTabs}>
+                      {s.party.map((member, i) => (
+                        <span key={member.key} className={(panel.member ?? 0) === i ? styles.tabOn : undefined}>{member.name}</span>
+                      ))}
+                      <small>A/D 切换</small>
+                    </div>
+                    <div className={styles.generalCard}>
+                      <div className={styles.generalPortrait}>
+                        {face ? <img src={face} alt="" /> : <span>{m.name[0]}</span>}
+                        <strong>{m.name}</strong>
+                        <em>Lv {m.level} · 兵 {m.hp}/{combat.maxHp}</em>
+                      </div>
+                      <div className={styles.generalStats}>
+                        {rows.map(([label, value]) => (
+                          <div key={label}>
+                            <b>{label}</b>
+                            <span>{value}</span>
+                            <i><em style={{ width: `${clamp(value / 255, 0, 1) * 100}%` }} /></i>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className={styles.generalColumns}>
+                      <section>
+                        <h3>装备</h3>
+                        <div className={styles.generalEquip}>
+                          {[0, 1, 2, 3].map((slot) => (
+                            <div key={slot}>
+                              <span>{["武器", "防具", "护具", "盾牌"][slot]}</span>
+                              <b>{m.equipment[slot] ?? "—"}</b>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                      <section>
+                        <h3>谋略</h3>
+                        <div className={styles.generalSkills}>
+                          {skills.length > 0
+                            ? skills.map((name) => (
+                                <span key={name}>
+                                  {name}<em>{data.skills.get(name)?.cost ?? 0} 计力</em>
+                                </span>
+                              ))
+                            : <p className={styles.emptyText}>尚未习得计策</p>}
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                );
+              })()}
+
               {panel.kind === "party" && (
                 <div className={styles.panelBody} data-km-scroll="1">
                   {s.party.map((m, i) => (
                     <div key={m.key} data-km-cursor={panel.cursor === i ? "1" : undefined} className={`${styles.partyRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
-                      <b>{m.name}</b>
+                      <span>{i + 1}</span>
+                      <b>{m.name}{i === 0 ? "（队长）" : ""}</b>
                       <span>Lv {m.level}</span>
                       <span>{m.hp} / {m.maxHp}</span>
                       <span>{m.dead ? "重伤" : "可战"}</span>
@@ -3765,29 +3923,56 @@ export default function KongmingGame({
                 </div>
               )}
 
-              {panel.kind === "skills" && (
-                <div className={styles.panelBody} data-km-scroll="1">
-                  {(s.party[panel.member ?? 0] ? memberSkillsAtLevel(s.party[panel.member ?? 0], s.level) : []).map((name, i) => (
-                    <div key={name} data-km-cursor={panel.cursor === i ? "1" : undefined} className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
-                      <span>{name}</span><span>{data.skills.get(name)?.cost ?? 0} 计力</span>
+              {panel.kind === "skills" && (() => {
+                const m = s.party[panel.member ?? 0];
+                const skills = m ? memberSkillsAtLevel(m, s.level) : [];
+                return (
+                  <div className={styles.panelBody} data-km-scroll="1">
+                    <div className={styles.memberTabs}>
+                      {s.party.map((member, i) => (
+                        <span key={member.key} className={(panel.member ?? 0) === i ? styles.tabOn : undefined}>{member.name}</span>
+                      ))}
+                      <small>A/D 切换</small>
                     </div>
-                  ))}
-                  {(s.party[panel.member ?? 0] ? memberSkillsAtLevel(s.party[panel.member ?? 0], s.level) : []).length === 0 && (
-                    <p className={styles.emptyText}>尚未习得计策</p>
-                  )}
-                </div>
-              )}
+                    <div className={styles.menuSkillHead}>
+                      <span>剩余计力</span><b>{s.mp} / {s.maxMp}</b>
+                    </div>
+                    {skills.length > 0 ? (
+                      <div className={styles.menuSkillGrid}>
+                        {skills.map((name, i) => (
+                          <div key={name} data-km-cursor={panel.cursor === i ? "1" : undefined} className={`${styles.menuSkillCell} ${panel.cursor === i ? styles.rowOn : ""}`}>
+                            <span>{panel.cursor === i ? "◆ " : ""}{name}</span>
+                            <em>{data.skills.get(name)?.cost ?? 0} 计力</em>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className={styles.emptyText}>尚未习得计策</p>}
+                  </div>
+                );
+              })()}
 
-              {panel.kind === "formations" && (
-                <div className={styles.panelBody} data-km-scroll="1">
-                  <div className={styles.moneyLine}>当前阵型 <b>{s.formation}</b></div>
-                  {learnedFormationsAtLevel(data.content, s.level, s.formation).map((name, i) => (
-                    <div key={name} data-km-cursor={panel.cursor === i ? "1" : undefined} className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
-                      <span>{name}</span><span>{name === s.formation ? "使用中" : "J 变阵"}</span>
+              {panel.kind === "formations" && (() => {
+                const owned = learnedFormationsAtLevel(data.content, s.level, s.formation);
+                return (
+                  <div className={styles.panelBody} data-km-scroll="1">
+                    <div className={styles.moneyLine}>当前阵形 <b>{s.formation}</b><span className={styles.formationHint}>J 变阵</span></div>
+                    <div className={styles.formationGrid}>
+                      {owned.map((name, i) => {
+                        const f = data.formations.get(name);
+                        return (
+                          <div key={name} data-km-cursor={panel.cursor === i ? "1" : undefined} className={`${styles.formationCard} ${panel.cursor === i ? styles.rowOn : ""}`}>
+                            <div>
+                              <strong>{name}</strong>
+                              <span>{name === s.formation ? "使用中" : `计力 ${f?.cost ?? 0}`}</span>
+                            </div>
+                            <small>{formationEffectText(f)}</small>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                );
+              })()}
 
               {panel.kind === "story" && (
                 <div className={styles.panelBody}>
@@ -3986,6 +4171,9 @@ export default function KongmingGame({
           </div>
         )}
       </div>
+      <button type="button" className={styles.fullscreenToggle} onClick={() => void toggleFullscreen()}>
+        {fullscreen ? "退出全屏" : "全屏"}
+      </button>
       </div>
       {activity ? (
         <div className={styles.couponWrap}>
