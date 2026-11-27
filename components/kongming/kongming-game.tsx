@@ -659,6 +659,8 @@ export default function KongmingGame({
   const [npcClock, setNpcClock] = useState(0);
   const [battleAnimFrame, setBattleAnimFrame] = useState(0);
   const snapRef = useRef<Snap>(EMPTY_SNAP);
+  /** 进室内 / 洞窟前在场景中的落脚点；type 3 出口按原版回到这扇门口。 */
+  const returnPosRef = useRef<{ level: number; x: number; y: number; dir: [number, number] } | null>(null);
   const [data, setData] = useState<GameData | null>(null);
   const dataRef = useRef<GameData | null>(null);
   const savesRef = useRef<Saves>({ 0: null, 1: null, 2: null });
@@ -949,10 +951,21 @@ export default function KongmingGame({
   const blockedAt = useCallback((scene: Scene, x: number, y: number) => {
     if (!scene.map) return false;
     const map = scene.map;
-    if (x < map.x || x > map.x + map.w - 1 || y < map.y || y > map.y + map.h - 1) return true;
     // 城门在原版 TilemapCollider 里仍是整排墙；只要贴着通往大地图的出口，
     // 就放行这一格，让玩家能从任意一个门走出去再触发切场景。
-    if (scene.transitions.some((t) => t.scene === "大地图" && dist(t.pos[0], t.pos[1], x, y) < 1.6)) return false;
+    // 裁边后城门触发点常在地图边界外 0.4~0.5 格，必须放在 bounds 判定之前，
+    // 否则站在边界内侧的玩家再走一步会先被地图边界挡住，永远踩不到传送点。
+    // 室内出口同理：原版门格常被 TilemapCollider 标成实心，或被裁到边界上；
+    // 只放行传送点附近的门格，避免整面墙变可穿。世界地图仍只放行“大地图”
+    // 出口，避免把 [0,0] 这类未启用的占位传送点变成可踩的洞。
+    const door = scene.transitions.find((t) => {
+      if (t.when !== 1) return false;
+      if (scene.isWorld && t.scene !== "大地图") return false;
+      const radius = t.scene === "大地图" ? 1.6 : 0.8;
+      return dist(t.pos[0], t.pos[1], x, y) < radius;
+    });
+    if (door) return false;
+    if (x < map.x || x > map.x + map.w - 1 || y < map.y || y > map.y + map.h - 1) return true;
     for (const box of scene.boxes) {
       const [cx, cy, w, h] = box;
       if (Math.abs(x - cx) <= w / 2 && Math.abs(y - cy) <= h / 2) return true;
@@ -1095,17 +1108,24 @@ export default function KongmingGame({
       }
       return { x: 0, y: 0 };
     })();
-    // 桌面场景的入口点偶尔落在 TilemapCollider 覆盖的格子内；向外找最近的可走格，
-    // 避免进城 / 出城后原地卡死。找不到时保持原入口。
-    if (!blockedAt(scene, raw.x, raw.y)) return raw;
+    // 入口点可能来自原版里未启用的旧坐标，裁边后会落到图外十几格；
+    // 先夹回地图边界内，再向外找最近的可走格，避免读档 / 切场景后角色
+    // 站在黑底里，连传送点都踩不到。
+    const base = scene.map
+      ? {
+          x: Math.min(Math.max(raw.x, scene.map.x + 0.2), scene.map.x + scene.map.w - 1.2),
+          y: Math.min(Math.max(raw.y, scene.map.y + 0.2), scene.map.y + scene.map.h - 1.2),
+        }
+      : raw;
+    if (!blockedAt(scene, base.x, base.y)) return base;
     let best: { x: number; y: number } | null = null;
     let bestScore = -Infinity;
     for (let r = 1; r <= 8; r++) {
       for (let dy = -r; dy <= r; dy++) {
         for (let dx = -r; dx <= r; dx++) {
           if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-          const x = raw.x + dx;
-          const y = raw.y + dy;
+          const x = base.x + dx;
+          const y = base.y + dy;
           if (blockedAt(scene, x, y)) continue;
           const exits = [[1, 0], [-1, 0], [0, 1], [0, -1]]
             .filter(([ox, oy]) => !blockedAt(scene, x + ox, y + oy)).length;
@@ -1118,7 +1138,7 @@ export default function KongmingGame({
       }
       if (best) return best;
     }
-    return raw;
+    return base;
   }, [blockedAt]);
 
   const chooseScene = useCallback((name: string, tag?: string, preferredLevel?: number, previousLevel?: number) => {
@@ -1168,15 +1188,21 @@ export default function KongmingGame({
     }
   }, []);
 
-  const loadScene = useCallback((level: number, tag?: string, keepPrevious = true) => {
+  const loadScene = useCallback((level: number, tag?: string, keepPrevious = true, at?: { x: number; y: number; dir: [number, number] } | null) => {
     const d = currentData();
     const scene = d.scenes.find((s) => s.level === level) ?? d.scenes[0];
     if (!scene) return;
     const prev = snapRef.current;
-    const spawn = spawnFor(scene, tag);
+    if (prev.scene && prev.scene.level !== level) {
+      returnPosRef.current = { level: prev.scene.level, x: prev.x, y: prev.y, dir: prev.dir };
+    }
+    const spawn = at ? { x: at.x, y: at.y } : spawnFor(scene, tag);
+    const backDir: [number, number] = at && (at.dir[0] !== 0 || at.dir[1] !== 0)
+      ? [-at.dir[0] as number, -at.dir[1] as number]
+      : (scene.level === 12 ? [0, 1] : [0, -1]);
     const token = ++currentSceneToken.current;
     autoEventToken.current = token;
-    trailRef.current = seedTeamTrail(spawn.x, spawn.y, [0, -1], Math.max(0, prev.party.length - 1));
+    trailRef.current = seedTeamTrail(spawn.x, spawn.y, backDir, Math.max(0, prev.party.length - 1));
     followPosRef.current = trailRef.current.map((p) => ({ ...p }));
     mutate((s) => ({
       ...s,
@@ -1185,7 +1211,7 @@ export default function KongmingGame({
       previousLevel: keepPrevious && s.scene && s.scene.level !== level ? s.scene.level : s.previousLevel,
       x: spawn.x,
       y: spawn.y,
-      dir: (scene.level === 12 ? [0, 1] : [0, -1]) as [number, number],
+      dir: backDir,
       meetStep: 0,
       eventPos: {},
       flags: pruneInvalidEventFlags(s.flags, d.scenes),
@@ -1206,7 +1232,16 @@ export default function KongmingGame({
   const loadSceneByName = useCallback((name: string, tag: string | undefined, type: number) => {
     const current = snapRef.current;
     if (type === 3 && current.previousLevel) {
-      loadScene(current.previousLevel, tag);
+      const back = returnPosRef.current;
+      loadScene(
+        current.previousLevel,
+        tag,
+        true,
+        back && back.level === current.previousLevel
+          ? { x: back.x, y: back.y, dir: back.dir }
+          : null,
+      );
+      returnPosRef.current = null;
       return;
     }
     const target = chooseScene(name, tag);
