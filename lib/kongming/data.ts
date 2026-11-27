@@ -252,6 +252,9 @@ export function loadGameData(): Promise<GameData> {
       if (s.map?.src?.startsWith("/kongming/")) {
         s.map.src = s.map.src.replace("/kongming/", "/game-assets/kongming/");
       }
+      if (s.map?.fg?.startsWith("/kongming/")) {
+        s.map.fg = s.map.fg.replace("/kongming/", "/game-assets/kongming/");
+      }
     }
     for (const c of content.characters) if (c.name && !characters.has(c.name)) characters.set(c.name, c);
     // Later entries from sharedassets0 win (they contain the playable leader data).

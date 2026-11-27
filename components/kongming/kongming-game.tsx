@@ -720,6 +720,21 @@ export default function KongmingGame({
   /** 进室内 / 洞窟前在场景中的落脚点；type 3 出口按原版回到这扇门口。 */
   const returnPosRef = useRef<{ level: number; x: number; y: number; dir: [number, number] } | null>(null);
   const [data, setData] = useState<GameData | null>(null);
+  const [touchMode, setTouchMode] = useState(false);
+  useEffect(() => {
+    const coarse = window.matchMedia("(pointer: coarse)").matches;
+    if (coarse || navigator.maxTouchPoints > 0) setTouchMode(true);
+    const enable = (event: Event) => {
+      if (event instanceof PointerEvent && event.pointerType !== "touch") return;
+      setTouchMode(true);
+    };
+    window.addEventListener("touchstart", enable, { passive: true });
+    window.addEventListener("pointerdown", enable);
+    return () => {
+      window.removeEventListener("touchstart", enable);
+      window.removeEventListener("pointerdown", enable);
+    };
+  }, []);
   const dataRef = useRef<GameData | null>(null);
   const savesRef = useRef<Saves>({ 0: null, 1: null, 2: null });
   const dialogResolve = useRef<((value: boolean) => void) | null>(null);
@@ -3182,15 +3197,19 @@ export default function KongmingGame({
       virtualTimer.current = null;
     }
   }, []);
+  const fireKey = useCallback((code: string) => {
+    const key = code.startsWith("Key") ? code.slice(3).toLowerCase() : code;
+    window.dispatchEvent(new KeyboardEvent("keydown", { code, key, bubbles: true }));
+  }, []);
   const virtualPress = useCallback((e: ReactPointerEvent<HTMLButtonElement>, code: string, hold = false) => {
     e.preventDefault();
     e.stopPropagation();
-    const fire = () => window.dispatchEvent(new KeyboardEvent("keydown", { code, key: code, bubbles: true }));
+    const fire = () => fireKey(code);
     fire();
     if (!hold) return;
     stopVirtual();
     virtualTimer.current = window.setInterval(fire, 170);
-  }, [stopVirtual]);
+  }, [fireKey, stopVirtual]);
   useEffect(() => stopVirtual, [stopVirtual]);
 
   const s = snap;
@@ -3702,7 +3721,14 @@ export default function KongmingGame({
                 ) : battle.menu === "command" ? (
                   <div className={styles.battleCommandGrid}>
                     {battleCommands.map((label, i) => (
-                      <div key={label} className={battle.cursor === i ? styles.commandOn : undefined}>
+                      <div
+                        key={label}
+                        className={battle.cursor === i ? styles.commandOn : undefined}
+                        onClick={() => {
+                          mutate((prev) => prev.battle ? { ...prev, battle: { ...prev.battle, cursor: i } } : prev);
+                          fireKey("KeyJ");
+                        }}
+                      >
                         <span className={battle.cursor === i ? styles.commandCursor : undefined} />{label}
                       </div>
                     ))}
@@ -3787,7 +3813,14 @@ export default function KongmingGame({
               {panel.kind === "root" && (
                 <ul className={styles.rootMenu}>
                   {rootLabels.map((label, i) => (
-                    <li key={label} className={panel.cursor === i ? styles.menuOn : undefined}>
+                    <li
+                      key={label}
+                      className={panel.cursor === i ? styles.menuOn : undefined}
+                      onClick={() => {
+                        mutate((prev) => prev.panel ? { ...prev, panel: { ...prev.panel, cursor: i } } : prev);
+                        fireKey("KeyJ");
+                      }}
+                    >
                       <span>{panel.cursor === i ? "◆" : ""}</span>{label}
                     </li>
                   ))}
@@ -4153,7 +4186,7 @@ export default function KongmingGame({
         {s.toast && <div className={styles.toast}>{s.toast}</div>}
         {s.faded && <div className={styles.fade} />}
         {(s.screen === "field" || s.screen === "battle" || s.screen === "title" || s.screen === "prologue") && (
-          <div className={styles.touchControls}>
+          <div className={styles.touchControls} data-touch={touchMode ? "1" : "0"}>
             {(s.screen === "field" || s.screen === "battle" || s.screen === "title") && (
               <div className={styles.touchDpad}>
                 {(s.screen !== "title" || s.panel) && <button type="button" aria-label="向上" className={`${styles.touchKey} ${styles.touchUp}`} onPointerDown={(e) => virtualPress(e, "KeyW", true)} onPointerUp={stopVirtual} onPointerLeave={stopVirtual} onPointerCancel={stopVirtual}>W</button>}

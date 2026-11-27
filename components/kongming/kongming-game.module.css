@@ -2729,8 +2729,14 @@
   position: absolute;
   inset: 0;
   z-index: 40;
+  display: none;
   pointer-events: none;
   touch-action: none;
+}
+
+/* 触屏或二合一设备：检测到触摸能力后再显示，不再用 pointer: fine 误伤触控笔记本。 */
+.touchControls[data-touch="1"] {
+  display: block;
 }
 
 .touchDpad {
@@ -2775,12 +2781,7 @@
   transform: scale(0.94);
 }
 
-/* 桌面端已有实体键盘，隐藏虚拟按键，避免遮住面板、武将头像与战斗窗口。 */
-@media (hover: hover) and (pointer: fine) {
-  .touchControls {
-    display: none;
-  }
-}
+/* 虚拟键的显隐由 React 的触摸能力检测控制，见 .touchControls[data-touch="1"]。 */
 
 .touchUp { grid-area: 1 / 2; }
 .touchLeft { grid-area: 2 / 1; }
