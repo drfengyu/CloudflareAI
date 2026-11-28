@@ -3449,8 +3449,12 @@ export default function KongmingGame({
 
   const seenEvents = new Set<string>();
   const currentChapter = chapterName(s.chapter);
+  // 主城（徐州、冀州这类「城 / 州」场景）只留有名有姓的剧情 NPC；
+  // 大爷 / 中年人 / 书生这类无名路人原本只是站着不动的 npc-* 单帧贴图，按用户要求不再绘制。
+  const isCityScene = !scene?.isWorld && !scene?.isCave && /(城|州)$/.test(scene?.name ?? "");
   const fieldEvents = (scene?.events ?? []).filter((e) => {
     if (!e.id || !eventVisible(e, s.flags, currentChapter)) return false;
+    if (isCityScene && e.names.every((n) => !n.name) && (e.model ?? "").startsWith("npc-")) return false;
     if (e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) return false;
     const k = `${e.id}:${e.pos[0]}:${e.pos[1]}`;
     if (seenEvents.has(k)) return false;
@@ -3667,7 +3671,7 @@ export default function KongmingGame({
                       {strip ? (
                         <TintedSvgSprite src={strip} palette={palette} x={-animFrame * WALK_CELL} y={0} width={WALK_CELL * 8} height={WALK_CELL} className={styles.pixel} />
                       ) : (
-                        <TintedSvgSprite src={sprite!} palette={palette} x={16} y={28} width={32} height={32} className={styles.pixel} />
+                        <TintedSvgSprite src={sprite!} palette={palette} x={0} y={0} width={WALK_CELL} height={WALK_CELL} className={styles.pixel} />
                       )}
                     </svg>
                     {name && null}
