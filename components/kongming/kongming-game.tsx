@@ -9,12 +9,14 @@ import {
   chapterName,
   deathSpriteForModel,
   equipmentSlot,
+  eventSpawnsOnTrigger,
   faceForProfile,
   hpFor,
   learnedAtLevel,
   learnedFormationsAtLevel,
   loadGameData,
   npcMotionFor,
+  npcStartPos,
   npcWalkStripFor,
   shopFaceForProfile,
   shopNpcFor,
@@ -2061,7 +2063,7 @@ export default function KongmingGame({
       if (!ev?.id) return;
       for (const target of positions) {
         if (!target || target.length < 2) continue;
-        const start = snapRef.current.eventPos[ev.id] ?? [ev.pos[0], ev.pos[1]];
+        const start = snapRef.current.eventPos[ev.id] ?? npcStartPos(snapRef.current.scene?.level, ev.id) ?? [ev.pos[0], ev.pos[1]];
         const tx = Number(target[0]);
         const ty = Number(target[1]);
         const span = Math.hypot(tx - start[0], ty - start[1]);
@@ -2875,7 +2877,7 @@ export default function KongmingGame({
       const walk = npcWalkRef.current[e.id];
       const p = shop?.event === String(e.id)
         ? shop.pos
-        : walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? e.pos;
+        : walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? npcStartPos(s.scene?.level, e.id) ?? e.pos;
       return dist(p[0], p[1], nx, ny) < 0.72;
     });
     if (blockingNpc) {
@@ -2938,7 +2940,7 @@ export default function KongmingGame({
     const shop = shopNpcFor(scene.level);
     const at = (e: SceneEvent) => {
       const walk = npcWalkRef.current[e.id];
-      return walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? e.pos;
+      return walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? npcStartPos(scene.level, e.id) ?? e.pos;
     };
 
     // 室内外人物都按原版格子站位：正交四格与斜角四格都算贴身，不能因为
@@ -2983,6 +2985,110 @@ export default function KongmingGame({
       return;
     }
   }, [loadSceneByName, mutate, runEvent]);
+
+  /* ------------------------------------------------------------------ */
+  /* 触屏点选：点地面自动寻路，点 NPC / 店铺走过去后直接开口             */
+  /* ------------------------------------------------------------------ */
+
+  const navToken = useRef(0);
+
+  /** 当值 NPC 占住的格子，寻路时要绕开（否则会一直顶着人原地不动）。 */
+  const npcAtCell = useCallback((st: Snap, scene: Scene, x: number, y: number) => {
+    return scene.events.some((e) => {
+      if (!e.id || e.when !== 2) return false;
+      if (!eventVisible(e, st.flags, chapterName(st.chapter))) return false;
+      if (e.hideAfter && e.names.some((n) => n.name && st.party.some((m) => m.name === n.name))) return false;
+      const shop = shopNpcFor(scene.level);
+      const walk = npcWalkRef.current[e.id];
+      const p = shop?.event === String(e.id)
+        ? shop.pos
+        : walk ? [walk.x, walk.y] as [number, number] : st.eventPos[e.id] ?? npcStartPos(scene.level, e.id) ?? e.pos;
+      return dist(p[0], p[1], x, y) < 0.72;
+    });
+  }, []);
+
+  /** 四向 BFS：只走可通行的格子，目标被占时退到它身边最近的可达格。 */
+  const findWalkPath = useCallback((st: Snap, scene: Scene, gx: number, gy: number) => {
+    const map = scene.map;
+    if (!map) return [] as Array<[number, number]>;
+    const pass = (x: number, y: number) => !blockedAt(scene, x, y) && !npcAtCell(st, scene, x, y);
+    const fromX = Math.round(st.x);
+    const fromY = Math.round(st.y);
+    const goals: Array<[number, number]> = [];
+    if (pass(gx, gy)) goals.push([gx, gy]);
+    else {
+      for (let dy = -2; dy <= 2; dy += 1) {
+        for (let dx = -2; dx <= 2; dx += 1) {
+          if (Math.abs(dx) + Math.abs(dy) > 2) continue;
+          if (pass(gx + dx, gy + dy)) goals.push([gx + dx, gy + dy]);
+        }
+      }
+      goals.sort((a, b) => dist(a[0], a[1], fromX, fromY) - dist(b[0], b[1], fromX, fromY));
+    }
+    if (!goals.length) return [];
+    const goalsKey = new Set(goals.map(([x, y]) => `${x},${y}`));
+    const start = `${fromX},${fromY}`;
+    const prevOf = new Map<string, string | null>([[start, null]]);
+    const queue: Array<[number, number]> = [[fromX, fromY]];
+    let hit: string | null = goalsKey.has(start) ? start : null;
+    while (queue.length && !hit) {
+      const [x, y] = queue.shift() as [number, number];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as Array<[number, number]>) {
+        const nx = x + dx;
+        const ny = y + dy;
+        const key = `${nx},${ny}`;
+        if (prevOf.has(key)) continue;
+        if (!pass(nx, ny)) continue;
+        prevOf.set(key, `${x},${y}`);
+        queue.push([nx, ny]);
+        if (goalsKey.has(key)) { hit = key; break; }
+      }
+    }
+    if (!hit) return [];
+    const path: Array<[number, number]> = [];
+    let cur: string | null = hit;
+    while (cur) {
+      const parent: string | null = prevOf.get(cur) ?? null;
+      const parts = cur.split(",");
+      path.unshift([Number(parts[0]), Number(parts[1])]);
+      cur = parent;
+    }
+    return path.slice(1);
+  }, [blockedAt, npcAtCell]);
+
+  /** 逐格播放走路动画；被点击打断（换目标、按方向键）时立刻停下。 */
+  const walkToCell = useCallback(async (gx: number, gy: number) => {
+    const st = snapRef.current;
+    if (!st.scene || !boxed()) return;
+    while (moving.current && boxed()) await new Promise((resolve) => setTimeout(resolve, 50));
+    if (!boxed()) return;
+    const scene = st.scene;
+    const path = findWalkPath(snapRef.current, scene, gx, gy);
+    const token = ++navToken.current;
+    for (const [x, y] of path) {
+      if (navToken.current !== token) return;
+      const cur = snapRef.current;
+      if (!cur.scene || cur.scene.level !== scene.level || !boxed()) return;
+      const dx = x - Math.round(cur.x);
+      const dy = y - Math.round(cur.y);
+      if (Math.abs(dx) + Math.abs(dy) !== 1) return;
+      await moveRef.current?.(dx, dy);
+    }
+    if (navToken.current !== token) return;
+    const last = snapRef.current;
+    // 点的是店门 / 城门：直接走门，别把旁边站着的 NPC 当成点选对象。
+    const door = scene.transitions.find((t) => dist(t.pos[0], t.pos[1], gx, gy) < 2.2);
+    if (door) {
+      const near = scene.transitions.find((t) => dist(t.pos[0], t.pos[1], last.x, last.y) < 1.4);
+      if (near) {
+        void loadSceneByName(near.scene, near.tag || undefined, near.type);
+        return;
+      }
+      return;
+    }
+    // 走到 NPC / 柜台 / 宝箱旁边时顺手开口，省一次“确认”。
+    void interact();
+  }, [boxed, findWalkPath, interact, loadSceneByName]);
 
   const activateTitle = useCallback((index: number) => {
     mutate((prev) => ({ ...prev, titleCursor: index }));
@@ -3306,7 +3412,10 @@ export default function KongmingGame({
 
     if (s.screen === "field" && !s.panel && !s.shop && !s.coupon && !s.battle) {
       const dir = DIR_KEYS[key];
-      if (dir) move(dir[0], dir[1]);
+      if (dir) {
+        navToken.current += 1;
+        move(dir[0], dir[1]);
+      }
       else if (key === "KeyJ") void interact();
       else if (key === "KeyK") openPanel("root");
     }
@@ -3447,14 +3556,35 @@ export default function KongmingGame({
   const sx = (gx: number) => (map ? (gx - map.x + 0.5) * cell - camX : 0);
   const sy = (gy: number) => (map ? (map.y + map.h - gy - 0.5) * cell - camY : 0);
 
+  /**
+   * 点地图任意位置：换算成格子后自动走过去。
+   * 点自己脚下相当于“确认”，方便纯触屏在没有虚拟按键时也能交谈。
+   */
+  const tapMap = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    if (!map || !scene) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const px = (event.clientX - rect.left) * (viewW / rect.width);
+    const py = (event.clientY - rect.top) * (viewH / rect.height);
+    if (px < 0 || py < 0 || px > viewW || py > viewH) return;
+    const gx = Math.round((px + camX) / cell + map.x - 0.5);
+    const gy = Math.round(map.y + map.h - 0.5 - (py + camY) / cell);
+    if (gx < map.x || gx > map.x + map.w - 1 || gy < map.y || gy > map.y + map.h - 1) return;
+    if (gx === Math.round(s.x) && gy === Math.round(s.y)) {
+      navToken.current += 1;
+      void interact();
+      return;
+    }
+    void walkToCell(gx, gy);
+  };
+
   const seenEvents = new Set<string>();
   const currentChapter = chapterName(s.chapter);
-  // 主城（徐州、冀州这类「城 / 州」场景）只留有名有姓的剧情 NPC；
-  // 大爷 / 中年人 / 书生这类无名路人原本只是站着不动的 npc-* 单帧贴图，按用户要求不再绘制。
-  const isCityScene = !scene?.isWorld && !scene?.isCave && /(城|州)$/.test(scene?.name ?? "");
   const fieldEvents = (scene?.events ?? []).filter((e) => {
     if (!e.id || !eventVisible(e, s.flags, currentChapter)) return false;
-    if (isCityScene && e.names.every((n) => !n.name) && (e.model ?? "").startsWith("npc-")) return false;
+    // 脚本以 SetActive(true, 0) 开头：进场景时 NPC 不在场上，由事件放出来再走位（徐州张飞就是这样）。
+    if (eventSpawnsOnTrigger(scene?.level, e.id) && !s.flags[e.id] && !s.eventPos[e.id]) return false;
     if (e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) return false;
     const k = `${e.id}:${e.pos[0]}:${e.pos[1]}`;
     if (seenEvents.has(k)) return false;
@@ -3598,6 +3728,7 @@ export default function KongmingGame({
               className={styles.world}
               viewBox={`0 0 ${viewW} ${viewH}`}
               preserveAspectRatio="xMidYMid meet"
+              onPointerDown={tapMap}
               style={{
                 width: `${viewW * viewScale}px`,
                 height: `${viewH * viewScale}px`,
@@ -3634,7 +3765,7 @@ export default function KongmingGame({
                 const walk = npcWalk[e.id];
                 const shop = shopNpcFor(scene?.level);
                 const isShopNpc = Boolean(shop && String(e.id) === shop.event);
-                const p = isShopNpc && shop ? shop.pos : walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? e.pos;
+                const p = isShopNpc && shop ? shop.pos : walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? npcStartPos(scene?.level, e.id) ?? e.pos;
                 const ex = sx(p[0]);
                 const ey = sy(p[1]);
                 if (ex < -80 || ex > viewW + 80 || ey < -100 || ey > viewH + 80) return null;
@@ -4117,7 +4248,15 @@ export default function KongmingGame({
                 <div className={styles.panelBody} data-km-scroll="1">
                   <div className={styles.moneyLine}>所持金 <b>{s.money}</b></div>
                   {s.inventory.map((it, i) => (
-                    <div key={it.name} data-km-cursor={panel.cursor === i ? "1" : undefined} className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
+                    <div
+                      key={it.name}
+                      data-km-cursor={panel.cursor === i ? "1" : undefined}
+                      className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}
+                      onClick={() => {
+                        mutate((prev) => prev.panel ? { ...prev, panel: { ...prev.panel, cursor: i } } : prev);
+                        fireKey("KeyJ");
+                      }}
+                    >
                       <span>{it.name}</span><span>× {it.count}</span>
                     </div>
                   ))}
@@ -4151,7 +4290,15 @@ export default function KongmingGame({
                         </div>
                         <div className={styles.invTitle}>可装备</div>
                         {equipmentInv.map((it, i) => (
-                          <div key={it.name} data-km-cursor={panel.cursor === i ? "1" : undefined} className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}>
+                          <div
+                            key={it.name}
+                            data-km-cursor={panel.cursor === i ? "1" : undefined}
+                            className={`${styles.listRow} ${panel.cursor === i ? styles.rowOn : ""}`}
+                            onClick={() => {
+                              mutate((prev) => prev.panel ? { ...prev, panel: { ...prev.panel, cursor: i } } : prev);
+                              fireKey("KeyJ");
+                            }}
+                          >
                             <span>{it.name}</span><span>× {it.count}</span>
                           </div>
                         ))}
@@ -4248,7 +4395,15 @@ export default function KongmingGame({
               <div className={styles.panelHead}><h2>{s.shop.title}</h2><span>所持 {s.money} 金{activity ? ` · ${activity.couponName} ${couponTickets} 张` : ""}</span></div>
               <div className={styles.panelBody} data-km-scroll="1">
                 {s.shop.items.map((it, i) => (
-                  <div key={it.name} data-km-cursor={s.shop?.cursor === i ? "1" : undefined} className={`${styles.listRow} ${s.shop?.cursor === i ? styles.rowOn : ""}`}>
+                  <div
+                    key={it.name}
+                    data-km-cursor={s.shop?.cursor === i ? "1" : undefined}
+                    className={`${styles.listRow} ${s.shop?.cursor === i ? styles.rowOn : ""}`}
+                    onClick={() => {
+                      mutate((prev) => prev.shop ? { ...prev, shop: { ...prev.shop, cursor: i } } : prev);
+                      fireKey("KeyJ");
+                    }}
+                  >
                     <span>{it.name}</span><span>{it.price} 金</span>
                   </div>
                 ))}

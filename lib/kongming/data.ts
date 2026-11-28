@@ -1,6 +1,8 @@
 import attackFrameCounts from "./attack-frames.json";
 import battleSpriteData from "./battle-sprites.json";
+import eventSpawnData from "./event-spawn.json";
 import npcMotionData from "./npc-motion.json";
+import npcPositionData from "./npc-positions.json";
 import shopNpcData from "./shop-npcs.json";
 import { installCouponRoom } from "./coupon-room";
 
@@ -410,6 +412,35 @@ export function npcWalkStripFor(motion: NpcMotion | null): string | null {
   if (!motion) return null;
   if (motion.strip) return `/game-assets/kongming/npc_walk/${motion.strip}.png`;
   return walkStripForModel(motion.model);
+}
+
+/**
+ * 桌面版场景里 NPC 的 SpriteRenderer 初始坐标。
+ *
+ * `QuestEvent.pos` 是脚本让 NPC 走过去的格子，不是出场站位；张飞这类角色
+ * 开场站在别处、由事件挪过来，网页若直接用 `pos` 会「一开始就站在目标格」。
+ */
+export function npcStartPos(
+  level: number | null | undefined,
+  eventId: string | null | undefined,
+): [number, number] | null {
+  if (level == null || !eventId) return null;
+  const table = npcPositionData as unknown as Record<string, Record<string, [number, number]>>;
+  const pos = table[String(level)]?.[eventId];
+  return pos ? [pos[0], pos[1]] : null;
+}
+
+/**
+ * 事件脚本以 `SetActive(true, 0)` 开头：桌面版进场景时该 NPC 是隐藏的，
+ * 由事件把它放出来再走位。这类 NPC 在触发前不绘制。
+ */
+export function eventSpawnsOnTrigger(
+  level: number | null | undefined,
+  eventId: string | null | undefined,
+): boolean {
+  if (level == null || !eventId) return false;
+  const table = eventSpawnData as unknown as Record<string, string[]>;
+  return (table[String(level)] ?? []).includes(String(eventId));
 }
 
 export interface ShopNpc {
