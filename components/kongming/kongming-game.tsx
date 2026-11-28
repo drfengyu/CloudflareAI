@@ -497,6 +497,9 @@ function kongmingBgmSrc(clip: string | null | undefined) {
   return file ? `/game-assets/kongming/bgm/${file}` : null;
 }
 
+/** 店铺老板独立 SpriteRenderer 原图 32×32，不跟武将放大。 */
+const SHOP_SPRITE = 32;
+
 /** 桌面版 Direction：0 下、1 上、2 左、3 右。 */
 const DIR_VECTORS: [number, number][] = [[0, -1], [0, 1], [-1, 0], [1, 0]];
 
@@ -1159,8 +1162,8 @@ export default function KongmingGame({
     // 徐州宫殿御座前的台阶在原始 TilemapCollider 中被整排标成实心，
     // 但原版可以从中央台阶走下。这里对这段台阶做通行修正。
     if (scene.level === 12 && y >= -2 && y <= -1 && x >= -8 && x <= 0) return false;
-    const ix = Math.floor(x - map.x);
-    const iy = Math.floor(map.y + map.h - 1 - y);
+    const ix = Math.round(x - map.x);
+    const iy = Math.round(map.y + map.h - 1 - y);
     if (ix < 0 || iy < 0 || ix >= map.w || iy >= map.h) return true;
     const bit = iy * map.w + ix;
     return !!(bytes[bit >> 3] & (1 << (bit & 7)));
@@ -3270,10 +3273,8 @@ export default function KongmingGame({
     }
 
     if (s.screen === "field" && !s.panel && !s.shop && !s.coupon && !s.battle) {
-      if (key === "KeyW") move(0, 1);
-      else if (key === "KeyA") move(-1, 0);
-      else if (key === "KeyS") move(0, -1);
-      else if (key === "KeyD") move(1, 0);
+      const dir = DIR_KEYS[key];
+      if (dir) move(dir[0], dir[1]);
       else if (key === "KeyJ") void interact();
       else if (key === "KeyK") openPanel("root");
     }
@@ -3561,11 +3562,11 @@ export default function KongmingGame({
                   <image href="/game-assets/kongming/ui/town-grass.png" width={32} height={32} className={styles.pixel} preserveAspectRatio="none" />
                 </pattern>
                 <clipPath id="clip-player">
-                  <rect x={playerSX - 18} y={playerSY - 33} width={36} height={36} />
+                  <rect x={playerSX} y={playerSY - 36} width={36} height={36} />
                 </clipPath>
                 {followerEntries.map(({ pos }, i) => (
                   <clipPath id={`clip-follower-${i}`} key={`clip-${i}`}>
-                    <rect x={sx(pos.x) - 18} y={sy(pos.y) - 33} width={36} height={36} />
+                    <rect x={sx(pos.x)} y={sy(pos.y) - 36} width={36} height={36} />
                   </clipPath>
                 ))}
               </defs>
@@ -3590,13 +3591,12 @@ export default function KongmingGame({
                 if (isShopNpc && shop) {
                   return (
                     <g key={`${e.id}-${i}`}>
-                      <ellipse cx={ex} cy={ey + 3} rx={12} ry={5} fill="rgba(0,0,0,.35)" />
                       <image
                         href={shop.image}
-                        x={ex - 18}
-                        y={ey - 33}
-                        width={36}
-                        height={36}
+                        x={ex}
+                        y={ey - SHOP_SPRITE}
+                        width={SHOP_SPRITE}
+                        height={SHOP_SPRITE}
                         preserveAspectRatio="xMidYMid meet"
                         className={styles.pixel}
                       />
@@ -3617,8 +3617,7 @@ export default function KongmingGame({
                 const animFrame = frameForDir(dir, moving ? npcClock % 2 : Math.floor(npcClock / 4) % 2);
                 return (
                   <g key={`${e.id}-${i}`}>
-                    <ellipse cx={ex} cy={ey + 3} rx={12} ry={5} fill="rgba(0,0,0,.35)" />
-                    <svg x={ex - 18} y={ey - 33} width={36} height={36} viewBox="0 0 36 36" preserveAspectRatio="xMidYMid meet" overflow="hidden">
+                    <svg x={ex} y={ey - 36} width={36} height={36} viewBox="0 0 36 36" preserveAspectRatio="xMidYMid meet" overflow="hidden">
                       {strip ? (
                         <TintedSvgSprite src={strip} palette={palette} x={-animFrame * 36} y={0} width={288} height={36} className={styles.pixel} />
                       ) : (
@@ -3634,10 +3633,8 @@ export default function KongmingGame({
                 const cy = sy(c.pos[1]);
                 return (
                   <g key={c.id}>
-                    <ellipse cx={cx} cy={cy + 4} rx={13} ry={5} fill="rgba(0,0,0,.35)" />
                     <rect x={cx - 11} y={cy - 18} width={22} height={18} rx={2} fill="#8a5b26" stroke="#e2b865" strokeWidth={1.5} />
                     <rect x={cx - 2} y={cy - 18} width={4} height={18} fill="#e2b865" />
-                    <text x={cx} y={cy - 26} textAnchor="middle" fill="#f5e7c8" fontSize={11} stroke="#20150b" strokeWidth={3} paintOrder="stroke">宝</text>
                   </g>
                 );
               })}
@@ -3652,41 +3649,39 @@ export default function KongmingGame({
                 const fy = sy(pos.y);
                 return (
                   <g key={m.key}>
-                    <ellipse cx={fx} cy={fy + 3} rx={12} ry={5} fill="rgba(0,0,0,.35)" />
                     {strip ? (
                       <TintedSvgSprite
                         src={strip}
                         palette={palette}
-                        x={fx - 18 - frame * 36}
-                        y={fy - 33}
+                        x={fx - frame * 36}
+                        y={fy - 36}
                         width={288}
                         height={36}
                         clipPath={`url(#clip-follower-${i})`}
                         className={styles.pixel}
                       />
                     ) : (
-                      <circle cx={fx} cy={fy - 17} r={11} fill="#3b4c45" stroke="#d8c38f" strokeWidth={2} />
+                      <circle cx={fx + 16} cy={fy - 16} r={11} fill="#3b4c45" stroke="#d8c38f" strokeWidth={2} />
                     )}
                   </g>
                 );
               })}
-              <ellipse cx={playerSX} cy={playerSY + 3} rx={12} ry={5} fill="rgba(0,0,0,.45)" />
               {playerSprite ? (
                 <TintedSvgSprite
                   src={playerSprite}
                   palette={playerPalette}
-                  x={playerSX - 18 - playerFrame * 36}
-                  y={playerSY - 33}
+                  x={playerSX - playerFrame * 36}
+                  y={playerSY - 36}
                   width={288}
                   height={36}
                   clipPath="url(#clip-player)"
                   className={styles.pixel}
                 />
               ) : (
-                <circle cx={playerSX} cy={playerSY - 17} r={11} fill="#294b63" stroke="#d8c38f" strokeWidth={2} />
+                <circle cx={playerSX + 16} cy={playerSY - 16} r={11} fill="#294b63" stroke="#d8c38f" strokeWidth={2} />
               )}
               {!playerSprite && (
-                <text x={playerSX} y={playerSY - 13} textAnchor="middle" fill="#fff" fontSize={10}>{leader?.name?.[0] ?? "刘"}</text>
+                <text x={playerSX + 16} y={playerSY - 13} textAnchor="middle" fill="#fff" fontSize={10}>{leader?.name?.[0] ?? "刘"}</text>
               )}
               {map.fg && (
                 <image
