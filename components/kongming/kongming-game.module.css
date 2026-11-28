@@ -83,8 +83,12 @@
 /* 横版全屏：把 16:9 画面居中铺满屏幕，竖屏设备左右留黑边，不拉伸像素。 */
 .frameWrapFull,
 .frameWrap:fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   max-width: none;
   aspect-ratio: auto;
   display: flex;
@@ -98,7 +102,9 @@
 .frameWrapFull .frame,
 .frameWrap:fullscreen .frame {
   width: min(100vw, 177.78vh);
+  width: min(100vw, 177.78dvh);
   height: min(56.25vw, 100vh);
+  height: min(56.25vw, 100dvh);
   flex: 0 0 auto;
 }
 

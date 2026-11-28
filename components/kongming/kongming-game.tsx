@@ -686,31 +686,83 @@ export default function KongmingGame({
   const [snap, setSnap] = useState<Snap>(EMPTY_SNAP);
   const frameWrapRef = useRef<HTMLDivElement | null>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  /** iOS / 不支持 Element Fullscreen 的移动浏览器用固定层铺满视口兜底。 */
+  const [pseudoFullscreen, setPseudoFullscreen] = useState(false);
+  const fullscreenView = fullscreen || pseudoFullscreen;
   useEffect(() => {
-    const sync = () => setFullscreen(document.fullscreenElement === frameWrapRef.current);
+    const sync = () => {
+      const doc = document as Document & { webkitFullscreenElement?: Element | null };
+      const active = document.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
+      setFullscreen(active === frameWrapRef.current);
+    };
     document.addEventListener("fullscreenchange", sync);
-    return () => document.removeEventListener("fullscreenchange", sync);
+    document.addEventListener("webkitfullscreenchange", sync);
+    return () => {
+      document.removeEventListener("fullscreenchange", sync);
+      document.removeEventListener("webkitfullscreenchange", sync);
+    };
   }, []);
+  useEffect(() => {
+    if (!pseudoFullscreen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPseudoFullscreen(false);
+    };
+    window.addEventListener("keydown", escape);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", escape);
+    };
+  }, [pseudoFullscreen]);
   const toggleFullscreen = useCallback(async () => {
     const wrap = frameWrapRef.current;
     if (!wrap) return;
-    try {
-      if (document.fullscreenElement === wrap) {
+    if (pseudoFullscreen) {
+      setPseudoFullscreen(false);
+      return;
+    }
+    const doc = document as Document & {
+      webkitFullscreenElement?: Element | null;
+      webkitExitFullscreen?: () => Promise<void> | void;
+    };
+    if (document.fullscreenElement === wrap || doc.webkitFullscreenElement === wrap) {
+      try {
         (screen.orientation as ScreenOrientation & { unlock?: () => void })?.unlock?.();
-        await document.exitFullscreen();
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await doc.webkitExitFullscreen?.();
+      } catch {
+        // 浏览器拒绝退出时保持当前全屏状态。
+      }
+      return;
+    }
+    const legacy = wrap as HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void };
+    try {
+      let entered = false;
+      if (typeof wrap.requestFullscreen === "function") {
+        await wrap.requestFullscreen({ navigationUI: "hide" });
+        entered = true;
+      } else if (typeof legacy.webkitRequestFullscreen === "function") {
+        await legacy.webkitRequestFullscreen();
+        entered = true;
+      }
+      if (!entered) {
+        setPseudoFullscreen(true);
         return;
       }
-      const legacy = wrap as HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void };
-      if (typeof wrap.requestFullscreen === "function") await wrap.requestFullscreen({ navigationUI: "hide" });
-      else await legacy.webkitRequestFullscreen?.();
-      const orientation = screen.orientation as ScreenOrientation & {
-        lock?: (mode: string) => Promise<void>;
-      };
-      await orientation?.lock?.("landscape");
+      try {
+        const orientation = screen.orientation as ScreenOrientation & {
+          lock?: (mode: string) => Promise<void>;
+        };
+        await orientation?.lock?.("landscape");
+      } catch {
+        // 横屏锁定多数移动浏览器会拒绝，保留已进入的全屏即可。
+      }
     } catch {
-      // 浏览器不支持元素全屏 / 屏幕方向锁时保持窗口内布局。
+      // iPhone Safari 等没有元素全屏能力时，用固定铺满兜底，至少能横屏游玩。
+      setPseudoFullscreen(true);
     }
-  }, []);
+  }, [pseudoFullscreen]);
   const [couponTickets, setCouponTickets] = useState(activity?.tickets ?? 0);
   const [npcWalk, setNpcWalk] = useState<Record<string, NpcWalkState>>({});
   const npcWalkRef = useRef<Record<string, NpcWalkState>>({});
@@ -719,6 +771,8 @@ export default function KongmingGame({
   const snapRef = useRef<Snap>(EMPTY_SNAP);
   /** 进室内 / 洞窟前在场景中的落脚点；type 3 出口按原版回到这扇门口。 */
   const returnPosRef = useRef<{ level: number; x: number; y: number; dir: [number, number] } | null>(null);
+  /** 刚进入场景时落在门口，先压住这道门的回程触发，离开范围后再恢复。 */
+  const arrivalGuardRef = useRef<{ level: number; x: number; y: number; radius: number } | null>(null);
   const [data, setData] = useState<GameData | null>(null);
   const [touchMode, setTouchMode] = useState(false);
   useEffect(() => {
@@ -1262,6 +1316,7 @@ export default function KongmingGame({
   }, []);
 
   const loadScene = useCallback((level: number, tag?: string, keepPrevious = true, at?: { x: number; y: number; dir: [number, number] } | null) => {
+    arrivalGuardRef.current = null;
     const d = currentData();
     const scene = d.scenes.find((s) => s.level === level) ?? d.scenes[0];
     if (!scene) return;
@@ -1275,6 +1330,18 @@ export default function KongmingGame({
       : (scene.level === 12 ? [0, 1] : [0, -1]);
     const token = ++currentSceneToken.current;
     autoEventToken.current = token;
+    const arrival = scene.transitions
+      .filter((t) => t.when === 1)
+      .map((t) => ({
+        ...t,
+        radius: t.scene === "大地图" ? 1.6 : 0.8,
+        distance: dist(t.pos[0], t.pos[1], spawn.x, spawn.y),
+      }))
+      .filter((t) => t.distance < t.radius)
+      .sort((a, b) => a.distance - b.distance)[0];
+    arrivalGuardRef.current = arrival
+      ? { level, x: arrival.pos[0], y: arrival.pos[1], radius: arrival.radius }
+      : null;
     trailRef.current = seedTeamTrail(spawn.x, spawn.y, backDir, Math.max(0, prev.party.length - 1));
     followPosRef.current = trailRef.current.map((p) => ({ ...p }));
     mutate((s) => ({
@@ -2273,7 +2340,13 @@ export default function KongmingGame({
   const triggerOnEnter = useCallback(async (scene: Scene, x: number, y: number) => {
     if (locked.current) return;
     const s = snapRef.current;
-    const trans = scene.transitions
+    const guard = arrivalGuardRef.current;
+    let arriving = false;
+    if (guard && guard.level === scene.level) {
+      if (dist(guard.x, guard.y, x, y) < guard.radius) arriving = true;
+      else arrivalGuardRef.current = null;
+    }
+    const trans = arriving ? undefined : scene.transitions
       .filter((t) => {
         if (t.when !== 1) return false;
         // 城门是整排墙，原版铺的触发点带小数；放宽到一格半，避免必须踩中
@@ -2699,6 +2772,9 @@ export default function KongmingGame({
     }
     const blockingNpc = s.scene.events.find((e) => {
       if (!e.id || e.when !== 2) return false;
+      // startHide 的 NPC 还没出现在脚本里，不能占住格子；徐州南门的陈登
+      // 在第一章尚未登场，却会挡住唯一的出城通道。
+      if (!eventVisible(e, s.flags, chapterName(s.chapter))) return false;
       if (e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) return false;
       const walk = npcWalkRef.current[e.id];
       const p = walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? e.pos;
@@ -3190,27 +3266,39 @@ export default function KongmingGame({
     return () => window.cancelAnimationFrame(frame);
   }, [cursorSignature]);
 
-  const virtualTimer = useRef<number | null>(null);
-  const stopVirtual = useCallback(() => {
-    if (virtualTimer.current !== null) {
-      window.clearInterval(virtualTimer.current);
-      virtualTimer.current = null;
-    }
-  }, []);
-  const fireKey = useCallback((code: string) => {
+  const virtualHeld = useRef<string | null>(null);
+  const dispatchKey = useCallback((type: "keydown" | "keyup", code: string) => {
     const key = code.startsWith("Key") ? code.slice(3).toLowerCase() : code;
-    window.dispatchEvent(new KeyboardEvent("keydown", { code, key, bubbles: true }));
+    window.dispatchEvent(new KeyboardEvent(type, { code, key, bubbles: true }));
   }, []);
+  const fireKey = useCallback((code: string) => dispatchKey("keydown", code), [dispatchKey]);
+  const stopVirtual = useCallback(() => {
+    if (virtualHeld.current) {
+      dispatchKey("keyup", virtualHeld.current);
+      virtualHeld.current = null;
+    }
+  }, [dispatchKey]);
   const virtualPress = useCallback((e: ReactPointerEvent<HTMLButtonElement>, code: string, hold = false) => {
     e.preventDefault();
     e.stopPropagation();
-    const fire = () => fireKey(code);
-    fire();
-    if (!hold) return;
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* 触屏浏览器可能不支持指针捕获 */ }
     stopVirtual();
-    virtualTimer.current = window.setInterval(fire, 170);
-  }, [fireKey, stopVirtual]);
-  useEffect(() => stopVirtual, [stopVirtual]);
+    fireKey(code);
+    if (hold) virtualHeld.current = code;
+    else dispatchKey("keyup", code);
+  }, [dispatchKey, fireKey, stopVirtual]);
+  useEffect(() => {
+    const release = () => stopVirtual();
+    window.addEventListener("pointerup", release);
+    window.addEventListener("pointercancel", release);
+    window.addEventListener("blur", release);
+    return () => {
+      window.removeEventListener("pointerup", release);
+      window.removeEventListener("pointercancel", release);
+      window.removeEventListener("blur", release);
+      stopVirtual();
+    };
+  }, [stopVirtual]);
 
   const s = snap;
   if (!s.ready || !data) {
@@ -3324,7 +3412,7 @@ export default function KongmingGame({
           <h1 className={styles.activityTitle}>诸葛孔明传 · 吞食天地２怀旧版</h1>
           <SoundToggle game="kongming" battle={s.screen === "battle"} className="ml-auto" />
           <button type="button" className={styles.fullscreenButton} onClick={() => void toggleFullscreen()}>
-            {fullscreen ? "退出全屏" : "全屏游玩"}
+            {fullscreenView ? "退出全屏" : "全屏游玩"}
           </button>
         </div>
         <p className={styles.activityDesc}>
@@ -3334,7 +3422,7 @@ export default function KongmingGame({
           封面四项：解甲归田 退出 · 厉兵秣马 设置 · 匡扶汉室 读取存档 · 初出茅庐 开始新游戏
         </p>
       </div>
-      <div ref={frameWrapRef} className={`${styles.frameWrap} ${fullscreen ? styles.frameWrapFull : ""}`}>
+      <div ref={frameWrapRef} className={`${styles.frameWrap} ${fullscreenView ? styles.frameWrapFull : ""}`}>
       <div className={`${styles.frame} ${s.shake ? styles.shake : ""}`}>
         {s.screen === "loading" && (
           <div className={styles.loading}>
@@ -4205,7 +4293,7 @@ export default function KongmingGame({
         )}
       </div>
       <button type="button" className={styles.fullscreenToggle} onClick={() => void toggleFullscreen()}>
-        {fullscreen ? "退出全屏" : "全屏"}
+        {fullscreenView ? "退出全屏" : "全屏"}
       </button>
       </div>
       {activity ? (
