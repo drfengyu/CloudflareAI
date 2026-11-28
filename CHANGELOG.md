@@ -1,3 +1,15 @@
+## [0.107.6] - 2026-11-28
+
+### 原版场景 BGM 与柜台店主交互
+
+- **BGM 对照基准**：逐 `level0..171` 读取桌面版 `tstd2_Data` 的 `Tstd2.SceneManagement.SceneData`，拿到 169 个场景的 `backgroundMusic`；分布为 `Store 49 / Village 34 / City 33 / Palace 20 / Cave1 12 / Temple 5 / Mount 4 / Forest 3 / World1 2 / Cave2 2 / GameEnd 2 / GameStart 1 / Island 1 / 吞食天地1英杰之语 1`。
+- **19 首原版 OGG 入包**：从 `assets/tstd2-reference/audio` 复制 18 首，另有标题曲 `Title` 从 `sharedassets0.assets` 的 AudioClip path_id 66 取出内嵌 WAV、转成 OGG；统一放进 `public/game-assets/kongming/bgm/`，共 19 文件 27.4MB，中文曲名映射为 `heroes.ogg`。
+- **逐场景接线**：`scenes.json` 169 条全部新增 `bgm`，无缺失、无未映射曲名；`Scene` 接口补 `bgm`；`lib/game/audio.ts` 新增 HTMLAudio 循环 BGM（音量 0.72、同曲不重播、关闭音效暂停、首次手势恢复），孔明传不再播放现场合成主题，合成主题只留给工坊。
+- **切歌规则**：标题 `Title`、序章 `GameStart`、失败 `GameEnd`、普通战斗 `Battle2`、`8-长安英杰之地-训练` 用 `Battle3`、七场 Boss 战用 `Boss`；世界地图按章节使用 `World1`，第五章起覆盖为 `World2`；其余场景严格取 `SceneData.backgroundMusic`。
+- **室内斜角对话**：NPC 实际上站在格心，玩家站在斜角相邻格时欧氏距离是 1.414，原先 1.1 的半径会判成没碰到，表现为「人就在影子旁，按 J 却不应」。对话判定改为正交四格 + 斜角四格都贴身；宫殿 `(0,-1)` 对 `朱灵 (1,-2)` 按 J 已正常出现「朱灵 / 嗯」。
+- **柜台交互修复**：桌面版店主是独立 GameObject，身体与阴影在 `shop.pos`（柜台后一格），事件格在柜台前沿 `[5,2]`；原先碰撞、对话与画面各用一套坐标，柜台又挡住移动，玩家只能停在柜台前 1.8 格，1.1 的对话半径永远够不到。现在阻挡用 `shop.pos` 实体格，对话仍用事件格但店主单独放宽到 2.0，渲染、阴影、阻挡、对话不再互相错位。
+- **实机复验**：标题 `title.ogg`、宫殿 `palace.ogg`、店铺 `store.ogg` 已按场景加载切换；把测试存档指到 `level8 训` 的 `(4,0.2)`，按 J 正常出现「刘备将军，这里是训练场。历练到 5 , 需要花费 500 金，是否需要训练？」；`npx tsc --noEmit` 通过。
+
 ## [0.107.5] - 2026-11-28
 
 ### 出城切场、虚拟键粘键与移动端全屏

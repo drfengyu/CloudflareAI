@@ -200,6 +200,8 @@ export interface Scene {
   level: number;
   id: string;
   name: string;
+  /** 原版 `SceneData.backgroundMusic` 的 AudioClip 名；场景切换时按原名播放 OGG。 */
+  bgm?: string | null;
   /** `SceneData.sceneName` 的旧名字；改版包里部分场景名被复用过，保留给旧传送点兼容。 */
   legacyName?: string;
   /** `fg` 是原版 `Foreground` 图层单独导出的透明覆盖层，画在角色之上。 */

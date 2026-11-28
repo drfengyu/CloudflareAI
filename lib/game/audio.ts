@@ -82,6 +82,8 @@ class GameAudioEngine {
   private enabled = false;
   private loaded = false;
   private theme: GameTheme | null = null;
+  private bgmEl: HTMLAudioElement | null = null;
+  private bgmSrc: string | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private nextTime = 0;
   private step = 0;
@@ -116,8 +118,10 @@ class GameAudioEngine {
     if (on) {
       this.ensureContext();
       this.startLoop();
+      this.playBgm();
     } else {
       this.stopLoop();
+      this.pauseBgm();
     }
     for (const listener of this.listeners) listener();
   }
@@ -130,10 +134,41 @@ class GameAudioEngine {
     else this.stopLoop();
   }
 
-  /** 刷新后沿用上次的开启状态：第一次点击 / 按键时再把音频上下文拉起来。 */
+  /**
+   * Play one original looping BGM track. `src` is a URL; `null` stops it.
+   * Re-selecting the same scene does not restart the track.
+   */
+  setBgm(src: string | null): void {
+    this.load();
+    if (typeof window === "undefined") return;
+    if (src === this.bgmSrc) {
+      if (this.enabled) this.playBgm();
+      return;
+    }
+    this.bgmSrc = src;
+    if (!this.bgmEl) {
+      this.bgmEl = new Audio();
+      this.bgmEl.loop = true;
+      this.bgmEl.preload = "auto";
+      this.bgmEl.volume = 0.72;
+    }
+    const el = this.bgmEl;
+    if (!src) {
+      el.pause();
+      el.removeAttribute("src");
+      return;
+    }
+    el.src = src;
+    el.load();
+    if (this.enabled) this.playBgm();
+  }
+
+  /** 刷新后沿用上次的开启状态：第一次点击 / 按键时再把音频上下文和 BGM 拉起来。 */
   unlockOnGesture(): void {
     if (typeof window === "undefined" || !this.enabled || this.pendingUnlock) return;
-    if (this.ctx?.state === "running") return;
+    const needsContext = !this.ctx || this.ctx.state !== "running";
+    const needsBgm = Boolean(this.bgmSrc && this.bgmEl && this.bgmEl.paused);
+    if (!needsContext && !needsBgm) return;
     this.pendingUnlock = true;
     const unlock = () => {
       window.removeEventListener("pointerdown", unlock);
@@ -142,6 +177,7 @@ class GameAudioEngine {
       if (!this.enabled) return;
       this.ensureContext();
       this.startLoop();
+      this.playBgm();
     };
     window.addEventListener("pointerdown", unlock);
     window.addEventListener("keydown", unlock);
@@ -261,6 +297,19 @@ class GameAudioEngine {
       this.step = 0;
       this.nextTime = 0;
     }
+  }
+
+  private playBgm(): void {
+    const el = this.bgmEl;
+    if (!this.enabled || !this.bgmSrc || !el || !el.paused) return;
+    void el.play().catch(() => {
+      // 浏览器自动播放策略会拒绝首次无手势播放；挂起后由 unlockOnGesture 重试。
+      this.unlockOnGesture();
+    });
+  }
+
+  private pauseBgm(): void {
+    this.bgmEl?.pause();
   }
 
   private pump(): void {

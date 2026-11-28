@@ -44,7 +44,7 @@ import {
 } from "@/app/kongming/actions";
 import type { ActivityCouponView } from "@/lib/activity/coupons";
 import { KongmingCouponPanel } from "./kongming-coupon-panel";
-import { gameAudio, type GameTheme } from "@/lib/game/audio";
+import { gameAudio } from "@/lib/game/audio";
 import { SoundToggle } from "@/components/activity/sound-toggle";
 import { TintedSprite, TintedSvgSprite } from "./tinted-sprite";
 import styles from "./kongming-game.module.css";
@@ -194,6 +194,7 @@ interface BattleState {
   menuTitle: string;
   intro?: boolean;
   terrain?: string;
+  bgm?: string;
   fx?: BattleFx | null;
   result?: "win" | "lose";
   outcome?: {
@@ -449,6 +450,51 @@ function normalizeSceneName(name: string) {
 
 function dist(ax: number, ay: number, bx: number, by: number) {
   return Math.hypot(ax - bx, ay - by);
+}
+
+/** 桌面版 SceneData.backgroundMusic 的 AudioClip 名 → 导出的 OGG。 */
+const KONGMING_BGM_FILES: Record<string, string> = {
+  Title: "title.ogg",
+  GameStart: "game-start.ogg",
+  GameEnd: "game-end.ogg",
+  World1: "world-1.ogg",
+  World2: "world-2.ogg",
+  City: "city.ogg",
+  Palace: "palace.ogg",
+  Store: "store.ogg",
+  Village: "village.ogg",
+  Temple: "temple.ogg",
+  Cave1: "cave-1.ogg",
+  Cave2: "cave-2.ogg",
+  Forest: "forest.ogg",
+  Mount: "mount.ogg",
+  Island: "island.ogg",
+  Battle2: "battle-2.ogg",
+  Battle3: "battle-3.ogg",
+  Boss: "boss.ogg",
+  吞食天地1英杰之语: "heroes.ogg",
+};
+
+const KONGMING_BOSS_BATTLES = [
+  "1-袁术战",
+  "4-大蛇-山顶",
+  "5-吕布终战-零陵",
+  "6-刘璋-成都",
+  "7-曹操终战-葫芦谷",
+  "8-司马懿终战-洛阳",
+  "战斗测试",
+];
+
+/** 桌面版 BattleInfo.backgroundMusic：121 场中 Boss 7 场、Battle3 1 场。 */
+function kongmingBattleBgm(name?: string) {
+  if (name === "8-长安英杰之地-训练") return "Battle3";
+  return name && KONGMING_BOSS_BATTLES.includes(name) ? "Boss" : "Battle2";
+}
+
+function kongmingBgmSrc(clip: string | null | undefined) {
+  if (!clip) return null;
+  const file = KONGMING_BGM_FILES[clip];
+  return file ? `/game-assets/kongming/bgm/${file}` : null;
 }
 
 /** 桌面版 Direction：0 下、1 上、2 左、3 右。 */
@@ -908,14 +954,25 @@ export default function KongmingGame({
 
   useEffect(() => {
     if (snap.screen === "loading") return;
-    const theme: GameTheme =
-      snap.screen === "battle" ? "kongming-battle"
-        : snap.screen === "title" || snap.screen === "prologue" ? "kongming-title"
-          : "kongming-field";
-    gameAudio.setTheme(theme);
+    // 孔明传全部改用桌面版 SceneData.backgroundMusic 对应 OGG；合成主题只留给工坊。
+    gameAudio.setTheme(null);
+    let track: string | null = null;
+    if (snap.screen === "title") track = "Title";
+    else if (snap.screen === "prologue") track = "GameStart";
+    else if (snap.screen === "battle") track = snap.battle?.bgm ?? "Battle2";
+    else if (snap.screen === "gameover") track = "GameEnd";
+    else if (snap.screen === "field") {
+      // 第五章起世界地图使用章节背景 World2；原版前四章留 SceneData 的 World1。
+      track = snap.scene?.isWorld && snap.chapter >= 5 ? "World2" : snap.scene?.bgm ?? null;
+    }
+    gameAudio.setBgm(kongmingBgmSrc(track));
     gameAudio.unlockOnGesture();
-    return () => gameAudio.setTheme(null);
-  }, [snap.screen]);
+  }, [snap.screen, snap.scene?.level, snap.scene?.bgm, snap.scene?.isWorld, snap.chapter, snap.battle?.bgm]);
+
+  useEffect(() => () => {
+    gameAudio.setBgm(null);
+    gameAudio.setTheme(null);
+  }, []);
 
   useEffect(() => {
     loadGameData()
@@ -1564,6 +1621,7 @@ export default function KongmingGame({
         menuTitle: "",
         intro: true,
         terrain: battleTerrainAsset(battleDef?.terrain),
+        bgm: kongmingBattleBgm(config?.name),
         fx: null,
       },
     }));
@@ -2776,8 +2834,13 @@ export default function KongmingGame({
       // 在第一章尚未登场，却会挡住唯一的出城通道。
       if (!eventVisible(e, s.flags, chapterName(s.chapter))) return false;
       if (e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) return false;
+      // 店铺店主是独立 GameObject，身体和阴影在 shop.pos（柜台后），事件格则
+      // 落在柜台前沿。阻挡用柜台后实体位置，对话锚点用事件格，两者分开。
+      const shop = shopNpcFor(s.scene?.level);
       const walk = npcWalkRef.current[e.id];
-      const p = walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? e.pos;
+      const p = shop?.event === String(e.id)
+        ? shop.pos
+        : walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? e.pos;
       return dist(p[0], p[1], nx, ny) < 0.72;
     });
     if (blockingNpc) {
@@ -2837,13 +2900,23 @@ export default function KongmingGame({
     if (!s.scene || locked.current) return;
     if (performance.now() < suppressInteractUntil.current) return;
     const scene = s.scene;
+    const shop = shopNpcFor(scene.level);
     const at = (e: SceneEvent) => {
       const walk = npcWalkRef.current[e.id];
       return walk ? [walk.x, walk.y] as [number, number] : s.eventPos[e.id] ?? e.pos;
     };
 
+    // 室内外人物都按原版格子站位：正交四格与斜角四格都算贴身，不能因为
+    // 欧氏距离 1.414 把斜着站在 NPC 影子旁的情况判成“没碰到”。
+    const canTalk = (e: SceneEvent) => {
+      const [ax, ay] = at(e);
+      const dx = Math.abs(ax - s.x);
+      const dy = Math.abs(ay - s.y);
+      if (shop?.event === String(e.id)) return dx <= 1.05 && dist(ax, ay, s.x, s.y) < 2.0;
+      return (dx <= 1.05 && dy <= 1.05) || dist(ax, ay, s.x, s.y) < 1.1;
+    };
     const ev = scene.events
-      .filter((e) => e.when === 2 && e.id && eventVisible(e, s.flags, chapterName(s.chapter)) && !(e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) && dist(at(e)[0], at(e)[1], s.x, s.y) < 1.1)
+      .filter((e) => e.when === 2 && e.id && eventVisible(e, s.flags, chapterName(s.chapter)) && !(e.hideAfter && e.names.some((n) => n.name && s.party.some((m) => m.name === n.name))) && canTalk(e))
       .sort((a, b) => dist(at(a)[0], at(a)[1], s.x, s.y) - dist(at(b)[0], at(b)[1], s.x, s.y))[0];
     if (ev) { await runEvent(ev); return; }
 
