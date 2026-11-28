@@ -497,8 +497,13 @@ function kongmingBgmSrc(clip: string | null | undefined) {
   return file ? `/game-assets/kongming/bgm/${file}` : null;
 }
 
-/** 店铺老板独立 SpriteRenderer 原图 32×32，不跟武将放大。 */
-const SHOP_SPRITE = 32;
+/**
+ * 桌面版行走条带：每帧 64×64，角色本体 32×32 居中，脚底在帧内 y=61。
+ * 必须按 64 帧原样绘制，压成 36 会把角色缩成半格、站到门格外。
+ */
+const WALK_CELL = 64;
+/** 帧顶到角色落点的距离：帧顶 = 实体 y - 60，脚底落点 = 实体 y + 1。 */
+const WALK_FOOT = 60;
 
 /** 桌面版 Direction：0 下、1 上、2 左、3 右。 */
 const DIR_VECTORS: [number, number][] = [[0, -1], [0, 1], [-1, 0], [1, 0]];
@@ -861,7 +866,34 @@ export default function KongmingGame({
   const trailRef = useRef<{ x: number; y: number; dir: [number, number] }[]>([]);
   const followPosRef = useRef<{ x: number; y: number; dir: [number, number] }[]>([]);
   const storyViewRef = useRef<HTMLDivElement | null>(null);
+  const fieldViewRef = useRef<HTMLDivElement | null>(null);
+  // 逻辑分辨率固定 800×450（原版 Camera.orthographicSize=7 的 25×14 格视野）。
+  // 只能用整数倍放大 + 整像素定位，否则瓦片会被浏览器重采样，烘焙阴影边缘出现半像素断层。
+  const [viewScale, setViewScale] = useState(1);
+  const [viewOffset, setViewOffset] = useState({ x: 0, y: 0 });
   const suppressInteractUntil = useRef(0);
+
+  useEffect(() => {
+    const el = fieldViewRef.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const fit = Math.min(rect.width / 800, rect.height / 450);
+      // 够 1 倍就只用整数倍放大，瓦片才不会重采样；不足 1 倍（小屏）才按比例缩。
+      const integer = fit >= 1;
+      const next = integer ? Math.floor(fit + 0.0001) : fit;
+      // 整数倍时把画面左上角对齐到整像素，地图像素才能和屏幕像素 1:1。
+      const dx = integer ? Math.round(rect.left + (rect.width - 800 * next) / 2) - rect.left : (rect.width - 800 * next) / 2;
+      const dy = integer ? Math.round(rect.top + (rect.height - 450 * next) / 2) - rect.top : (rect.height - 450 * next) / 2;
+      setViewScale((prev) => (prev === next ? prev : next));
+      setViewOffset((prev) => (prev.x === dx && prev.y === dy ? prev : { x: dx, y: dy }));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
 
   const mutate = useCallback((fn: (prev: Snap) => Snap) => {
     const next = fn(snapRef.current);
@@ -3406,6 +3438,9 @@ export default function KongmingGame({
     const rawY = (map.y + map.h - s.y - 0.5) * cell;
     camX = mapW <= viewW ? (mapW - viewW) / 2 : clamp(rawX - viewW / 2, 0, mapW - viewW);
     camY = mapH <= viewH ? (mapH - viewH) / 2 : clamp(rawY - viewH / 2, 0, mapH - viewH);
+    // 摄像机只能落在整像素上，地图/瓦片/烘焙阴影才不会被重采样切出半像素断层。
+    camX = Math.round(camX);
+    camY = Math.round(camY);
     playerSX = rawX - camX;
     playerSY = rawY - camY;
   }
@@ -3554,19 +3589,30 @@ export default function KongmingGame({
         )}
 
         {(s.screen === "field" || s.screen === "battle" || s.screen === "gameover") && scene && map && (
-          <div className={styles.field}>
-            <svg className={styles.world} viewBox={`0 0 ${viewW} ${viewH}`} preserveAspectRatio="xMidYMid slice">
+          <div className={styles.field} ref={fieldViewRef} data-scale={viewScale}>
+            <svg
+              className={styles.world}
+              viewBox={`0 0 ${viewW} ${viewH}`}
+              preserveAspectRatio="xMidYMid meet"
+              style={{
+                width: `${viewW * viewScale}px`,
+                height: `${viewH * viewScale}px`,
+                left: `${viewOffset.x}px`,
+                top: `${viewOffset.y}px`,
+              }}
+              shapeRendering="crispEdges"
+            >
               <rect width={viewW} height={viewH} fill={scene.isWorld || scene.isCave || isIndoorScene(scene.name) ? "#10130f" : "url(#town-grass)"} />
               <defs>
                 <pattern id="town-grass" width={32} height={32} patternUnits="userSpaceOnUse">
                   <image href="/game-assets/kongming/ui/town-grass.png" width={32} height={32} className={styles.pixel} preserveAspectRatio="none" />
                 </pattern>
                 <clipPath id="clip-player">
-                  <rect x={playerSX} y={playerSY - 36} width={36} height={36} />
+                  <rect x={playerSX - WALK_CELL / 2} y={playerSY - WALK_FOOT} width={WALK_CELL} height={WALK_CELL} />
                 </clipPath>
                 {followerEntries.map(({ pos }, i) => (
                   <clipPath id={`clip-follower-${i}`} key={`clip-${i}`}>
-                    <rect x={sx(pos.x)} y={sy(pos.y) - 36} width={36} height={36} />
+                    <rect x={sx(pos.x) - WALK_CELL / 2} y={sy(pos.y) - WALK_FOOT} width={WALK_CELL} height={WALK_CELL} />
                   </clipPath>
                 ))}
               </defs>
@@ -3593,10 +3639,10 @@ export default function KongmingGame({
                     <g key={`${e.id}-${i}`}>
                       <image
                         href={shop.image}
-                        x={ex}
-                        y={ey - SHOP_SPRITE}
-                        width={SHOP_SPRITE}
-                        height={SHOP_SPRITE}
+                        x={ex - 16}
+                        y={ey - 32}
+                        width={32}
+                        height={32}
                         preserveAspectRatio="xMidYMid meet"
                         className={styles.pixel}
                       />
@@ -3617,11 +3663,11 @@ export default function KongmingGame({
                 const animFrame = frameForDir(dir, moving ? npcClock % 2 : Math.floor(npcClock / 4) % 2);
                 return (
                   <g key={`${e.id}-${i}`}>
-                    <svg x={ex} y={ey - 36} width={36} height={36} viewBox="0 0 36 36" preserveAspectRatio="xMidYMid meet" overflow="hidden">
+                    <svg x={ex - WALK_CELL / 2} y={ey - WALK_FOOT} width={WALK_CELL} height={WALK_CELL} viewBox={`0 0 ${WALK_CELL} ${WALK_CELL}`} preserveAspectRatio="xMidYMid meet" overflow="hidden">
                       {strip ? (
-                        <TintedSvgSprite src={strip} palette={palette} x={-animFrame * 36} y={0} width={288} height={36} className={styles.pixel} />
+                        <TintedSvgSprite src={strip} palette={palette} x={-animFrame * WALK_CELL} y={0} width={WALK_CELL * 8} height={WALK_CELL} className={styles.pixel} />
                       ) : (
-                        <TintedSvgSprite src={sprite!} palette={palette} x={0} y={0} width={36} height={36} className={styles.pixel} />
+                        <TintedSvgSprite src={sprite!} palette={palette} x={16} y={28} width={32} height={32} className={styles.pixel} />
                       )}
                     </svg>
                     {name && null}
@@ -3653,15 +3699,15 @@ export default function KongmingGame({
                       <TintedSvgSprite
                         src={strip}
                         palette={palette}
-                        x={fx - frame * 36}
-                        y={fy - 36}
-                        width={288}
-                        height={36}
+                        x={fx - WALK_CELL / 2 - frame * WALK_CELL}
+                        y={fy - WALK_FOOT}
+                        width={WALK_CELL * 8}
+                        height={WALK_CELL}
                         clipPath={`url(#clip-follower-${i})`}
                         className={styles.pixel}
                       />
                     ) : (
-                      <circle cx={fx + 16} cy={fy - 16} r={11} fill="#3b4c45" stroke="#d8c38f" strokeWidth={2} />
+                      <circle cx={fx} cy={fy - 12} r={11} fill="#3b4c45" stroke="#d8c38f" strokeWidth={2} />
                     )}
                   </g>
                 );
@@ -3670,18 +3716,18 @@ export default function KongmingGame({
                 <TintedSvgSprite
                   src={playerSprite}
                   palette={playerPalette}
-                  x={playerSX - playerFrame * 36}
-                  y={playerSY - 36}
-                  width={288}
-                  height={36}
+                  x={playerSX - WALK_CELL / 2 - playerFrame * WALK_CELL}
+                  y={playerSY - WALK_FOOT}
+                  width={WALK_CELL * 8}
+                  height={WALK_CELL}
                   clipPath="url(#clip-player)"
                   className={styles.pixel}
                 />
               ) : (
-                <circle cx={playerSX + 16} cy={playerSY - 16} r={11} fill="#294b63" stroke="#d8c38f" strokeWidth={2} />
+                <circle cx={playerSX} cy={playerSY - 12} r={11} fill="#294b63" stroke="#d8c38f" strokeWidth={2} />
               )}
               {!playerSprite && (
-                <text x={playerSX + 16} y={playerSY - 13} textAnchor="middle" fill="#fff" fontSize={10}>{leader?.name?.[0] ?? "刘"}</text>
+                <text x={playerSX} y={playerSY - 8} textAnchor="middle" fill="#fff" fontSize={10}>{leader?.name?.[0] ?? "刘"}</text>
               )}
               {map.fg && (
                 <image
